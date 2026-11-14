@@ -1,0 +1,39 @@
+# Build artifacts (workspace and standalone example crates)
+target/
+.venv/
+*.whl
+*.so
+*.dylib
+
+# Local validation scratch data
+.work/
+__pycache__/
+*.py[cod]
+
+# Session state (created by pwright CLI)
+.pwright/
+
+# IDE / editor
+.idea/
+.vscode/
+# Per-user Claude Code permission allowlist
+.claude/settings.local.json
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+
+# Node (test harness)
+node_modules/
+packages/pwright/native/
+# Private integration scripts
+examples/scripts-dragb-private/
+docs/dragb-integration-report.md
+docs/knowledge/dragb-use-cases.md

@@ -1,0 +1,487 @@
+[workspace]
+resolver = "2"
+exclude = [
+    "vendor/pwright-tungstenite",
+    "vendor/pwright-tokio-tungstenite",
+]
+members = [
+    "crates/pwright-cap-touchscreen",
+    "crates/pwright-backend-cdp-touchscreen",
+    "crates/pwright-composition-chromium-touchscreen",
+    "crates/pwright-backend-cdp-drag",
+    "crates/pwright-composition-chromium-mouse",
+    "crates/pwright-backend-cdp-mouse",
+    "crates/pwright-cap-mouse",
+    "crates/pwright-codec-mouse",
+    "crates/pwright-client-mouse",
+    "crates/pwright-server-mouse",
+    "crates/pwright-backend-cdp-keyboard",
+    "crates/pwright-composition-chromium-keyboard",
+    "crates/pwright-cap-keyboard",
+    "crates/pwright-codec-keyboard",
+    "crates/pwright-client-keyboard",
+    "crates/pwright-server-keyboard",
+    "crates/pwright",
+    "crates/pwright-core",
+    "crates/pwright-input-model",
+    "crates/pwright-process-metrics",
+    "crates/pwright-owned-process-startup",
+    "crates/pwright-playwright-connect-headers",
+    "crates/pwright-playwright-server-initialize",
+    "crates/pwright-playwright-server-client-core",
+    "crates/pwright-playwright-server-session",
+    "crates/pwright-playwright-server-endpoint-discovery",
+    "crates/pwright-playwright-server-connect",
+    "crates/pwright-playwright-server-browser-ops",
+    "crates/pwright-playwright-server-page-events",
+    "crates/pwright-persistent-context-preflight",
+    "crates/pwright-browser-model",
+    "crates/pwright-network-model",
+    "crates/pwright-har-replay",
+    "crates/pwright-api-request",
+    "crates/pwright-api-request-http1",
+    "crates/pwright-api-request-transport",
+    "crates/pwright-api-request-connector-tokio",
+    "crates/pwright-api-request-connector-rustls",
+    "crates/pwright-api-request-connector-http-proxy",
+    "crates/pwright-api-request-connector-socks5",
+    "crates/pwright-api-request-connector-proxy-bypass",
+    "crates/pwright-api-request-client-certificates",
+    "crates/pwright-api-request-decompress",
+    "crates/pwright-api-request-cookie",
+    "crates/pwright-api-request-auth-basic",
+    "crates/pwright-file-input-model",
+    "crates/pwright-file-input-source",
+    "crates/pwright-file-input-fs",
+    "crates/pwright-file-input-tokio",
+    "crates/pwright-backend-cdp-file-input",
+    "crates/pwright-composition-chromium-file-input",
+    "crates/pwright-trace-model",
+    "crates/pwright-tracing-service",
+    "crates/pwright-plugin-tracing-navigation",
+    "crates/pwright-plugin-ordered-handle-delivery",
+    "crates/pwright-plugin-chromium-session-initialization",
+    "crates/pwright-plugin-chromium-frame-observer",
+    "crates/pwright-plugin-chromium-frame-lifecycle",
+    "crates/pwright-trace-sink-file",
+    "crates/pwright-trace-sink-pull",
+    "crates/pwright-trace-format",
+    "crates/pwright-trace-playwright-v8",
+    "crates/pwright-trace-playwright-v8-context",
+    "crates/pwright-artifact-model",
+    "crates/pwright-artifact-service",
+    "crates/pwright-artifact-runtime",
+    "crates/pwright-cap-artifact",
+    "crates/pwright-cap-tracing-artifact",
+    "crates/pwright-screenshot-model",
+    "crates/pwright-selector-model",
+    "crates/pwright-browser-provider",
+    "crates/pwright-browser-install",
+    "crates/pwright-browser-registry",
+    "crates/pwright-browser-backend",
+    "crates/pwright-provider-cdp",
+    "crates/pwright-provider-chromium",
+    "crates/pwright-composition-chromium-content",
+    "crates/pwright-composition-chromium-context-creation",
+    "crates/pwright-composition-chromium-context-lifecycle",
+    "crates/pwright-composition-chromium-page-lifecycle",
+    "crates/pwright-composition-chromium-page-creation",
+    "crates/pwright-composition-chromium-page-events",
+    "crates/pwright-composition-chromium-network-events",
+    "crates/pwright-composition-chromium-handle-lifecycle",
+    "crates/pwright-composition-chromium-handle-evaluation",
+    "crates/pwright-composition-chromium-locator",
+    "crates/pwright-composition-chromium-locator-screenshot",
+    "crates/pwright-composition-chromium-dom-content",
+    "crates/pwright-composition-chromium-evaluation",
+    "crates/pwright-composition-chromium-navigation",
+    "crates/pwright-composition-chromium",
+    "crates/pwright-composition-chromium-launch",
+    "crates/pwright-composition-chromium-tokio",
+    "crates/pwright-runtime",
+    "crates/pwright-runtime-control",
+    "crates/pwright-runtime-tokio",
+    "crates/pwright-transport",
+    "crates/pwright-transport-memory",
+    "crates/pwright-transport-stream",
+    "crates/pwright-transport-tokio",
+    "crates/pwright-transport-ws",
+    "crates/pwright-endpoint-tokio",
+    "crates/pwright-codec-json",
+    "crates/pwright-codec-binary",
+    "crates/pwright-codec-common",
+    "crates/pwright-codec-selector",
+    "crates/pwright-codec-screenshot",
+    "crates/pwright-codec-control",
+    "crates/pwright-codec-handshake",
+    "crates/pwright-codec-navigation",
+    "crates/pwright-codec-locator",
+    "crates/pwright-codec-page-events",
+    "crates/pwright-codec-network-events",
+    "crates/pwright-codec-browser-events",
+    "crates/pwright-codec-context-lifecycle",
+    "crates/pwright-codec-handle-lifecycle",
+    "crates/pwright-codec-handle-evaluation",
+    "crates/pwright-codec-context-creation",
+    "crates/pwright-codec-page-creation",
+    "crates/pwright-codec-page-lifecycle",
+    "crates/pwright-codec-browser-lifecycle",
+    "crates/pwright-codec-evaluation",
+    "crates/pwright-codec-content",
+    "crates/pwright-codec-locator-screenshot",
+    "crates/pwright-codec-dom-content",
+    "crates/pwright-codec-tracing",
+    "crates/pwright-codec-artifact",
+    "crates/pwright-codec-tracing-artifact",
+    "crates/pwright-schema-gen",
+    "crates/pwright-cap-locator",
+    "crates/pwright-cap-page-events",
+    "crates/pwright-cap-network-events",
+    "crates/pwright-cap-browser-events",
+    "crates/pwright-cap-context-lifecycle",
+    "crates/pwright-cap-handle-lifecycle",
+    "crates/pwright-cap-handle-evaluation",
+    "crates/pwright-cap-context-creation",
+    "crates/pwright-cap-page-creation",
+    "crates/pwright-cap-page-lifecycle",
+    "crates/pwright-cap-browser-lifecycle",
+    "crates/pwright-cap-evaluation",
+    "crates/pwright-cap-content",
+    "crates/pwright-cap-locator-screenshot",
+    "crates/pwright-cap-dom-content",
+    "crates/pwright-cap-history-navigation",
+    "crates/pwright-cap-tracing",
+    "crates/pwright-client",
+    "crates/pwright-client-locator",
+    "crates/pwright-client-navigation",
+    "crates/pwright-client-wire",
+    "crates/pwright-client-control",
+    "crates/pwright-connection-control",
+    "crates/pwright-client-events",
+    "crates/pwright-client-page-events",
+    "crates/pwright-client-network-events",
+    "crates/pwright-client-browser-events",
+    "crates/pwright-client-context-lifecycle",
+    "crates/pwright-client-handle-lifecycle",
+    "crates/pwright-client-handle-evaluation",
+    "crates/pwright-client-context-creation",
+    "crates/pwright-client-page-creation",
+    "crates/pwright-client-page-lifecycle",
+    "crates/pwright-client-browser-lifecycle",
+    "crates/pwright-client-evaluation",
+    "crates/pwright-client-content",
+    "crates/pwright-client-locator-screenshot",
+    "crates/pwright-client-dom-content",
+    "crates/pwright-client-tracing",
+    "crates/pwright-client-artifact",
+    "crates/pwright-client-tracing-artifact",
+    "crates/pwright-server-wire",
+    "crates/pwright-server-events",
+    "crates/pwright-server-locator",
+    "crates/pwright-server-navigation",
+    "crates/pwright-server-context-lifecycle",
+    "crates/pwright-server-handle-lifecycle",
+    "crates/pwright-server-handle-evaluation",
+    "crates/pwright-server-context-creation",
+    "crates/pwright-server-page-creation",
+    "crates/pwright-server-page-lifecycle",
+    "crates/pwright-server-browser-lifecycle",
+    "crates/pwright-server-browser-events",
+    "crates/pwright-server-evaluation",
+    "crates/pwright-server-content",
+    "crates/pwright-server-locator-screenshot",
+    "crates/pwright-server-dom-content",
+    "crates/pwright-server-tracing",
+    "crates/pwright-server-artifact",
+    "crates/pwright-server-tracing-artifact",
+    "crates/pwright-cap-navigation",
+    "crates/pwright-plugin-tracing-artifact",
+    "crates/pwright-backend-cdp-common",
+    "crates/pwright-backend-cdp-navigation",
+    "crates/pwright-backend-cdp-topology",
+    "crates/pwright-backend-cdp-context-creation",
+    "crates/pwright-backend-cdp-context-lifecycle",
+    "crates/pwright-backend-cdp-page-creation",
+    "crates/pwright-backend-cdp-page-lifecycle",
+    "crates/pwright-backend-cdp-handle-evaluation",
+    "crates/pwright-backend-cdp-handle-lifecycle",
+    "crates/pwright-backend-cdp-input",
+    "crates/pwright-backend-cdp-locator",
+    "crates/pwright-backend-cdp-network-events",
+    "crates/pwright-backend-cdp-page-events",
+    "crates/pwright-backend-cdp-content",
+    "crates/pwright-backend-cdp-locator-screenshot",
+    "crates/pwright-backend-cdp-selector-runtime",
+    "crates/pwright-backend-cdp-locator-resolution",
+    "crates/pwright-composition-chromium-locator-resolution",
+    "crates/pwright-composition-chromium-locator-evaluation",
+    "crates/pwright-backend-cdp-selector-geometry",
+    "crates/pwright-backend-cdp-dom-content",
+    "crates/pwright-backend-cdp-evaluation",
+    "crates/pwright-backend-cdp",
+    "crates/pwright-cdp",
+    "crates/pwright-js",
+    "crates/pwright-node-host",
+    "crates/pwright-node-addon",
+    "crates/pwright-python-addon",
+    "crates/pwright-fake",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/Shuozeli/playwright-rust"
+homepage = "https://github.com/Shuozeli/playwright-rust"
+
+[workspace.dependencies]
+tokio = { version = "1", features = ["full"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
+openssl = "0.10.76"
+tokio-tungstenite = { version = "0.26", features = ["native-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tonic = "0.13"
+tonic-build = "0.13"
+prost = "0.13"
+prost-build = "0.13"
+clap = { version = "4", features = ["derive", "env"] }
+dashmap = "6"
+futures-util = "0.3"
+anyhow = "1"
+async-trait = "0.1"
+thiserror = "2"
+url = "2"
+base64 = "0.22"
+rand = "0.9"
+ring = "0.17"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+mime_guess = "2"
+httparse = "1"
+webpki-roots = "1"
+brotli = { version = "9", features = ["disallow_large_window_size"] }
+flate2 = { version = "1.1", default-features = false, features = ["rust_backend"] }
+httpdate = "1"
+tokio-util = "0.7"
+serde_yaml = "0.9"
+zeroize = "1"
+pyo3 = { version = "=0.29.2", features = ["abi3-py39"] }
+pyo3-async-runtimes = { version = "=0.29.0", features = ["tokio-runtime"] }
+
+# Internal crate dependencies
+pwright-backend-cdp-keyboard = { path = "crates/pwright-backend-cdp-keyboard" }
+pwright-backend-cdp-touchscreen = { path = "crates/pwright-backend-cdp-touchscreen" }
+pwright-composition-chromium-keyboard = { path = "crates/pwright-composition-chromium-keyboard" }
+pwright-composition-chromium-touchscreen = { path = "crates/pwright-composition-chromium-touchscreen" }
+pwright-cap-keyboard = { path = "crates/pwright-cap-keyboard" }
+pwright-cap-touchscreen = { path = "crates/pwright-cap-touchscreen" }
+pwright-cap-mouse = { path = "crates/pwright-cap-mouse" }
+pwright-backend-cdp-mouse = { path = "crates/pwright-backend-cdp-mouse" }
+pwright-backend-cdp-drag = { path = "crates/pwright-backend-cdp-drag" }
+pwright-composition-chromium-mouse = { path = "crates/pwright-composition-chromium-mouse" }
+pwright-codec-mouse = { path = "crates/pwright-codec-mouse" }
+pwright-client-mouse = { path = "crates/pwright-client-mouse" }
+pwright-server-mouse = { path = "crates/pwright-server-mouse" }
+pwright-codec-keyboard = { path = "crates/pwright-codec-keyboard" }
+pwright-client-keyboard = { path = "crates/pwright-client-keyboard" }
+pwright-server-keyboard = { path = "crates/pwright-server-keyboard" }
+pwright = { path = "crates/pwright", default-features = false }
+pwright-core = { path = "crates/pwright-core" }
+pwright-input-model = { path = "crates/pwright-input-model" }
+pwright-process-metrics = { path = "crates/pwright-process-metrics" }
+pwright-persistent-context-preflight = { path = "crates/pwright-persistent-context-preflight" }
+pwright-browser-model = { path = "crates/pwright-browser-model" }
+pwright-network-model = { path = "crates/pwright-network-model" }
+pwright-har-replay = { path = "crates/pwright-har-replay" }
+pwright-api-request = { path = "crates/pwright-api-request" }
+pwright-api-request-http1 = { path = "crates/pwright-api-request-http1" }
+pwright-api-request-transport = { path = "crates/pwright-api-request-transport" }
+pwright-api-request-connector-tokio = { path = "crates/pwright-api-request-connector-tokio" }
+pwright-api-request-connector-rustls = { path = "crates/pwright-api-request-connector-rustls" }
+pwright-api-request-connector-http-proxy = { path = "crates/pwright-api-request-connector-http-proxy" }
+pwright-api-request-connector-socks5 = { path = "crates/pwright-api-request-connector-socks5" }
+pwright-api-request-connector-proxy-bypass = { path = "crates/pwright-api-request-connector-proxy-bypass" }
+pwright-api-request-client-certificates = { path = "crates/pwright-api-request-client-certificates" }
+pwright-api-request-decompress = { path = "crates/pwright-api-request-decompress" }
+pwright-api-request-cookie = { path = "crates/pwright-api-request-cookie" }
+pwright-api-request-auth-basic = { path = "crates/pwright-api-request-auth-basic" }
+pwright-file-input-model = { path = "crates/pwright-file-input-model" }
+pwright-file-input-source = { path = "crates/pwright-file-input-source" }
+pwright-file-input-fs = { path = "crates/pwright-file-input-fs" }
+pwright-file-input-tokio = { path = "crates/pwright-file-input-tokio" }
+pwright-backend-cdp-file-input = { path = "crates/pwright-backend-cdp-file-input" }
+pwright-composition-chromium-file-input = { path = "crates/pwright-composition-chromium-file-input" }
+pwright-trace-model = { path = "crates/pwright-trace-model" }
+pwright-tracing-service = { path = "crates/pwright-tracing-service" }
+pwright-plugin-tracing-navigation = { path = "crates/pwright-plugin-tracing-navigation" }
+pwright-plugin-ordered-handle-delivery = { path = "crates/pwright-plugin-ordered-handle-delivery" }
+pwright-plugin-chromium-session-initialization = { path = "crates/pwright-plugin-chromium-session-initialization" }
+pwright-plugin-chromium-frame-observer = { path = "crates/pwright-plugin-chromium-frame-observer" }
+pwright-plugin-chromium-frame-lifecycle = { path = "crates/pwright-plugin-chromium-frame-lifecycle" }
+pwright-trace-sink-file = { path = "crates/pwright-trace-sink-file" }
+pwright-trace-sink-pull = { path = "crates/pwright-trace-sink-pull" }
+pwright-trace-format = { path = "crates/pwright-trace-format" }
+pwright-trace-playwright-v8 = { path = "crates/pwright-trace-playwright-v8" }
+pwright-trace-playwright-v8-context = { path = "crates/pwright-trace-playwright-v8-context" }
+pwright-artifact-model = { path = "crates/pwright-artifact-model" }
+pwright-artifact-service = { path = "crates/pwright-artifact-service" }
+pwright-artifact-runtime = { path = "crates/pwright-artifact-runtime" }
+pwright-cap-artifact = { path = "crates/pwright-cap-artifact" }
+pwright-cap-tracing-artifact = { path = "crates/pwright-cap-tracing-artifact" }
+pwright-codec-artifact = { path = "crates/pwright-codec-artifact" }
+pwright-codec-tracing-artifact = { path = "crates/pwright-codec-tracing-artifact" }
+pwright-server-artifact = { path = "crates/pwright-server-artifact" }
+pwright-server-tracing-artifact = { path = "crates/pwright-server-tracing-artifact" }
+pwright-client-artifact = { path = "crates/pwright-client-artifact" }
+pwright-client-tracing-artifact = { path = "crates/pwright-client-tracing-artifact" }
+pwright-plugin-tracing-artifact = { path = "crates/pwright-plugin-tracing-artifact" }
+pwright-backend-cdp-common = { path = "crates/pwright-backend-cdp-common" }
+pwright-backend-cdp-navigation = { path = "crates/pwright-backend-cdp-navigation" }
+pwright-backend-cdp-topology = { path = "crates/pwright-backend-cdp-topology" }
+pwright-backend-cdp-context-creation = { path = "crates/pwright-backend-cdp-context-creation" }
+pwright-backend-cdp-context-lifecycle = { path = "crates/pwright-backend-cdp-context-lifecycle" }
+pwright-backend-cdp-page-creation = { path = "crates/pwright-backend-cdp-page-creation" }
+pwright-backend-cdp-page-lifecycle = { path = "crates/pwright-backend-cdp-page-lifecycle" }
+pwright-backend-cdp-handle-evaluation = { path = "crates/pwright-backend-cdp-handle-evaluation" }
+pwright-backend-cdp-handle-lifecycle = { path = "crates/pwright-backend-cdp-handle-lifecycle" }
+pwright-backend-cdp-input = { path = "crates/pwright-backend-cdp-input" }
+pwright-backend-cdp-network-events = { path = "crates/pwright-backend-cdp-network-events" }
+pwright-backend-cdp-page-events = { path = "crates/pwright-backend-cdp-page-events" }
+pwright-backend-cdp-content = { path = "crates/pwright-backend-cdp-content" }
+pwright-backend-cdp-locator-screenshot = { path = "crates/pwright-backend-cdp-locator-screenshot" }
+pwright-backend-cdp-locator = { path = "crates/pwright-backend-cdp-locator" }
+pwright-backend-cdp-selector-runtime = { path = "crates/pwright-backend-cdp-selector-runtime" }
+pwright-backend-cdp-locator-resolution = { path = "crates/pwright-backend-cdp-locator-resolution" }
+pwright-composition-chromium-locator-resolution = { path = "crates/pwright-composition-chromium-locator-resolution" }
+pwright-composition-chromium-locator-evaluation = { path = "crates/pwright-composition-chromium-locator-evaluation" }
+pwright-backend-cdp-selector-geometry = { path = "crates/pwright-backend-cdp-selector-geometry" }
+pwright-backend-cdp-dom-content = { path = "crates/pwright-backend-cdp-dom-content" }
+pwright-backend-cdp-evaluation = { path = "crates/pwright-backend-cdp-evaluation" }
+pwright-screenshot-model = { path = "crates/pwright-screenshot-model" }
+pwright-selector-model = { path = "crates/pwright-selector-model" }
+pwright-browser-provider = { path = "crates/pwright-browser-provider" }
+pwright-browser-install = { path = "crates/pwright-browser-install" }
+pwright-browser-registry = { path = "crates/pwright-browser-registry" }
+pwright-browser-backend = { path = "crates/pwright-browser-backend" }
+pwright-provider-cdp = { path = "crates/pwright-provider-cdp" }
+pwright-provider-chromium = { path = "crates/pwright-provider-chromium" }
+pwright-composition-chromium-content = { path = "crates/pwright-composition-chromium-content" }
+pwright-composition-chromium-context-creation = { path = "crates/pwright-composition-chromium-context-creation" }
+pwright-composition-chromium-context-lifecycle = { path = "crates/pwright-composition-chromium-context-lifecycle" }
+pwright-composition-chromium-page-lifecycle = { path = "crates/pwright-composition-chromium-page-lifecycle" }
+pwright-composition-chromium-page-creation = { path = "crates/pwright-composition-chromium-page-creation" }
+pwright-composition-chromium-page-events = { path = "crates/pwright-composition-chromium-page-events" }
+pwright-composition-chromium-network-events = { path = "crates/pwright-composition-chromium-network-events" }
+pwright-composition-chromium-handle-lifecycle = { path = "crates/pwright-composition-chromium-handle-lifecycle" }
+pwright-composition-chromium-handle-evaluation = { path = "crates/pwright-composition-chromium-handle-evaluation" }
+pwright-composition-chromium-locator = { path = "crates/pwright-composition-chromium-locator" }
+pwright-composition-chromium-locator-screenshot = { path = "crates/pwright-composition-chromium-locator-screenshot" }
+pwright-composition-chromium-dom-content = { path = "crates/pwright-composition-chromium-dom-content" }
+pwright-composition-chromium-evaluation = { path = "crates/pwright-composition-chromium-evaluation" }
+pwright-composition-chromium-navigation = { path = "crates/pwright-composition-chromium-navigation" }
+pwright-composition-chromium = { path = "crates/pwright-composition-chromium" }
+pwright-composition-chromium-launch = { path = "crates/pwright-composition-chromium-launch" }
+pwright-composition-chromium-tokio = { path = "crates/pwright-composition-chromium-tokio" }
+pwright-runtime = { path = "crates/pwright-runtime" }
+pwright-runtime-control = { path = "crates/pwright-runtime-control" }
+pwright-runtime-tokio = { path = "crates/pwright-runtime-tokio" }
+pwright-transport = { path = "crates/pwright-transport" }
+pwright-transport-memory = { path = "crates/pwright-transport-memory" }
+pwright-transport-stream = { path = "crates/pwright-transport-stream" }
+pwright-transport-tokio = { path = "crates/pwright-transport-tokio" }
+pwright-transport-ws = { path = "crates/pwright-transport-ws" }
+pwright-playwright-connect-headers = { path = "crates/pwright-playwright-connect-headers" }
+pwright-playwright-server-initialize = { path = "crates/pwright-playwright-server-initialize" }
+pwright-playwright-server-client-core = { path = "crates/pwright-playwright-server-client-core" }
+pwright-playwright-server-session = { path = "crates/pwright-playwright-server-session" }
+pwright-playwright-server-endpoint-discovery = { path = "crates/pwright-playwright-server-endpoint-discovery" }
+pwright-playwright-server-connect = { path = "crates/pwright-playwright-server-connect" }
+pwright-playwright-server-browser-ops = { path = "crates/pwright-playwright-server-browser-ops" }
+pwright-endpoint-tokio = { path = "crates/pwright-endpoint-tokio" }
+pwright-codec-json = { path = "crates/pwright-codec-json" }
+pwright-codec-binary = { path = "crates/pwright-codec-binary" }
+pwright-codec-common = { path = "crates/pwright-codec-common" }
+pwright-codec-selector = { path = "crates/pwright-codec-selector" }
+pwright-codec-screenshot = { path = "crates/pwright-codec-screenshot" }
+pwright-codec-control = { path = "crates/pwright-codec-control" }
+pwright-codec-handshake = { path = "crates/pwright-codec-handshake" }
+pwright-codec-navigation = { path = "crates/pwright-codec-navigation" }
+pwright-codec-locator = { path = "crates/pwright-codec-locator" }
+pwright-codec-page-events = { path = "crates/pwright-codec-page-events" }
+pwright-codec-network-events = { path = "crates/pwright-codec-network-events" }
+pwright-codec-browser-events = { path = "crates/pwright-codec-browser-events" }
+pwright-codec-context-lifecycle = { path = "crates/pwright-codec-context-lifecycle" }
+pwright-codec-handle-lifecycle = { path = "crates/pwright-codec-handle-lifecycle" }
+pwright-codec-handle-evaluation = { path = "crates/pwright-codec-handle-evaluation" }
+pwright-codec-context-creation = { path = "crates/pwright-codec-context-creation" }
+pwright-codec-page-creation = { path = "crates/pwright-codec-page-creation" }
+pwright-codec-page-lifecycle = { path = "crates/pwright-codec-page-lifecycle" }
+pwright-codec-browser-lifecycle = { path = "crates/pwright-codec-browser-lifecycle" }
+pwright-codec-evaluation = { path = "crates/pwright-codec-evaluation" }
+pwright-codec-content = { path = "crates/pwright-codec-content" }
+pwright-codec-locator-screenshot = { path = "crates/pwright-codec-locator-screenshot" }
+pwright-codec-dom-content = { path = "crates/pwright-codec-dom-content" }
+pwright-codec-tracing = { path = "crates/pwright-codec-tracing" }
+pwright-cap-locator = { path = "crates/pwright-cap-locator" }
+pwright-cap-page-events = { path = "crates/pwright-cap-page-events" }
+pwright-cap-network-events = { path = "crates/pwright-cap-network-events" }
+pwright-cap-browser-events = { path = "crates/pwright-cap-browser-events" }
+pwright-cap-context-lifecycle = { path = "crates/pwright-cap-context-lifecycle" }
+pwright-cap-handle-lifecycle = { path = "crates/pwright-cap-handle-lifecycle" }
+pwright-cap-handle-evaluation = { path = "crates/pwright-cap-handle-evaluation" }
+pwright-cap-context-creation = { path = "crates/pwright-cap-context-creation" }
+pwright-cap-page-creation = { path = "crates/pwright-cap-page-creation" }
+pwright-cap-page-lifecycle = { path = "crates/pwright-cap-page-lifecycle" }
+pwright-cap-browser-lifecycle = { path = "crates/pwright-cap-browser-lifecycle" }
+pwright-cap-evaluation = { path = "crates/pwright-cap-evaluation" }
+pwright-cap-content = { path = "crates/pwright-cap-content" }
+pwright-cap-locator-screenshot = { path = "crates/pwright-cap-locator-screenshot" }
+pwright-cap-dom-content = { path = "crates/pwright-cap-dom-content" }
+pwright-cap-history-navigation = { path = "crates/pwright-cap-history-navigation" }
+pwright-cap-tracing = { path = "crates/pwright-cap-tracing" }
+pwright-client = { path = "crates/pwright-client" }
+pwright-client-locator = { path = "crates/pwright-client-locator" }
+pwright-client-navigation = { path = "crates/pwright-client-navigation" }
+pwright-client-wire = { path = "crates/pwright-client-wire" }
+pwright-client-control = { path = "crates/pwright-client-control" }
+pwright-connection-control = { path = "crates/pwright-connection-control" }
+pwright-client-events = { path = "crates/pwright-client-events" }
+pwright-client-page-events = { path = "crates/pwright-client-page-events" }
+pwright-client-network-events = { path = "crates/pwright-client-network-events" }
+pwright-client-browser-events = { path = "crates/pwright-client-browser-events" }
+pwright-client-context-lifecycle = { path = "crates/pwright-client-context-lifecycle" }
+pwright-client-handle-lifecycle = { path = "crates/pwright-client-handle-lifecycle" }
+pwright-client-handle-evaluation = { path = "crates/pwright-client-handle-evaluation" }
+pwright-client-context-creation = { path = "crates/pwright-client-context-creation" }
+pwright-client-page-creation = { path = "crates/pwright-client-page-creation" }
+pwright-client-page-lifecycle = { path = "crates/pwright-client-page-lifecycle" }
+pwright-client-browser-lifecycle = { path = "crates/pwright-client-browser-lifecycle" }
+pwright-client-evaluation = { path = "crates/pwright-client-evaluation" }
+pwright-client-content = { path = "crates/pwright-client-content" }
+pwright-client-locator-screenshot = { path = "crates/pwright-client-locator-screenshot" }
+pwright-client-dom-content = { path = "crates/pwright-client-dom-content" }
+pwright-client-tracing = { path = "crates/pwright-client-tracing" }
+pwright-server-wire = { path = "crates/pwright-server-wire" }
+pwright-server-events = { path = "crates/pwright-server-events" }
+pwright-server-locator = { path = "crates/pwright-server-locator" }
+pwright-server-navigation = { path = "crates/pwright-server-navigation" }
+pwright-server-context-lifecycle = { path = "crates/pwright-server-context-lifecycle" }
+pwright-server-handle-lifecycle = { path = "crates/pwright-server-handle-lifecycle" }
+pwright-server-handle-evaluation = { path = "crates/pwright-server-handle-evaluation" }
+pwright-server-context-creation = { path = "crates/pwright-server-context-creation" }
+pwright-server-page-creation = { path = "crates/pwright-server-page-creation" }
+pwright-server-page-lifecycle = { path = "crates/pwright-server-page-lifecycle" }
+pwright-server-browser-lifecycle = { path = "crates/pwright-server-browser-lifecycle" }
+pwright-server-browser-events = { path = "crates/pwright-server-browser-events" }
+pwright-server-evaluation = { path = "crates/pwright-server-evaluation" }
+pwright-server-content = { path = "crates/pwright-server-content" }
+pwright-server-locator-screenshot = { path = "crates/pwright-server-locator-screenshot" }
+pwright-server-dom-content = { path = "crates/pwright-server-dom-content" }
+pwright-server-tracing = { path = "crates/pwright-server-tracing" }
+pwright-cap-navigation = { path = "crates/pwright-cap-navigation" }
+pwright-backend-cdp = { path = "crates/pwright-backend-cdp" }
+pwright-cdp = { path = "crates/pwright-cdp" }
+pwright-js = { path = "crates/pwright-js" }
+pwright-fake = { path = "crates/pwright-fake" }

@@ -1,0 +1,117 @@
+use std::sync::Arc;
+
+use serde_json::Value;
+#[cfg(feature = "runtime-binding")]
+use tokio::sync::OnceCell;
+
+use crate::CdpClient;
+use crate::client_trait::SessionFactory;
+use crate::connection::{CdpConnection, CdpEventSubscriptionError, Result};
+use crate::events::{CdpEvent, CdpEventReceiver};
+
+/// A per-target session for tab-scoped CDP commands.
+///
+/// Browser-level commands use session_id = None.
+/// Tab-level commands use the session_id returned by Target.attachToTarget.
+#[derive(Clone)]
+pub struct CdpSession {
+    conn: Arc<CdpConnection>,
+    session_id: Option<String>,
+    target_id: String,
+    #[cfg(feature = "runtime-binding")]
+    pub(crate) runtime_binding: Arc<OnceCell<&'static str>>,
+}
+
+impl CdpSession {
+    /// Create a browser-level session (no session ID).
+    pub fn browser(conn: Arc<CdpConnection>) -> Self {
+        Self {
+            conn,
+            session_id: None,
+            target_id: String::new(),
+            #[cfg(feature = "runtime-binding")]
+            runtime_binding: Arc::new(OnceCell::new()),
+        }
+    }
+
+    /// Create a tab-level session.
+    pub fn new(conn: Arc<CdpConnection>, session_id: String, target_id: String) -> Self {
+        // Opaque routing identity only. Retention belongs to an explicitly
+        // installed subscriber; no correlation table lives in the CDP client.
+        tracing::trace!(
+            session_id = session_id.as_str(),
+            target_id = target_id.as_str(),
+            "bound CDP target session"
+        );
+        Self {
+            conn,
+            session_id: Some(session_id),
+            target_id,
+            #[cfg(feature = "runtime-binding")]
+            runtime_binding: Arc::new(OnceCell::new()),
+        }
+    }
+
+    /// The CDP target ID this session is attached to.
+    pub fn target_id(&self) -> &str {
+        &self.target_id
+    }
+
+    /// The CDP session ID (None for browser-level).
+    pub fn session_id(&self) -> Option<&str> {
+        self.session_id.as_deref()
+    }
+
+    /// Send a CDP command on this session and await the response.
+    pub async fn send(&self, method: &str, params: Value) -> Result<Value> {
+        self.conn
+            .send_command_with_session(method, params, self.session_id.as_deref())
+            .await
+    }
+
+    /// Send without the ordinary response timer. The caller must retain this
+    /// Future through settlement; dropping it is not native cancellation.
+    pub async fn send_to_settlement(&self, method: &str, params: Value) -> Result<Value> {
+        self.conn
+            .send_command_to_settlement_with_session(method, params, self.session_id.as_deref())
+            .await
+    }
+
+    /// Subscribe to CDP events. Caller should filter by session_id if desired.
+    pub fn subscribe_events(&self) -> tokio::sync::broadcast::Receiver<CdpEvent> {
+        self.conn.subscribe_events()
+    }
+
+    /// Subscribe using the delivery mode selected by a production profile.
+    pub fn subscribe_composable_events(
+        &self,
+    ) -> std::result::Result<CdpEventReceiver, CdpEventSubscriptionError> {
+        self.conn.subscribe_composable_events()
+    }
+
+    /// The underlying connection.
+    pub fn connection(&self) -> &Arc<CdpConnection> {
+        &self.conn
+    }
+}
+
+/// Factory that creates per-tab `CdpSession` instances from a shared connection.
+pub struct CdpSessionFactory {
+    connection: Arc<CdpConnection>,
+}
+
+impl CdpSessionFactory {
+    pub fn new(connection: Arc<CdpConnection>) -> Self {
+        Self { connection }
+    }
+}
+
+impl SessionFactory for CdpSessionFactory {
+    fn create_session(&self, session_id: String, target_id: String) -> Arc<dyn CdpClient> {
+        Arc::new(CdpSession::new(
+            self.connection.clone(),
+            session_id,
+            target_id,
+        ))
+    }
+}
