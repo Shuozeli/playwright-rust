@@ -1,10 +1,27 @@
-<!-- agent-updated: 2026-11-14T05:28:56Z -->
+<!-- agent-updated: 2026-11-14T22:25:00Z -->
 
 # Playwright-compatible Python FFI design
 
 Status: the base Chromium-CDP slice is implemented and verified. Compatibility
 is limited to the supported surface below; APIs explicitly reported as
 unsupported are not part of the claim.
+
+## Chromium request-count and WSJ checkpoint (2026-11-14)
+
+The ABI131 Python composition now follows upstream Playwright's unbounded
+active Chromium Request count instead of rejecting the 65th request. Missing
+or already-detached frame topology during a network event is published as an
+unavailable Request frame, matching the upstream nullable-frame behavior,
+rather than closing the Browser. Python also ignores already-scheduled
+lifecycle callbacks after Browser closure and cancels request and download
+notice watchers during `Playwright.stop()`.
+
+Focused Rust and Python AAA regressions pass. A real unfiltered WSJ run through
+this package against Chrome 157 over CDP reached the page, read headline text,
+and produced a nonempty 90,810-byte viewport screenshot. `page.goto()` did not
+observe `domcontentloaded` inside the diagnostic's outer deadline, and the
+separate HostSession teardown hang remains open; neither is
+reported as a complete WSJ E2E pass.
 
 ## Locator click force forwarding (wheel-verified, browser-unverified, 2026-10-12)
 

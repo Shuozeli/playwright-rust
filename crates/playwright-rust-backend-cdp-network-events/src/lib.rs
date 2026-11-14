@@ -165,6 +165,25 @@ impl CdpNetworkEventProductionProfile {
         Self::with_post_data_budget(limits, resource_scope, limits.post_data_bytes, 0)
     }
 
+    /// Selects Playwright-compatible active Request tracking without a
+    /// request-count admission limit.
+    ///
+    /// Dynamic Request/Response map storage follows the Rust allocator just
+    /// as upstream Playwright's maps follow the JavaScript heap. Fixed adapter
+    /// bookkeeping remains declared in the production resource plan. Per-field
+    /// bounds still reject malformed individual protocol payloads.
+    pub fn new_unbounded_active_requests(
+        limits: NetworkLifecycleLimits,
+        resource_scope: ResourceScope,
+    ) -> Result<Self, CdpNetworkEventError> {
+        Self::with_unbounded_active_request_budget(
+            limits,
+            resource_scope,
+            limits.post_data_bytes,
+            0,
+        )
+    }
+
     /// Selects an exceptional body allowance without multiplying it by every
     /// active Request. The ordinary limit remains available to all Requests;
     /// at most `large_post_data_requests` may exceed it concurrently per Page.
@@ -187,6 +206,75 @@ impl CdpNetworkEventProductionProfile {
             ordinary_post_data_bytes,
             large_post_data_requests,
         )
+    }
+
+    /// Selects unbounded active Request count while keeping the exceptional
+    /// large-POST tier independently finite.
+    pub fn with_unbounded_active_requests_and_bounded_large_post_data(
+        limits: NetworkLifecycleLimits,
+        resource_scope: ResourceScope,
+        ordinary_post_data_bytes: usize,
+        large_post_data_requests: usize,
+    ) -> Result<Self, CdpNetworkEventError> {
+        if ordinary_post_data_bytes == 0
+            || ordinary_post_data_bytes >= limits.post_data_bytes
+            || large_post_data_requests == 0
+        {
+            return Err(CdpNetworkEventError::InvalidPostDataBudget);
+        }
+        Self::with_unbounded_active_request_budget(
+            limits,
+            resource_scope,
+            ordinary_post_data_bytes,
+            large_post_data_requests,
+        )
+    }
+
+    fn with_unbounded_active_request_budget(
+        limits: NetworkLifecycleLimits,
+        resource_scope: ResourceScope,
+        ordinary_post_data_bytes: usize,
+        large_post_data_requests: usize,
+    ) -> Result<Self, CdpNetworkEventError> {
+        limits.validate().map_err(CdpNetworkEventError::Lifecycle)?;
+        let large_request_bytes = limits
+            .post_data_bytes
+            .checked_sub(ordinary_post_data_bytes)
+            .and_then(|extra| extra.checked_add(LARGE_POST_DATA_REQUEST_BOOKKEEPING_BYTES))
+            .and_then(|bytes| bytes.checked_add(limits.native_scope_bytes))
+            .and_then(|bytes| bytes.checked_add(limits.native_id_bytes))
+            .and_then(|bytes| bytes.checked_mul(large_post_data_requests))
+            .ok_or(CdpNetworkEventError::SizeOverflow {
+                field: "large post-data request state bytes",
+            })?;
+        let maximum_retained_bytes = ADAPTER_BOOKKEEPING_BYTES
+            .checked_add(limits.native_id_bytes)
+            .and_then(|bytes| bytes.checked_add(large_request_bytes))
+            .ok_or(CdpNetworkEventError::SizeOverflow {
+                field: "network adapter fixed state bytes",
+            })?;
+        #[cfg(feature = "request-frame")]
+        let maximum_retained_bytes = maximum_retained_bytes
+            .checked_add(maximum_observed_frame_bytes(limits)?)
+            .ok_or(CdpNetworkEventError::SizeOverflow {
+                field: "observed frame state bytes",
+            })?;
+        let retained = u64::try_from(maximum_retained_bytes).map_err(|_| {
+            CdpNetworkEventError::SizeOverflow {
+                field: "network adapter fixed state bytes",
+            }
+        })?;
+        let requirements = ResourceRequirements::none()
+            .with_class(ResourceClass::BackendStateBytes, retained, retained)
+            .with_metadata(1, 1);
+        Ok(Self {
+            limits,
+            ordinary_post_data_bytes,
+            large_post_data_requests,
+            resource_scope,
+            maximum_retained_bytes,
+            requirements,
+        })
     }
 
     fn with_post_data_budget(
@@ -360,6 +448,18 @@ fn maximum_request_frame_bytes(
         .and_then(|bytes| active_requests.and_then(|active| bytes.checked_add(active)))
         .ok_or(CdpNetworkEventError::SizeOverflow {
             field: "request frame state bytes",
+        })
+}
+
+#[cfg(feature = "request-frame")]
+fn maximum_observed_frame_bytes(
+    limits: NetworkLifecycleLimits,
+) -> Result<usize, CdpNetworkEventError> {
+    OBSERVED_FRAME_BOOKKEEPING_BYTES
+        .checked_add(limits.native_id_bytes)
+        .and_then(|bytes| bytes.checked_mul(MAX_OBSERVED_FRAMES_PER_PAGE))
+        .ok_or(CdpNetworkEventError::SizeOverflow {
+            field: "observed frame state bytes",
         })
 }
 
@@ -1912,7 +2012,7 @@ impl Display for CdpNetworkEventError {
             Self::ZeroPageObject => formatter.write_str("network Page object ID zero is invalid"),
             Self::EmptySessionId => formatter.write_str("network CDP session ID is empty"),
             Self::InvalidPostDataBudget => formatter.write_str(
-                "network large post-data budget requires a smaller positive ordinary limit and 1..=active-request large slots",
+                "network large post-data budget requires a smaller positive ordinary limit and a positive large-request slot count",
             ),
             Self::InvalidEvent { method, field } => {
                 write!(formatter, "{method} has an invalid or missing `{field}`")
@@ -3631,6 +3731,49 @@ mod tests {
                 .current,
             0
         );
+    }
+
+    #[test]
+    fn production_unbounded_profile_tracks_more_than_the_legacy_request_count() {
+        // Arrange
+        const REQUESTS: usize = 129;
+        let profile = CdpNetworkEventProductionProfile::new_unbounded_active_requests(
+            limits(usize::MAX),
+            ResourceScope::extension(95, 1),
+        )
+        .expect("unbounded production profile should validate");
+        let requirements = profile.requirements();
+        let class = requirements.class(ResourceClass::BackendStateBytes);
+        let resources = ProductionResourceLedger::new(
+            ResourceLimits::deny_all(requirements.scopes, requirements.leases).with_class(
+                ResourceClass::BackendStateBytes,
+                class.global,
+                class.per_scope,
+            ),
+            requirements,
+        )
+        .expect("production resources should validate");
+        let mut adapter = CdpNetworkEventAdapter::new_with_production_resources(
+            ObjectId::new(3),
+            "session-1".to_owned(),
+            Arc::new(AtomicObjectIdSource::new(10).expect("object IDs should validate")),
+            profile,
+            &resources,
+        )
+        .expect("production adapter should reserve fixed bookkeeping");
+
+        // Act
+        for index in 0..REQUESTS {
+            adapter
+                .map_event(&request_event(
+                    &format!("request-{index}"),
+                    "https://example.test/data",
+                ))
+                .expect("normal request count growth should not be rejected");
+        }
+
+        // Assert
+        assert_eq!(adapter.active_request_count(), REQUESTS);
     }
 
     #[test]

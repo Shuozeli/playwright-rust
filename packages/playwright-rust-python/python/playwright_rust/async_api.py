@@ -9275,6 +9275,8 @@ class Browser:
         file_chooser_descriptor: tuple[_native.NativeFileChooser, bool] | None = None,
         frame_id: str | None = None,
     ) -> None:
+        if self._closed:
+            return
         context = self._notice_context(context_id, base_url, create=kind in {2, 3})
         if kind == 1:
             if context is None:
@@ -10835,7 +10837,9 @@ class Playwright:
             await browser._cancel_cdp_event_watcher()
             await browser._cancel_lifecycle_watcher()
             await browser._cancel_route_watcher()
+            await browser._cancel_request_watcher()
             await browser._cancel_response_watcher()
+            await browser._cancel_download_watcher()
             await browser._cancel_worker_watcher()
             await browser._cancel_worker_console_watcher()
             for context in browser._contexts.values():

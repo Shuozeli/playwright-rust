@@ -1608,6 +1608,22 @@ fn record(
     }
 }
 
+#[cfg(feature = "request-frame")]
+fn resolve_request_frame(
+    descriptor_available: bool,
+    native_id: Option<&str>,
+    topology_frame: Option<ObjectId>,
+) -> (Option<ObjectId>, bool) {
+    if !descriptor_available || native_id.is_none() {
+        return (None, false);
+    }
+
+    match topology_frame {
+        Some(frame) => (Some(frame), true),
+        None => (None, false),
+    }
+}
+
 #[cfg(feature = "response-security-details")]
 fn attach_response_security(
     effect: &CdpNetworkEventEffect,
@@ -2587,22 +2603,13 @@ impl Installation {
             let (frame, frame_available) = request_id
                 .and_then(|request| batch.request_frame(request))
                 .map(|descriptor| {
-                    if !descriptor.available() {
-                        return Ok((None, false));
-                    }
-                    let native_id = descriptor.native_id().ok_or_else(|| {
-                        HostError::Backend(
-                            "available network Request frame has no native identity".into(),
-                        )
-                    })?;
-                    let frame = topology.frame_object_id(native_id).ok_or_else(|| {
-                        HostError::Backend(
-                            "available network Request frame is absent from topology".into(),
-                        )
-                    })?;
-                    Ok((Some(frame), true))
+                    let native_id = descriptor.native_id();
+                    resolve_request_frame(
+                        descriptor.available(),
+                        native_id,
+                        native_id.and_then(|native_id| topology.frame_object_id(native_id)),
+                    )
                 })
-                .transpose()?
                 .unwrap_or((None, false));
             #[cfg(not(feature = "request-frame"))]
             let frame = None;
@@ -3384,6 +3391,8 @@ mod tests {
     use super::State;
     #[cfg(feature = "request-post-data-json")]
     use super::request_post_data_json;
+    #[cfg(feature = "request-frame")]
+    use super::resolve_request_frame;
     #[cfg(feature = "request-events")]
     use super::{MAX_REQUEST_EVENT_NOTICES, RequestNotice};
     #[cfg(feature = "response-events")]
@@ -3424,6 +3433,33 @@ mod tests {
 
         // Assert
         assert!(matches!(error, HostError::InvalidArgument(_)));
+    }
+
+    #[cfg(feature = "request-frame")]
+    #[test]
+    fn request_frame_missing_from_current_topology_is_published_as_unavailable() {
+        // Arrange
+        let descriptor_available = true;
+        let native_id = Some("detached-frame");
+
+        // Act
+        let resolved = resolve_request_frame(descriptor_available, native_id, None);
+
+        // Assert
+        assert_eq!(resolved, (None, false));
+    }
+
+    #[cfg(feature = "request-frame")]
+    #[test]
+    fn request_frame_in_current_topology_is_published_with_portable_identity() {
+        // Arrange
+        let frame = ObjectId::new(7);
+
+        // Act
+        let resolved = resolve_request_frame(true, Some("frame-7"), Some(frame));
+
+        // Assert
+        assert_eq!(resolved, (Some(frame), true));
     }
 
     fn request() -> NetworkRequestRecord {

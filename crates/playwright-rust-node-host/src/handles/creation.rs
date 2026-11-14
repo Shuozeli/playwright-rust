@@ -157,16 +157,13 @@ impl Installation {
             composition.resources(),
             owners.clone(),
         )?;
-        let runtime_objects = std::num::NonZeroUsize::new(runtime.limits().live_objects)
-            .ok_or_else(|| {
-                HostError::backend("Handle release requires a nonzero runtime object limit")
-            })?;
+        let handle_subtree_objects = std::num::NonZeroUsize::new(super::MAX_HANDLES).unwrap();
         Ok(Self {
             create: Arc::new(create),
             dispose: Releases::new(
                 dispose,
                 &runtime.lifecycle_handle(),
-                runtime_objects,
+                handle_subtree_objects,
                 composition.resources(),
             )?,
             owners,

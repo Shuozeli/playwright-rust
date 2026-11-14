@@ -11,6 +11,15 @@ fn process_profile(pending: usize) -> DisposalReservationProfile {
     .unwrap()
 }
 
+fn process_subtree_profile(objects: usize, pending: usize) -> DisposalReservationProfile {
+    DisposalReservationProfile::new_in_process_subtree(
+        NonZeroUsize::new(objects).unwrap(),
+        NonZeroUsize::new(pending).unwrap(),
+        SCOPE,
+    )
+    .unwrap()
+}
+
 fn process_fixture(
     selected: DisposalReservationProfile,
 ) -> (Dispatcher, DisposalReservations, ProductionResourceLedger) {
@@ -133,6 +142,54 @@ fn in_process_commit_uses_the_latest_subtree_without_adding_an_outbox() {
             .peak,
         0
     );
+}
+
+#[test]
+fn in_process_subtree_profile_binds_to_a_larger_dynamic_runtime() {
+    // Arrange
+    let (runtime, pool, _) = process_fixture(process_subtree_profile(2, 1));
+    let reservation = pool.reserve().unwrap();
+
+    // Act
+    let removed = reservation
+        .prepare(&runtime.lifecycle_handle(), ObjectId::new(2))
+        .unwrap()
+        .commit()
+        .unwrap();
+
+    // Assert
+    assert_eq!(
+        removed.iter().map(ObjectRecord::id).collect::<Vec<_>>(),
+        [ObjectId::new(3), ObjectId::new(2)]
+    );
+    assert_eq!(runtime.live_object_count(), Ok(1));
+}
+
+#[test]
+fn in_process_subtree_profile_rejects_a_subtree_larger_than_its_reservation() {
+    // Arrange
+    let (runtime, pool, _) = process_fixture(process_subtree_profile(2, 1));
+    runtime
+        .register_object(
+            ObjectId::new(4),
+            Some(ObjectId::new(2)),
+            ObjectKindTag::new(1),
+        )
+        .unwrap();
+    let reservation = pool.reserve().unwrap();
+
+    // Act
+    let result = reservation.prepare(&runtime.lifecycle_handle(), ObjectId::new(2));
+
+    // Assert
+    assert!(matches!(
+        result,
+        Err(DisposalReservationError::Invalid(
+            "disposal subtree exceeds reserved capacity"
+        ))
+    ));
+    assert_eq!(runtime.live_object_count(), Ok(4));
+    assert_eq!(pool.pending(), 0);
 }
 
 #[test]

@@ -1,4 +1,4 @@
-<!-- agent-updated: 2026-11-14T02:34:45Z -->
+<!-- agent-updated: 2026-11-14T22:51:06Z -->
 
 # Design decisions to settle
 
@@ -17,6 +17,12 @@ This is design work in progress, not a stable public API contract.
 6. Define FFI responsibilities and package naming separately from the core
    Rust API. Compatibility claims require full, unmodified official test
    execution or an explicit scoped matrix with receipts.
+
+Compatibility profiles must not invent finite object-count limits where the
+corresponding upstream Playwright implementation has none. Dynamic lifecycle
+tables, including Chromium's active Request map, grow through the allocator;
+independent payload, queue, and explicitly opt-in retained-data budgets remain
+allowed when they do not reject otherwise valid upstream behavior.
 
 The design favors compile-time composition over unrestricted dynamic Rust
 library loading. Browser download and launch must be opt-in. Chromium's CDP

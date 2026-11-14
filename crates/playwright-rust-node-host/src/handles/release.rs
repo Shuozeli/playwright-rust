@@ -52,7 +52,7 @@ pub(super) struct Releases {
     _storage: ResourceLease,
 }
 fn profile(objects: NonZeroUsize) -> Result<DisposalReservationProfile, HostError> {
-    DisposalReservationProfile::new_in_process(
+    DisposalReservationProfile::new_in_process_subtree(
         objects,
         NonZeroUsize::new(PENDING).unwrap(),
         RESERVATION_SCOPE,

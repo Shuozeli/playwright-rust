@@ -1258,6 +1258,24 @@ mod tests {
         .with_headers(vec![HttpHeader::new("content-type", "application/json")])
     }
 
+    #[test]
+    fn unbounded_profile_does_not_reject_normal_request_count_growth() {
+        // Arrange
+        const REQUESTS: u64 = 129;
+        let mut tracker = NetworkLifecycleTracker::new(limits(usize::MAX))
+            .expect("unbounded limits should validate");
+
+        // Act
+        for index in 0..REQUESTS {
+            tracker
+                .request_will_be_sent(request(&format!("request-{index}"), 10 + index), None)
+                .expect("normal request count growth should not be rejected");
+        }
+
+        // Assert
+        assert_eq!(tracker.active_request_count(), REQUESTS as usize);
+    }
+
     #[cfg(feature = "request-timing")]
     fn timing() -> ResponseTiming {
         ResponseTiming {

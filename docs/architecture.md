@@ -1,4 +1,4 @@
-<!-- agent-updated: 2026-11-14T05:29:40Z -->
+<!-- agent-updated: 2026-11-14T22:51:06Z -->
 
 # Architecture
 
@@ -20,6 +20,12 @@ The Node and Python layers should translate public values and callbacks, while
 Rust owns browser state and core operation semantics. The current Node host is
 still a broad compatibility composition root; its footprint and feature edges
 need further audit.
+
+The Chromium network lifecycle stores active Request and Response state in
+allocator-backed dynamic maps, matching upstream Playwright rather than
+enforcing a finite request-count admission limit. Bounded event queues,
+payload fields, and opt-in retained-data tiers are separate composition leaves;
+they must not be multiplied into a fabricated maximum active-request count.
 
 The raw `playwright-rust-cdp` crate provides the shared CDP connection and
 message foundation used by Chromium adapters. This repository is

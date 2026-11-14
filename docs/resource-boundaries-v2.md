@@ -1,4 +1,22 @@
-<!-- agent-updated: 2026-11-14T05:28:56Z -->
+<!-- agent-updated: 2026-11-14T22:25:00Z -->
+
+## Current Chromium request-count policy (2026-11-14)
+
+The Playwright-compatible Chromium profile does not impose a finite active
+Request count. This matches upstream Playwright 1.58.0, whose Chromium network
+manager retains in-flight requests in dynamically growing maps and removes
+them on redirect, `loadingFinished`, or `loadingFailed`; it has no 64-, 128-,
+or other request-count rejection. Playwright Rust therefore uses an unbounded
+count sentinel for lifecycle admission and allocator-backed request/response
+maps. This does not remove the independent per-field byte limits, event-queue
+limits, or the explicitly selected bounded large-POST-data tier.
+
+The production resource ledger still accounts for the adapter's fixed state
+and bounded payload tiers. Dynamic in-flight request-map storage is reported
+honestly as allocator-backed rather than multiplied by a fabricated maximum
+request count. A 129-simultaneous-request regression passes in both the
+portable lifecycle model and Chromium adapter, and an unfiltered WSJ run no
+longer fails at request 65.
 
 The default-off Python `response-security-details` leaf retains only CDP
 issuer, protocol, subjectName, validFrom, and validTo; each of the three

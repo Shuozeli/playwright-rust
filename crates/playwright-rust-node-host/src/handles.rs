@@ -136,9 +136,7 @@ pub(crate) const CREATION_FUTURE_BYTES: usize = 8 * 1024;
 pub(crate) fn select(
     profile: ChromiumAttachProductionProfile,
 ) -> Result<ChromiumAttachProductionProfile, HostError> {
-    let runtime_objects = NonZeroUsize::new(profile.runtime().live_objects).ok_or_else(|| {
-        HostError::backend("Handle release requires a nonzero runtime object limit")
-    })?;
+    let handle_subtree_objects = NonZeroUsize::new(MAX_HANDLES).unwrap();
     let wire = |version| {
         CapabilityWireProfile::new(
             version,
@@ -148,7 +146,7 @@ pub(crate) fn select(
     };
     Ok(profile
         .with_extension_requirements(pending::requirements())
-        .with_extension_requirements(release::requirements(runtime_objects)?)
+        .with_extension_requirements(release::requirements(handle_subtree_objects)?)
         .with_extension_requirements(publication::requirements())
         .with_extension_requirements(batch_publication::requirements())
         .with_handle_lifecycle(HandleLifecycleInstallationProfile::new(

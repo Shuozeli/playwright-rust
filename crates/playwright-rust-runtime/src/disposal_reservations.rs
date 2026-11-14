@@ -68,6 +68,7 @@ enum OutboxMode {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct DisposalReservationProfile {
     objects: usize,
+    require_runtime_limit_match: bool,
     pending: usize,
     scope: ResourceScope,
     bytes: u64,
@@ -86,7 +87,7 @@ impl DisposalReservationProfile {
         pending: NonZeroUsize,
         scope: ResourceScope,
     ) -> Result<Self, DisposalReservationError> {
-        Self::build(objects, pending, scope, OutboxMode::Required)
+        Self::build(objects, pending, scope, OutboxMode::Required, true)
     }
 
     /// Select an in-process runtime whose control outbox is disabled. Reserves
@@ -99,7 +100,17 @@ impl DisposalReservationProfile {
         pending: NonZeroUsize,
         scope: ResourceScope,
     ) -> Result<Self, DisposalReservationError> {
-        Self::build(objects, pending, scope, OutboxMode::Absent)
+        Self::build(objects, pending, scope, OutboxMode::Absent, true)
+    }
+
+    /// Reserves one bounded subtree without coupling the reservation size to
+    /// an otherwise dynamically growing runtime graph.
+    pub fn new_in_process_subtree(
+        objects: NonZeroUsize,
+        pending: NonZeroUsize,
+        scope: ResourceScope,
+    ) -> Result<Self, DisposalReservationError> {
+        Self::build(objects, pending, scope, OutboxMode::Absent, false)
     }
 
     fn build(
@@ -107,6 +118,7 @@ impl DisposalReservationProfile {
         pending: NonZeroUsize,
         scope: ResourceScope,
         outbox: OutboxMode,
+        require_runtime_limit_match: bool,
     ) -> Result<Self, DisposalReservationError> {
         if !matches!(scope, ResourceScope::Extension { .. }) {
             return Err(DisposalReservationError::Invalid(
@@ -141,6 +153,7 @@ impl DisposalReservationProfile {
             .ok_or_else(overflow)?;
         Ok(Self {
             objects: objects.get(),
+            require_runtime_limit_match,
             pending: pending.get(),
             scope,
             bytes,
@@ -200,7 +213,7 @@ impl DisposalReservationProfile {
             if state.transport_closed {
                 return Err(RuntimeStateError::TransportClosed.into());
             }
-            if state.objects.limit() != self.objects {
+            if self.require_runtime_limit_match && state.objects.limit() != self.objects {
                 return Err(DisposalReservationError::Invalid(
                     "runtime object limit differs from reservation profile",
                 ));
@@ -479,7 +492,11 @@ impl ReservedDisposalCapacity {
         }
         state.ensure_no_lifecycle_transaction()?;
         let disposal_order = state.objects.subtree_ids_child_first(object_id);
-        debug_assert!(disposal_order.len() <= self.permit.0.profile.objects);
+        if disposal_order.len() > self.permit.0.profile.objects {
+            return Err(DisposalReservationError::Invalid(
+                "disposal subtree exceeds reserved capacity",
+            ));
+        }
         let transaction_id = state.begin_lifecycle_transaction()?;
         if let Some(controls) = &mut self.controls {
             controls.truncate(disposal_order.len());

@@ -38,6 +38,7 @@ use playwright_rust_transport::FrameLimits;
 use crate::{HostError, evaluation};
 
 const MAX_TOPOLOGY_OBJECTS: usize = 64;
+#[cfg(not(feature = "network-events"))]
 const BASE_RUNTIME_LIVE_OBJECTS: usize = 256;
 /// One bounded connection replay window large enough for the declared
 /// 16-Page/128-session/256-world authoritative reattach burst and the small
@@ -65,7 +66,11 @@ const MAX_CDP_WEBSOCKET_BYTES: usize = 8 * 1024 * 1024;
 #[cfg(not(any(feature = "large-evaluation-inputs", feature = "large-route-post-data")))]
 const MAX_CDP_WEBSOCKET_BYTES: usize = 4 * 1024 * 1024;
 #[cfg(feature = "network-events")]
-const MAX_NETWORK_ACTIVE_REQUESTS_PER_PAGE: usize = 64;
+// Upstream Playwright retains active Chromium Requests in dynamically sized
+// maps and imposes no API-visible request-count limit. usize::MAX is a sentinel
+// that disables the portable tracker's finite-count rejection without
+// allocating or pre-sizing storage.
+const UNBOUNDED_NETWORK_ACTIVE_REQUESTS: usize = usize::MAX;
 #[cfg(feature = "network-events")]
 const MAX_NETWORK_PAGE_LANES: usize = 8;
 #[cfg(feature = "network-events")]
@@ -137,11 +142,10 @@ pub(crate) fn attach_factory_with_native_close(
     .and_then(ChromiumTopologyEventDriverProductionProfile::with_parallel_recursive_attachment)
     .map_err(HostError::backend)?;
     let discovery = ChromiumPageDiscoveryProductionProfile::from_profiles(&connection, topology);
+    #[cfg(not(feature = "network-events"))]
     let runtime_live_objects = BASE_RUNTIME_LIVE_OBJECTS;
     #[cfg(feature = "network-events")]
-    let runtime_live_objects = runtime_live_objects.max(
-        MAX_TOPOLOGY_OBJECTS + (2 * MAX_NETWORK_ACTIVE_REQUESTS_PER_PAGE * MAX_NETWORK_PAGE_LANES),
-    );
+    let runtime_live_objects = usize::MAX;
     let runtime_limits = RuntimeLimits::new(runtime_live_objects, 16).with_active_commands(8);
     #[cfg(feature = "concurrent-close")]
     let runtime_limits = if native_close {
@@ -436,7 +440,7 @@ pub(crate) fn attach_factory_with_native_close(
     #[cfg(feature = "network-events")]
     let profile = {
         let lifecycle = NetworkLifecycleLimits::new(
-            MAX_NETWORK_ACTIVE_REQUESTS_PER_PAGE,
+            UNBOUNDED_NETWORK_ACTIVE_REQUESTS,
             256,
             64 * 1024,
             32,
@@ -456,7 +460,7 @@ pub(crate) fn attach_factory_with_native_close(
         let lifecycle =
             lifecycle.with_native_scope_bytes(crate::worker_events::MAX_WORKER_ID_BYTES);
         #[cfg(all(feature = "large-route-post-data", feature = "route-request-history"))]
-        let adapter = CdpNetworkEventProductionProfile::with_bounded_large_post_data(
+        let adapter = CdpNetworkEventProductionProfile::with_unbounded_active_requests_and_bounded_large_post_data(
             lifecycle,
             ResourceScope::extension(135, 2),
             MAX_NETWORK_POST_DATA_BYTES,
@@ -464,9 +468,11 @@ pub(crate) fn attach_factory_with_native_close(
         )
         .map_err(HostError::backend)?;
         #[cfg(not(all(feature = "large-route-post-data", feature = "route-request-history")))]
-        let adapter =
-            CdpNetworkEventProductionProfile::new(lifecycle, ResourceScope::extension(135, 2))
-                .map_err(HostError::backend)?;
+        let adapter = CdpNetworkEventProductionProfile::new_unbounded_active_requests(
+            lifecycle,
+            ResourceScope::extension(135, 2),
+        )
+        .map_err(HostError::backend)?;
         #[cfg(not(feature = "worker-network-events"))]
         let network = ChromiumNetworkEventsProductionProfile::new_with_context_limit(
             adapter,
@@ -522,7 +528,7 @@ mod tests {
 
     #[cfg(feature = "network-events")]
     #[test]
-    fn network_profile_admits_a_bounded_parallel_page_load() {
+    fn network_profile_matches_playwright_unbounded_request_count() {
         // Arrange
         let factory = attach_factory(Duration::from_secs(5)).unwrap();
 
@@ -535,7 +541,7 @@ mod tests {
         // Assert
         assert_eq!(
             network.adapter().limits().active_requests,
-            MAX_NETWORK_ACTIVE_REQUESTS_PER_PAGE
+            UNBOUNDED_NETWORK_ACTIVE_REQUESTS
         );
         assert_eq!(
             network.adapter().ordinary_post_data_bytes(),
@@ -569,11 +575,7 @@ mod tests {
             network.max_related_sessions(),
             crate::worker_events::MAX_WORKERS
         );
-        assert_eq!(
-            factory.profile().runtime().live_objects,
-            MAX_TOPOLOGY_OBJECTS
-                + (2 * MAX_NETWORK_ACTIVE_REQUESTS_PER_PAGE * MAX_NETWORK_PAGE_LANES)
-        );
+        assert_eq!(factory.profile().runtime().live_objects, usize::MAX);
         assert!(network.adapter().maximum_retained_bytes() > 0);
     }
 
@@ -677,12 +679,10 @@ mod tests {
     fn native_lifecycle_attachments_need_no_control_outbox() {
         // Arrange
         let ordinary = attach_factory(Duration::from_secs(5)).unwrap();
+        #[cfg(not(feature = "network-events"))]
         let expected_live_objects = crate::close_jobs::MAX_OBJECTS;
         #[cfg(feature = "network-events")]
-        let expected_live_objects = expected_live_objects.max(
-            MAX_TOPOLOGY_OBJECTS
-                + (2 * MAX_NETWORK_ACTIVE_REQUESTS_PER_PAGE * MAX_NETWORK_PAGE_LANES),
-        );
+        let expected_live_objects = usize::MAX;
         // Act
         let selected = attach_factory_with_native_close(Duration::from_secs(5), true).unwrap();
         // Assert

@@ -1,6 +1,15 @@
-<!-- agent-updated: 2026-11-14T05:29:40Z -->
+<!-- agent-updated: 2026-11-14T22:25:00Z -->
 
 # Open tasks
+
+- [x] Match upstream Chromium's unbounded active Request count; add 129-request
+  lifecycle/adapter regressions and verify that an unfiltered WSJ load no
+  longer fails on request 65.
+- [x] Treat a network Request whose observed frame has already left topology as
+  frame-unavailable instead of terminating the Browser.
+- [ ] Fix the independent HostSession teardown hang observed after remote CDP
+  screenshot runs, then rerun the full WSJ navigation/screenshot/zero-resource
+  cleanup path without diagnostic timeouts.
 
 - [x] Verify standalone locked release checks, the Rust workspace tests, Node
   build/tests, Python wheel/tests, and relevant dependency proofs.

@@ -9090,6 +9090,29 @@ async def test_context_console_waiter_arms_before_lifecycle_fence() -> None:
     assert context._event_waiters == {}
 
 
+def test_closed_browser_ignores_already_scheduled_lifecycle_notice() -> None:
+    # Arrange
+    browser = object.__new__(Browser)
+    browser._closed = True
+    browser._contexts = cast(Any, None)
+
+    # Act
+    browser._receive_lifecycle_notice(
+        1,
+        "context-1",
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+
+    # Assert
+    assert browser._closed is True
+
+
 class _FrameEventNative:
     def __init__(self) -> None:
         self.rows: list[tuple[str, str | None, str, str]] = [
@@ -10699,6 +10722,86 @@ async def test_async_environment_closes_with_zero_ffi_metrics() -> None:
         "closes": 0,
         "watches": 0,
     }
+
+
+@pytest.mark.asyncio
+async def test_playwright_stop_cancels_all_explicit_notice_watchers() -> None:
+    # Arrange
+    manager = async_playwright()
+    playwright = await manager.start()
+    cancelled: list[str] = []
+
+    class BrowserWithNoticeWatchers:
+        _closed = False
+        _remote = False
+        _contexts: dict[str, object] = {}
+
+        def cancel(self, name: str) -> Awaitable[None]:
+            async def operation() -> None:
+                cancelled.append(name)
+
+            return operation()
+
+        def _cancel_remote_disconnect_watcher(self) -> Awaitable[None]:
+            return self.cancel("remote_disconnect")
+
+        def _cancel_cdp_event_watcher(self) -> Awaitable[None]:
+            return self.cancel("cdp")
+
+        def _cancel_lifecycle_watcher(self) -> Awaitable[None]:
+            return self.cancel("lifecycle")
+
+        def _cancel_route_watcher(self) -> Awaitable[None]:
+            return self.cancel("route")
+
+        def _cancel_request_watcher(self) -> Awaitable[None]:
+            return self.cancel("request")
+
+        def _cancel_response_watcher(self) -> Awaitable[None]:
+            return self.cancel("response")
+
+        def _cancel_download_watcher(self) -> Awaitable[None]:
+            return self.cancel("download")
+
+        def _cancel_worker_watcher(self) -> Awaitable[None]:
+            return self.cancel("worker")
+
+        def _cancel_worker_console_watcher(self) -> Awaitable[None]:
+            return self.cancel("worker_console")
+
+        def _settle_cdp_detach_tasks(self) -> Awaitable[None]:
+            return self.cancel("settle_cdp")
+
+        def _finish_lifecycle_watcher(self) -> Awaitable[None]:
+            return self.cancel("finish_lifecycle")
+
+        def _finish_binding_watcher(self) -> Awaitable[None]:
+            return self.cancel("finish_binding")
+
+        def _finish_route_watcher(self) -> Awaitable[None]:
+            return self.cancel("finish_route")
+
+    playwright._browsers.append(cast(Any, BrowserWithNoticeWatchers()))
+
+    # Act
+    await playwright.stop()
+
+    # Assert
+    assert cancelled == [
+        "remote_disconnect",
+        "cdp",
+        "lifecycle",
+        "route",
+        "request",
+        "response",
+        "download",
+        "worker",
+        "worker_console",
+        "settle_cdp",
+        "finish_lifecycle",
+        "finish_binding",
+        "finish_route",
+    ]
 
 
 @pytest.mark.asyncio
