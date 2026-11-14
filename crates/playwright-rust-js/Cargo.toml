@@ -1,0 +1,9 @@
+[package]
+name = "playwright-rust-js"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Centralized JavaScript snippets for playwright-rust CDP bridge"
+
+[dependencies]
+serde_json = { workspace = true }

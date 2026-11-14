@@ -1,0 +1,23 @@
+[package]
+name = "playwright-rust-backend-cdp-locator-resolution"
+description = "Opt-in group-owned Chromium Locator element resolution"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+default = []
+retained-reference = []
+
+[dependencies]
+playwright-rust-backend-cdp-selector-runtime = { workspace = true }
+playwright-rust-cdp = { workspace = true }
+playwright-rust-core = { workspace = true }
+playwright-rust-selector-model = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+playwright-rust-fake = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt"] }

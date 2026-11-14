@@ -1,5 +1,5 @@
-use pwright::client_navigation::PageGotoExt;
-use pwright::navigation::{GotoParams, WaitUntil};
+use playwright_rust::client_navigation::PageGotoExt;
+use playwright_rust::navigation::{GotoParams, WaitUntil};
 
 fn main() {
     let request = GotoParams::new("https://example.com").with_wait_until(WaitUntil::Load);

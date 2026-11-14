@@ -1,8 +1,8 @@
 [package]
-name = "pwright-v2-umbrella-chromium-navigation"
+name = "playwright-rust-v2-umbrella-chromium-navigation"
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
 
 [dependencies]
-pwright = { workspace = true, features = ["chromium-navigation"] }
+playwright-rust = { workspace = true, features = ["chromium-navigation"] }

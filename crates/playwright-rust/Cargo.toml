@@ -1,0 +1,233 @@
+[package]
+name = "playwright-rust"
+description = "No-default-features umbrella for composable Playwright Rust v2 components"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[features]
+default = []
+core = ["dep:playwright-rust-core"]
+navigation = ["core", "dep:playwright-rust-cap-navigation"]
+evaluation = ["core", "dep:playwright-rust-cap-evaluation"]
+content = ["core", "dep:playwright-rust-cap-content"]
+context-lifecycle = ["core", "dep:playwright-rust-cap-context-lifecycle"]
+page-lifecycle = ["core", "dep:playwright-rust-cap-page-lifecycle"]
+page-creation = ["core", "page-lifecycle", "dep:playwright-rust-cap-page-creation"]
+handle-lifecycle = ["core", "dep:playwright-rust-cap-handle-lifecycle"]
+handle-evaluation = ["core", "handle-lifecycle", "dep:playwright-rust-cap-handle-evaluation"]
+ordered-handle-delivery = [
+    "handle-evaluation",
+    "runtime",
+    "transport",
+    "dep:playwright-rust-plugin-ordered-handle-delivery",
+]
+context-creation = [
+    "core",
+    "context-lifecycle",
+    "dep:playwright-rust-cap-context-creation",
+]
+locator = ["core", "dep:playwright-rust-cap-locator"]
+locator-screenshot = ["core", "dep:playwright-rust-cap-locator-screenshot"]
+dom-content = ["core", "dep:playwright-rust-cap-dom-content"]
+page-events = ["core", "dep:playwright-rust-cap-page-events"]
+network-events = ["core", "dep:playwright-rust-cap-network-events"]
+client = ["core", "dep:playwright-rust-client"]
+client-navigation = ["client", "navigation", "dep:playwright-rust-client-navigation"]
+client-evaluation = ["client", "evaluation", "dep:playwright-rust-client-evaluation"]
+client-content = ["client", "content", "dep:playwright-rust-client-content"]
+client-context-lifecycle = [
+    "client",
+    "context-lifecycle",
+    "dep:playwright-rust-client-context-lifecycle",
+]
+client-page-lifecycle = [
+    "client",
+    "page-lifecycle",
+    "dep:playwright-rust-client-page-lifecycle",
+]
+client-page-creation = [
+    "client",
+    "page-creation",
+    "client-page-lifecycle",
+    "dep:playwright-rust-client-page-creation",
+]
+client-handle-lifecycle = [
+    "client",
+    "handle-lifecycle",
+    "dep:playwright-rust-client-handle-lifecycle",
+]
+client-handle-evaluation = [
+    "client",
+    "handle-evaluation",
+    "client-handle-lifecycle",
+    "dep:playwright-rust-client-handle-evaluation",
+]
+client-context-creation = [
+    "client",
+    "context-creation",
+    "client-context-lifecycle",
+    "dep:playwright-rust-client-context-creation",
+]
+client-locator = ["client", "locator", "dep:playwright-rust-client-locator"]
+client-locator-screenshot = [
+    "client",
+    "locator-screenshot",
+    "dep:playwright-rust-client-locator-screenshot",
+]
+client-dom-content = ["client", "dom-content", "dep:playwright-rust-client-dom-content"]
+client-page-events = ["client", "page-events", "dep:playwright-rust-client-page-events"]
+client-network-events = [
+    "client",
+    "network-events",
+    "dep:playwright-rust-client-network-events",
+]
+cdp = ["dep:playwright-rust-cdp"]
+chromium-content = [
+    "cdp",
+    "content",
+    "dep:playwright-rust-composition-chromium-content",
+]
+chromium-context-lifecycle = [
+    "cdp",
+    "context-lifecycle",
+    "runtime",
+    "dep:playwright-rust-composition-chromium-context-lifecycle",
+]
+chromium-page-lifecycle = [
+    "cdp",
+    "page-lifecycle",
+    "runtime",
+    "dep:playwright-rust-composition-chromium-page-lifecycle",
+]
+chromium-page-creation = [
+    "cdp",
+    "runtime",
+    "page-creation",
+    "chromium-page-lifecycle",
+    "dep:playwright-rust-composition-chromium-page-creation",
+]
+chromium-handle-lifecycle = [
+    "cdp",
+    "handle-lifecycle",
+    "runtime",
+    "dep:playwright-rust-composition-chromium-handle-lifecycle",
+]
+chromium-handle-evaluation = [
+    "cdp",
+    "runtime",
+    "handle-evaluation",
+    "chromium-handle-lifecycle",
+    "dep:playwright-rust-composition-chromium-handle-evaluation",
+]
+chromium-context-creation = [
+    "cdp",
+    "runtime",
+    "context-creation",
+    "chromium-context-lifecycle",
+    "dep:playwright-rust-composition-chromium-context-creation",
+]
+chromium-locator = [
+    "cdp",
+    "locator",
+    "dep:playwright-rust-composition-chromium-locator",
+]
+chromium-locator-screenshot = [
+    "chromium-selector-geometry",
+    "cdp",
+    "locator-screenshot",
+    "dep:playwright-rust-composition-chromium-locator-screenshot",
+]
+chromium-selector-geometry = [
+    "cdp",
+    "locator-screenshot",
+    "dep:playwright-rust-backend-cdp-selector-geometry",
+]
+chromium-dom-content = [
+    "cdp",
+    "dom-content",
+    "dep:playwright-rust-composition-chromium-dom-content",
+]
+chromium-evaluation = [
+    "cdp",
+    "evaluation",
+    "dep:playwright-rust-composition-chromium-evaluation",
+]
+chromium-navigation = [
+    "cdp",
+    "navigation",
+    "dep:playwright-rust-composition-chromium-navigation",
+]
+chromium-page-events = [
+    "cdp",
+    "page-events",
+    "transport",
+    "dep:playwright-rust-composition-chromium-page-events",
+]
+chromium-network-events = [
+    "cdp",
+    "network-events",
+    "runtime",
+    "transport",
+    "dep:playwright-rust-composition-chromium-network-events",
+]
+runtime = ["core", "dep:playwright-rust-runtime"]
+runtime-tokio = ["runtime", "dep:playwright-rust-runtime-tokio"]
+transport = ["core", "dep:playwright-rust-transport"]
+transport-tokio = ["transport", "dep:playwright-rust-transport-tokio"]
+tokio = ["runtime-tokio", "transport-tokio"]
+
+[dependencies]
+playwright-rust-core = { path = "../playwright-rust-core", version = "0.1.0", optional = true }
+playwright-rust-cap-navigation = { path = "../playwright-rust-cap-navigation", version = "0.1.0", optional = true }
+playwright-rust-cap-evaluation = { path = "../playwright-rust-cap-evaluation", version = "0.1.0", optional = true }
+playwright-rust-cap-content = { path = "../playwright-rust-cap-content", version = "0.1.0", optional = true }
+playwright-rust-cap-context-lifecycle = { path = "../playwright-rust-cap-context-lifecycle", version = "0.1.0", optional = true }
+playwright-rust-cap-page-lifecycle = { path = "../playwright-rust-cap-page-lifecycle", version = "0.1.0", optional = true }
+playwright-rust-cap-page-creation = { path = "../playwright-rust-cap-page-creation", version = "0.1.0", optional = true }
+playwright-rust-cap-handle-lifecycle = { path = "../playwright-rust-cap-handle-lifecycle", version = "0.1.0", optional = true }
+playwright-rust-cap-handle-evaluation = { path = "../playwright-rust-cap-handle-evaluation", version = "0.1.0", optional = true }
+playwright-rust-cap-context-creation = { path = "../playwright-rust-cap-context-creation", version = "0.1.0", optional = true }
+playwright-rust-cap-locator = { path = "../playwright-rust-cap-locator", version = "0.1.0", optional = true }
+playwright-rust-cap-locator-screenshot = { path = "../playwright-rust-cap-locator-screenshot", version = "0.1.0", optional = true }
+playwright-rust-cap-dom-content = { path = "../playwright-rust-cap-dom-content", version = "0.1.0", optional = true }
+playwright-rust-cap-page-events = { path = "../playwright-rust-cap-page-events", version = "0.1.0", optional = true }
+playwright-rust-cap-network-events = { path = "../playwright-rust-cap-network-events", version = "0.1.0", optional = true }
+playwright-rust-client = { path = "../playwright-rust-client", version = "0.1.0", optional = true }
+playwright-rust-client-navigation = { path = "../playwright-rust-client-navigation", version = "0.1.0", optional = true }
+playwright-rust-client-evaluation = { path = "../playwright-rust-client-evaluation", version = "0.1.0", optional = true }
+playwright-rust-client-content = { path = "../playwright-rust-client-content", version = "0.1.0", optional = true }
+playwright-rust-client-context-lifecycle = { path = "../playwright-rust-client-context-lifecycle", version = "0.1.0", optional = true }
+playwright-rust-client-page-lifecycle = { path = "../playwright-rust-client-page-lifecycle", version = "0.1.0", optional = true }
+playwright-rust-client-page-creation = { path = "../playwright-rust-client-page-creation", version = "0.1.0", optional = true }
+playwright-rust-client-handle-lifecycle = { path = "../playwright-rust-client-handle-lifecycle", version = "0.1.0", optional = true }
+playwright-rust-client-handle-evaluation = { path = "../playwright-rust-client-handle-evaluation", version = "0.1.0", optional = true }
+playwright-rust-client-context-creation = { path = "../playwright-rust-client-context-creation", version = "0.1.0", optional = true }
+playwright-rust-client-locator = { path = "../playwright-rust-client-locator", version = "0.1.0", optional = true }
+playwright-rust-client-locator-screenshot = { path = "../playwright-rust-client-locator-screenshot", version = "0.1.0", optional = true }
+playwright-rust-client-dom-content = { path = "../playwright-rust-client-dom-content", version = "0.1.0", optional = true }
+playwright-rust-client-page-events = { path = "../playwright-rust-client-page-events", version = "0.1.0", optional = true }
+playwright-rust-client-network-events = { path = "../playwright-rust-client-network-events", version = "0.1.0", optional = true }
+playwright-rust-cdp = { path = "../playwright-rust-cdp", version = "0.1.0", optional = true }
+playwright-rust-backend-cdp-selector-geometry = { path = "../playwright-rust-backend-cdp-selector-geometry", version = "0.1.0", optional = true }
+playwright-rust-composition-chromium-content = { path = "../playwright-rust-composition-chromium-content", version = "0.1.0", optional = true }
+playwright-rust-composition-chromium-context-lifecycle = { path = "../playwright-rust-composition-chromium-context-lifecycle", version = "0.1.0", optional = true }
+playwright-rust-composition-chromium-page-lifecycle = { path = "../playwright-rust-composition-chromium-page-lifecycle", version = "0.1.0", optional = true }
+playwright-rust-composition-chromium-page-creation = { path = "../playwright-rust-composition-chromium-page-creation", version = "0.1.0", optional = true }
+playwright-rust-composition-chromium-handle-lifecycle = { path = "../playwright-rust-composition-chromium-handle-lifecycle", version = "0.1.0", optional = true }
+playwright-rust-composition-chromium-handle-evaluation = { path = "../playwright-rust-composition-chromium-handle-evaluation", version = "0.1.0", optional = true }
+playwright-rust-plugin-ordered-handle-delivery = { path = "../playwright-rust-plugin-ordered-handle-delivery", version = "0.1.0", optional = true }
+playwright-rust-composition-chromium-context-creation = { path = "../playwright-rust-composition-chromium-context-creation", version = "0.1.0", optional = true }
+playwright-rust-composition-chromium-locator = { path = "../playwright-rust-composition-chromium-locator", version = "0.1.0", optional = true }
+playwright-rust-composition-chromium-locator-screenshot = { path = "../playwright-rust-composition-chromium-locator-screenshot", version = "0.1.0", optional = true }
+playwright-rust-composition-chromium-dom-content = { path = "../playwright-rust-composition-chromium-dom-content", version = "0.1.0", optional = true }
+playwright-rust-composition-chromium-evaluation = { path = "../playwright-rust-composition-chromium-evaluation", version = "0.1.0", optional = true }
+playwright-rust-composition-chromium-navigation = { path = "../playwright-rust-composition-chromium-navigation", version = "0.1.0", optional = true }
+playwright-rust-composition-chromium-page-events = { path = "../playwright-rust-composition-chromium-page-events", version = "0.1.0", optional = true }
+playwright-rust-composition-chromium-network-events = { path = "../playwright-rust-composition-chromium-network-events", version = "0.1.0", optional = true }
+playwright-rust-runtime = { path = "../playwright-rust-runtime", version = "0.1.0", optional = true }
+playwright-rust-runtime-tokio = { path = "../playwright-rust-runtime-tokio", version = "0.1.0", optional = true }
+playwright-rust-transport = { path = "../playwright-rust-transport", version = "0.1.0", optional = true }
+playwright-rust-transport-tokio = { path = "../playwright-rust-transport-tokio", version = "0.1.0", optional = true }

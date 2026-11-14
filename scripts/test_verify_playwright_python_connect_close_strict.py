@@ -16,7 +16,7 @@ import pytest
 import verify_playwright_python_connect_close_strict as strict
 
 sys.path.insert(0, str(strict.GUARD))
-import pwright_official_connect_guard as guard
+import playwright_rust_official_connect_guard as guard
 
 
 class PolicyTests(unittest.TestCase):
@@ -127,14 +127,14 @@ class GuardTests(unittest.TestCase):
         self.host = "test.tail8f3b66.ts.net"
         self.port = 48000
         self.env = {
-            "PWRIGHT_PYTHON_CONNECT_EXPECTED_TEST": strict.TEST_IDS[1],
-            "PWRIGHT_PYTHON_CONNECT_UPSTREAM": str(self.root),
-            "PWRIGHT_PYTHON_CONNECT_PORT": str(self.port),
-            "PWRIGHT_PYTHON_CONNECT_RECEIPT": str(self.receipt),
-            "PWRIGHT_PYTHON_CONNECT_NONCE": "a" * 32,
-            "PWRIGHT_OFFICIAL_TAILSCALE_HOST": self.host,
-            "PWRIGHT_OFFICIAL_TAILSCALE_IP": "100.78.97.63",
-            "PWRIGHT_OFFICIAL_MODE": "oracle",
+            "PLAYWRIGHT_RUST_PYTHON_CONNECT_EXPECTED_TEST": strict.TEST_IDS[1],
+            "PLAYWRIGHT_RUST_PYTHON_CONNECT_UPSTREAM": str(self.root),
+            "PLAYWRIGHT_RUST_PYTHON_CONNECT_PORT": str(self.port),
+            "PLAYWRIGHT_RUST_PYTHON_CONNECT_RECEIPT": str(self.receipt),
+            "PLAYWRIGHT_RUST_PYTHON_CONNECT_NONCE": "a" * 32,
+            "PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_HOST": self.host,
+            "PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_IP": "100.78.97.63",
+            "PLAYWRIGHT_RUST_OFFICIAL_MODE": "oracle",
         }
         guard._selected_test = None
         guard._invocations = 0
@@ -218,7 +218,7 @@ class GuardTests(unittest.TestCase):
 
     def test_candidate_missing_method_remains_missing(self) -> None:
         # Arrange
-        self.env["PWRIGHT_OFFICIAL_MODE"] = "candidate"
+        self.env["PLAYWRIGHT_RUST_OFFICIAL_MODE"] = "candidate"
 
         class BrowserType:
             name = "firefox"

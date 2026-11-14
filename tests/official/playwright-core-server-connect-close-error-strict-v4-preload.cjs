@@ -7,22 +7,22 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { fileURLToPath } = require('node:url');
 
-const mode = process.env.PWRIGHT_CORE_SERVER_CONNECT_CLOSE_ERROR_V4_MODE;
-const upstream = process.env.PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM;
-const receipt = process.env.PWRIGHT_CORE_SERVER_CONNECT_CLOSE_ERROR_V4_RECEIPT;
-const fixtureHost = process.env.PWRIGHT_OFFICIAL_SERVER_HOST;
-const fixtureBind = process.env.PWRIGHT_OFFICIAL_SERVER_IP;
+const mode = process.env.PLAYWRIGHT_RUST_CORE_SERVER_CONNECT_CLOSE_ERROR_V4_MODE;
+const upstream = process.env.PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM;
+const receipt = process.env.PLAYWRIGHT_RUST_CORE_SERVER_CONNECT_CLOSE_ERROR_V4_RECEIPT;
+const fixtureHost = process.env.PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST;
+const fixtureBind = process.env.PLAYWRIGHT_RUST_OFFICIAL_SERVER_IP;
 if (!['candidate', 'oracle'].includes(mode) || !upstream || !receipt)
   throw new Error('v4 Close guard requires mode, upstream and receipt');
 if (!/^[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*\.ts\.net$/.test(fixtureHost || ''))
   throw new Error('v4 Close guard requires full Tailscale MagicDNS host');
 if (!/^100\.(?:6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\.(?:[0-9]{1,3})\.(?:[0-9]{1,3})$/.test(fixtureBind || ''))
   throw new Error('v4 Close guard requires a Tailscale IPv4 bind');
-for (const key of ['PWRIGHT_CANDIDATE_CDP_ENDPOINT', 'PWRIGHT_ORACLE_CDP_ENDPOINT',
-  'PWRIGHT_CDP_ENDPOINT', 'PWRIGHT_CDP_WS_URL']) {
+for (const key of ['PLAYWRIGHT_RUST_CANDIDATE_CDP_ENDPOINT', 'PLAYWRIGHT_RUST_ORACLE_CDP_ENDPOINT',
+  'PLAYWRIGHT_RUST_CDP_ENDPOINT', 'PLAYWRIGHT_RUST_CDP_WS_URL']) {
   if (process.env[key]) throw new Error(`v4 Close guard forbids ${key}`);
 }
-const guardKey = Symbol.for('pwright.server-connect-close.v4.guard');
+const guardKey = Symbol.for('playwright.rust.server-connect-close.v4.guard');
 const prior = process[guardKey];
 
 const source = path.join(path.resolve(upstream), 'tests/library/browsertype-connect.spec.ts');
@@ -32,7 +32,7 @@ const sourceSha256 = '9de4d9c8c71b8509887c81220f2eb0042e89e146c65d0311b020d19181
 const serverFixtureSha256 = '4c0039a149bd61e8707adddc626b345632561bd343749293ddbe9458f6ac617b';
 const adaptedSha256 = '923655fa0381086cd6702fd1aa3c81535e0bf4c06c5d5df826c392bc79aa6a25';
 const before = 'const error = await connect(`ws://localhost:${server.PORT}/ws`).catch(e => e);';
-const after = 'const error = await connect(`ws://${process.env.PWRIGHT_OFFICIAL_SERVER_HOST}:${server.PORT}/ws`).catch(e => e);';
+const after = 'const error = await connect(`ws://${process.env.PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST}:${server.PORT}/ws`).catch(e => e);';
 const nativeReadFileSync = prior?.nativeReadFileSync ?? fs.readFileSync;
 const sha256 = value => crypto.createHash('sha256').update(value).digest('hex');
 const sourceText = nativeReadFileSync.call(fs, source, 'utf8');
@@ -56,14 +56,14 @@ if (sha256(serverFixtureText) !== serverFixtureSha256 ||
 
 let ownerBound = null;
 if (mode === 'candidate') {
-  if (process.env.PWRIGHT_NATIVE_PROFILE !== 'playwright-server-connect-close-error')
+  if (process.env.PLAYWRIGHT_RUST_NATIVE_PROFILE !== 'playwright-server-connect-close-error')
     throw new Error('v4 Close candidate profile drifted');
   require('./playwright-core-browser-type-owner-v2-preload.cjs');
-  const implementation = require(path.resolve(process.env.PWRIGHT_NODE_CANDIDATE || ''));
+  const implementation = require(path.resolve(process.env.PLAYWRIGHT_RUST_NODE_CANDIDATE || ''));
   ownerBound = ['chromium', 'firefox', 'webkit'].every(
     name => implementation[name]._playwright === implementation);
   if (!ownerBound) throw new Error('v4 Close candidate BrowserType owner was not bound');
-} else if (process.env.PWRIGHT_NODE_CANDIDATE || process.env.PWRIGHT_NATIVE_PROFILE) {
+} else if (process.env.PLAYWRIGHT_RUST_NODE_CANDIDATE || process.env.PLAYWRIGHT_RUST_NATIVE_PROFILE) {
   throw new Error('v4 Close oracle forbids candidate selection');
 }
 

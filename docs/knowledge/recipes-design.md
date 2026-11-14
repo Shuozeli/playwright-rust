@@ -1,8 +1,10 @@
+<!-- agent-updated: 2026-11-14T05:28:56Z -->
+
 # Recipes Design
 
 Pre-built YAML script templates for common browser automation tasks.
 Recipes are generic, parameterized scripts that work out of the box
-with `pwright script run`.
+with `playwright-rust script run`.
 
 ## Goals
 
@@ -45,7 +47,7 @@ Each recipe follows a consistent structure:
 ```yaml
 # recipe-name.yaml -- One-line description
 #
-# Usage: pwright script run examples/recipes/category/recipe.yaml \
+# Usage: playwright-rust script run examples/recipes/category/recipe.yaml \
 #          --param key=value
 #
 # Prerequisites: (if any, e.g. "must be logged into Gmail in Chrome")
@@ -258,7 +260,7 @@ Search Google and extract top results.
 {
   "query": "rust browser automation",
   "results": [
-    {"title": "pwright - ...", "url": "https://...", "snippet": "..."},
+    {"title": "playwright-rust - ...", "url": "https://...", "snippet": "..."},
     ...
   ]
 }

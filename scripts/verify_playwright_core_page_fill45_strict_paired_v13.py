@@ -71,7 +71,7 @@ CANDIDATE_ARTIFACT_SHA256 = (
 CANDIDATE_SOURCE_SHA256 = (
     "8f7871adeb009eed6bdd097f6317e8f16c8df84116b04e23ac652faa3ac0367f"
 )
-ARTIFACT = PACKAGE / f"native/{CANDIDATE_PROFILE}/pwright.node"
+ARTIFACT = PACKAGE / f"native/{CANDIDATE_PROFILE}/playwright_rust.node"
 CHROME_VERSION_OBSERVED = "155.0.8059.85"
 LANES = ("candidate", "oracle")
 BUNDLE_NAMES = {
@@ -170,7 +170,7 @@ def verify_package() -> None:
         and manifest["profile"] == CANDIDATE_PROFILE
         and manifest["candidateSourceSha256"] == CANDIDATE_SOURCE_SHA256
         and manifest["artifactSha256"] == CANDIDATE_ARTIFACT_SHA256
-        and manifest["sourcePackage"] == str(ROOT / "packages/pwright")
+        and manifest["sourcePackage"] == str(ROOT / "packages/playwright-rust")
         and manifest["snapshotPackage"] == str(PACKAGE)
         and isinstance(manifest["files"], list)
         and len(manifest["files"]) == 68,

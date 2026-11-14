@@ -13,7 +13,7 @@
         "tests/image_tools/fixtures.spec.ts",
         "tests/image_tools/unit.spec.ts"
       ],
-      "sourceOnlyAdapter": "upstream-private-source-only-no-pwright-runtime",
+      "sourceOnlyAdapter": "upstream-private-source-only-no-playwright-rust-runtime",
       "requiresBrowser": false,
       "fixtureMode": "pinned-private-source-only-no-io",
       "sourceOnlyCase": "private-image-tools-batch-v1",

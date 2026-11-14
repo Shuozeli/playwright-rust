@@ -1,10 +1,10 @@
-<!-- agent-updated: 2026-10-06T21:07:32Z -->
+<!-- agent-updated: 2026-11-14T05:28:56Z -->
 
 # Playwright API Compatibility
 
-pwright aims to provide a Rust API with the same mental model as [Playwright](https://playwright.dev). This document maps every Playwright public API to its pwright status: **supported**, **planned**, or **out of scope**.
+playwright-rust aims to provide a Rust API with the same mental model as [Playwright](https://playwright.dev). This document maps every Playwright public API to its playwright-rust status: **supported**, **planned**, or **out of scope**.
 
-> **Constraint:** pwright only supports **remote CDP** — connecting to an externally-managed Chrome via WebSocket. No browser launch, no profiles, no tracing, no video.
+> **Constraint:** playwright-rust only supports **remote CDP** — connecting to an externally-managed Chrome via WebSocket. No browser launch, no profiles, no tracing, no video.
 
 Node NODE-427 adds opt-in `Browser.newContext({ hasTouch: true })` over the
 existing Rust device-emulation registry and completes native TouchEvent
@@ -159,7 +159,7 @@ Playwright
                       └─ Touchscreen
 ```
 
-| Playwright class | pwright Rust struct | Status |
+| Playwright class | playwright-rust Rust struct | Status |
 |-----------------|-------------------|--------|
 | `BrowserType` | — | Only `connectOverCDP()` via `Browser::connect()` |
 | `Browser` | `Browser` | ✅ Exists |
@@ -170,14 +170,14 @@ Playwright
 | `Keyboard` | `Keyboard` | ✅ Exists |
 | `Mouse` | `Mouse` | ✅ Exists |
 | `Touchscreen` | `Touchscreen` | ✅ Exists |
-| `APIRequestContext` | `pwright_api_request::ApiRequestContext` | ✅ Node/Python opt-in |
-| `APIResponse` | `pwright_api_request::ApiResponse` | ✅ Node/Python opt-in |
+| `APIRequestContext` | `playwright_rust_api_request::ApiRequestContext` | ✅ Node/Python opt-in |
+| `APIResponse` | `playwright_rust_api_request::ApiResponse` | ✅ Node/Python opt-in |
 
 ---
 
 ## Browser
 
-| Playwright API | pwright | Status | Notes |
+| Playwright API | playwright-rust | Status | Notes |
 |---------------|---------|--------|-------|
 | `browser.newContext(opts)` | `browser.new_context()` | Partial | Node opt-in Context creation supports selected base URL, headers, proxy/CSP and `hasTouch`; other nondefault device/policy options remain explicit |
 | `browser.newPage(opts)` | `browser.new_page()` | Planned | Shorthand: creates context + page |
@@ -194,7 +194,7 @@ Playwright
 
 ## BrowserContext
 
-| Playwright API | pwright | Status | CDP method |
+| Playwright API | playwright-rust | Status | CDP method |
 |---------------|---------|--------|------------|
 | `context.newPage()` | `context.new_page()` | ✅ Python | Rust-owned `Target.createTarget` lifecycle |
 | `context.pages()` | `context.pages()` | ✅ Python | Published Rust topology |
@@ -219,7 +219,7 @@ Playwright
 | `context.exposeBinding()` | — | Planned (Tier 3) | `Runtime.addBinding` |
 | `context.exposeFunction()` | — | Planned (Tier 3) | `Runtime.addBinding` |
 | `context.tracing` | — | ❌ Out of scope | |
-| `context.request` (APIRequestContext) | `pwright_api_request::ApiRequestContext` | Planned | Global `playwright.request` is public; BrowserContext cookie sharing is pending |
+| `context.request` (APIRequestContext) | `playwright_rust_api_request::ApiRequestContext` | Planned | Global `playwright.request` is public; BrowserContext cookie sharing is pending |
 
 ---
 
@@ -227,7 +227,7 @@ Playwright
 
 ### Navigation
 
-| Playwright API | pwright | Status | CDP method |
+| Playwright API | playwright-rust | Status | CDP method |
 |---------------|---------|--------|------------|
 | `page.goto(url, opts)` | `page.goto()` | ✅ Exists | `Page.navigate` |
 | `page.reload(opts)` | `page.reload()` | ✅ Exists | `Page.reload` |
@@ -239,7 +239,7 @@ Playwright
 
 ### Content & State
 
-| Playwright API | pwright | Status | Implementation |
+| Playwright API | playwright-rust | Status | Implementation |
 |---------------|---------|--------|----------------|
 | `page.url()` | `page.url()` | ✅ Exists | `Runtime.evaluate` |
 | `page.title()` | `page.title()` | ✅ Exists | `Runtime.evaluate` |
@@ -250,7 +250,7 @@ Playwright
 
 ### Evaluation
 
-| Playwright API | pwright | Status | Implementation |
+| Playwright API | playwright-rust | Status | Implementation |
 |---------------|---------|--------|----------------|
 | `page.evaluate(fn, arg)` | `page.evaluate()` | ✅ Exists | `Runtime.evaluate` |
 | `page.evaluate(fn, arg)` (async) | `page.evaluate_async()` | ✅ Exists | `Runtime.evaluate` with `awaitPromise: true` |
@@ -263,7 +263,7 @@ Playwright
 
 ### Screenshots & PDF
 
-| Playwright API | pwright | Status | CDP method |
+| Playwright API | playwright-rust | Status | CDP method |
 |---------------|---------|--------|------------|
 | `page.screenshot(opts)` | `page.screenshot()` | ✅ Exists | `Page.captureScreenshot` |
 | `page.pdf(opts)` | `page.pdf()` | ✅ Exists | `Page.printToPDF` |
@@ -271,7 +271,7 @@ Playwright
 
 ### Input (selector-based)
 
-| Playwright API | pwright | Status | Notes |
+| Playwright API | playwright-rust | Status | Notes |
 |---------------|---------|--------|-------|
 | `page.click(selector)` | `page.click()` | ✅ Exists | Via Locator |
 | `page.dblclick(selector)` | `page.dblclick()` | ✅ Exists | `clickCount: 2` |
@@ -289,7 +289,7 @@ Playwright
 
 ### Locators (getBy)
 
-| Playwright API | pwright | Status | Selector strategy |
+| Playwright API | playwright-rust | Status | Selector strategy |
 |---------------|---------|--------|-------------------|
 | `page.locator(selector)` | `page.locator()` | ✅ Exists | CSS `querySelector` |
 | `page.getByRole(role)` | `page.get_by_role()` | ✅ Exists | JS implicit role mapping + `[role]` |
@@ -303,7 +303,7 @@ Playwright
 
 ### DOM Queries (selector-based)
 
-| Playwright API | pwright | Status | Implementation |
+| Playwright API | playwright-rust | Status | Implementation |
 |---------------|---------|--------|----------------|
 | `page.textContent(sel)` | `page.text_content(sel)` | ✅ Exists | Delegates to `Locator::text_content()` |
 | `page.innerText(sel)` | `page.inner_text(sel)` | ✅ Exists | Delegates to `Locator::inner_text()` |
@@ -319,7 +319,7 @@ Playwright
 
 ### Emulation
 
-| Playwright API | pwright | Status | CDP method |
+| Playwright API | playwright-rust | Status | CDP method |
 |---------------|---------|--------|------------|
 | `page.setViewportSize(size)` | `page.set_viewport_size()` | Planned | `Emulation.setDeviceMetricsOverride` |
 | `page.viewportSize()` | `page.viewport_size()` | Planned | Cached locally |
@@ -327,7 +327,7 @@ Playwright
 
 ### Waiting
 
-| Playwright API | pwright | Status | Implementation |
+| Playwright API | playwright-rust | Status | Implementation |
 |---------------|---------|--------|----------------|
 | `page.waitForTimeout(ms)` | `page.wait_for_timeout()` | ✅ Exists | `tokio::time::sleep` |
 | `page.waitForFunction(fn)` | `page.wait_for_function()` | Planned (Tier 3) | Poll `Runtime.evaluate` |
@@ -338,7 +338,7 @@ Playwright
 
 ### Network Interception
 
-| Playwright API | pwright | Status | CDP method |
+| Playwright API | playwright-rust | Status | CDP method |
 |---------------|---------|--------|------------|
 | `page.route(url, handler)` | `page.route()` | Partial: Python ABI 86 opt-in | Bounded string patterns and finite `times`; continue/fallback URL/method/header/POST-data overrides, abort and fulfill with Playwright reason phrases; regex/predicate gaps |
 | `page.unroute(url, handler=None)` | `page.unroute()` | Partial: Python ABI 85 opt-in | Exact bounded string-pattern removal; optional original handler identity; regex/predicate gaps |
@@ -351,7 +351,7 @@ Playwright
 
 ### Misc
 
-| Playwright API | pwright | Status | Notes |
+| Playwright API | playwright-rust | Status | Notes |
 |---------------|---------|--------|-------|
 | `page.bringToFront()` | `page.bring_to_front()` | ✅ Exists | `Page.bringToFront` |
 | `page.mainFrame()` | `page.main_frame()` | ✅ Python | Published Rust Frame tree |
@@ -370,7 +370,7 @@ Playwright
 
 ### Actions
 
-| Playwright API | pwright | Status | Implementation |
+| Playwright API | playwright-rust | Status | Implementation |
 |---------------|---------|--------|----------------|
 | `locator.click(opts)` | `locator.click()` | ✅ Exists | Resolve → click via box model |
 | `locator.dblclick(opts)` | `locator.dblclick()` | ✅ Exists | `clickCount: 2` |
@@ -394,7 +394,7 @@ Playwright
 
 ### Queries
 
-| Playwright API | pwright | Status | Implementation |
+| Playwright API | playwright-rust | Status | Implementation |
 |---------------|---------|--------|----------------|
 | `locator.textContent()` | `locator.text_content()` | ✅ Exists | `Runtime.callFunctionOn` |
 | `locator.innerText()` | `locator.inner_text()` | ✅ Exists | `Runtime.callFunctionOn` |
@@ -412,7 +412,7 @@ Playwright
 
 ### Composition
 
-| Playwright API | pwright | Status | Notes |
+| Playwright API | playwright-rust | Status | Notes |
 |---------------|---------|--------|-------|
 | `locator.first()` | `locator.first()` | ✅ Exists | `querySelectorAll` + index 0 |
 | `locator.last()` | `locator.last()` | ✅ Exists | `querySelectorAll` + index -1 |
@@ -426,7 +426,7 @@ Playwright
 
 ### Waiting & Assertions
 
-| Playwright API | pwright | Status | Implementation |
+| Playwright API | playwright-rust | Status | Implementation |
 |---------------|---------|--------|----------------|
 | `locator.waitFor(opts)` | `locator.wait_for()` | ✅ Exists | Poll with `WaitState`: Attached, Visible, Hidden, Detached |
 | `locator.screenshot(opts)` | `locator.screenshot()` | Planned | Element clip screenshot |
@@ -441,7 +441,7 @@ Playwright
 
 ## Keyboard
 
-| Playwright API | pwright | Status | CDP method |
+| Playwright API | playwright-rust | Status | CDP method |
 |---------------|---------|--------|------------|
 | `keyboard.down(key)` | `keyboard.down()` | ✅ Exists | `Input.dispatchKeyEvent` rawKeyDown |
 | `keyboard.up(key)` | `keyboard.up()` | ✅ Exists | `Input.dispatchKeyEvent` keyUp |
@@ -451,7 +451,7 @@ Playwright
 
 ## Mouse
 
-| Playwright API | pwright | Status | CDP method |
+| Playwright API | playwright-rust | Status | CDP method |
 |---------------|---------|--------|------------|
 | `mouse.click(x, y, opts)` | `mouse.click()` | ✅ Exists | mousePressed + mouseReleased |
 | `mouse.dblclick(x, y, opts)` | `mouse.dblclick()` | ✅ Exists | `clickCount: 2` |
@@ -462,7 +462,7 @@ Playwright
 
 ## Touchscreen
 
-| Playwright API | pwright | Status | CDP method |
+| Playwright API | playwright-rust | Status | CDP method |
 |---------------|---------|--------|------------|
 | `touchscreen.tap(x, y)` | `touchscreen.tap()` | ✅ Exists | `Input.dispatchTouchEvent` |
 
@@ -480,7 +480,7 @@ request behaviors pass 21/21 in both candidate and oracle lanes. BrowserContext
 cookie/certificate sharing, proxy paths and multiple identities for one origin
 are still planned.
 
-| Playwright API | pwright | Status |
+| Playwright API | playwright-rust | Status |
 |---------------|---------|--------|
 | `request.newContext(opts)` | `ApiRequestContext::new()` | ✅ Node/Python opt-in |
 | `context.fetch(url, opts)` | `ApiRequestContext::fetch()` | ✅ Node/Python opt-in |
@@ -499,7 +499,7 @@ are still planned.
 
 ## Selector Engine
 
-pwright implements a subset of Playwright's selector engine:
+playwright-rust implements a subset of Playwright's selector engine:
 
 | Selector | Syntax | Implementation |
 |----------|--------|----------------|
@@ -527,15 +527,15 @@ locator("button.submit").click()
 
 ## JS Evaluation Strategy
 
-All JavaScript snippets are centralized in the `pwright-js` crate:
+All JavaScript snippets are centralized in the `playwright-rust-js` crate:
 
 | Module | What's there |
 |--------|-------------|
-| `pwright_js::dom` | `GET_INNER_TEXT`, `query_selector_exists()` |
-| `pwright_js::page` | `GET_READY_STATE`, `GET_LOCATION_HREF`, `GET_TITLE`, `GET_DOCUMENT_HTML`, `scroll_by()` |
-| `pwright_js::element` | `GET_BOUNDING_CENTER`, `SET_VALUE` |
+| `playwright_rust_js::dom` | `GET_INNER_TEXT`, `query_selector_exists()` |
+| `playwright_rust_js::page` | `GET_READY_STATE`, `GET_LOCATION_HREF`, `GET_TITLE`, `GET_DOCUMENT_HTML`, `scroll_by()` |
+| `playwright_rust_js::element` | `GET_BOUNDING_CENTER`, `SET_VALUE` |
 
-Where possible, pwright avoids JS and uses pure CDP domains:
+Where possible, playwright-rust avoids JS and uses pure CDP domains:
 - **DOM queries**: `DOM.getAttributes`, `DOM.getOuterHTML`, `DOM.getBoxModel`
 - **Visibility checks**: `DOM.getBoxModel` success/failure (`is_visible`, `is_hidden`)
 - **Input**: `Input.dispatchKeyEvent`, `Input.dispatchMouseEvent`

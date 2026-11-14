@@ -1,0 +1,18 @@
+[package]
+name = "playwright-rust-server-tracing"
+description = "Generated opt-in typed server handlers for tracing"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+playwright-rust-cap-tracing = { workspace = true }
+playwright-rust-codec-tracing = { workspace = true }
+playwright-rust-server-wire = { workspace = true }
+playwright-rust-transport = { workspace = true }
+
+[dev-dependencies]
+playwright-rust-browser-model = { workspace = true }
+playwright-rust-core = { workspace = true }

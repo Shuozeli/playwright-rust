@@ -1,0 +1,14 @@
+[package]
+name = "playwright-rust-server-content"
+description = "Generated composable server bindings for Playwright Rust content capture"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+playwright-rust-cap-content = { workspace = true }
+playwright-rust-codec-content = { workspace = true }
+playwright-rust-server-wire = { workspace = true }
+playwright-rust-transport = { workspace = true }

@@ -583,49 +583,49 @@ dependencies = [
 ]
 
 [[package]]
-name = "pwright-backend-cdp-common"
+name = "playwright-rust-backend-cdp-common"
 version = "0.1.0"
 dependencies = [
- "pwright-cdp",
- "pwright-core",
+ "playwright-rust-cdp",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-backend-cdp-content"
+name = "playwright-rust-backend-cdp-content"
 version = "0.1.0"
 dependencies = [
  "base64",
- "pwright-backend-cdp-common",
- "pwright-browser-backend",
- "pwright-cap-content",
- "pwright-cdp",
- "pwright-core",
+ "playwright-rust-backend-cdp-common",
+ "playwright-rust-browser-backend",
+ "playwright-rust-cap-content",
+ "playwright-rust-cdp",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-browser-backend"
+name = "playwright-rust-browser-backend"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-cap-content"
+name = "playwright-rust-cap-content"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
- "pwright-screenshot-model",
+ "playwright-rust-core",
+ "playwright-rust-screenshot-model",
 ]
 
 [[package]]
-name = "pwright-cdp"
+name = "playwright-rust-cdp"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
  "dashmap",
  "futures-util",
- "pwright-core",
+ "playwright-rust-core",
  "serde",
  "serde_json",
  "thiserror",
@@ -637,103 +637,103 @@ dependencies = [
 ]
 
 [[package]]
-name = "pwright-codec-binary"
+name = "playwright-rust-codec-binary"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-codec-common"
+name = "playwright-rust-codec-common"
 version = "0.1.0"
 dependencies = [
- "pwright-codec-binary",
- "pwright-core",
+ "playwright-rust-codec-binary",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-codec-content"
+name = "playwright-rust-codec-content"
 version = "0.1.0"
 dependencies = [
- "pwright-cap-content",
- "pwright-codec-binary",
- "pwright-codec-common",
- "pwright-codec-screenshot",
- "pwright-core",
- "pwright-transport",
+ "playwright-rust-cap-content",
+ "playwright-rust-codec-binary",
+ "playwright-rust-codec-common",
+ "playwright-rust-codec-screenshot",
+ "playwright-rust-core",
+ "playwright-rust-transport",
 ]
 
 [[package]]
-name = "pwright-codec-screenshot"
+name = "playwright-rust-codec-screenshot"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
- "pwright-screenshot-model",
- "pwright-transport",
+ "playwright-rust-core",
+ "playwright-rust-screenshot-model",
+ "playwright-rust-transport",
 ]
 
 [[package]]
-name = "pwright-composition-chromium-content"
+name = "playwright-rust-composition-chromium-content"
 version = "0.1.0"
 dependencies = [
- "pwright-backend-cdp-content",
- "pwright-cap-content",
- "pwright-cdp",
- "pwright-codec-content",
- "pwright-core",
- "pwright-server-content",
- "pwright-transport",
+ "playwright-rust-backend-cdp-content",
+ "playwright-rust-cap-content",
+ "playwright-rust-cdp",
+ "playwright-rust-codec-content",
+ "playwright-rust-core",
+ "playwright-rust-server-content",
+ "playwright-rust-transport",
 ]
 
 [[package]]
-name = "pwright-connection-control"
+name = "playwright-rust-connection-control"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-core"
+name = "playwright-rust-core"
 version = "0.1.0"
 
 [[package]]
-name = "pwright-screenshot-model"
+name = "playwright-rust-screenshot-model"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-server-content"
+name = "playwright-rust-server-content"
 version = "0.1.0"
 dependencies = [
- "pwright-cap-content",
- "pwright-codec-content",
- "pwright-server-wire",
- "pwright-transport",
+ "playwright-rust-cap-content",
+ "playwright-rust-codec-content",
+ "playwright-rust-server-wire",
+ "playwright-rust-transport",
 ]
 
 [[package]]
-name = "pwright-server-wire"
+name = "playwright-rust-server-wire"
 version = "0.1.0"
 dependencies = [
- "pwright-connection-control",
- "pwright-core",
- "pwright-transport",
+ "playwright-rust-connection-control",
+ "playwright-rust-core",
+ "playwright-rust-transport",
 ]
 
 [[package]]
-name = "pwright-transport"
+name = "playwright-rust-transport"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-v2-content-only-example"
+name = "playwright-rust-v2-content-only-example"
 version = "0.1.0"
 dependencies = [
- "pwright-composition-chromium-content",
+ "playwright-rust-composition-chromium-content",
 ]
 
 [[package]]

@@ -11,18 +11,18 @@ const playwrightRequire = createRequire(require.resolve('playwright/package.json
 const oracleRoot = dirname(playwrightRequire.resolve('playwright-core/package.json'));
 assert.equal(require(join(oracleRoot, 'package.json')).version, '1.58.2');
 const { mime } = require(join(oracleRoot, 'lib/utilsBundle.js'));
-const source = readFileSync(join(root, 'crates/pwright-file-input-fs/src/mime/table.rs'), 'utf8');
+const source = readFileSync(join(root, 'crates/playwright-rust-file-input-fs/src/mime/table.rs'), 'utf8');
 const rows = [...source.matchAll(/\(\s*"([^"]+)",\s*"([^"]+)",?\s*\)/g)].map(match => [match[1], match[2]]);
 assert.equal(rows.length, 1173);
 assert.deepEqual(Object.fromEntries(rows), { ...mime._types });
-const build = spawnSync('cargo', ['build', '--release', '--locked', '-p', 'pwright-file-input-fs', '--example', 'mime-lookup'], {
+const build = spawnSync('cargo', ['build', '--release', '--locked', '-p', 'playwright-rust-file-input-fs', '--example', 'mime-lookup'], {
   cwd: root, encoding: 'utf8', maxBuffer: 1024 * 1024,
   env: { ...process.env, CARGO_INCREMENTAL: '0', CARGO_BUILD_JOBS: '1' },
 });
 if (build.error) throw build.error;
 assert.equal(build.status, 0, build.stderr);
 const cases = rows.flatMap(([ext]) => [ext, `.${ext}`, `a.${ext}`, `a.${ext.toUpperCase()}`, `a/${ext}`, `a/.${ext}`, `a/b.${ext}`, `a\\b.${ext}`]);
-cases.push('', '.', '..', '/', 'a.', 'a.unknown-pwright', 'a.KML', 'a.İ', 'a/b\\.txt');
+cases.push('', '.', '..', '/', 'a.', 'a.unknown-playwrightRust', 'a.KML', 'a.İ', 'a/b\\.txt');
 for (let offset = 0; offset < cases.length; offset += 128) {
   const batch = cases.slice(offset, offset + 128);
   const result = spawnSync(join(root, 'target/release/examples/mime-lookup'), batch, {

@@ -24,7 +24,7 @@ from verify_playwright_official_provenance import verify_provenance
 ROOT = source.ROOT
 SNAPSHOT = ROOT / ".work/official-conformance/snapshots/core-cdp-error-slice-strict-v2-candidate"
 SOURCE_SHA256 = "041a4d60f4901b5f89ffbff492fa13c33e41f6c1ee695c1c81d120e6dba4f03a"
-ARTIFACT = SNAPSHOT / "native" / source.PROFILE / "pwright.node"
+ARTIFACT = SNAPSHOT / "native" / source.PROFILE / "playwright_rust.node"
 RECEIPT_SHA256 = "92c6720100cfbecdef6ad36e3bd8fdaf3f327251b4200f83dafeb0ef893e4cb4"
 ORIGINAL_VERIFIER_SHA256 = "d059b55943d5a4506f5499e48d4ea9bd06eee40a244a84b620c394e4a08bb7a0"
 PROMOTER_SHA256 = "1a41f80e08d476c803d6bd76d351bba943e5216ca7312dedb9340434faedbe99"
@@ -180,7 +180,7 @@ def verify_strict_from_snapshot(strict_path: Path) -> dict[str, Any]:
             and provenance["candidateArtifactSha256"] == source.ARTIFACT_SHA256
             and provenance["candidateSourceSha256"] == SOURCE_SHA256
             and provenance["candidate"] is not None
-            and "[pwright-candidate]" in log,
+            and "[playwright-rust-candidate]" in log,
             "candidate identity drift",
         )
     else:
@@ -188,7 +188,7 @@ def verify_strict_from_snapshot(strict_path: Path) -> dict[str, Any]:
             strict["candidateProfile"] is None
             and strict["candidateArtifactSha256"] is None
             and provenance["candidate"] is None
-            and "[pwright-candidate]" not in log,
+            and "[playwright-rust-candidate]" not in log,
             "oracle identity drift",
         )
     selected = capture.selected_tests(json.loads(result.read_text()))

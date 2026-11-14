@@ -1,0 +1,34 @@
+[package]
+name = "playwright-rust-plugin-tracing-artifact"
+description = "Opt-in bounded tracing-to-Artifact producer"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+playwright-rust-artifact-runtime = { workspace = true }
+playwright-rust-browser-model = { workspace = true }
+playwright-rust-cap-artifact = { workspace = true }
+playwright-rust-cap-tracing = { workspace = true }
+playwright-rust-cap-tracing-artifact = { workspace = true }
+playwright-rust-core = { workspace = true }
+playwright-rust-runtime = { workspace = true }
+playwright-rust-runtime-control = { workspace = true }
+playwright-rust-server-tracing-artifact = { workspace = true }
+playwright-rust-trace-format = { workspace = true }
+playwright-rust-tracing-service = { workspace = true }
+playwright-rust-transport = { workspace = true }
+
+[dev-dependencies]
+playwright-rust-artifact-service = { workspace = true }
+playwright-rust-client = { workspace = true }
+playwright-rust-client-tracing-artifact = { workspace = true }
+playwright-rust-client-wire = { workspace = true }
+playwright-rust-codec-control = { workspace = true }
+playwright-rust-codec-tracing-artifact = { workspace = true }
+playwright-rust-server-wire = { workspace = true }
+playwright-rust-trace-model = { workspace = true }
+playwright-rust-transport-memory = { workspace = true }
+tokio = { workspace = true }

@@ -77,7 +77,7 @@ def verify_strict(path: Path) -> dict:
         manifest_override=MANIFEST,
         result_override=result,
         upstream_override=UPSTREAM,
-        candidate_override=ROOT / "packages/pwright",
+        candidate_override=ROOT / "packages/playwright-rust",
         tooling_root=ROOT,
     )
     assert provenance["mode"] == strict["mode"]
@@ -101,13 +101,13 @@ def verify_strict(path: Path) -> dict:
             set(record) == {"pid", "workerIndex", "candidate", "ownerBound"} for record in records
         )
         assert all(
-            record["candidate"] == str(ROOT / "packages/pwright") and record["ownerBound"] is True
+            record["candidate"] == str(ROOT / "packages/playwright-rust") and record["ownerBound"] is True
             for record in records
         )
         assert {
             record["workerIndex"] for record in records if record["workerIndex"] is not None
         } == {str(row["workerIndex"]) for row in selected}
-        assert "[pwright-candidate]" in log_path.read_text()
+        assert "[playwright-rust-candidate]" in log_path.read_text()
     else:
         assert strict["candidateProfile"] is None
         assert strict["candidateArtifactSha256"] is None

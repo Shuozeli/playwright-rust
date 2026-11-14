@@ -36,7 +36,7 @@ PREDECESSOR_VERIFIER = (
 )
 PROVENANCE_VERIFIER = ROOT / "scripts/verify_playwright_official_provenance.py"
 PACKAGE = WORK / "builds/core-dialog10-evaluation-clean-20261021-v1/candidate"
-ARTIFACT = PACKAGE / "native/official-conformance-page-check/pwright.node"
+ARTIFACT = PACKAGE / "native/official-conformance-page-check/playwright_rust.node"
 COUNT = 48_477
 TARGET_COUNT = 21
 FILE = "page/selectors-misc.spec.ts"

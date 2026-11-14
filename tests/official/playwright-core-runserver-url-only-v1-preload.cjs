@@ -8,10 +8,10 @@ const net = require('node:net');
 const path = require('node:path');
 
 const expectedSuite = 'library-server-connect-version-mismatch-chromium-url-v1';
-const suite = process.env.PWRIGHT_OFFICIAL_RUNSERVER_URL_SUITE;
-const bind = process.env.PWRIGHT_OFFICIAL_RUNSERVER_EXPECT_BIND;
-const host = process.env.PWRIGHT_OFFICIAL_RUNSERVER_EXPECT_HOST;
-const receipt = process.env.PWRIGHT_OFFICIAL_RUNSERVER_RECEIPT;
+const suite = process.env.PLAYWRIGHT_RUST_OFFICIAL_RUNSERVER_URL_SUITE;
+const bind = process.env.PLAYWRIGHT_RUST_OFFICIAL_RUNSERVER_EXPECT_BIND;
+const host = process.env.PLAYWRIGHT_RUST_OFFICIAL_RUNSERVER_EXPECT_HOST;
+const receipt = process.env.PLAYWRIGHT_RUST_OFFICIAL_RUNSERVER_RECEIPT;
 if (suite !== expectedSuite || net.isIP(bind) !== 4 || !host?.endsWith('.ts.net') || !receipt)
   throw new Error('RunServer URL-only preload requires the pinned Tailscale suite and receipt');
 

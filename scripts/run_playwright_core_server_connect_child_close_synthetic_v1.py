@@ -44,21 +44,21 @@ FORBIDDEN_OVERRIDES = (
     "PWTEST_MODE",
     "PWPAGE_IMPL",
     "PWTEST_USE_BIDI_EXPECTATIONS",
-    "PWRIGHT_CANDIDATE_CDP_ENDPOINT",
-    "PWRIGHT_ORACLE_CDP_ENDPOINT",
-    "PWRIGHT_CDP_ENDPOINT",
-    "PWRIGHT_CDP_WS_URL",
-    "PWRIGHT_NATIVE_PROFILE",
-    "PWRIGHT_NODE_CANDIDATE",
-    "PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM",
-    "PWRIGHT_OFFICIAL_SERVER_IP",
-    "PWRIGHT_OFFICIAL_SERVER_HOST",
-    "PWRIGHT_CORE_LIFECYCLE_SYNTHETIC_MODE",
-    "PWRIGHT_CORE_LIFECYCLE_SYNTHETIC_RECEIPT",
-    "PWRIGHT_CORE_LIFECYCLE_SYNTHETIC_SERVER",
-    "PWRIGHT_CORE_CHILD_CLOSE_SYNTHETIC_MODE",
-    "PWRIGHT_CORE_CHILD_CLOSE_SYNTHETIC_RECEIPT",
-    "PWRIGHT_CORE_CHILD_CLOSE_SYNTHETIC_SERVER",
+    "PLAYWRIGHT_RUST_CANDIDATE_CDP_ENDPOINT",
+    "PLAYWRIGHT_RUST_ORACLE_CDP_ENDPOINT",
+    "PLAYWRIGHT_RUST_CDP_ENDPOINT",
+    "PLAYWRIGHT_RUST_CDP_WS_URL",
+    "PLAYWRIGHT_RUST_NATIVE_PROFILE",
+    "PLAYWRIGHT_RUST_NODE_CANDIDATE",
+    "PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM",
+    "PLAYWRIGHT_RUST_OFFICIAL_SERVER_IP",
+    "PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST",
+    "PLAYWRIGHT_RUST_CORE_LIFECYCLE_SYNTHETIC_MODE",
+    "PLAYWRIGHT_RUST_CORE_LIFECYCLE_SYNTHETIC_RECEIPT",
+    "PLAYWRIGHT_RUST_CORE_LIFECYCLE_SYNTHETIC_SERVER",
+    "PLAYWRIGHT_RUST_CORE_CHILD_CLOSE_SYNTHETIC_MODE",
+    "PLAYWRIGHT_RUST_CORE_CHILD_CLOSE_SYNTHETIC_RECEIPT",
+    "PLAYWRIGHT_RUST_CORE_CHILD_CLOSE_SYNTHETIC_SERVER",
 )
 
 
@@ -77,7 +77,7 @@ def capture(result_dir: Path) -> dict[str, object]:
         raise ValueError("result directory needs the versioned child-close prefix")
     if result_dir.exists() or result_dir.is_symlink():
         raise ValueError("diagnostic destination already exists")
-    artifact = SOURCE_PACKAGE / "native" / PROFILE / "pwright.node"
+    artifact = SOURCE_PACKAGE / "native" / PROFILE / "playwright_rust.node"
     if not artifact.is_file() or artifact.is_symlink():
         raise ValueError("selected-profile release addon is missing")
     inputs_before = {str(path.relative_to(ROOT)): sha256(path) for path in INPUTS}
@@ -98,9 +98,9 @@ def capture(result_dir: Path) -> dict[str, object]:
         log = result_dir / f"{mode}.log"
         env = os.environ.copy()
         env["NODE_OPTIONS"] = f"--require={PRELOAD}"
-        env["PWRIGHT_CORE_CHILD_CLOSE_SYNTHETIC_MODE"] = mode
-        env["PWRIGHT_CORE_CHILD_CLOSE_SYNTHETIC_RECEIPT"] = str(receipt)
-        env["PWRIGHT_CORE_CHILD_CLOSE_SYNTHETIC_SERVER"] = str(SERVER)
+        env["PLAYWRIGHT_RUST_CORE_CHILD_CLOSE_SYNTHETIC_MODE"] = mode
+        env["PLAYWRIGHT_RUST_CORE_CHILD_CLOSE_SYNTHETIC_RECEIPT"] = str(receipt)
+        env["PLAYWRIGHT_RUST_CORE_CHILD_CLOSE_SYNTHETIC_SERVER"] = str(SERVER)
         command = [
             "uv",
             "run",

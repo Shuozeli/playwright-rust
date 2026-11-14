@@ -169,7 +169,7 @@ class CurrentSnapshotTests(unittest.TestCase):
 
 class SyntheticMutationTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.temp = tempfile.TemporaryDirectory(prefix="pwright-adapter-audit-test-")
+        self.temp = tempfile.TemporaryDirectory(prefix="playwright-rust-adapter-audit-test-")
         root = Path(self.temp.name)
         self.manifest = root / "manifest.json"
         self.strict_manifest = root / "strict-manifest.json"

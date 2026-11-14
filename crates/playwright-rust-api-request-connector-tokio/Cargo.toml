@@ -1,0 +1,19 @@
+[package]
+name = "playwright-rust-api-request-connector-tokio"
+description = "Optional Tokio TCP connector for Playwright Rust API requests"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[features]
+default = []
+
+[dependencies]
+async-trait.workspace = true
+futures-util.workspace = true
+playwright-rust-api-request-transport.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+url.workspace = true

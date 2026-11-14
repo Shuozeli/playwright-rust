@@ -3,10 +3,10 @@
 const Module = require('node:module');
 const path = require('node:path');
 
-const candidate = process.env.PWRIGHT_NODE_CANDIDATE;
-const upstream = process.env.PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM;
-if (!candidate) throw new Error('PWRIGHT_NODE_CANDIDATE is required');
-if (!upstream) throw new Error('PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM is required');
+const candidate = process.env.PLAYWRIGHT_RUST_NODE_CANDIDATE;
+const upstream = process.env.PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM;
+if (!candidate) throw new Error('PLAYWRIGHT_RUST_NODE_CANDIDATE is required');
+if (!upstream) throw new Error('PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM is required');
 
 const candidateEntry = require.resolve(path.resolve(candidate));
 const testModeSource = path.join(path.resolve(upstream), 'tests', 'config', 'testMode.ts');
@@ -32,7 +32,7 @@ function publishOfficialBuiltins() {
 
 async function installOfficialBuiltins(page) {
   // Playwright's own UtilityScript exposes these only while its upstream test
-  // build isUnderTest. Reproduce that fixture input here; it is not a Pwright
+  // build isUnderTest. Reproduce that fixture input here; it is not a Playwright Rust
   // public API and is never installed outside this official-test preload.
   await page.evaluate(publishOfficialBuiltins);
   return page;
@@ -42,7 +42,7 @@ function candidateForOfficialFixtures(parent, isMain) {
   if (adaptedCandidate) return adaptedCandidate;
   const implementation = originalLoad(candidateEntry, parent, isMain);
   if (!implementation?.chromium)
-    throw new Error(`Pwright candidate has no chromium export: ${candidateEntry}`);
+    throw new Error(`Playwright Rust candidate has no chromium export: ${candidateEntry}`);
 
   // @playwright/test's fixture recorder consumes these Playwright-client
   // internals even when trace and screenshot fixtures are unused. Keep the
@@ -89,12 +89,12 @@ function candidateForOfficialFixtures(parent, isMain) {
       return context;
     },
   });
-  const endpoint = process.env.PWRIGHT_CANDIDATE_CDP_ENDPOINT;
+  const endpoint = process.env.PLAYWRIGHT_RUST_CANDIDATE_CDP_ENDPOINT;
   const chromium = Object.create(implementation.chromium);
   if (endpoint) {
     chromium.launch = async () => {
       process.stderr.write(
-        `[pwright-candidate] browserType.launch fixture adapter -> connectOverCDP(${endpoint})\n`,
+        `[playwright-rust-candidate] browserType.launch fixture adapter -> connectOverCDP(${endpoint})\n`,
       );
       const browser = await implementation.chromium.connectOverCDP(endpoint);
       browser._connection = { headers: [] };
@@ -140,10 +140,10 @@ function candidateForOfficialFixtures(parent, isMain) {
   return adaptedCandidate;
 }
 
-Module._load = function pwrightCandidateLoad(request, parent, isMain) {
+Module._load = function playwrightRustCandidateLoad(request, parent, isMain) {
   if (request === 'playwright-core' && parent?.filename === testModeSource) {
     process.stderr.write(
-      `[pwright-candidate] ${testModeSource} -> ${candidateEntry}\n`,
+      `[playwright-rust-candidate] ${testModeSource} -> ${candidateEntry}\n`,
     );
     return candidateForOfficialFixtures(parent, isMain);
   }

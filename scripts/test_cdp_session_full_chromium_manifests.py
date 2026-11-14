@@ -25,7 +25,7 @@ SOURCES = {
 
 def _manifest(api: str) -> dict[str, object]:
     path = (
-        ROOT / "packages/pwright-python/tests/official/"
+        ROOT / "packages/playwright-rust-python/tests/official/"
         f"{api}-cdp-session-full-chromium-v1-manifest.json"
     )
     return json.loads(path.read_text())

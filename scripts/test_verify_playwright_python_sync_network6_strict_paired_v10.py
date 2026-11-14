@@ -239,16 +239,16 @@ def test_paired_classification_rejects_status_mutation(mutation: str) -> None:
 
 def test_archive_fingerprint_detects_content_and_extra_directory(tmp_path: Path) -> None:
     # Arrange
-    for relative in ("pwright", "shuozeli_pwright.dylibs", "harness/shim", "harness/runtime"):
+    for relative in ("playwright_rust", "shuozeli_playwright_rust.dylibs", "harness/shim", "harness/runtime"):
         (tmp_path / relative).mkdir(parents=True)
         (tmp_path / relative / "one.txt").write_text(relative)
     expected = verify.archive_fingerprint(tmp_path)
 
     # Act / Assert
-    (tmp_path / "pwright" / "one.txt").write_text("changed")
+    (tmp_path / "playwright_rust" / "one.txt").write_text("changed")
     assert verify.archive_fingerprint(tmp_path) != expected
-    (tmp_path / "pwright" / "one.txt").write_text("pwright")
-    (tmp_path / "pwright" / "extra").mkdir()
+    (tmp_path / "playwright_rust" / "one.txt").write_text("playwright_rust")
+    (tmp_path / "playwright_rust" / "extra").mkdir()
     assert verify.archive_fingerprint(tmp_path) != expected
 
 

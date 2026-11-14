@@ -61,11 +61,11 @@ UPSTREAM_COMMIT = "47a5d35ef4f815a2021349f86ae391f7c20c02d6"
 UPSTREAM_NAVIGATION_SHA256 = (
     "f04af8cbdee3dffb2c578d61d7685f02e5186ca565906323d71b6f92f96cd144"
 )
-MANIFEST = ROOT / "packages/pwright-python/tests/official/manifest.json"
+MANIFEST = ROOT / "packages/playwright-rust-python/tests/official/manifest.json"
 MANIFEST_SHA256 = "6d4f86fee517e300319cfa87014a54302980bdf8cf538fa21c1daff4219ea724"
 INVENTORY = WORK / "playwright-python-v1.58.0-profiled.jsonl"
 INVENTORY_SHA256 = "3dfb11b6ad7eb4736166ee2c4f7fa32cda78063324ad8314ce12f3e2d49b9d41"
-WHEEL = BUILD_DIR / "wheel/shuozeli_pwright-0.1.0-cp39-abi3-macosx_11_0_arm64.whl"
+WHEEL = BUILD_DIR / "wheel/shuozeli_playwright-rust-0.1.0-cp39-abi3-macosx_11_0_arm64.whl"
 WHEEL_SHA256 = "40889db525656b5410a994c81e79530f873531c28ac0e8c9052e8603a87efb78"
 IDENTITY = BUILD_DIR / "results/abi130-v2-identity.json"
 IDENTITY_SHA256 = "aeb78b8ff2a6acd554b210491f8b73e9e27cae47faa29ddd128106b38ae7f2f7"
@@ -257,9 +257,9 @@ def report(targets: list[str]) -> tuple[dict[str, Any], dict[str, dict[str, Any]
         and payload.get("caseReportsSha256") == CASE_REPORTS_SHA256
         and payload.get("result") == str(REPORT)
         and payload.get("resultSha256") == REPORT_SHA256
-        and payload.get("pwrightPackageSha256") == PACKAGE_SHA256
-        and payload.get("pwrightArtifactSha256") == ARTIFACT_SHA256
-        and payload.get("pwrightPackage") == str(prior.CANDIDATE_PACKAGE)
+        and payload.get("playwright_rustPackageSha256") == PACKAGE_SHA256
+        and payload.get("playwright_rustArtifactSha256") == ARTIFACT_SHA256
+        and payload.get("playwright_rustPackage") == str(prior.CANDIDATE_PACKAGE)
         and payload.get("fixtureBind") == "100.78.97.63"
         and payload.get("fixtureHost") == "macbookpro-yuacx.tail8f3b66.ts.net"
         and payload.get("exitCode") == 1
@@ -335,12 +335,12 @@ def source_pins(payload: dict[str, Any]) -> bytes:
         "wheelName": WHEEL.name,
         "abi130Identity": str(IDENTITY),
         "abi130IdentitySha256": IDENTITY_SHA256,
-        "pwrightPackageSha256": payload["pwrightPackageSha256"],
-        "pwrightArtifactSha256": payload["pwrightArtifactSha256"],
+        "playwright_rustPackageSha256": payload["playwright_rustPackageSha256"],
+        "playwright_rustArtifactSha256": payload["playwright_rustArtifactSha256"],
         "playwrightPackageSha256": payload["playwrightPackageSha256"],
         "harnessInputs": payload["harnessInputs"],
         "toolingSources": payload["toolingSources"],
-        "pwrightRuntimeLibraries": payload["pwrightRuntimeLibraries"],
+        "playwright_rustRuntimeLibraries": payload["playwright_rustRuntimeLibraries"],
     }
     return (json.dumps(pins, indent=2, sort_keys=True) + "\n").encode()
 

@@ -109,14 +109,14 @@ class PythonOfficialProvenanceTests(unittest.TestCase):
         # Arrange
         with TemporaryDirectory() as directory:
             root = Path(directory)
-            pwright_package = root / "site/pwright"
-            pwright_package.mkdir(parents=True)
+            playwright_rust_package = root / "site/playwright_rust"
+            playwright_rust_package.mkdir(parents=True)
             runtime: RuntimeIdentity = {
                 "pythonExecutable": sys.executable,
                 "pythonVersion": "3.12",
                 "playwrightPackage": str(root / "shim/playwright"),
-                "pwrightPackage": str(pwright_package),
-                "pwrightArtifact": None,
+                "playwright_rustPackage": str(playwright_rust_package),
+                "playwright_rustArtifact": None,
             }
             environment = os.environ.copy()
             environment["PLAYWRIGHT_BROWSERS_PATH"] = "0"
@@ -145,7 +145,7 @@ class PythonOfficialProvenanceTests(unittest.TestCase):
             )
 
             # Assert
-            self.assertEqual(candidate["registryRoot"], str(pwright_package / ".local-browsers"))
+            self.assertEqual(candidate["registryRoot"], str(playwright_rust_package / ".local-browsers"))
             self.assertEqual(oracle["registryRoot"], str(browsers_json.parent / ".local-browsers"))
             self.assertNotEqual(candidate["registryRoot"], oracle["registryRoot"])
             self.assertEqual(_registry_executables(candidate)[0]["revision"], "1208")
@@ -160,8 +160,8 @@ class PythonOfficialProvenanceTests(unittest.TestCase):
                 "pythonExecutable": sys.executable,
                 "pythonVersion": "3.12",
                 "playwrightPackage": str(root / "shim/playwright"),
-                "pwrightPackage": str(root / "site/pwright"),
-                "pwrightArtifact": None,
+                "playwright_rustPackage": str(root / "site/playwright_rust"),
+                "playwright_rustArtifact": None,
             }
             environment = os.environ.copy()
             environment["PLAYWRIGHT_BROWSERS_PATH"] = "relative-cache"
@@ -200,8 +200,8 @@ class PythonOfficialProvenanceTests(unittest.TestCase):
                 "pythonExecutable": sys.executable,
                 "pythonVersion": "3.12",
                 "playwrightPackage": str(root / "shim/playwright"),
-                "pwrightPackage": str(root / "site/pwright"),
-                "pwrightArtifact": None,
+                "playwright_rustPackage": str(root / "site/playwright_rust"),
+                "playwright_rustArtifact": None,
             }
             environment = os.environ.copy()
             environment["PLAYWRIGHT_HOST_PLATFORM_OVERRIDE"] = "win64"
@@ -239,8 +239,8 @@ class PythonOfficialProvenanceTests(unittest.TestCase):
                 "pythonExecutable": sys.executable,
                 "pythonVersion": "3.12",
                 "playwrightPackage": str(root / "shim/playwright"),
-                "pwrightPackage": str(root / "site/pwright"),
-                "pwrightArtifact": None,
+                "playwright_rustPackage": str(root / "site/playwright_rust"),
+                "playwright_rustArtifact": None,
             }
             browsers_json = probe_official_browsers_json(
                 sys.executable, cwd=root, env=os.environ.copy()
@@ -284,8 +284,8 @@ class PythonOfficialProvenanceTests(unittest.TestCase):
                 "pythonExecutable": sys.executable,
                 "pythonVersion": "3.12",
                 "playwrightPackage": str(root / "shim/playwright"),
-                "pwrightPackage": str(root / "site/pwright"),
-                "pwrightArtifact": None,
+                "playwright_rustPackage": str(root / "site/playwright_rust"),
+                "playwright_rustArtifact": None,
             }
             environment = {"HOME": str(root)}
             browsers_json = probe_official_browsers_json(
@@ -321,8 +321,8 @@ class PythonOfficialProvenanceTests(unittest.TestCase):
                 "pythonExecutable": sys.executable,
                 "pythonVersion": "3.12",
                 "playwrightPackage": str(root / "shim/playwright"),
-                "pwrightPackage": str(root / "site/pwright"),
-                "pwrightArtifact": None,
+                "playwright_rustPackage": str(root / "site/playwright_rust"),
+                "playwright_rustArtifact": None,
             }
             environment = os.environ.copy()
             environment["PLAYWRIGHT_BROWSERS_PATH"] = str(cache)
@@ -381,8 +381,8 @@ class PythonOfficialProvenanceTests(unittest.TestCase):
                 "pythonExecutable": sys.executable,
                 "pythonVersion": "3.12",
                 "playwrightPackage": str(root / "playwright"),
-                "pwrightPackage": str(root / "pwright"),
-                "pwrightArtifact": None,
+                "playwright_rustPackage": str(root / "playwright_rust"),
+                "playwright_rustArtifact": None,
             }
 
             # Act and Assert
@@ -506,12 +506,12 @@ class PythonOfficialProvenanceTests(unittest.TestCase):
             }
             manifest_path.write_text(json.dumps(manifest) + "\n")
             playwright_package = root / "playwright"
-            pwright_package = root / "pwright"
+            playwright_rust_package = root / "playwright_rust"
             harness = root / "runtime"
-            for package in (playwright_package, pwright_package, harness):
+            for package in (playwright_package, playwright_rust_package, harness):
                 package.mkdir()
                 (package / "__init__.py").write_text("\n")
-            artifact = pwright_package / "_native.abi3.so"
+            artifact = playwright_rust_package / "_native.abi3.so"
             artifact.write_bytes(b"native")
             inventory = root / "inventory.jsonl"
             inventory.write_text('{"id":"tests/test_a.py::test_a"}\n')
@@ -524,8 +524,8 @@ class PythonOfficialProvenanceTests(unittest.TestCase):
                 "pythonExecutable": "/usr/bin/python3",
                 "pythonVersion": "3.9.6",
                 "playwrightPackage": str(playwright_package),
-                "pwrightPackage": str(pwright_package),
-                "pwrightArtifact": str(artifact),
+                "playwright_rustPackage": str(playwright_rust_package),
+                "playwright_rustArtifact": str(artifact),
             }
             scripts = root / "scripts"
             scripts.mkdir()
@@ -575,7 +575,7 @@ class PythonOfficialProvenanceTests(unittest.TestCase):
             self.assertEqual(provenance["schema"], 2)
             self.assertEqual(provenance["toolingSources"], tooling_source_records)
             self.assertEqual(provenance["isolatedCaseCount"], 1)
-            self.assertEqual(provenance["pwrightArtifact"], str(artifact))
+            self.assertEqual(provenance["playwright_rustArtifact"], str(artifact))
             self.assertEqual(provenance["caseReports"], str(case_reports))
             self.assertEqual(len(str(provenance["resultSha256"])), 64)
 
@@ -583,11 +583,11 @@ class PythonOfficialProvenanceTests(unittest.TestCase):
         # Arrange
         with TemporaryDirectory() as directory:
             root = Path(directory)
-            for package in ("playwright", "pwright"):
+            for package in ("playwright", "playwright_rust"):
                 package_path = root / package
                 package_path.mkdir()
                 (package_path / "__init__.py").write_text("\n")
-            (root / "pwright/_native.py").write_text("\n")
+            (root / "playwright_rust/_native.py").write_text("\n")
             environment = os.environ.copy()
             environment["PYTHONPATH"] = str(root)
 
@@ -601,10 +601,10 @@ class PythonOfficialProvenanceTests(unittest.TestCase):
 
             # Assert
             self.assertEqual(identity["playwrightPackage"], str((root / "playwright").resolve()))
-            self.assertEqual(identity["pwrightPackage"], str((root / "pwright").resolve()))
+            self.assertEqual(identity["playwright_rustPackage"], str((root / "playwright_rust").resolve()))
             self.assertEqual(
-                identity["pwrightArtifact"],
-                str((root / "pwright/_native.py").resolve()),
+                identity["playwright_rustArtifact"],
+                str((root / "playwright_rust/_native.py").resolve()),
             )
 
 

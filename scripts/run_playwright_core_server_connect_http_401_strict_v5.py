@@ -64,7 +64,7 @@ SUITE = "library-chromium-server-connect-http-401-strict-v5"
 RESULT_PARENT = (
     ROOT / ".work/official-conformance/results/core-server-connect-http-401-strict-v5"
 )
-SOURCE_PACKAGE = ROOT / "packages/pwright"
+SOURCE_PACKAGE = ROOT / "packages/playwright-rust"
 SNAPSHOT_PACKAGE = RESULT_PARENT / "candidate-package-snapshot-v1"
 SNAPSHOT_MANIFEST = RESULT_PARENT / "candidate-package-snapshot-v1.files.json"
 SCOPE = "official-derived-core-server-connect-http-401-fixture-host-adapted-internal-v5"
@@ -73,7 +73,7 @@ FIXTURE_ADAPTATION = "exact-one-line116-localhost-ws-401-to-tailscale-magicdns-v
 SOURCE_CONNECT_BEFORE = (
     "const error = await connect(`ws://localhost:${server.PORT}/ws-401`).catch(e => e);"
 )
-SOURCE_CONNECT_AFTER = "const error = await connect(`ws://${process.env.PWRIGHT_OFFICIAL_SERVER_HOST}:${server.PORT}/ws-401`).catch(e => e);"
+SOURCE_CONNECT_AFTER = "const error = await connect(`ws://${process.env.PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST}:${server.PORT}/ws-401`).catch(e => e);"
 EXPECTED_SPEC_IDS = {
     "ee6df4b3a2217bd356a7-720923a9c0a90c985ea9": "launchServer",
     "ee6df4b3a2217bd356a7-dde3c17a495868ff251c": "run-server",
@@ -286,15 +286,15 @@ def run(mode: str) -> dict[str, Any]:
         "PWTEST_MODE",
         "PWPAGE_IMPL",
         "PWTEST_USE_BIDI_EXPECTATIONS",
-        "PWRIGHT_CANDIDATE_CDP_ENDPOINT",
-        "PWRIGHT_ORACLE_CDP_ENDPOINT",
-        "PWRIGHT_CDP_ENDPOINT",
-        "PWRIGHT_CDP_WS_URL",
-        "PWRIGHT_NATIVE_PROFILE",
-        "PWRIGHT_NODE_CANDIDATE",
-        "PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM",
-        "PWRIGHT_OFFICIAL_SERVER_IP",
-        "PWRIGHT_OFFICIAL_SERVER_HOST",
+        "PLAYWRIGHT_RUST_CANDIDATE_CDP_ENDPOINT",
+        "PLAYWRIGHT_RUST_ORACLE_CDP_ENDPOINT",
+        "PLAYWRIGHT_RUST_CDP_ENDPOINT",
+        "PLAYWRIGHT_RUST_CDP_WS_URL",
+        "PLAYWRIGHT_RUST_NATIVE_PROFILE",
+        "PLAYWRIGHT_RUST_NODE_CANDIDATE",
+        "PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM",
+        "PLAYWRIGHT_RUST_OFFICIAL_SERVER_IP",
+        "PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST",
     )
     if any(os.environ.get(key) for key in forbidden):
         raise ValueError(
@@ -302,7 +302,7 @@ def run(mode: str) -> dict[str, Any]:
         )
     check_source_and_manifest()
     verify_v2_snapshot()
-    artifact = SOURCE_PACKAGE / "native" / PROFILE / "pwright.node"
+    artifact = SOURCE_PACKAGE / "native" / PROFILE / "playwright_rust.node"
     if mode == "candidate" and (
         not artifact.is_file() or sha256(artifact) != ARTIFACT_SHA256
     ):
@@ -332,8 +332,8 @@ def run(mode: str) -> dict[str, Any]:
     receipt.open("x").close()
     env = os.environ.copy()
     env["NODE_OPTIONS"] = f"--require={PRELOAD}"
-    env["PWRIGHT_CORE_SERVER_CONNECT_HTTP_401_V5_MODE"] = mode
-    env["PWRIGHT_CORE_SERVER_CONNECT_HTTP_401_V5_RECEIPT"] = str(receipt)
+    env["PLAYWRIGHT_RUST_CORE_SERVER_CONNECT_HTTP_401_V5_MODE"] = mode
+    env["PLAYWRIGHT_RUST_CORE_SERVER_CONNECT_HTTP_401_V5_RECEIPT"] = str(receipt)
     command = [
         "uv",
         "run",
@@ -387,7 +387,7 @@ def run(mode: str) -> dict[str, Any]:
     )
     if mode == "oracle":
         assert all(item["status"] == "expected" for item in selected)
-    assert ("[pwright-candidate]" in log_path.read_text()) == (mode == "candidate")
+    assert ("[playwright-rust-candidate]" in log_path.read_text()) == (mode == "candidate")
     records = [json.loads(line) for line in receipt.read_text().splitlines() if line]
     assert records and any(record.get("workerIndex") is not None for record in records)
     strict = {

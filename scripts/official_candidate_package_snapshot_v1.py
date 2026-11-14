@@ -36,7 +36,7 @@ def _relative_files(package: Path, profile: str) -> list[Path]:
     if source.is_symlink() or not source.is_dir():
         raise ValueError("candidate src is missing or a symlink")
     package_json = package / "package.json"
-    artifact = package / "native" / profile / "pwright.node"
+    artifact = package / "native" / profile / "playwright_rust.node"
     _regular(package_json)
     _regular(artifact)
     files = [Path("package.json")]
@@ -49,7 +49,7 @@ def _relative_files(package: Path, profile: str) -> list[Path]:
             raise ValueError(f"candidate src contains a non-file: {path}")
     if len(files) == 1:
         raise ValueError("candidate src is empty")
-    files.append(Path("native") / profile / "pwright.node")
+    files.append(Path("native") / profile / "playwright_rust.node")
     return sorted(files, key=Path.as_posix)
 
 
@@ -178,7 +178,7 @@ def verify_snapshot(
     digest = _candidate_source_sha256(snapshot)
     if digest != manifest["candidateSourceSha256"]:
         raise ValueError("candidate snapshot source digest changed")
-    if sha256(snapshot / "native" / profile / "pwright.node") != artifact_sha256:
+    if sha256(snapshot / "native" / profile / "playwright_rust.node") != artifact_sha256:
         raise ValueError("candidate snapshot artifact digest changed")
     return manifest
 
@@ -204,7 +204,7 @@ def create_snapshot(
         raise ValueError("candidate snapshot destination is not empty")
     source_files = _relative_files(source_package, profile)
     before_source = _candidate_source_sha256(source_package)
-    before_artifact = sha256(source_package / "native" / profile / "pwright.node")
+    before_artifact = sha256(source_package / "native" / profile / "playwright_rust.node")
     if before_artifact != artifact_sha256:
         raise ValueError("candidate source artifact differs from pinned SHA256")
     snapshot.parent.mkdir(parents=True, exist_ok=True)
@@ -216,12 +216,12 @@ def create_snapshot(
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(source_package / relative, destination)
         after_source = _candidate_source_sha256(source_package)
-        after_artifact = sha256(source_package / "native" / profile / "pwright.node")
+        after_artifact = sha256(source_package / "native" / profile / "playwright_rust.node")
         if (before_source, before_artifact) != (after_source, after_artifact):
             raise ValueError("candidate source changed during snapshot copy")
         if _candidate_source_sha256(temporary) != before_source:
             raise ValueError("candidate snapshot source differs from copied source")
-        if sha256(temporary / "native" / profile / "pwright.node") != artifact_sha256:
+        if sha256(temporary / "native" / profile / "playwright_rust.node") != artifact_sha256:
             raise ValueError("candidate snapshot artifact differs from copied source")
         manifest = {
             "schema": 1,

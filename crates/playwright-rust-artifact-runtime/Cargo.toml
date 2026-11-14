@@ -1,0 +1,25 @@
+[package]
+name = "playwright-rust-artifact-runtime"
+description = "Atomic runtime lifecycle and ordered-control composition for Artifact services"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+playwright-rust-artifact-service = { workspace = true }
+playwright-rust-browser-model = { workspace = true }
+playwright-rust-cap-artifact = { workspace = true }
+playwright-rust-core = { workspace = true }
+playwright-rust-runtime = { workspace = true }
+playwright-rust-runtime-control = { workspace = true }
+playwright-rust-server-artifact = { workspace = true }
+playwright-rust-transport = { workspace = true }
+
+[dev-dependencies]
+playwright-rust-codec-control = { workspace = true }
+playwright-rust-trace-format = { workspace = true }
+playwright-rust-trace-model = { workspace = true }
+playwright-rust-transport-memory = { workspace = true }
+tokio = { workspace = true }

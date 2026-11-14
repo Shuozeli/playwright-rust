@@ -29,23 +29,23 @@ from verify_playwright_python_dummy_node_strict import (
     _tree,
     _upstream,
     file_sha256,
-    pwright_runtime_library_paths,
+    playwright_rust_runtime_library_paths,
 )
 
 POLICY = (
-    ROOT / "packages/pwright-python/tests/official/"
+    ROOT / "packages/playwright-rust-python/tests/official/"
     "dummy-node-launch-nonchromium-strict-v2-manifest.json"
 )
 POLICY_SHA256 = "faa4a608951f661d26342aeeed21d76b976f8170fe606bdbe81f46b3145e9c63"
 KIND = "playwright-python-nonchromium-dummy-node-strict-v2"
 SCOPE = "strict-public-behavior-nonchromium-dummy-exit-post-fix"
-GUARD_RELATIVE = "packages/pwright-python/tests/official/dummy_engine_guard_strict_v2"
+GUARD_RELATIVE = "packages/playwright-rust-python/tests/official/dummy_engine_guard_strict_v2"
 RESULT_DIR = ROOT / ".work/official-conformance/results/python-dummy-engine-post-fix-strict-v2"
 _NONCE = re.compile(r"^[0-9a-f]{32}$")
 _FIELDS = _SIDECAR_KEYS | {"browser"}
 _CAPTURE_PATHS = {
     "scripts/run_playwright_python_dummy_engine_strict_v2.py",
-    f"{GUARD_RELATIVE}/pwright_official_dummy_engine_guard_v2.py",
+    f"{GUARD_RELATIVE}/playwright_rust_official_dummy_engine_guard_v2.py",
     f"{GUARD_RELATIVE}/node",
 }
 _SUPPORT_PATHS = {
@@ -145,8 +145,8 @@ def _policy(raw: object, *, require_ready: bool = True) -> dict[str, Any]:
         _digest(policy[label], label)
     support_trees = _object(policy["supportTrees"], "supportTrees")
     if set(support_trees) != {
-        "packages/pwright-python/tests/official/shim",
-        "packages/pwright-python/tests/official/runtime",
+        "packages/playwright-rust-python/tests/official/shim",
+        "packages/playwright-rust-python/tests/official/runtime",
     }:
         _fail("v2 non-Chromium support tree set differs")
     for label, digest in support_trees.items():
@@ -233,7 +233,7 @@ def _wheel_matches_install(wheel: Path, site: Path) -> None:
                     continue
                 if name in expected:
                     _fail("v2 candidate wheel contains a duplicate file")
-                if name.startswith(("pwright/", "shuozeli_pwright.dylibs/")):
+                if name.startswith(("playwright_rust/", "shuozeli_playwright_rust.dylibs/")):
                     digest = hashlib.sha256()
                     with archive.open(info) as stream:
                         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
@@ -241,10 +241,10 @@ def _wheel_matches_install(wheel: Path, site: Path) -> None:
                     expected[name] = digest.hexdigest()
     except (OSError, zipfile.BadZipFile) as error:
         raise StrictEvidenceError("v2 candidate wheel is not a valid zip") from error
-    if not expected or "pwright/_native.abi3.so" not in expected:
+    if not expected or "playwright_rust/_native.abi3.so" not in expected:
         _fail("v2 candidate wheel lacks the native package")
     installed: set[str] = set()
-    for directory in (site / "pwright", site / "shuozeli_pwright.dylibs"):
+    for directory in (site / "playwright_rust", site / "shuozeli_playwright_rust.dylibs"):
         if directory.is_symlink() or not directory.is_dir():
             _fail("v2 candidate installed directory is missing or linked")
         for path in directory.rglob("*"):
@@ -292,17 +292,17 @@ def _runtime(policy: dict[str, Any], payload: dict[str, Any]) -> None:
                 for field in (
                     "wheelPath",
                     "wheelSha256",
-                    "pwrightPackage",
-                    "pwrightPackageSha256",
+                    "playwright_rustPackage",
+                    "playwright_rustPackageSha256",
                     "nativePath",
                     "nativeSha256",
                 )
             )
             or payload["runtimeLibraries"] != {}
-            or (site / "pwright").exists()
-            or (site / "shuozeli_pwright.dylibs").exists()
+            or (site / "playwright_rust").exists()
+            or (site / "shuozeli_playwright_rust.dylibs").exists()
         ):
-            _fail("v2 oracle must not carry or install a Pwright candidate artifact")
+            _fail("v2 oracle must not carry or install a Playwright Rust candidate artifact")
         return
     wheel = Path(_text(payload["wheelPath"], "wheelPath"))
     if wheel != Path(payload["result"]).with_suffix(".candidate-wheel.whl"):
@@ -310,19 +310,19 @@ def _runtime(policy: dict[str, Any], payload: dict[str, Any]) -> None:
     _file(wheel, policy["candidateWheelSha256"], "v2 candidate wheel snapshot")
     if payload["wheelSha256"] != policy["candidateWheelSha256"]:
         _fail("v2 recorded candidate wheel digest differs")
-    package = site / "pwright"
+    package = site / "playwright_rust"
     native = package / "_native.abi3.so"
-    if Path(payload["pwrightPackage"]) != package or Path(payload["nativePath"]) != native:
+    if Path(payload["playwright_rustPackage"]) != package or Path(payload["nativePath"]) != native:
         _fail("v2 candidate package/native path differs")
     _tree(package, policy["candidatePackageTreeSha256"], "v2 candidate package")
     _file(native, policy["candidateNativeSha256"], "v2 candidate native artifact")
     if (
-        payload["pwrightPackageSha256"] != policy["candidatePackageTreeSha256"]
+        payload["playwright_rustPackageSha256"] != policy["candidatePackageTreeSha256"]
         or payload["nativeSha256"] != policy["candidateNativeSha256"]
     ):
         _fail("v2 recorded candidate package/native digest differs")
     try:
-        libraries = pwright_runtime_library_paths(package)
+        libraries = playwright_rust_runtime_library_paths(package)
     except ValueError as error:
         raise StrictEvidenceError("v2 candidate adjacent dylibs are invalid") from error
     expected_libraries = _object(policy["candidateRuntimeLibraries"], "candidateRuntimeLibraries")
@@ -336,7 +336,7 @@ def _runtime(policy: dict[str, Any], payload: dict[str, Any]) -> None:
 
 
 def _environment(payload: dict[str, Any], root: Path, guard: Path, upstream: Path) -> None:
-    official = root / "packages/pwright-python/tests/official"
+    official = root / "packages/playwright-rust-python/tests/official"
     python_paths = (
         [official / "shim", upstream, official / "runtime", guard]
         if payload["mode"] == "candidate"
@@ -347,19 +347,19 @@ def _environment(payload: dict[str, Any], root: Path, guard: Path, upstream: Pat
         "PYTHONPATH": ":".join(map(str, python_paths)),
         "PYTHONNOUSERSITE": "1",
         "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
-        "PWRIGHT_OFFICIAL_MODE": payload["mode"],
-        "PWRIGHT_OFFICIAL_LAUNCH_MODE": "owned",
-        "PWRIGHT_OFFICIAL_BROWSER_CHANNEL": "",
-        "PWRIGHT_OFFICIAL_UPSTREAM_TESTS": str(upstream / "tests"),
-        "PWRIGHT_OFFICIAL_TAILSCALE_IP": payload["fixtureBind"],
-        "PWRIGHT_OFFICIAL_TAILSCALE_HOST": payload["fixtureHost"],
-        "PWRIGHT_PYTHON_DUMMY_UPSTREAM": str(upstream),
-        "PWRIGHT_PYTHON_DUMMY_API": payload["api"],
-        "PWRIGHT_PYTHON_DUMMY_BROWSER": payload["browser"],
-        "PWRIGHT_PYTHON_DUMMY_LAUNCH_RECEIPT": payload["publicReceipt"],
-        "PWRIGHT_PYTHON_DUMMY_PROCESS_RECEIPT": payload["processReceipt"],
-        "PWRIGHT_PYTHON_DUMMY_REAL_NODE": payload["systemNode"],
-        "PWRIGHT_PYTHON_DUMMY_NONCE": payload["runNonce"],
+        "PLAYWRIGHT_RUST_OFFICIAL_MODE": payload["mode"],
+        "PLAYWRIGHT_RUST_OFFICIAL_LAUNCH_MODE": "owned",
+        "PLAYWRIGHT_RUST_OFFICIAL_BROWSER_CHANNEL": "",
+        "PLAYWRIGHT_RUST_OFFICIAL_UPSTREAM_TESTS": str(upstream / "tests"),
+        "PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_IP": payload["fixtureBind"],
+        "PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_HOST": payload["fixtureHost"],
+        "PLAYWRIGHT_RUST_PYTHON_DUMMY_UPSTREAM": str(upstream),
+        "PLAYWRIGHT_RUST_PYTHON_DUMMY_API": payload["api"],
+        "PLAYWRIGHT_RUST_PYTHON_DUMMY_BROWSER": payload["browser"],
+        "PLAYWRIGHT_RUST_PYTHON_DUMMY_LAUNCH_RECEIPT": payload["publicReceipt"],
+        "PLAYWRIGHT_RUST_PYTHON_DUMMY_PROCESS_RECEIPT": payload["processReceipt"],
+        "PLAYWRIGHT_RUST_PYTHON_DUMMY_REAL_NODE": payload["systemNode"],
+        "PLAYWRIGHT_RUST_PYTHON_DUMMY_NONCE": payload["runNonce"],
     }
     if payload["environment"] != expected:
         _fail("v2 scrubbed worker environment differs")
@@ -418,13 +418,13 @@ def _command(payload: dict[str, Any], upstream: Path) -> None:
         "-p",
         "pytest_timeout",
         "-p",
-        "pwright_official_server_runtime",
+        "playwright_rust_official_server_runtime",
         "-p",
-        "pwright_candidate_runtime"
+        "playwright_rust_candidate_runtime"
         if payload["mode"] == "candidate"
-        else "pwright_official_oracle_runtime",
+        else "playwright_rust_official_oracle_runtime",
         "-p",
-        "pwright_official_dummy_engine_guard_v2",
+        "playwright_rust_official_dummy_engine_guard_v2",
         f"--browser={payload['browser']}",
         "--timeout=20",
         "--timeout-method=signal",
@@ -515,7 +515,7 @@ def _receipts(payload: dict[str, Any], policy: dict[str, Any], asset: Path) -> N
         or failed.get("errorClass") != policy["expectedErrorClass"][payload["browser"]]
         or not isinstance(failed.get("errorMessage"), str)
         or not failed["errorMessage"]
-        or "PWRIGHT_UNSUPPORTED" in failed["errorMessage"]
+        or "PLAYWRIGHT_RUST_UNSUPPORTED" in failed["errorMessage"]
         or failed.get("processReceiptSha256") != payload["processReceiptSha256"]
     ):
         _fail("v2 public launch failure lacks matching dummy-process proof")

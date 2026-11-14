@@ -36,7 +36,7 @@ LEDGERS = {
 }
 BUILD_WHEEL = (
     BASE
-    / "builds/python-remote-terminal-fix-oct20/shuozeli_pwright-0.1.0-cp39-abi3-macosx_11_0_arm64.whl"
+    / "builds/python-remote-terminal-fix-oct20/shuozeli_playwright-rust-0.1.0-cp39-abi3-macosx_11_0_arm64.whl"
 )
 WHEEL_NAME = BUILD_WHEEL.name
 

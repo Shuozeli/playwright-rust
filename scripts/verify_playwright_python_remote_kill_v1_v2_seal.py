@@ -34,7 +34,7 @@ UPSTREAM = Path("/Users/cyuan/projects/thirdparty/playwright-python")
 CORE = Path("/Users/cyuan/projects/thirdparty/playwright-v1.58.0")
 BUILD_WHEEL = (
     BASE
-    / "builds/python-remote-terminal-fix-oct20/shuozeli_pwright-0.1.0-cp39-abi3-macosx_11_0_arm64.whl"
+    / "builds/python-remote-terminal-fix-oct20/shuozeli_playwright-rust-0.1.0-cp39-abi3-macosx_11_0_arm64.whl"
 )
 VERIFIER_NAMES = {
     "v1": "verify_playwright_python_connect_remote_kill_synthetic_v1.py",
@@ -316,9 +316,9 @@ def replay(seal: Path = SEAL) -> dict[str, dict[str, Any]]:
             v1,
             UPSTREAM=sealed_upstream,
             LEGACY_DIR=sealed_repo
-            / "packages/pwright-python/tests/official/connect_close_events_synthetic_v1",
+            / "packages/playwright-rust-python/tests/official/connect_close_events_synthetic_v1",
             MANIFEST=sealed_repo
-            / "packages/pwright-python/tests/official/connect_remote_kill_synthetic_v1/manifest.json",
+            / "packages/playwright-rust-python/tests/official/connect_remote_kill_synthetic_v1/manifest.json",
             LEDGERS=ledgers,
             _git=snapshot_git,
         ):
@@ -336,7 +336,7 @@ def replay(seal: Path = SEAL) -> dict[str, dict[str, Any]]:
             v2,
             ROOT=sealed_repo,
             MANIFEST=sealed_repo
-            / "packages/pwright-python/tests/official/connect_remote_kill_synthetic_v2/manifest.json",
+            / "packages/playwright-rust-python/tests/official/connect_remote_kill_synthetic_v2/manifest.json",
             BUILD_WHEEL=seal / "inputs/build-wheel" / BUILD_WHEEL.name,
         ):
             return original_v2_sources()
@@ -353,17 +353,17 @@ def replay(seal: Path = SEAL) -> dict[str, dict[str, Any]]:
     v1.UPSTREAM = UPSTREAM
     v1.CORE = CORE
     v1.PLUGIN_DIR = (
-        ROOT / "packages/pwright-python/tests/official/connect_remote_kill_synthetic_v1"
+        ROOT / "packages/playwright-rust-python/tests/official/connect_remote_kill_synthetic_v1"
     )
     v1.LEGACY_DIR = (
         ROOT
-        / "packages/pwright-python/tests/official/connect_close_events_synthetic_v1"
+        / "packages/playwright-rust-python/tests/official/connect_close_events_synthetic_v1"
     )
-    v1.RUNTIME = ROOT / "packages/pwright-python/tests/official/runtime"
-    v1.SHIM = ROOT / "packages/pwright-python/tests/official/shim"
+    v1.RUNTIME = ROOT / "packages/playwright-rust-python/tests/official/runtime"
+    v1.SHIM = ROOT / "packages/playwright-rust-python/tests/official/shim"
     v1.SERVER = (
         ROOT
-        / "packages/pwright-python/tests/official/connect_close_events_synthetic_v1/server.cjs"
+        / "packages/playwright-rust-python/tests/official/connect_close_events_synthetic_v1/server.cjs"
     )
     v1.verify_sources = v1_sources
     v1.harness_hashes = v1_harness

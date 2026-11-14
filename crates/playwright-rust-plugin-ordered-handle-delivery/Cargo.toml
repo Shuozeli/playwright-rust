@@ -1,0 +1,25 @@
+[package]
+name = "playwright-rust-plugin-ordered-handle-delivery"
+description = "Optional ordered remote delivery fence for retained Playwright Rust Handles"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+playwright-rust-cap-handle-evaluation = { workspace = true }
+playwright-rust-cap-handle-lifecycle = { workspace = true }
+playwright-rust-codec-handle-evaluation = { workspace = true }
+playwright-rust-core = { workspace = true }
+playwright-rust-runtime = { workspace = true }
+playwright-rust-runtime-control = { workspace = true }
+playwright-rust-server-handle-evaluation = { workspace = true }
+playwright-rust-server-wire = { workspace = true }
+playwright-rust-transport = { workspace = true }
+
+[dev-dependencies]
+playwright-rust-browser-model = { workspace = true }
+playwright-rust-codec-control = { workspace = true }
+playwright-rust-transport-memory = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt"] }

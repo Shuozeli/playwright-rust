@@ -1,0 +1,268 @@
+[package]
+name = "playwright-rust-node-host"
+description = "Safe embedded Rust v2 host for the Playwright Rust Node compatibility package"
+version.workspace = true
+edition.workspace = true
+license = "MIT AND Apache-2.0"
+repository.workspace = true
+
+[features]
+default = []
+cdp-handshake-headers = ["playwright-rust-composition-chromium/cdp-handshake-headers"]
+cdp-default-user-agent = ["cdp-handshake-headers", "dep:playwright-rust-playwright-connect-headers"]
+cdp-discovery-errors = []
+cdp-ws-close-reason = ["playwright-rust-cdp/cdp-ws-close-reason"]
+cdp-ws-invalid-frame = ["playwright-rust-cdp/cdp-ws-invalid-frame"]
+cdp-session = []
+browser-cdp-session = ["cdp-session"]
+owned-launch = ["dep:playwright-rust-browser-provider", "dep:playwright-rust-composition-chromium-launch", "dep:playwright-rust-provider-chromium", "playwright-rust-composition-chromium-launch/startup-logs"]
+playwright-trace = ["owned-launch", "dep:playwright-rust-trace-playwright-v8"]
+persistent-context-locale = ["owned-launch", "context-locale"]
+persistent-context-timezone = ["owned-launch", "context-timezone"]
+persistent-context-offline = ["owned-launch", "context-offline"]
+persistent-context-geolocation = ["owned-launch", "context-geolocation"]
+persistent-context-geolocation-permission = ["owned-launch", "context-geolocation-permission"]
+persistent-context-http-credentials = ["owned-launch", "context-http-credentials"]
+persistent-context-launch-arguments = ["owned-launch"]
+persistent-context-ignore-https-errors = ["owned-launch", "ignore-https-errors"]
+persistent-context-device-emulation = ["owned-launch", "device-emulation"]
+persistent-context-emulate-media = ["owned-launch", "emulate-media"]
+persistent-context-extra-headers = ["owned-launch", "extra-headers"]
+persistent-context-bypass-csp = ["owned-launch", "bypass-csp"]
+persistent-context-javascript-disabled = ["owned-launch", "javascript-disabled"]
+context-cookies = ["dep:regex"]
+context-storage-state = ["context-cookies", "page-routes"]
+context-api-request = ["context-cookies", "device-emulation", "context-http-credentials", "ignore-https-errors"]
+retained-target-marking = ["retained-file-input", "playwright-rust-composition-chromium-file-input/retained-target-marking"]
+retained-target-prevalidation = ["retained-target-marking", "playwright-rust-composition-chromium-file-input/retained-target-prevalidation"]
+retained-serialized-payload-import = ["retained-target-prevalidation"]
+retained-serialized-payload-mutation = ["retained-serialized-payload-import", "playwright-rust-composition-chromium-file-input/retained-serialized-payload-mutation"]
+retained-file-input = ["handles", "file-input", "playwright-rust-composition-chromium-handle-evaluation/retained-reference", "playwright-rust-composition-chromium-locator-resolution/retained-reference"]
+handles = ["dep:playwright-rust-cap-handle-lifecycle", "dep:playwright-rust-codec-handle-evaluation", "dep:playwright-rust-codec-handle-lifecycle", "dep:playwright-rust-composition-chromium-handle-evaluation", "playwright-rust-composition-chromium-handle-evaluation/native-creation", "playwright-rust-composition-chromium-handle-evaluation/frame-value", "playwright-rust-composition-chromium-handle-evaluation/handle-value", "dep:playwright-rust-composition-chromium-handle-lifecycle", "playwright-rust-composition-chromium-handle-lifecycle/native-release", "playwright-rust-runtime/disposal-reservations"]
+frame-element = ["handles"]
+element-handle-dom = ["handles", "locator-bounding-box"]
+element-handle-select-option-value = ["handles", "timeout-settings"]
+element-handle-wait-for-selector = ["handles", "timeout-settings"]
+element-handle-scroll-into-view = ["handles", "playwright-rust-composition-chromium-handle-evaluation/retained-reference"]
+element-handle-select-text = ["handles"]
+element-handle-state-predicates = ["element-handle-dom"]
+element-handle-state-wait = ["element-handle-dom"]
+element-handle-click = ["element-handle-dom", "playwright-rust-backend-cdp-locator/retained-element-click", "playwright-rust-composition-chromium-handle-evaluation/retained-reference"]
+fill-navigation-commit = ["playwright-rust-composition-chromium/fill-navigation-commit"]
+select-option-navigation-commit = ["playwright-rust-composition-chromium/select-option-navigation-commit"]
+select-option-timeout-progress = ["playwright-rust-composition-chromium/select-option-timeout-progress"]
+file-input = ["dep:playwright-rust-file-input-model", "dep:playwright-rust-file-input-source", "dep:playwright-rust-file-input-fs", "dep:playwright-rust-file-input-tokio", "dep:playwright-rust-backend-cdp-file-input", "dep:playwright-rust-composition-chromium-file-input", "playwright-rust-backend-cdp-file-input/large-commands"]
+file-input-native-paths = ["file-input", "playwright-rust-composition-chromium-file-input/retained-preflight"]
+concurrent-close = ["playwright-rust-composition-chromium/native-close-retirement", "playwright-rust-runtime/disposal-reservations", "playwright-rust-backend-cdp-topology/transition-reservations"]
+extra-headers = ["dep:playwright-rust-network-model", "playwright-rust-network-model/extra-headers", "dep:futures-util"]
+frame-lifecycle = ["dep:playwright-rust-plugin-chromium-frame-lifecycle", "playwright-rust-composition-chromium/frame-lifecycle"]
+page-events = ["frame-lifecycle"]
+frame-events = ["page-events"]
+frame-detach-events = ["page-events", "playwright-rust-backend-cdp-topology/frame-detach-events"]
+page-dialogs = ["page-events"]
+file-chooser-events = ["page-events", "file-input"]
+file-chooser-native-paths = ["file-chooser-events"]
+page-errors = ["page-events"]
+page-routes = ["frame-lifecycle", "dep:base64"]
+route-request-history = ["page-routes", "request-history"]
+route-regexp = ["page-routes", "dep:regex"]
+route-redirects = ["page-routes", "request-history"]
+route-fulfill-cors = ["page-routes"]
+route-fulfill-path = ["page-routes", "dep:mime_guess"]
+har-replay = ["page-routes", "dep:playwright-rust-har-replay"]
+console-events = ["frame-lifecycle"]
+console-argument-handles = ["console-events", "handles"]
+console-history = ["frame-lifecycle"]
+page-bindings = ["frame-lifecycle", "handles"]
+context-bindings = ["page-bindings"]
+init-scripts = []
+service-worker-policy = ["init-scripts"]
+wait-for-function = ["handles"]
+wait-for-timeout = []
+frame-navigation = ["frame-lifecycle", "playwright-rust-cap-navigation/frame-navigation"]
+navigation-url-match = ["frame-navigation", "url-glob"]
+frame-navigation-burst-20 = ["frame-navigation"]
+history-navigation = [
+    "dep:playwright-rust-cap-history-navigation",
+    "playwright-rust-backend-cdp/history-navigation",
+    "playwright-rust-composition-chromium/history-navigation",
+]
+url-glob = []
+url-wait = ["url-glob", "frame-lifecycle"]
+set-content = ["frame-lifecycle"]
+selector-registration = []
+light-selectors = ["handles"]
+layout-selectors = []
+react-selectors = ["handles"]
+emulate-media = []
+context-forced-colors = ["emulate-media"]
+device-emulation = []
+touchscreen-input = [
+    "device-emulation",
+    "dep:playwright-rust-backend-cdp-input",
+    "dep:playwright-rust-backend-cdp-touchscreen",
+    "dep:playwright-rust-cap-touchscreen",
+    "dep:playwright-rust-composition-chromium-touchscreen",
+    "playwright-rust-backend-cdp-locator/touchscreen-input",
+    "playwright-rust-composition-chromium/touchscreen-input",
+]
+context-locale = []
+context-timezone = []
+context-offline = []
+context-geolocation = []
+context-geolocation-permission = []
+context-http-credentials = ["frame-lifecycle"]
+context-proxy = ["dep:zeroize"]
+ignore-https-errors = []
+bypass-csp = []
+javascript-disabled = []
+page-pdf = ["dep:base64"]
+page-viewport = ["device-emulation"]
+request-gc = []
+response-body = ["frame-navigation", "dep:base64"]
+response-request = ["frame-navigation", "request-history"]
+locator-bounding-box = []
+locator-highlight = ["locator-bounding-box"]
+locator-screenshot = ["dep:playwright-rust-cap-locator-screenshot", "dep:playwright-rust-codec-locator-screenshot"]
+locator-dom-actions = []
+timeout-settings = []
+page-pause = ["timeout-settings"]
+large-evaluation-results = []
+large-evaluation-inputs = []
+large-route-post-data = ["page-routes"]
+network-events = ["dep:playwright-rust-backend-cdp", "dep:playwright-rust-cap-network-events", "dep:playwright-rust-network-model", "dep:playwright-rust-runtime-control"]
+context-network-events = ["network-events"]
+request-frame = [
+    "network-events",
+    "playwright-rust-backend-cdp/request-frame",
+    "playwright-rust-composition-chromium/request-frame",
+]
+request-timing = [
+    "network-events",
+    "playwright-rust-backend-cdp/request-timing",
+    "playwright-rust-cap-network-events/request-timing",
+    "playwright-rust-composition-chromium/request-timing",
+    "playwright-rust-network-model/request-timing",
+]
+request-post-data-json = ["network-events"]
+request-history = ["network-events"]
+request-events = ["network-events"]
+response-events = ["network-events"]
+response-finished = ["response-events"]
+navigation-response-finished = ["response-request", "response-finished"]
+response-security-details = [
+    "response-request",
+    "playwright-rust-backend-cdp/response-security-details",
+    "playwright-rust-composition-chromium/response-security-details",
+]
+download-events = ["frame-lifecycle"]
+worker-events = ["page-events"]
+worker-handle-evaluation = ["worker-events", "dep:playwright-rust-backend-cdp-handle-evaluation"]
+worker-console-events = ["worker-events", "console-events"]
+worker-console-argument-handles = ["worker-console-events", "worker-handle-evaluation"]
+worker-error-events = ["worker-events", "page-errors"]
+worker-network-events = ["worker-events", "request-events", "response-events"]
+drag-source = ["dep:playwright-rust-backend-cdp-drag"]
+drag-runtime = ["drag-source", "playwright-rust-runtime/lifetime-handoff"]
+drag-and-drop = ["drag-runtime", "locator-bounding-box"]
+
+[dependencies]
+playwright-rust-playwright-connect-headers = { workspace = true, optional = true }
+playwright-rust-browser-provider = { workspace = true, optional = true }
+playwright-rust-trace-playwright-v8 = { workspace = true, optional = true }
+playwright-rust-cap-handle-lifecycle = { workspace = true, optional = true }
+playwright-rust-backend-cdp = { workspace = true, optional = true }
+playwright-rust-cap-network-events = { workspace = true, optional = true }
+playwright-rust-network-model = { workspace = true, optional = true }
+playwright-rust-har-replay = { workspace = true, optional = true }
+playwright-rust-runtime-control = { workspace = true, optional = true }
+playwright-rust-codec-handle-evaluation = { workspace = true, optional = true }
+playwright-rust-codec-handle-lifecycle = { workspace = true, optional = true }
+playwright-rust-composition-chromium-handle-evaluation = { workspace = true, optional = true }
+playwright-rust-composition-chromium-handle-lifecycle = { workspace = true, optional = true }
+playwright-rust-file-input-model = { workspace = true, optional = true }
+playwright-rust-file-input-source = { workspace = true, optional = true }
+playwright-rust-file-input-fs = { workspace = true, optional = true }
+playwright-rust-file-input-tokio = { workspace = true, optional = true }
+playwright-rust-backend-cdp-file-input = { workspace = true, optional = true }
+playwright-rust-composition-chromium-file-input = { workspace = true, optional = true }
+futures-util = { workspace = true, optional = true }
+base64 = { workspace = true, optional = true }
+mime_guess = { workspace = true, optional = true }
+playwright-rust-input-model = { workspace = true }
+playwright-rust-backend-cdp-drag = { workspace = true, optional = true, features = ["mouse-dispatch"] }
+playwright-rust-cap-mouse = { workspace = true }
+playwright-rust-backend-cdp-mouse = { workspace = true }
+playwright-rust-composition-chromium-mouse = { workspace = true, features = ["runtime"] }
+playwright-rust-backend-cdp-touchscreen = { workspace = true, optional = true }
+playwright-rust-backend-cdp-input = { workspace = true, optional = true }
+playwright-rust-cap-touchscreen = { workspace = true, optional = true }
+playwright-rust-composition-chromium-touchscreen = { workspace = true, optional = true }
+playwright-rust-cap-keyboard = { workspace = true }
+playwright-rust-composition-chromium-keyboard = { workspace = true, features = ["runtime"] }
+playwright-rust-backend-cdp-content = { workspace = true }
+playwright-rust-cap-content = { workspace = true }
+playwright-rust-codec-content = { workspace = true }
+playwright-rust-backend-cdp-context-creation = { workspace = true }
+playwright-rust-cap-context-creation = { workspace = true }
+playwright-rust-cap-context-lifecycle = { workspace = true }
+playwright-rust-codec-context-creation = { workspace = true }
+playwright-rust-codec-context-lifecycle = { workspace = true }
+playwright-rust-backend-cdp-navigation = { workspace = true }
+playwright-rust-backend-cdp-dom-content = { workspace = true }
+playwright-rust-backend-cdp-evaluation = { workspace = true }
+playwright-rust-backend-cdp-handle-evaluation = { workspace = true, optional = true }
+playwright-rust-backend-cdp-page-creation = { workspace = true }
+playwright-rust-backend-cdp-page-lifecycle = { workspace = true, features = ["native-confirmation"] }
+playwright-rust-backend-cdp-topology = { workspace = true }
+playwright-rust-cap-navigation = { workspace = true }
+playwright-rust-cap-history-navigation = { workspace = true, optional = true }
+playwright-rust-cap-dom-content = { workspace = true }
+playwright-rust-cap-evaluation = { workspace = true }
+playwright-rust-cap-locator = { workspace = true }
+playwright-rust-cap-locator-screenshot = { workspace = true, optional = true }
+playwright-rust-backend-cdp-selector-runtime = { workspace = true }
+playwright-rust-backend-cdp-locator = { workspace = true }
+playwright-rust-codec-locator = { workspace = true }
+playwright-rust-codec-locator-screenshot = { workspace = true, optional = true }
+playwright-rust-cap-page-creation = { workspace = true }
+playwright-rust-cap-page-lifecycle = { workspace = true }
+playwright-rust-cdp = { workspace = true }
+playwright-rust-codec-navigation = { workspace = true }
+playwright-rust-codec-dom-content = { workspace = true }
+playwright-rust-codec-evaluation = { workspace = true }
+playwright-rust-codec-page-creation = { workspace = true }
+playwright-rust-codec-page-lifecycle = { workspace = true }
+playwright-rust-composition-chromium = { workspace = true }
+playwright-rust-composition-chromium-launch = { workspace = true, optional = true }
+playwright-rust-composition-chromium-locator-evaluation = { workspace = true }
+playwright-rust-composition-chromium-locator-resolution = { workspace = true }
+playwright-rust-cap-handle-evaluation = { workspace = true }
+playwright-rust-browser-model = { workspace = true }
+playwright-rust-core = { workspace = true }
+playwright-rust-provider-cdp = { workspace = true }
+playwright-rust-provider-chromium = { workspace = true, optional = true }
+playwright-rust-plugin-chromium-session-initialization = { workspace = true }
+playwright-rust-plugin-chromium-frame-observer = { workspace = true }
+playwright-rust-plugin-chromium-frame-lifecycle = { workspace = true, optional = true }
+playwright-rust-runtime = { workspace = true }
+playwright-rust-runtime-tokio = { workspace = true }
+playwright-rust-server-wire = { workspace = true }
+playwright-rust-transport = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+tracing = { workspace = true }
+url = { workspace = true }
+regex = { version = "1", optional = true }
+zeroize = { workspace = true, optional = true }
+
+[dev-dependencies]
+futures-util = { workspace = true }
+playwright-rust-fake = { workspace = true }
+tokio = { workspace = true, features = ["test-util"] }
+tokio-tungstenite = { workspace = true }
+tracing-subscriber = { workspace = true }

@@ -428,7 +428,7 @@ def main() -> None:
     parser.add_argument(
         "--manifest",
         type=Path,
-        default=root / "packages/pwright-python/tests/official/manifest.json",
+        default=root / "packages/playwright-rust-python/tests/official/manifest.json",
     )
     parser.add_argument(
         "--inventory",
@@ -438,7 +438,7 @@ def main() -> None:
     parser.add_argument(
         "--applicability-policy",
         type=Path,
-        default=root / "packages/pwright-python/tests/official/invocation-applicability.json",
+        default=root / "packages/playwright-rust-python/tests/official/invocation-applicability.json",
     )
     parser.add_argument(
         "--output",

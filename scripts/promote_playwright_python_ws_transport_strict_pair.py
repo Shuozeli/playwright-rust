@@ -286,8 +286,8 @@ def _reports(
             )
         if mode == "candidate":
             for field in (
-                "pwrightPackage",
-                "pwrightPackageSha256",
+                "playwright_rustPackage",
+                "playwright_rustPackageSha256",
                 "nativePath",
                 "nativeSha256",
                 "runtimeLibraries",

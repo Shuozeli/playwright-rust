@@ -1,0 +1,18 @@
+[package]
+name = "playwright-rust-client-keyboard"
+description = "Optional raw Page Keyboard client layer for Playwright Rust"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+playwright-rust-cap-keyboard = { workspace = true }
+playwright-rust-client = { workspace = true }
+playwright-rust-core = { workspace = true }
+
+[dev-dependencies]
+playwright-rust-browser-model = { workspace = true }
+playwright-rust-core = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt"] }

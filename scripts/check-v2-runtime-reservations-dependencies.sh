@@ -7,14 +7,14 @@ selected=$(mktemp)
 trap 'rm -f "$ordinary" "$selected"' EXIT
 cd "$repo_dir"
 
-cargo tree --locked -p pwright-runtime --no-default-features \
+cargo tree --locked -p playwright-rust-runtime --no-default-features \
   --edges normal --prefix none --format '{p} features={f}' \
   | sed '1d' | sort -u >"$ordinary"
 for features in disposal-reservations disposal-reservations,lifetime-handoff; do
-  CARGO_INCREMENTAL=0 cargo check --release --locked -p pwright-runtime \
+  CARGO_INCREMENTAL=0 cargo check --release --locked -p playwright-rust-runtime \
     --no-default-features --features "$features"
   # Only the root feature selection may change, not any dependency or feature.
-  cargo tree --locked -p pwright-runtime --no-default-features --features "$features" \
+  cargo tree --locked -p playwright-rust-runtime --no-default-features --features "$features" \
     --edges normal --prefix none --format '{p} features={f}' \
     | sed '1d' | sort -u >"$selected"
   diff -u "$ordinary" "$selected"

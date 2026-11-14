@@ -6,16 +6,16 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const mode = process.env.PWRIGHT_CORE_CHILD_CLOSE_SYNTHETIC_MODE;
-const receipt = process.env.PWRIGHT_CORE_CHILD_CLOSE_SYNTHETIC_RECEIPT;
-const server = process.env.PWRIGHT_CORE_CHILD_CLOSE_SYNTHETIC_SERVER;
-const upstream = process.env.PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM;
+const mode = process.env.PLAYWRIGHT_RUST_CORE_CHILD_CLOSE_SYNTHETIC_MODE;
+const receipt = process.env.PLAYWRIGHT_RUST_CORE_CHILD_CLOSE_SYNTHETIC_RECEIPT;
+const server = process.env.PLAYWRIGHT_RUST_CORE_CHILD_CLOSE_SYNTHETIC_SERVER;
+const upstream = process.env.PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM;
 if (!['oracle', 'candidate'].includes(mode) || !receipt || !server || !upstream)
   throw new Error('child-close fixture requires its exact mode, receipt, server, and upstream');
 for (const [key, value] of [
-  ['PWRIGHT_CORE_LIFECYCLE_SYNTHETIC_MODE', mode],
-  ['PWRIGHT_CORE_LIFECYCLE_SYNTHETIC_RECEIPT', receipt],
-  ['PWRIGHT_CORE_LIFECYCLE_SYNTHETIC_SERVER', server],
+  ['PLAYWRIGHT_RUST_CORE_LIFECYCLE_SYNTHETIC_MODE', mode],
+  ['PLAYWRIGHT_RUST_CORE_LIFECYCLE_SYNTHETIC_RECEIPT', receipt],
+  ['PLAYWRIGHT_RUST_CORE_LIFECYCLE_SYNTHETIC_SERVER', server],
 ]) {
   if (process.env[key] && process.env[key] !== value)
     throw new Error(`child-close fixture forbids conflicting ${key}`);
@@ -41,9 +41,9 @@ const selected = `    test('should emit close events on pages and contexts', asy
 if (!source.includes(selected) || source.split(selected).length !== 2)
   throw new Error('selected upstream child-close assertion changed or duplicated');
 
-process.env.PWRIGHT_CORE_LIFECYCLE_SYNTHETIC_MODE = mode;
-process.env.PWRIGHT_CORE_LIFECYCLE_SYNTHETIC_RECEIPT = receipt;
-process.env.PWRIGHT_CORE_LIFECYCLE_SYNTHETIC_SERVER = server;
+process.env.PLAYWRIGHT_RUST_CORE_LIFECYCLE_SYNTHETIC_MODE = mode;
+process.env.PLAYWRIGHT_RUST_CORE_LIFECYCLE_SYNTHETIC_RECEIPT = receipt;
+process.env.PLAYWRIGHT_RUST_CORE_LIFECYCLE_SYNTHETIC_SERVER = server;
 require('./playwright-core-server-connect-lifecycle-synthetic-v1-preload.cjs');
 fs.appendFileSync(receipt, JSON.stringify({
   kind: 'selected-child-close-source', mode, pid: process.pid,

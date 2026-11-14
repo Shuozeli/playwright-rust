@@ -239,14 +239,14 @@ def verify_strict(strict_path: Path) -> dict[str, Any]:
     if mode == "candidate":
         candidate = Path(provenance["candidate"])
         require(
-            candidate == lane.ROOT / "packages/pwright"
+            candidate == lane.ROOT / "packages/playwright-rust"
             and candidate.is_dir()
             and not candidate.is_symlink()
             and lane.source_digest(candidate) == strict["candidateSourceSha256"],
             "strict candidate package source differs",
         )
         file_hash(
-            candidate / "native" / lane.TRACE_PROFILE / "pwright.node",
+            candidate / "native" / lane.TRACE_PROFILE / "playwright_rust.node",
             strict["candidateArtifactSha256"],
             "strict candidate native artifact",
         )

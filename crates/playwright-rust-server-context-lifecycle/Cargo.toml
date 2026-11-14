@@ -1,0 +1,14 @@
+[package]
+name = "playwright-rust-server-context-lifecycle"
+description = "Generated opt-in typed server handlers for context lifecycle"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+playwright-rust-cap-context-lifecycle = { workspace = true }
+playwright-rust-codec-context-lifecycle = { workspace = true }
+playwright-rust-server-wire = { workspace = true }
+playwright-rust-transport = { workspace = true }

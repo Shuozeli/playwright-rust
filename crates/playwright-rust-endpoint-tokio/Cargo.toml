@@ -1,0 +1,24 @@
+[package]
+name = "playwright-rust-endpoint-tokio"
+description = "Optional authenticated Tokio endpoint adapters for Playwright Rust transports"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+playwright-rust-server-wire = { workspace = true }
+playwright-rust-transport = { workspace = true }
+playwright-rust-transport-stream = { workspace = true }
+playwright-rust-transport-tokio = { workspace = true }
+ring = { workspace = true }
+tokio = { workspace = true }
+tokio-rustls = { workspace = true }
+zeroize = { workspace = true }
+
+[dev-dependencies]
+playwright-rust-client-wire = { workspace = true }
+playwright-rust-codec-handshake = { workspace = true }
+playwright-rust-core = { workspace = true }
+rcgen = "0.13.2"

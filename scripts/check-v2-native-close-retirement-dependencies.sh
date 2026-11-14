@@ -5,11 +5,11 @@ explicit=$(mktemp)
 selected=$(mktemp)
 trap 'rm -f "$explicit" "$selected"' EXIT
 cd "$repo_dir"
-cargo tree --locked -p pwright-composition-chromium --no-default-features \
+cargo tree --locked -p playwright-rust-composition-chromium --no-default-features \
   --features close-capacity,close-route-retirement,native-close-scheduler \
   --edges normal --prefix none --format '{p} features={f}' \
   | sed '1d; s/ (\*)$//' | sort -u >"$explicit"
-cargo tree --locked -p pwright-composition-chromium --no-default-features \
+cargo tree --locked -p playwright-rust-composition-chromium --no-default-features \
   --features native-close-retirement --edges normal --prefix none --format '{p} features={f}' \
   | sed '1d; s/ (\*)$//' | sort -u >"$selected"
 diff -u "$explicit" "$selected"

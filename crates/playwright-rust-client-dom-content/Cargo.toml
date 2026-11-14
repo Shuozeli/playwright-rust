@@ -1,0 +1,17 @@
+[package]
+name = "playwright-rust-client-dom-content"
+description = "Opt-in typed Frame and Page DOM-content extensions for playwright-rust-client"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+playwright-rust-cap-dom-content = { workspace = true }
+playwright-rust-client = { workspace = true }
+playwright-rust-core = { workspace = true }
+
+[dev-dependencies]
+playwright-rust-browser-model = { workspace = true }
+tokio = { workspace = true }

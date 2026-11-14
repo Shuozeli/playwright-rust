@@ -16,7 +16,7 @@ ROOT = Path(__file__).parents[1]
 CORE_MANIFEST = ROOT / "tests/official/playwright-core-eval-on-selector-public-v1-manifest.json"
 PYTHON_MANIFEST = (
     ROOT
-    / "packages/pwright-python/tests/official/async-popup-full-chromium-v1-manifest.json"
+    / "packages/playwright-rust-python/tests/official/async-popup-full-chromium-v1-manifest.json"
 )
 CORE_UPSTREAM = Path.home() / "projects/thirdparty/playwright-v1.58.0"
 PYTHON_UPSTREAM = Path.home() / "projects/thirdparty/playwright-python"

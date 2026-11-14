@@ -1,4 +1,4 @@
-use pwright::chromium_page_creation::{
+use playwright_rust::chromium_page_creation::{
     ChromiumPageCreationProfile, NoopChromiumPagePublication,
 };
 

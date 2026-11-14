@@ -279,7 +279,7 @@ def verify_envelope(path: Path) -> dict[str, object]:
 def run(mode: str, upstream: Path, profile: str | None, result: Path) -> int:
     if os.environ.get("NODE_OPTIONS", "").strip():
         raise ValueError("ambient NODE_OPTIONS is forbidden for this strict suite")
-    if any(key.startswith("PWRIGHT_OFFICIAL_RUNSERVER_") for key in os.environ):
+    if any(key.startswith("PLAYWRIGHT_RUST_OFFICIAL_RUNSERVER_") for key in os.environ):
         raise ValueError("ambient RunServer attestation variables are forbidden")
     upstream = upstream.resolve()
     result = result.resolve()
@@ -301,10 +301,10 @@ def run(mode: str, upstream: Path, profile: str | None, result: Path) -> int:
     env["TAILSCALE_IP"] = bind
     env["TAILSCALE_HOST"] = host
     env["NODE_OPTIONS"] = f"--require={ADAPTER}"
-    env["PWRIGHT_OFFICIAL_RUNSERVER_URL_SUITE"] = SUITE
-    env["PWRIGHT_OFFICIAL_RUNSERVER_EXPECT_BIND"] = bind
-    env["PWRIGHT_OFFICIAL_RUNSERVER_EXPECT_HOST"] = host
-    env["PWRIGHT_OFFICIAL_RUNSERVER_RECEIPT"] = str(receipt_path(result))
+    env["PLAYWRIGHT_RUST_OFFICIAL_RUNSERVER_URL_SUITE"] = SUITE
+    env["PLAYWRIGHT_RUST_OFFICIAL_RUNSERVER_EXPECT_BIND"] = bind
+    env["PLAYWRIGHT_RUST_OFFICIAL_RUNSERVER_EXPECT_HOST"] = host
+    env["PLAYWRIGHT_RUST_OFFICIAL_RUNSERVER_RECEIPT"] = str(receipt_path(result))
     command = [
         sys.executable,
         str(RUNNER),

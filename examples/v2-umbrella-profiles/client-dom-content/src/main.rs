@@ -1,5 +1,5 @@
-use pwright::client_dom_content::{FrameContentExt, PageContentExt};
-use pwright::dom_content::DomContentParams;
+use playwright_rust::client_dom_content::{FrameContentExt, PageContentExt};
+use playwright_rust::dom_content::DomContentParams;
 
 fn main() {
     let request = DomContentParams;

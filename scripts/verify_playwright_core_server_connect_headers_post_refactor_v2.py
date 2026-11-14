@@ -68,7 +68,7 @@ def main() -> None:
         base.sha256(snapshot / "src/native-artifact.cjs")
         == capture.CANDIDATE_NATIVE_ARTIFACT_SHA256
     )
-    artifact = snapshot / "native" / capture.base.PROFILE / "pwright.node"
+    artifact = snapshot / "native" / capture.base.PROFILE / "playwright_rust.node"
     assert base.sha256(artifact) == capture.ARTIFACT_SHA256
     require_abi_shape(capture.probe_artifact_abi(artifact))
     print(

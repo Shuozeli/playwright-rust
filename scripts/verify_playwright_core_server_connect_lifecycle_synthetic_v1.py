@@ -33,7 +33,7 @@ SERVER = (
     ROOT
     / "tests/official/playwright-core-server-connect-lifecycle-synthetic-v1-server.cjs"
 )
-SOURCE_PACKAGE = ROOT / "packages/pwright"
+SOURCE_PACKAGE = ROOT / "packages/playwright-rust"
 SOURCE_HASHES = {
     "tests/library/browsertype-connect.spec.ts": "9de4d9c8c71b8509887c81220f2eb0042e89e146c65d0311b020d191814ed2bc",
     "tests/config/remoteServer.ts": "ceb98f2d613b5d1639732c3fa647eba661045ebdce799246d6fc9872f5643f56",
@@ -412,8 +412,8 @@ def verify_directory(result_dir: Path) -> dict[str, Any]:
                 "candidate snapshot or selected addon differs from run",
             )
             _require(
-                "[pwright-candidate]" in log.read_text(),
-                "candidate did not load Pwright",
+                "[playwright-rust-candidate]" in log.read_text(),
+                "candidate did not load Playwright Rust",
             )
         else:
             _require(
@@ -422,8 +422,8 @@ def verify_directory(result_dir: Path) -> dict[str, Any]:
                 "oracle loaded candidate",
             )
             _require(
-                "[pwright-candidate]" not in log.read_text(),
-                "oracle log contains Pwright adapter",
+                "[playwright-rust-candidate]" not in log.read_text(),
+                "oracle log contains Playwright Rust adapter",
             )
         selected = _selected_tests(report)
         passed = sum(item["status"] == "expected" for item in selected)

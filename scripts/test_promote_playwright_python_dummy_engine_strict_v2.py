@@ -210,7 +210,7 @@ def synthetic_reports(
             "pythonExecutable": f"/pinned/{mode}/python",
             "playwrightPackage": f"/pinned/{mode}/playwright",
             "driverNode": f"/pinned/{mode}/playwright/driver/node",
-            "pwrightPackageSha256": "2" * 64 if mode == "candidate" else None,
+            "playwright_rustPackageSha256": "2" * 64 if mode == "candidate" else None,
             "nativeSha256": "3" * 64 if mode == "candidate" else None,
             "runtimeLibraries": {"native.dylib": "4" * 64} if mode == "candidate" else {},
         }

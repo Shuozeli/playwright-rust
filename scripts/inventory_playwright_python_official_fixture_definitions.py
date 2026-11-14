@@ -28,9 +28,9 @@ from inventory_playwright_python_official_fixtures import (
     _verify_inventory,
 )
 
-_PLUGIN_BINDINGS_OUTPUT = "PWRIGHT_PYTHON_FIXTURE_BINDINGS_OUTPUT"
-_PLUGIN_DEFINITIONS_OUTPUT = "PWRIGHT_PYTHON_FIXTURE_DEFINITIONS_OUTPUT"
-_PLUGIN_UPSTREAM = "PWRIGHT_PYTHON_FIXTURE_UPSTREAM"
+_PLUGIN_BINDINGS_OUTPUT = "PLAYWRIGHT_RUST_PYTHON_FIXTURE_BINDINGS_OUTPUT"
+_PLUGIN_DEFINITIONS_OUTPUT = "PLAYWRIGHT_RUST_PYTHON_FIXTURE_DEFINITIONS_OUTPUT"
+_PLUGIN_UPSTREAM = "PLAYWRIGHT_RUST_PYTHON_FIXTURE_UPSTREAM"
 
 
 class Manifest(TypedDict):
@@ -533,7 +533,7 @@ def _collect_profile(
     profile: CollectionProfile,
 ) -> tuple[list[dict[str, object]], list[dict[str, object]], list[str]]:
     with tempfile.TemporaryDirectory(
-        prefix=f"pwright-python-fixture-defs-{profile['name']}-"
+        prefix=f"playwright-rust-python-fixture-defs-{profile['name']}-"
     ) as directory:
         raw_bindings = Path(directory) / "bindings.jsonl"
         raw_definitions = Path(directory) / "definitions.jsonl"
@@ -592,7 +592,7 @@ def main() -> None:
     parser.add_argument(
         "--manifest",
         type=Path,
-        default=root / "packages/pwright-python/tests/official/manifest.json",
+        default=root / "packages/playwright-rust-python/tests/official/manifest.json",
     )
     parser.add_argument(
         "--inventory",

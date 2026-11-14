@@ -52,7 +52,7 @@ RESULT_PARENT = (
     ROOT
     / ".work/official-conformance/results/core-server-connect-close-error-strict-v4"
 )
-SOURCE_PACKAGE = ROOT / "packages/pwright"
+SOURCE_PACKAGE = ROOT / "packages/playwright-rust"
 SNAPSHOT_PACKAGE = RESULT_PARENT / "candidate-package-snapshot-v1"
 SNAPSHOT_MANIFEST = RESULT_PARENT / "candidate-package-snapshot-v1.files.json"
 SCOPE = "official-derived-core-server-connect-ws-close-fixture-host-adapted-two-cases-internal-diagnostic-v4"
@@ -63,7 +63,7 @@ ADAPTED_SOURCE_SHA256 = (
 SOURCE_CONNECT_BEFORE = (
     "const error = await connect(`ws://localhost:${server.PORT}/ws`).catch(e => e);"
 )
-SOURCE_CONNECT_AFTER = "const error = await connect(`ws://${process.env.PWRIGHT_OFFICIAL_SERVER_HOST}:${server.PORT}/ws`).catch(e => e);"
+SOURCE_CONNECT_AFTER = "const error = await connect(`ws://${process.env.PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST}:${server.PORT}/ws`).catch(e => e);"
 SERVER_PORT_BASE = 8907
 SERVER_PORT_STRIDE = 4
 EXPECTED_SPEC_IDS = {
@@ -258,22 +258,22 @@ def run(mode: str) -> dict[str, Any]:
         "PWTEST_MODE",
         "PWPAGE_IMPL",
         "PWTEST_USE_BIDI_EXPECTATIONS",
-        "PWRIGHT_CANDIDATE_CDP_ENDPOINT",
-        "PWRIGHT_ORACLE_CDP_ENDPOINT",
-        "PWRIGHT_CDP_ENDPOINT",
-        "PWRIGHT_CDP_WS_URL",
-        "PWRIGHT_NATIVE_PROFILE",
-        "PWRIGHT_NODE_CANDIDATE",
-        "PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM",
-        "PWRIGHT_OFFICIAL_SERVER_IP",
-        "PWRIGHT_OFFICIAL_SERVER_HOST",
+        "PLAYWRIGHT_RUST_CANDIDATE_CDP_ENDPOINT",
+        "PLAYWRIGHT_RUST_ORACLE_CDP_ENDPOINT",
+        "PLAYWRIGHT_RUST_CDP_ENDPOINT",
+        "PLAYWRIGHT_RUST_CDP_WS_URL",
+        "PLAYWRIGHT_RUST_NATIVE_PROFILE",
+        "PLAYWRIGHT_RUST_NODE_CANDIDATE",
+        "PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM",
+        "PLAYWRIGHT_RUST_OFFICIAL_SERVER_IP",
+        "PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST",
     )
     if any(os.environ.get(key) for key in forbidden):
         raise ValueError(
             "strict Server-connect Close diagnostic rejects inherited runtime overrides"
         )
     check_source_and_manifest()
-    artifact = SOURCE_PACKAGE / "native" / PROFILE / "pwright.node"
+    artifact = SOURCE_PACKAGE / "native" / PROFILE / "playwright_rust.node"
     if mode == "candidate" and (
         not artifact.is_file() or sha256(artifact) != ARTIFACT_SHA256
     ):
@@ -309,8 +309,8 @@ def run(mode: str) -> dict[str, Any]:
     env["TAILSCALE_IP"] = dns_preflight["fixtureBind"]
     env["TAILSCALE_HOST"] = dns_preflight["fixtureHost"]
     env["NODE_OPTIONS"] = f"--require={PRELOAD}"
-    env["PWRIGHT_CORE_SERVER_CONNECT_CLOSE_ERROR_V4_MODE"] = mode
-    env["PWRIGHT_CORE_SERVER_CONNECT_CLOSE_ERROR_V4_RECEIPT"] = str(receipt)
+    env["PLAYWRIGHT_RUST_CORE_SERVER_CONNECT_CLOSE_ERROR_V4_MODE"] = mode
+    env["PLAYWRIGHT_RUST_CORE_SERVER_CONNECT_CLOSE_ERROR_V4_RECEIPT"] = str(receipt)
     command = [
         "uv",
         "run",
@@ -363,7 +363,7 @@ def run(mode: str) -> dict[str, Any]:
     )
     if mode == "oracle":
         assert all(item["status"] == "expected" for item in selected)
-    assert ("[pwright-candidate]" in log_path.read_text()) == (mode == "candidate")
+    assert ("[playwright-rust-candidate]" in log_path.read_text()) == (mode == "candidate")
     records = [json.loads(line) for line in receipt.read_text().splitlines() if line]
     assert records and any(record.get("workerIndex") is not None for record in records)
     strict = {

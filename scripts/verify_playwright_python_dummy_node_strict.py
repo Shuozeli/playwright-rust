@@ -15,7 +15,7 @@ from typing import Any, NoReturn, cast
 
 ROOT = Path(__file__).resolve().parents[1]
 POLICY = (
-    ROOT / "packages/pwright-python/tests/official/"
+    ROOT / "packages/playwright-rust-python/tests/official/"
     "dummy-node-launch-abi119-strict-v1-manifest.json"
 )
 POLICY_SHA256 = "b68e2a021f6d29dc399d13bd2864ffffe1d972c14960c2f303d5e261d8fc6b78"
@@ -48,8 +48,8 @@ _SIDECAR_KEYS = frozenset(
         "wheelSha256",
         "playwrightPackage",
         "playwrightPackageSha256",
-        "pwrightPackage",
-        "pwrightPackageSha256",
+        "playwright_rustPackage",
+        "playwright_rustPackageSha256",
         "nativePath",
         "nativeSha256",
         "runtimeLibraries",
@@ -119,8 +119,8 @@ def tree_sha256(root: Path) -> str:
     return digest.hexdigest()
 
 
-def pwright_runtime_library_paths(package: Path) -> list[Path]:
-    directory = package.parent / "shuozeli_pwright.dylibs"
+def playwright_rust_runtime_library_paths(package: Path) -> list[Path]:
+    directory = package.parent / "shuozeli_playwright_rust.dylibs"
     if directory.is_symlink():
         raise ValueError("candidate adjacent dylib directory is a symlink")
     if not directory.exists():
@@ -257,8 +257,8 @@ def _policy(raw: object) -> dict[str, Any]:
         _digest(digest, label)
     support = _object(policy["supportTrees"], "supportTrees")
     if set(support) != {
-        "packages/pwright-python/tests/official/shim",
-        "packages/pwright-python/tests/official/runtime",
+        "packages/playwright-rust-python/tests/official/shim",
+        "packages/playwright-rust-python/tests/official/runtime",
     }:
         _fail("strict support tree set differs")
     for label, digest in support.items():
@@ -339,7 +339,7 @@ def _tooling(policy: dict[str, Any], payload: dict[str, Any], root: Path) -> Pat
         if not path.resolve().is_relative_to(root.resolve()):
             _fail(f"support tree escapes tooling root: {relative}")
         _tree(path, digest, f"support tree {relative}")
-    return root / "packages/pwright-python/tests/official/dummy_guard_strict"
+    return root / "packages/playwright-rust-python/tests/official/dummy_guard_strict"
 
 
 def _runtime(policy: dict[str, Any], payload: dict[str, Any]) -> None:
@@ -374,22 +374,22 @@ def _runtime(policy: dict[str, Any], payload: dict[str, Any]) -> None:
     if payload["systemNodeSha256"] != policy["systemNodeSha256"]:
         _fail("recorded system Node digest differs")
     if payload["mode"] == "candidate":
-        package = site / "pwright"
+        package = site / "playwright_rust"
         native = package / "_native.abi3.so"
         if (
-            Path(payload["pwrightPackage"]) != package
+            Path(payload["playwright_rustPackage"]) != package
             or Path(payload["nativePath"]) != native
         ):
             _fail("candidate package/native is not installed in selected interpreter")
         _tree(package, policy["candidatePackageTreeSha256"], "candidate package")
         _file(native, policy["candidateNativeSha256"], "candidate native artifact")
         if (
-            payload["pwrightPackageSha256"] != policy["candidatePackageTreeSha256"]
+            payload["playwright_rustPackageSha256"] != policy["candidatePackageTreeSha256"]
             or payload["nativeSha256"] != policy["candidateNativeSha256"]
         ):
             _fail("recorded candidate package/native digest differs")
         try:
-            libraries = pwright_runtime_library_paths(package)
+            libraries = playwright_rust_runtime_library_paths(package)
         except ValueError as error:
             raise StrictEvidenceError(
                 "candidate adjacent dylibs are invalid"
@@ -408,17 +408,17 @@ def _runtime(policy: dict[str, Any], payload: dict[str, Any]) -> None:
         any(
             payload[field] is not None
             for field in (
-                "pwrightPackage",
-                "pwrightPackageSha256",
+                "playwright_rustPackage",
+                "playwright_rustPackageSha256",
                 "nativePath",
                 "nativeSha256",
             )
         )
         or payload["runtimeLibraries"] != {}
-        or (site / "pwright").exists()
-        or (site / "shuozeli_pwright.dylibs").exists()
+        or (site / "playwright_rust").exists()
+        or (site / "shuozeli_playwright_rust.dylibs").exists()
     ):
-        _fail("oracle run must not import or install a Pwright candidate artifact")
+        _fail("oracle run must not import or install a Playwright Rust candidate artifact")
 
 
 def _sandbox(payload: dict[str, Any], guard_dir: Path, asset: Path) -> None:
@@ -471,7 +471,7 @@ def _fixture(payload: dict[str, Any]) -> None:
 def _environment(
     payload: dict[str, Any], tooling_root: Path, guard_dir: Path, upstream: Path
 ) -> None:
-    official = tooling_root / "packages/pwright-python/tests/official"
+    official = tooling_root / "packages/playwright-rust-python/tests/official"
     python_paths = (
         [official / "shim", upstream, official / "runtime", guard_dir]
         if payload["mode"] == "candidate"
@@ -482,18 +482,18 @@ def _environment(
         "PYTHONPATH": ":".join(map(str, python_paths)),
         "PYTHONNOUSERSITE": "1",
         "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
-        "PWRIGHT_OFFICIAL_MODE": payload["mode"],
-        "PWRIGHT_OFFICIAL_LAUNCH_MODE": "owned",
-        "PWRIGHT_OFFICIAL_BROWSER_CHANNEL": "",
-        "PWRIGHT_OFFICIAL_UPSTREAM_TESTS": str(upstream / "tests"),
-        "PWRIGHT_OFFICIAL_TAILSCALE_IP": payload["fixtureBind"],
-        "PWRIGHT_OFFICIAL_TAILSCALE_HOST": payload["fixtureHost"],
-        "PWRIGHT_PYTHON_DUMMY_UPSTREAM": str(upstream),
-        "PWRIGHT_PYTHON_DUMMY_API": payload["api"],
-        "PWRIGHT_PYTHON_DUMMY_LAUNCH_RECEIPT": payload["publicReceipt"],
-        "PWRIGHT_PYTHON_DUMMY_PROCESS_RECEIPT": payload["processReceipt"],
-        "PWRIGHT_PYTHON_DUMMY_REAL_NODE": payload["systemNode"],
-        "PWRIGHT_PYTHON_DUMMY_NONCE": payload["runNonce"],
+        "PLAYWRIGHT_RUST_OFFICIAL_MODE": payload["mode"],
+        "PLAYWRIGHT_RUST_OFFICIAL_LAUNCH_MODE": "owned",
+        "PLAYWRIGHT_RUST_OFFICIAL_BROWSER_CHANNEL": "",
+        "PLAYWRIGHT_RUST_OFFICIAL_UPSTREAM_TESTS": str(upstream / "tests"),
+        "PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_IP": payload["fixtureBind"],
+        "PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_HOST": payload["fixtureHost"],
+        "PLAYWRIGHT_RUST_PYTHON_DUMMY_UPSTREAM": str(upstream),
+        "PLAYWRIGHT_RUST_PYTHON_DUMMY_API": payload["api"],
+        "PLAYWRIGHT_RUST_PYTHON_DUMMY_LAUNCH_RECEIPT": payload["publicReceipt"],
+        "PLAYWRIGHT_RUST_PYTHON_DUMMY_PROCESS_RECEIPT": payload["processReceipt"],
+        "PLAYWRIGHT_RUST_PYTHON_DUMMY_REAL_NODE": payload["systemNode"],
+        "PLAYWRIGHT_RUST_PYTHON_DUMMY_NONCE": payload["runNonce"],
     }
     if payload["environment"] != expected:
         _fail("recorded scrubbed environment differs or contains an override")
@@ -518,15 +518,15 @@ def _command(payload: dict[str, Any], upstream: Path) -> None:
         "-p",
         "pytest_timeout",
         "-p",
-        "pwright_official_server_runtime",
+        "playwright_rust_official_server_runtime",
         "-p",
         (
-            "pwright_candidate_runtime"
+            "playwright_rust_candidate_runtime"
             if payload["mode"] == "candidate"
-            else "pwright_official_oracle_runtime"
+            else "playwright_rust_official_oracle_runtime"
         ),
         "-p",
-        "pwright_official_dummy_guard",
+        "playwright_rust_official_dummy_guard",
         "--browser=chromium",
         "--timeout=20",
         "--timeout-method=signal",
@@ -645,7 +645,7 @@ def _receipts(payload: dict[str, Any], policy: dict[str, Any], asset: Path) -> N
             "public launch receipts differ from exact invoke/process/failure sequence"
         )
     message = public_rows[1]["errorMessage"]
-    if not isinstance(message, str) or not message or "PWRIGHT_UNSUPPORTED" in message:
+    if not isinstance(message, str) or not message or "PLAYWRIGHT_RUST_UNSUPPORTED" in message:
         _fail("public launch did not report a concrete process failure")
 
 

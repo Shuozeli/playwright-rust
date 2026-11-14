@@ -1,4 +1,4 @@
-use pwright_backend_cdp_network_events::CdpNetworkEventBatch;
+use playwright_rust_backend_cdp_network_events::CdpNetworkEventBatch;
 
 fn main() {
     let batch = CdpNetworkEventBatch::default();

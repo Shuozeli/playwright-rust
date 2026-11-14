@@ -39,7 +39,7 @@ def test_capture_policy_binds_exact_runner_and_guard_sources() -> None:
 @pytest.mark.parametrize(
     "override",
     [
-        {"PWRIGHT_CDP_ENDPOINT": "http://127.0.0.1:9222"},
+        {"PLAYWRIGHT_RUST_CDP_ENDPOINT": "http://127.0.0.1:9222"},
         {"PLAYWRIGHT_BROWSERS_PATH": "/tmp/alternate"},
         {"NODE_OPTIONS": "--require /tmp/alternate.js"},
         {"DYLD_INSERT_LIBRARIES": "/tmp/alternate.dylib"},

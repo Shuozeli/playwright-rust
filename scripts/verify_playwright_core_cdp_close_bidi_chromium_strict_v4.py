@@ -216,7 +216,7 @@ def verify_strict(strict_path: Path) -> dict[str, Any]:
         assert run["exitCode"] == (0 if selected[0]["status"] == "expected" else 1)
         if mode == "oracle":
             assert selected[0]["status"] == "expected"
-        assert ("[pwright-candidate]" in output["log"].read_text()) == (
+        assert ("[playwright-rust-candidate]" in output["log"].read_text()) == (
             mode == "candidate"
         )
         checked_receipts(output["receipt"], selected, fixture_host)

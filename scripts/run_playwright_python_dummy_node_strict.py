@@ -34,12 +34,12 @@ from verify_playwright_python_dummy_node_strict import (
     _tooling,
     _upstream,
     file_sha256,
-    pwright_runtime_library_paths,
+    playwright_rust_runtime_library_paths,
     tree_sha256,
     verify_provenance,
 )
 
-OFFICIAL = ROOT / "packages/pwright-python/tests/official"
+OFFICIAL = ROOT / "packages/playwright-rust-python/tests/official"
 GUARD_DIR = OFFICIAL / "dummy_guard_strict"
 FORBIDDEN_AMBIENT = (
     "CI",
@@ -53,9 +53,9 @@ FORBIDDEN_AMBIENT = (
     "PYTEST_PLUGINS",
     "HEADFUL",
     "PLAYWRIGHT_BROWSERS_PATH",
-    "PWRIGHT_CDP_ENDPOINT",
-    "PWRIGHT_CDP_WS_URL",
-    "PWRIGHT_OFFICIAL_LAUNCH_MODE",
+    "PLAYWRIGHT_RUST_CDP_ENDPOINT",
+    "PLAYWRIGHT_RUST_CDP_WS_URL",
+    "PLAYWRIGHT_RUST_OFFICIAL_LAUNCH_MODE",
     "PWDEBUG",
 )
 
@@ -66,7 +66,7 @@ def _fail(message: str) -> NoReturn:
 
 def _clean_ambient(environment: dict[str, str]) -> None:
     if any(key in environment for key in FORBIDDEN_AMBIENT) or any(
-        key.startswith(("DYLD_", "LD_", "PWTEST_", "PLAYWRIGHT_", "PWRIGHT_"))
+        key.startswith(("DYLD_", "LD_", "PWTEST_", "PLAYWRIGHT_", "PLAYWRIGHT_RUST_"))
         for key in environment
     ):
         _fail("strict dummy run forbids inherited test, browser and loader overrides")
@@ -145,12 +145,12 @@ def _artifact_payload(
 ) -> dict[str, Any]:
     official = site / "playwright"
     driver = official / "driver/node"
-    package = site / "pwright"
+    package = site / "playwright_rust"
     native = package / "_native.abi3.so"
     libraries = (
         {
             path.name: file_sha256(path)
-            for path in pwright_runtime_library_paths(package)
+            for path in playwright_rust_runtime_library_paths(package)
         }
         if mode == "candidate"
         else {}
@@ -162,8 +162,8 @@ def _artifact_payload(
         "wheelSha256": file_sha256(wheel),
         "playwrightPackage": str(official),
         "playwrightPackageSha256": tree_sha256(official),
-        "pwrightPackage": str(package) if mode == "candidate" else None,
-        "pwrightPackageSha256": tree_sha256(package) if mode == "candidate" else None,
+        "playwright_rustPackage": str(package) if mode == "candidate" else None,
+        "playwright_rustPackageSha256": tree_sha256(package) if mode == "candidate" else None,
         "nativePath": str(native) if mode == "candidate" else None,
         "nativeSha256": file_sha256(native) if mode == "candidate" else None,
         "runtimeLibraries": libraries,
@@ -289,18 +289,18 @@ def run(args: argparse.Namespace) -> Path:
         "PYTHONPATH": ":".join(map(str, python_paths)),
         "PYTHONNOUSERSITE": "1",
         "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
-        "PWRIGHT_OFFICIAL_MODE": args.mode,
-        "PWRIGHT_OFFICIAL_LAUNCH_MODE": "owned",
-        "PWRIGHT_OFFICIAL_BROWSER_CHANNEL": "",
-        "PWRIGHT_OFFICIAL_UPSTREAM_TESTS": str(upstream / "tests"),
-        "PWRIGHT_OFFICIAL_TAILSCALE_IP": bind,
-        "PWRIGHT_OFFICIAL_TAILSCALE_HOST": host,
-        "PWRIGHT_PYTHON_DUMMY_UPSTREAM": str(upstream),
-        "PWRIGHT_PYTHON_DUMMY_API": args.api,
-        "PWRIGHT_PYTHON_DUMMY_LAUNCH_RECEIPT": str(public),
-        "PWRIGHT_PYTHON_DUMMY_PROCESS_RECEIPT": str(process),
-        "PWRIGHT_PYTHON_DUMMY_REAL_NODE": str(node),
-        "PWRIGHT_PYTHON_DUMMY_NONCE": nonce,
+        "PLAYWRIGHT_RUST_OFFICIAL_MODE": args.mode,
+        "PLAYWRIGHT_RUST_OFFICIAL_LAUNCH_MODE": "owned",
+        "PLAYWRIGHT_RUST_OFFICIAL_BROWSER_CHANNEL": "",
+        "PLAYWRIGHT_RUST_OFFICIAL_UPSTREAM_TESTS": str(upstream / "tests"),
+        "PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_IP": bind,
+        "PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_HOST": host,
+        "PLAYWRIGHT_RUST_PYTHON_DUMMY_UPSTREAM": str(upstream),
+        "PLAYWRIGHT_RUST_PYTHON_DUMMY_API": args.api,
+        "PLAYWRIGHT_RUST_PYTHON_DUMMY_LAUNCH_RECEIPT": str(public),
+        "PLAYWRIGHT_RUST_PYTHON_DUMMY_PROCESS_RECEIPT": str(process),
+        "PLAYWRIGHT_RUST_PYTHON_DUMMY_REAL_NODE": str(node),
+        "PLAYWRIGHT_RUST_PYTHON_DUMMY_NONCE": nonce,
     }
     selected = upstream / f"tests/{args.api}/test_launcher.py"
     command = [
@@ -319,13 +319,13 @@ def run(args: argparse.Namespace) -> Path:
         "-p",
         "pytest_timeout",
         "-p",
-        "pwright_official_server_runtime",
+        "playwright_rust_official_server_runtime",
         "-p",
-        "pwright_candidate_runtime"
+        "playwright_rust_candidate_runtime"
         if args.mode == "candidate"
-        else "pwright_official_oracle_runtime",
+        else "playwright_rust_official_oracle_runtime",
         "-p",
-        "pwright_official_dummy_guard",
+        "playwright_rust_official_dummy_guard",
         "--browser=chromium",
         "--timeout=20",
         "--timeout-method=signal",

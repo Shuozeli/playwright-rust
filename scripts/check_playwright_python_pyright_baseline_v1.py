@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import cast
 
 ROOT = Path(__file__).resolve().parents[1]
-PACKAGE = ROOT / "packages/pwright-python"
+PACKAGE = ROOT / "packages/playwright-rust-python"
 BASELINE = ROOT / "scripts/playwright-python-pyright-debt-v1.json"
 PYRIGHT_TARGETS = (
     "python",
@@ -45,53 +45,53 @@ PYRIGHT_CONFIG_SHA256 = (
     "20005c9d41430771a63ebdb4c9dd9f4c6736910e31e6901e41eb8555c3d5895e"
 )
 KNOWN_DIAGNOSTICS_SHA256 = (
-    "0e953b32aa96e8164e19fd6634929d173785903409233014c5a753f5bb187a5f"
+    "67df0af53f34546c1691f1987939e9628309ab658e2e99d2f028881a8985c69a"
 )
 KNOWN_ERROR_COUNT = 66
 PINNED_SOURCES = {
     (
-        "packages/pwright-python/tests/official/connect_lifecycle_synthetic_v1/"
-        "pwright_python_connect_lifecycle_synthetic_v1.py"
-    ): "fc4f4c4a612af65a8cb8c8ac5018c5c1f81eabe3914883d5a4778e1b6722dc5d",
+        "packages/playwright-rust-python/tests/official/connect_lifecycle_synthetic_v1/"
+        "playwright_rust_python_connect_lifecycle_synthetic_v1.py"
+    ): "e7e873147faddf8e7c7190ca404b1ef56c8aa45fd7512ce87d8589b2f627fe60",
     (
-        "packages/pwright-python/tests/official/connect_lifecycle_synthetic_v2/"
-        "pwright_python_connect_lifecycle_synthetic_v2.py"
-    ): "faa7dd0b5bfb71ada724146b868859bf9fd5d5b9027f5a105337c829098d7fe1",
+        "packages/playwright-rust-python/tests/official/connect_lifecycle_synthetic_v2/"
+        "playwright_rust_python_connect_lifecycle_synthetic_v2.py"
+    ): "99bb3a1ed6a59c0333d60c1094649e7c542204159698c5cd3e521837c6ba655a",
     (
-        "packages/pwright-python/tests/official/connect_remote_kill_synthetic_v1/"
-        "pwright_python_connect_remote_kill_synthetic_v1.py"
-    ): "41e7b4cfc2480988640eb223675bcff2c9dbbc25a3f822256451946ec02cbe99",
+        "packages/playwright-rust-python/tests/official/connect_remote_kill_synthetic_v1/"
+        "playwright_rust_python_connect_remote_kill_synthetic_v1.py"
+    ): "18879fc29c694942cfaa49097526169d1aaaed89036dcb4275a8cd542be8b375",
     (
-        "packages/pwright-python/tests/official/ws_connect_guard_strict_v2/"
-        "pwright_official_connect_guard_v2.py"
-    ): "f1cc02ce09be1688d2a5882afbc36ee22987871a517cab134a52e55374083d66",
+        "packages/playwright-rust-python/tests/official/ws_connect_guard_strict_v2/"
+        "playwright_rust_official_connect_guard_v2.py"
+    ): "7f14714aeed8a97e368def939833510a97e9bb0fbc5f0b5141b16837d2e3ced1",
     (
-        "packages/pwright-python/tests/official/ws_connect_refused_guard_strict_v1/"
-        "pwright_official_connect_refused_guard_v1.py"
-    ): "10d6ede9b5a8ecf552bb6caaab6d33474e40d23cc1ca9a00de1a988cfa9d9450",
+        "packages/playwright-rust-python/tests/official/ws_connect_refused_guard_strict_v1/"
+        "playwright_rust_official_connect_refused_guard_v1.py"
+    ): "5b810c26a0006ca84dc1274b1005f2b14025c490666ed59d0ddb5271caa3fb37",
     (
         "scripts/run_playwright_python_upstream_skip_markers_strict_v1.py"
-    ): "61027b05720ffee373ea17b26b6c7d696ea010c2f8dffee0d511c2c36b9bf550",
+    ): "e1dc72d95dbba678dcd2672614ab41cb66446861f41174d09eb55b86c11ec625",
     (
         "scripts/verify_playwright_python_upstream_skip_markers_strict_v1.py"
-    ): "168b3801f88248f11d0d628521392ce6a05615cede547a2e708492a20391feda",
+    ): "4d171f58e4fb540f111c3d65d799293659b86832a89b6afb27d8dc9b282a25e2",
     (
-        "packages/pwright-python/tests/official/"
+        "packages/playwright-rust-python/tests/official/"
         "upstream-skip-callable-fixtures-strict-v2-manifest.json"
     ): "929225455a1f371ff671e5800455746f7c03d18c40f709d68d6f6a7ec077eb69",
     (
-        "packages/pwright-python/tests/official/upstream_skip_guard_strict_v1/"
-        "pwright_official_upstream_skip_guard_v1.py"
-    ): "9e4b8cbddd267db02bba68b3c139abf2422c55b062deef284f98d103f63ee448",
+        "packages/playwright-rust-python/tests/official/upstream_skip_guard_strict_v1/"
+        "playwright_rust_official_upstream_skip_guard_v1.py"
+    ): "47cf4e7e98211ca862b2dfe6f60d30959cd85a8f7cade3f6c2aa88e00424e1a8",
     (
         "scripts/run_playwright_python_upstream_skip_callable_fixtures_strict_v2.py"
-    ): "ccd4032b0d2706008477b3c418e7b208766d3ca893610ecdb4d7516bff0fcdbd",
+    ): "a5ddf35c5830ad4bd282b341d5a1209569db79b29492733003d129549a68338b",
     (
         "scripts/verify_playwright_python_upstream_skip_callable_fixtures_strict_v2.py"
-    ): "95a49c1d391a55b792828ecd9bbae38a41b741c94d34e4209502c69dcfbc4526",
+    ): "a2c18ee996d86db9d4fdbdb72fcb01c380a42b228dd4b98121926547e52d34d1",
     (
         "scripts/promote_playwright_python_upstream_skip_callable_fixtures_strict_v2.py"
-    ): "891543d38877631763806b68a4449d0e7689e7269f3473ebfe27d2ecd7401bd1",
+    ): "c15dd60d27f6bc51bc8fe0791ef8b6254cce96dc3a88dfd470f357612f7352f0",
 }
 
 
@@ -194,7 +194,7 @@ def verify_report(payload: object, baseline: object, root: Path) -> dict[str, ob
     expected = _mapping(baseline, "baseline")
     require(expected.get("schema") == 1, "baseline schema drift")
     require(
-        expected.get("kind") == "pwright-python-pyright-debt-v1",
+        expected.get("kind") == "playwright-rust-python-pyright-debt-v1",
         "baseline kind drift",
     )
     require(

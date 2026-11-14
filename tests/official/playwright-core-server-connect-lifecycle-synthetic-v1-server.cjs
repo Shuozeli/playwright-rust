@@ -6,10 +6,10 @@ const { promises: dns } = require('node:dns');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const bind = process.env.PWRIGHT_OFFICIAL_SERVER_IP;
-const host = process.env.PWRIGHT_OFFICIAL_SERVER_HOST;
-const upstream = process.env.PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM;
-const receipt = process.env.PWRIGHT_CORE_LIFECYCLE_SYNTHETIC_RECEIPT;
+const bind = process.env.PLAYWRIGHT_RUST_OFFICIAL_SERVER_IP;
+const host = process.env.PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST;
+const upstream = process.env.PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM;
+const receipt = process.env.PLAYWRIGHT_RUST_CORE_LIFECYCLE_SYNTHETIC_RECEIPT;
 if (!bind || !host || !upstream || !receipt)
   throw new Error('synthetic server requires Tailscale bind, host, upstream and receipt');
 const { WebSocketServer } = require(require.resolve('ws', { paths: [path.resolve(upstream)] }));
@@ -29,7 +29,7 @@ let stopping = false;
 
 function record(kind, extra = {}) {
   fs.appendFileSync(receipt, JSON.stringify({
-    kind, mode: process.env.PWRIGHT_CORE_LIFECYCLE_SYNTHETIC_MODE,
+    kind, mode: process.env.PLAYWRIGHT_RUST_CORE_LIFECYCLE_SYNTHETIC_MODE,
     pid: process.pid, workerIndex: process.env.TEST_WORKER_INDEX ?? null,
     fixtureHost: host, fixtureBind: bind, synthetic: true,
     browserProcessLaunched: false, ...extra,

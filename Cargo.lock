@@ -1029,6 +1029,2997 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f6b464fbc74e149a392436b17d523f769e057cb6877f6a5c4618bc6f11800548"
 
 [[package]]
+name = "playwright-rust"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-backend-cdp-selector-geometry",
+ "playwright-rust-cap-content",
+ "playwright-rust-cap-context-creation",
+ "playwright-rust-cap-context-lifecycle",
+ "playwright-rust-cap-dom-content",
+ "playwright-rust-cap-evaluation",
+ "playwright-rust-cap-handle-evaluation",
+ "playwright-rust-cap-handle-lifecycle",
+ "playwright-rust-cap-locator",
+ "playwright-rust-cap-locator-screenshot",
+ "playwright-rust-cap-navigation",
+ "playwright-rust-cap-network-events",
+ "playwright-rust-cap-page-creation",
+ "playwright-rust-cap-page-events",
+ "playwright-rust-cap-page-lifecycle",
+ "playwright-rust-cdp",
+ "playwright-rust-client",
+ "playwright-rust-client-content",
+ "playwright-rust-client-context-creation",
+ "playwright-rust-client-context-lifecycle",
+ "playwright-rust-client-dom-content",
+ "playwright-rust-client-evaluation",
+ "playwright-rust-client-handle-evaluation",
+ "playwright-rust-client-handle-lifecycle",
+ "playwright-rust-client-locator",
+ "playwright-rust-client-locator-screenshot",
+ "playwright-rust-client-navigation",
+ "playwright-rust-client-network-events",
+ "playwright-rust-client-page-creation",
+ "playwright-rust-client-page-events",
+ "playwright-rust-client-page-lifecycle",
+ "playwright-rust-composition-chromium-content",
+ "playwright-rust-composition-chromium-context-creation",
+ "playwright-rust-composition-chromium-context-lifecycle",
+ "playwright-rust-composition-chromium-dom-content",
+ "playwright-rust-composition-chromium-evaluation",
+ "playwright-rust-composition-chromium-handle-evaluation",
+ "playwright-rust-composition-chromium-handle-lifecycle",
+ "playwright-rust-composition-chromium-locator",
+ "playwright-rust-composition-chromium-locator-screenshot",
+ "playwright-rust-composition-chromium-navigation",
+ "playwright-rust-composition-chromium-network-events",
+ "playwright-rust-composition-chromium-page-creation",
+ "playwright-rust-composition-chromium-page-events",
+ "playwright-rust-composition-chromium-page-lifecycle",
+ "playwright-rust-core",
+ "playwright-rust-plugin-ordered-handle-delivery",
+ "playwright-rust-runtime",
+ "playwright-rust-runtime-tokio",
+ "playwright-rust-transport",
+ "playwright-rust-transport-tokio",
+]
+
+[[package]]
+name = "playwright-rust-api-request"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "mime_guess",
+ "thiserror",
+ "tokio",
+ "tokio-util",
+ "url",
+]
+
+[[package]]
+name = "playwright-rust-api-request-auth-basic"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "playwright-rust-api-request",
+ "thiserror",
+ "url",
+ "zeroize",
+]
+
+[[package]]
+name = "playwright-rust-api-request-client-certificates"
+version = "0.1.0"
+dependencies = [
+ "openssl",
+ "playwright-rust-api-request-connector-rustls",
+ "rcgen",
+ "thiserror",
+ "url",
+]
+
+[[package]]
+name = "playwright-rust-api-request-connector-http-proxy"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "base64",
+ "httparse",
+ "playwright-rust-api-request-transport",
+ "tokio",
+ "tokio-util",
+ "url",
+ "zeroize",
+]
+
+[[package]]
+name = "playwright-rust-api-request-connector-proxy-bypass"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "playwright-rust-api-request-transport",
+ "tokio",
+ "tokio-util",
+ "url",
+]
+
+[[package]]
+name = "playwright-rust-api-request-connector-rustls"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "playwright-rust-api-request-connector-tokio",
+ "playwright-rust-api-request-transport",
+ "rcgen",
+ "tokio",
+ "tokio-rustls",
+ "tokio-util",
+ "url",
+ "webpki-roots",
+]
+
+[[package]]
+name = "playwright-rust-api-request-connector-socks5"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "playwright-rust-api-request-transport",
+ "tokio",
+ "tokio-util",
+ "url",
+]
+
+[[package]]
+name = "playwright-rust-api-request-connector-tokio"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "futures-util",
+ "playwright-rust-api-request-transport",
+ "tokio",
+ "tokio-util",
+ "url",
+]
+
+[[package]]
+name = "playwright-rust-api-request-cookie"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "httpdate",
+ "playwright-rust-api-request",
+ "tokio",
+ "url",
+]
+
+[[package]]
+name = "playwright-rust-api-request-decompress"
+version = "0.1.0"
+dependencies = [
+ "brotli",
+ "flate2",
+ "playwright-rust-api-request-transport",
+]
+
+[[package]]
+name = "playwright-rust-api-request-http1"
+version = "0.1.0"
+dependencies = [
+ "httparse",
+ "playwright-rust-api-request",
+ "thiserror",
+ "tokio-util",
+ "url",
+]
+
+[[package]]
+name = "playwright-rust-api-request-transport"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "playwright-rust-api-request",
+ "playwright-rust-api-request-auth-basic",
+ "playwright-rust-api-request-cookie",
+ "playwright-rust-api-request-http1",
+ "thiserror",
+ "tokio",
+ "tokio-util",
+ "url",
+]
+
+[[package]]
+name = "playwright-rust-artifact-model"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-core",
+]
+
+[[package]]
+name = "playwright-rust-artifact-runtime"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-artifact-service",
+ "playwright-rust-browser-model",
+ "playwright-rust-cap-artifact",
+ "playwright-rust-codec-control",
+ "playwright-rust-core",
+ "playwright-rust-runtime",
+ "playwright-rust-runtime-control",
+ "playwright-rust-server-artifact",
+ "playwright-rust-trace-format",
+ "playwright-rust-trace-model",
+ "playwright-rust-transport",
+ "playwright-rust-transport-memory",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-artifact-service"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-artifact-model",
+ "playwright-rust-browser-model",
+ "playwright-rust-cap-artifact",
+ "playwright-rust-client",
+ "playwright-rust-client-artifact",
+ "playwright-rust-client-wire",
+ "playwright-rust-codec-artifact",
+ "playwright-rust-core",
+ "playwright-rust-server-artifact",
+ "playwright-rust-server-wire",
+ "playwright-rust-transport",
+ "playwright-rust-transport-memory",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-backend-cdp"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "playwright-rust-backend-cdp-common",
+ "playwright-rust-backend-cdp-content",
+ "playwright-rust-backend-cdp-context-creation",
+ "playwright-rust-backend-cdp-context-lifecycle",
+ "playwright-rust-backend-cdp-dom-content",
+ "playwright-rust-backend-cdp-evaluation",
+ "playwright-rust-backend-cdp-handle-evaluation",
+ "playwright-rust-backend-cdp-handle-lifecycle",
+ "playwright-rust-backend-cdp-input",
+ "playwright-rust-backend-cdp-locator",
+ "playwright-rust-backend-cdp-locator-screenshot",
+ "playwright-rust-backend-cdp-navigation",
+ "playwright-rust-backend-cdp-network-events",
+ "playwright-rust-backend-cdp-page-creation",
+ "playwright-rust-backend-cdp-page-events",
+ "playwright-rust-backend-cdp-page-lifecycle",
+ "playwright-rust-backend-cdp-topology",
+ "playwright-rust-browser-backend",
+ "playwright-rust-browser-model",
+ "playwright-rust-browser-provider",
+ "playwright-rust-cap-content",
+ "playwright-rust-cap-context-creation",
+ "playwright-rust-cap-context-lifecycle",
+ "playwright-rust-cap-dom-content",
+ "playwright-rust-cap-evaluation",
+ "playwright-rust-cap-handle-evaluation",
+ "playwright-rust-cap-handle-lifecycle",
+ "playwright-rust-cap-history-navigation",
+ "playwright-rust-cap-locator",
+ "playwright-rust-cap-locator-screenshot",
+ "playwright-rust-cap-navigation",
+ "playwright-rust-cap-network-events",
+ "playwright-rust-cap-page-creation",
+ "playwright-rust-cap-page-events",
+ "playwright-rust-cap-page-lifecycle",
+ "playwright-rust-cdp",
+ "playwright-rust-client",
+ "playwright-rust-client-locator",
+ "playwright-rust-client-navigation",
+ "playwright-rust-core",
+ "playwright-rust-fake",
+ "playwright-rust-network-model",
+ "playwright-rust-provider-cdp",
+ "playwright-rust-runtime",
+ "playwright-rust-runtime-tokio",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-backend-cdp-common"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-cdp",
+ "playwright-rust-core",
+]
+
+[[package]]
+name = "playwright-rust-backend-cdp-content"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "playwright-rust-backend-cdp-common",
+ "playwright-rust-browser-backend",
+ "playwright-rust-cap-content",
+ "playwright-rust-cdp",
+ "playwright-rust-core",
+ "playwright-rust-fake",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-backend-cdp-context-creation"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-backend-cdp-common",
+ "playwright-rust-cap-context-creation",
+ "playwright-rust-cdp",
+ "playwright-rust-core",
+ "playwright-rust-fake",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-backend-cdp-context-lifecycle"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-backend-cdp-common",
+ "playwright-rust-backend-cdp-topology",
+ "playwright-rust-cap-context-lifecycle",
+ "playwright-rust-cdp",
+ "playwright-rust-core",
+ "playwright-rust-fake",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-backend-cdp-dom-content"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-backend-cdp-common",
+ "playwright-rust-browser-backend",
+ "playwright-rust-cap-dom-content",
+ "playwright-rust-cdp",
+ "playwright-rust-core",
+ "playwright-rust-fake",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-backend-cdp-drag"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-backend-cdp-input",
+ "playwright-rust-cdp",
+ "playwright-rust-core",
+ "playwright-rust-fake",
+ "serde_json",
+ "tokio",
+ "url",
+]
+
+[[package]]
+name = "playwright-rust-backend-cdp-evaluation"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "playwright-rust-backend-cdp-common",
+ "playwright-rust-browser-backend",
+ "playwright-rust-cap-evaluation",
+ "playwright-rust-cdp",
+ "playwright-rust-core",
+ "playwright-rust-fake",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-backend-cdp-file-input"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "base64",
+ "playwright-rust-backend-cdp-locator-resolution",
+ "playwright-rust-browser-provider",
+ "playwright-rust-cdp",
+ "playwright-rust-composition-chromium-locator-resolution",
+ "playwright-rust-core",
+ "playwright-rust-fake",
+ "playwright-rust-file-input-fs",
+ "playwright-rust-file-input-model",
+ "playwright-rust-file-input-source",
+ "playwright-rust-file-input-tokio",
+ "playwright-rust-provider-cdp",
+ "playwright-rust-runtime",
+ "playwright-rust-selector-model",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-backend-cdp-handle-evaluation"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "playwright-rust-backend-cdp-common",
+ "playwright-rust-backend-cdp-evaluation",
+ "playwright-rust-browser-model",
+ "playwright-rust-cap-evaluation",
+ "playwright-rust-cap-handle-evaluation",
+ "playwright-rust-cdp",
+ "playwright-rust-core",
+ "playwright-rust-fake",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-backend-cdp-handle-lifecycle"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-backend-cdp-common",
+ "playwright-rust-cap-handle-lifecycle",
+ "playwright-rust-cdp",
+ "playwright-rust-core",
+ "playwright-rust-fake",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-backend-cdp-input"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-cdp",
+ "playwright-rust-core",
+ "playwright-rust-fake",
+ "playwright-rust-input-model",
+ "serde",
+ "serde_json",
+ "tokio",
+ "url",
+]
+
+[[package]]
+name = "playwright-rust-backend-cdp-keyboard"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-backend-cdp-common",
+ "playwright-rust-backend-cdp-input",
+ "playwright-rust-browser-backend",
+ "playwright-rust-cap-keyboard",
+ "playwright-rust-cdp",
+ "playwright-rust-core",
+ "playwright-rust-fake",
+ "playwright-rust-input-model",
+ "serde",
+ "serde_json",
+ "tokio",
+ "url",
+]
+
+[[package]]
+name = "playwright-rust-backend-cdp-locator"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-backend-cdp-common",
+ "playwright-rust-backend-cdp-input",
+ "playwright-rust-backend-cdp-selector-runtime",
+ "playwright-rust-browser-model",
+ "playwright-rust-cap-locator",
+ "playwright-rust-cap-touchscreen",
+ "playwright-rust-cdp",
+ "playwright-rust-core",
+ "playwright-rust-fake",
+ "playwright-rust-runtime",
+ "playwright-rust-runtime-tokio",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-backend-cdp-locator-resolution"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-backend-cdp-selector-runtime",
+ "playwright-rust-cdp",
+ "playwright-rust-core",
+ "playwright-rust-fake",
+ "playwright-rust-selector-model",
+ "serde_json",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-backend-cdp-locator-screenshot"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-backend-cdp-common",
+ "playwright-rust-backend-cdp-content",
+ "playwright-rust-cap-content",
+ "playwright-rust-cap-locator-screenshot",
+ "playwright-rust-cdp",
+ "playwright-rust-core",
+ "playwright-rust-fake",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-backend-cdp-mouse"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-backend-cdp-common",
+ "playwright-rust-backend-cdp-input",
+ "playwright-rust-browser-backend",
+ "playwright-rust-cap-mouse",
+ "playwright-rust-cdp",
+ "playwright-rust-core",
+ "playwright-rust-fake",
+ "playwright-rust-input-model",
+ "serde",
+ "serde_json",
+ "tokio",
+ "url",
+]
+
+[[package]]
+name = "playwright-rust-backend-cdp-navigation"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-backend-cdp-common",
+ "playwright-rust-browser-backend",
+ "playwright-rust-cap-history-navigation",
+ "playwright-rust-cap-navigation",
+ "playwright-rust-cdp",
+ "playwright-rust-core",
+ "playwright-rust-fake",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-backend-cdp-network-events"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "playwright-rust-browser-model",
+ "playwright-rust-cap-network-events",
+ "playwright-rust-cdp",
+ "playwright-rust-core",
+ "playwright-rust-network-model",
+ "serde_json",
+]
+
+[[package]]
+name = "playwright-rust-backend-cdp-page-creation"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-backend-cdp-common",
+ "playwright-rust-backend-cdp-page-lifecycle",
+ "playwright-rust-cap-page-creation",
+ "playwright-rust-cdp",
+ "playwright-rust-core",
+ "playwright-rust-fake",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-backend-cdp-page-events"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-backend-cdp-topology",
+ "playwright-rust-cap-page-events",
+ "playwright-rust-cdp",
+ "playwright-rust-core",
+ "playwright-rust-fake",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-backend-cdp-page-lifecycle"
+version = "0.1.0"
+dependencies = [
+ "futures-util",
+ "playwright-rust-backend-cdp-common",
+ "playwright-rust-cap-page-lifecycle",
+ "playwright-rust-cdp",
+ "playwright-rust-core",
+ "playwright-rust-fake",
+ "serde_json",
+ "tokio",
+ "tokio-tungstenite",
+]
+
+[[package]]
+name = "playwright-rust-backend-cdp-selector-geometry"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-backend-cdp-common",
+ "playwright-rust-backend-cdp-locator-screenshot",
+ "playwright-rust-backend-cdp-selector-runtime",
+ "playwright-rust-browser-provider",
+ "playwright-rust-cap-locator-screenshot",
+ "playwright-rust-cdp",
+ "playwright-rust-core",
+ "playwright-rust-fake",
+ "playwright-rust-provider-cdp",
+ "playwright-rust-selector-model",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-backend-cdp-selector-runtime"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-core",
+ "playwright-rust-selector-model",
+ "serde_json",
+]
+
+[[package]]
+name = "playwright-rust-backend-cdp-topology"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-browser-model",
+ "playwright-rust-cdp",
+ "playwright-rust-core",
+ "playwright-rust-runtime",
+ "serde_json",
+]
+
+[[package]]
+name = "playwright-rust-backend-cdp-touchscreen"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-backend-cdp-common",
+ "playwright-rust-backend-cdp-input",
+ "playwright-rust-browser-backend",
+ "playwright-rust-cap-touchscreen",
+ "playwright-rust-cdp",
+ "playwright-rust-core",
+ "playwright-rust-fake",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-browser-backend"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-core",
+]
+
+[[package]]
+name = "playwright-rust-browser-install"
+version = "0.1.0"
+
+[[package]]
+name = "playwright-rust-browser-model"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-core",
+]
+
+[[package]]
+name = "playwright-rust-browser-provider"
+version = "0.1.0"
+
+[[package]]
+name = "playwright-rust-browser-registry"
+version = "0.1.0"
+
+[[package]]
+name = "playwright-rust-cap-artifact"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-artifact-model",
+ "playwright-rust-core",
+]
+
+[[package]]
+name = "playwright-rust-cap-browser-events"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-browser-model",
+ "playwright-rust-core",
+]
+
+[[package]]
+name = "playwright-rust-cap-browser-lifecycle"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-core",
+]
+
+[[package]]
+name = "playwright-rust-cap-content"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-core",
+ "playwright-rust-screenshot-model",
+]
+
+[[package]]
+name = "playwright-rust-cap-context-creation"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-core",
+]
+
+[[package]]
+name = "playwright-rust-cap-context-lifecycle"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-core",
+]
+
+[[package]]
+name = "playwright-rust-cap-dom-content"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-core",
+]
+
+[[package]]
+name = "playwright-rust-cap-evaluation"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-core",
+]
+
+[[package]]
+name = "playwright-rust-cap-handle-evaluation"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-cap-evaluation",
+ "playwright-rust-core",
+]
+
+[[package]]
+name = "playwright-rust-cap-handle-lifecycle"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-core",
+]
+
+[[package]]
+name = "playwright-rust-cap-history-navigation"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-core",
+]
+
+[[package]]
+name = "playwright-rust-cap-keyboard"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-core",
+ "playwright-rust-input-model",
+]
+
+[[package]]
+name = "playwright-rust-cap-locator"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-core",
+ "playwright-rust-input-model",
+ "playwright-rust-selector-model",
+]
+
+[[package]]
+name = "playwright-rust-cap-locator-screenshot"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-core",
+ "playwright-rust-screenshot-model",
+ "playwright-rust-selector-model",
+]
+
+[[package]]
+name = "playwright-rust-cap-mouse"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-core",
+ "playwright-rust-input-model",
+]
+
+[[package]]
+name = "playwright-rust-cap-navigation"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-core",
+]
+
+[[package]]
+name = "playwright-rust-cap-network-events"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-browser-model",
+ "playwright-rust-core",
+ "playwright-rust-network-model",
+]
+
+[[package]]
+name = "playwright-rust-cap-page-creation"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-core",
+]
+
+[[package]]
+name = "playwright-rust-cap-page-events"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-browser-model",
+ "playwright-rust-core",
+]
+
+[[package]]
+name = "playwright-rust-cap-page-lifecycle"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-core",
+]
+
+[[package]]
+name = "playwright-rust-cap-touchscreen"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-cap-locator",
+ "playwright-rust-core",
+]
+
+[[package]]
+name = "playwright-rust-cap-tracing"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-core",
+]
+
+[[package]]
+name = "playwright-rust-cap-tracing-artifact"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-cap-artifact",
+ "playwright-rust-cap-tracing",
+ "playwright-rust-core",
+]
+
+[[package]]
+name = "playwright-rust-cdp"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "dashmap",
+ "futures-util",
+ "playwright-rust-core",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tokio-tungstenite",
+ "tokio-util",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "playwright-rust-client"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-browser-model",
+ "playwright-rust-core",
+ "playwright-rust-runtime",
+]
+
+[[package]]
+name = "playwright-rust-client-artifact"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-browser-model",
+ "playwright-rust-cap-artifact",
+ "playwright-rust-client",
+ "playwright-rust-core",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-client-browser-events"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-browser-model",
+ "playwright-rust-cap-browser-events",
+ "playwright-rust-client",
+ "playwright-rust-client-events",
+ "playwright-rust-codec-browser-events",
+ "playwright-rust-core",
+ "playwright-rust-transport",
+]
+
+[[package]]
+name = "playwright-rust-client-browser-lifecycle"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-cap-browser-lifecycle",
+ "playwright-rust-client",
+ "playwright-rust-core",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-client-content"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-cap-content",
+ "playwright-rust-client",
+ "playwright-rust-core",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-client-context-creation"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-browser-model",
+ "playwright-rust-cap-context-creation",
+ "playwright-rust-client",
+ "playwright-rust-core",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-client-context-lifecycle"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-cap-context-lifecycle",
+ "playwright-rust-client",
+ "playwright-rust-core",
+]
+
+[[package]]
+name = "playwright-rust-client-control"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-client",
+ "playwright-rust-client-wire",
+ "playwright-rust-core",
+ "playwright-rust-transport",
+]
+
+[[package]]
+name = "playwright-rust-client-dom-content"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-browser-model",
+ "playwright-rust-cap-dom-content",
+ "playwright-rust-client",
+ "playwright-rust-core",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-client-evaluation"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-browser-model",
+ "playwright-rust-cap-evaluation",
+ "playwright-rust-cap-page-creation",
+ "playwright-rust-client",
+ "playwright-rust-core",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-client-events"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-client-wire",
+ "playwright-rust-core",
+ "playwright-rust-transport",
+]
+
+[[package]]
+name = "playwright-rust-client-handle-evaluation"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-browser-model",
+ "playwright-rust-cap-evaluation",
+ "playwright-rust-cap-handle-evaluation",
+ "playwright-rust-client",
+ "playwright-rust-core",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-client-handle-lifecycle"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-cap-handle-lifecycle",
+ "playwright-rust-client",
+ "playwright-rust-core",
+]
+
+[[package]]
+name = "playwright-rust-client-keyboard"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-browser-model",
+ "playwright-rust-cap-keyboard",
+ "playwright-rust-client",
+ "playwright-rust-core",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-client-locator"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-cap-locator",
+ "playwright-rust-client",
+ "playwright-rust-core",
+ "playwright-rust-runtime",
+]
+
+[[package]]
+name = "playwright-rust-client-locator-screenshot"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-cap-locator-screenshot",
+ "playwright-rust-client",
+ "playwright-rust-core",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-client-mouse"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-browser-model",
+ "playwright-rust-cap-mouse",
+ "playwright-rust-client",
+ "playwright-rust-core",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-client-navigation"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-browser-model",
+ "playwright-rust-cap-navigation",
+ "playwright-rust-client",
+ "playwright-rust-core",
+ "playwright-rust-runtime",
+]
+
+[[package]]
+name = "playwright-rust-client-network-events"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-browser-model",
+ "playwright-rust-cap-network-events",
+ "playwright-rust-client",
+ "playwright-rust-client-events",
+ "playwright-rust-client-wire",
+ "playwright-rust-codec-network-events",
+ "playwright-rust-core",
+ "playwright-rust-server-events",
+ "playwright-rust-server-wire",
+ "playwright-rust-transport",
+ "playwright-rust-transport-memory",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-client-page-creation"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-browser-model",
+ "playwright-rust-cap-page-creation",
+ "playwright-rust-client",
+ "playwright-rust-core",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-client-page-events"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-browser-model",
+ "playwright-rust-cap-page-events",
+ "playwright-rust-client",
+ "playwright-rust-client-events",
+ "playwright-rust-codec-page-events",
+ "playwright-rust-core",
+ "playwright-rust-transport",
+]
+
+[[package]]
+name = "playwright-rust-client-page-lifecycle"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-cap-page-lifecycle",
+ "playwright-rust-client",
+ "playwright-rust-core",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-client-tracing"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-cap-tracing",
+ "playwright-rust-client",
+ "playwright-rust-core",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-client-tracing-artifact"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-browser-model",
+ "playwright-rust-cap-tracing-artifact",
+ "playwright-rust-client",
+ "playwright-rust-core",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-client-wire"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-client",
+ "playwright-rust-codec-handshake",
+ "playwright-rust-connection-control",
+ "playwright-rust-core",
+ "playwright-rust-transport",
+]
+
+[[package]]
+name = "playwright-rust-codec-artifact"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-cap-artifact",
+ "playwright-rust-codec-binary",
+ "playwright-rust-codec-common",
+ "playwright-rust-core",
+ "playwright-rust-transport",
+]
+
+[[package]]
+name = "playwright-rust-codec-binary"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-core",
+]
+
+[[package]]
+name = "playwright-rust-codec-browser-events"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-cap-browser-events",
+ "playwright-rust-core",
+ "playwright-rust-transport",
+]
+
+[[package]]
+name = "playwright-rust-codec-browser-lifecycle"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-cap-browser-lifecycle",
+ "playwright-rust-codec-binary",
+ "playwright-rust-codec-common",
+ "playwright-rust-core",
+ "playwright-rust-transport",
+]
+
+[[package]]
+name = "playwright-rust-codec-common"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-codec-binary",
+ "playwright-rust-core",
+]
+
+[[package]]
+name = "playwright-rust-codec-content"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-cap-content",
+ "playwright-rust-codec-binary",
+ "playwright-rust-codec-common",
+ "playwright-rust-codec-screenshot",
+ "playwright-rust-core",
+ "playwright-rust-transport",
+]
+
+[[package]]
+name = "playwright-rust-codec-context-creation"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-cap-context-creation",
+ "playwright-rust-codec-binary",
+ "playwright-rust-codec-common",
+ "playwright-rust-core",
+ "playwright-rust-transport",
+]
+
+[[package]]
+name = "playwright-rust-codec-context-lifecycle"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-cap-context-lifecycle",
+ "playwright-rust-codec-binary",
+ "playwright-rust-codec-common",
+ "playwright-rust-core",
+ "playwright-rust-transport",
+]
+
+[[package]]
+name = "playwright-rust-codec-control"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-client-wire",
+ "playwright-rust-codec-binary",
+ "playwright-rust-core",
+ "playwright-rust-server-wire",
+ "playwright-rust-transport",
+ "playwright-rust-transport-memory",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-codec-dom-content"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-cap-dom-content",
+ "playwright-rust-codec-binary",
+ "playwright-rust-codec-common",
+ "playwright-rust-core",
+ "playwright-rust-transport",
+]
+
+[[package]]
+name = "playwright-rust-codec-evaluation"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-cap-evaluation",
+ "playwright-rust-codec-binary",
+ "playwright-rust-codec-common",
+ "playwright-rust-core",
+ "playwright-rust-transport",
+]
+
+[[package]]
+name = "playwright-rust-codec-handle-evaluation"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-cap-evaluation",
+ "playwright-rust-cap-handle-evaluation",
+ "playwright-rust-codec-binary",
+ "playwright-rust-codec-common",
+ "playwright-rust-core",
+ "playwright-rust-transport",
+]
+
+[[package]]
+name = "playwright-rust-codec-handle-lifecycle"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-cap-handle-lifecycle",
+ "playwright-rust-codec-binary",
+ "playwright-rust-codec-common",
+ "playwright-rust-core",
+ "playwright-rust-transport",
+]
+
+[[package]]
+name = "playwright-rust-codec-handshake"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-codec-binary",
+ "playwright-rust-core",
+ "playwright-rust-transport",
+]
+
+[[package]]
+name = "playwright-rust-codec-json"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-core",
+ "playwright-rust-transport",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "playwright-rust-codec-keyboard"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-cap-keyboard",
+ "playwright-rust-codec-binary",
+ "playwright-rust-codec-common",
+ "playwright-rust-core",
+ "playwright-rust-transport",
+]
+
+[[package]]
+name = "playwright-rust-codec-locator"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-browser-model",
+ "playwright-rust-cap-locator",
+ "playwright-rust-client",
+ "playwright-rust-client-locator",
+ "playwright-rust-client-wire",
+ "playwright-rust-codec-binary",
+ "playwright-rust-codec-common",
+ "playwright-rust-codec-control",
+ "playwright-rust-core",
+ "playwright-rust-runtime",
+ "playwright-rust-runtime-control",
+ "playwright-rust-server-wire",
+ "playwright-rust-transport",
+ "playwright-rust-transport-stream",
+ "playwright-rust-transport-tokio",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-codec-locator-screenshot"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-cap-locator-screenshot",
+ "playwright-rust-codec-binary",
+ "playwright-rust-codec-common",
+ "playwright-rust-codec-screenshot",
+ "playwright-rust-codec-selector",
+ "playwright-rust-core",
+ "playwright-rust-selector-model",
+ "playwright-rust-transport",
+]
+
+[[package]]
+name = "playwright-rust-codec-mouse"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-cap-mouse",
+ "playwright-rust-codec-binary",
+ "playwright-rust-codec-common",
+ "playwright-rust-core",
+ "playwright-rust-transport",
+]
+
+[[package]]
+name = "playwright-rust-codec-navigation"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-browser-model",
+ "playwright-rust-cap-navigation",
+ "playwright-rust-client",
+ "playwright-rust-client-navigation",
+ "playwright-rust-client-wire",
+ "playwright-rust-codec-binary",
+ "playwright-rust-codec-common",
+ "playwright-rust-core",
+ "playwright-rust-runtime",
+ "playwright-rust-server-wire",
+ "playwright-rust-transport",
+ "playwright-rust-transport-stream",
+ "playwright-rust-transport-tokio",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-codec-network-events"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-cap-network-events",
+ "playwright-rust-codec-binary",
+ "playwright-rust-core",
+ "playwright-rust-transport",
+]
+
+[[package]]
+name = "playwright-rust-codec-page-creation"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-cap-page-creation",
+ "playwright-rust-codec-binary",
+ "playwright-rust-codec-common",
+ "playwright-rust-core",
+ "playwright-rust-transport",
+]
+
+[[package]]
+name = "playwright-rust-codec-page-events"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-cap-page-events",
+ "playwright-rust-core",
+ "playwright-rust-transport",
+]
+
+[[package]]
+name = "playwright-rust-codec-page-lifecycle"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-cap-page-lifecycle",
+ "playwright-rust-codec-binary",
+ "playwright-rust-codec-common",
+ "playwright-rust-core",
+ "playwright-rust-transport",
+]
+
+[[package]]
+name = "playwright-rust-codec-screenshot"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-core",
+ "playwright-rust-screenshot-model",
+ "playwright-rust-transport",
+]
+
+[[package]]
+name = "playwright-rust-codec-selector"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-codec-binary",
+ "playwright-rust-codec-locator",
+ "playwright-rust-core",
+ "playwright-rust-selector-model",
+]
+
+[[package]]
+name = "playwright-rust-codec-tracing"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-cap-tracing",
+ "playwright-rust-codec-binary",
+ "playwright-rust-codec-common",
+ "playwright-rust-core",
+ "playwright-rust-transport",
+]
+
+[[package]]
+name = "playwright-rust-codec-tracing-artifact"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-cap-tracing-artifact",
+ "playwright-rust-codec-binary",
+ "playwright-rust-codec-common",
+ "playwright-rust-core",
+ "playwright-rust-transport",
+]
+
+[[package]]
+name = "playwright-rust-composition-chromium"
+version = "0.1.0"
+dependencies = [
+ "futures-util",
+ "playwright-rust-backend-cdp",
+ "playwright-rust-backend-cdp-common",
+ "playwright-rust-backend-cdp-input",
+ "playwright-rust-backend-cdp-navigation",
+ "playwright-rust-backend-cdp-page-lifecycle",
+ "playwright-rust-backend-cdp-topology",
+ "playwright-rust-browser-backend",
+ "playwright-rust-browser-model",
+ "playwright-rust-browser-provider",
+ "playwright-rust-cap-browser-events",
+ "playwright-rust-cap-content",
+ "playwright-rust-cap-context-creation",
+ "playwright-rust-cap-context-lifecycle",
+ "playwright-rust-cap-dom-content",
+ "playwright-rust-cap-evaluation",
+ "playwright-rust-cap-handle-evaluation",
+ "playwright-rust-cap-handle-lifecycle",
+ "playwright-rust-cap-history-navigation",
+ "playwright-rust-cap-locator",
+ "playwright-rust-cap-locator-screenshot",
+ "playwright-rust-cap-navigation",
+ "playwright-rust-cap-network-events",
+ "playwright-rust-cap-page-creation",
+ "playwright-rust-cap-page-events",
+ "playwright-rust-cap-page-lifecycle",
+ "playwright-rust-cap-touchscreen",
+ "playwright-rust-cdp",
+ "playwright-rust-client",
+ "playwright-rust-client-content",
+ "playwright-rust-client-context-creation",
+ "playwright-rust-client-context-lifecycle",
+ "playwright-rust-client-control",
+ "playwright-rust-client-dom-content",
+ "playwright-rust-client-evaluation",
+ "playwright-rust-client-events",
+ "playwright-rust-client-handle-evaluation",
+ "playwright-rust-client-navigation",
+ "playwright-rust-client-network-events",
+ "playwright-rust-client-page-creation",
+ "playwright-rust-client-page-lifecycle",
+ "playwright-rust-client-wire",
+ "playwright-rust-codec-browser-events",
+ "playwright-rust-codec-content",
+ "playwright-rust-codec-context-creation",
+ "playwright-rust-codec-context-lifecycle",
+ "playwright-rust-codec-control",
+ "playwright-rust-codec-dom-content",
+ "playwright-rust-codec-evaluation",
+ "playwright-rust-codec-handle-evaluation",
+ "playwright-rust-codec-handle-lifecycle",
+ "playwright-rust-codec-handshake",
+ "playwright-rust-codec-locator",
+ "playwright-rust-codec-locator-screenshot",
+ "playwright-rust-codec-navigation",
+ "playwright-rust-codec-network-events",
+ "playwright-rust-codec-page-creation",
+ "playwright-rust-codec-page-events",
+ "playwright-rust-codec-page-lifecycle",
+ "playwright-rust-composition-chromium-handle-evaluation",
+ "playwright-rust-composition-chromium-network-events",
+ "playwright-rust-composition-chromium-page-events",
+ "playwright-rust-core",
+ "playwright-rust-fake",
+ "playwright-rust-network-model",
+ "playwright-rust-plugin-chromium-frame-lifecycle",
+ "playwright-rust-plugin-chromium-frame-observer",
+ "playwright-rust-plugin-chromium-session-initialization",
+ "playwright-rust-plugin-ordered-handle-delivery",
+ "playwright-rust-process-metrics",
+ "playwright-rust-provider-cdp",
+ "playwright-rust-runtime",
+ "playwright-rust-runtime-control",
+ "playwright-rust-server-browser-events",
+ "playwright-rust-server-content",
+ "playwright-rust-server-context-creation",
+ "playwright-rust-server-context-lifecycle",
+ "playwright-rust-server-dom-content",
+ "playwright-rust-server-evaluation",
+ "playwright-rust-server-events",
+ "playwright-rust-server-handle-evaluation",
+ "playwright-rust-server-handle-lifecycle",
+ "playwright-rust-server-locator",
+ "playwright-rust-server-locator-screenshot",
+ "playwright-rust-server-navigation",
+ "playwright-rust-server-page-creation",
+ "playwright-rust-server-page-lifecycle",
+ "playwright-rust-server-wire",
+ "playwright-rust-transport",
+ "playwright-rust-transport-memory",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-tungstenite",
+]
+
+[[package]]
+name = "playwright-rust-composition-chromium-content"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-backend-cdp-content",
+ "playwright-rust-cap-content",
+ "playwright-rust-cdp",
+ "playwright-rust-codec-content",
+ "playwright-rust-core",
+ "playwright-rust-fake",
+ "playwright-rust-server-content",
+ "playwright-rust-transport",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-composition-chromium-context-creation"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-backend-cdp-context-creation",
+ "playwright-rust-backend-cdp-topology",
+ "playwright-rust-browser-model",
+ "playwright-rust-browser-provider",
+ "playwright-rust-cap-context-creation",
+ "playwright-rust-cap-context-lifecycle",
+ "playwright-rust-cdp",
+ "playwright-rust-codec-context-creation",
+ "playwright-rust-composition-chromium-context-lifecycle",
+ "playwright-rust-core",
+ "playwright-rust-fake",
+ "playwright-rust-provider-cdp",
+ "playwright-rust-runtime",
+ "playwright-rust-server-context-creation",
+ "playwright-rust-transport",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-composition-chromium-context-lifecycle"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-backend-cdp-context-lifecycle",
+ "playwright-rust-backend-cdp-topology",
+ "playwright-rust-browser-model",
+ "playwright-rust-browser-provider",
+ "playwright-rust-cap-context-lifecycle",
+ "playwright-rust-cdp",
+ "playwright-rust-codec-context-lifecycle",
+ "playwright-rust-core",
+ "playwright-rust-fake",
+ "playwright-rust-provider-cdp",
+ "playwright-rust-runtime",
+ "playwright-rust-server-context-lifecycle",
+ "playwright-rust-transport",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-composition-chromium-dom-content"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-backend-cdp-dom-content",
+ "playwright-rust-cap-dom-content",
+ "playwright-rust-cdp",
+ "playwright-rust-codec-dom-content",
+ "playwright-rust-core",
+ "playwright-rust-fake",
+ "playwright-rust-server-dom-content",
+ "playwright-rust-transport",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-composition-chromium-evaluation"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-backend-cdp-evaluation",
+ "playwright-rust-cap-evaluation",
+ "playwright-rust-cdp",
+ "playwright-rust-codec-evaluation",
+ "playwright-rust-core",
+ "playwright-rust-fake",
+ "playwright-rust-server-evaluation",
+ "playwright-rust-transport",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-composition-chromium-file-input"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "playwright-rust-backend-cdp-file-input",
+ "playwright-rust-browser-provider",
+ "playwright-rust-cdp",
+ "playwright-rust-composition-chromium-locator-resolution",
+ "playwright-rust-core",
+ "playwright-rust-fake",
+ "playwright-rust-file-input-model",
+ "playwright-rust-file-input-source",
+ "playwright-rust-provider-cdp",
+ "playwright-rust-runtime",
+ "playwright-rust-runtime-tokio",
+ "playwright-rust-selector-model",
+ "serde_json",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-composition-chromium-handle-evaluation"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-backend-cdp-common",
+ "playwright-rust-backend-cdp-evaluation",
+ "playwright-rust-backend-cdp-handle-evaluation",
+ "playwright-rust-browser-model",
+ "playwright-rust-browser-provider",
+ "playwright-rust-cap-handle-evaluation",
+ "playwright-rust-cap-handle-lifecycle",
+ "playwright-rust-cdp",
+ "playwright-rust-codec-control",
+ "playwright-rust-codec-handle-evaluation",
+ "playwright-rust-composition-chromium-handle-lifecycle",
+ "playwright-rust-core",
+ "playwright-rust-fake",
+ "playwright-rust-plugin-ordered-handle-delivery",
+ "playwright-rust-provider-cdp",
+ "playwright-rust-runtime",
+ "playwright-rust-runtime-control",
+ "playwright-rust-server-handle-evaluation",
+ "playwright-rust-server-wire",
+ "playwright-rust-transport",
+ "playwright-rust-transport-memory",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-composition-chromium-handle-lifecycle"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-backend-cdp-handle-lifecycle",
+ "playwright-rust-browser-model",
+ "playwright-rust-browser-provider",
+ "playwright-rust-cap-handle-lifecycle",
+ "playwright-rust-cdp",
+ "playwright-rust-codec-handle-lifecycle",
+ "playwright-rust-core",
+ "playwright-rust-fake",
+ "playwright-rust-provider-cdp",
+ "playwright-rust-runtime",
+ "playwright-rust-server-handle-lifecycle",
+ "playwright-rust-transport",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-composition-chromium-keyboard"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-backend-cdp-input",
+ "playwright-rust-backend-cdp-keyboard",
+ "playwright-rust-browser-model",
+ "playwright-rust-cap-keyboard",
+ "playwright-rust-cdp",
+ "playwright-rust-codec-keyboard",
+ "playwright-rust-core",
+ "playwright-rust-fake",
+ "playwright-rust-runtime",
+ "playwright-rust-server-keyboard",
+ "playwright-rust-server-wire",
+ "playwright-rust-transport",
+ "serde",
+ "serde_json",
+ "tokio",
+ "url",
+]
+
+[[package]]
+name = "playwright-rust-composition-chromium-launch"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-backend-cdp",
+ "playwright-rust-browser-model",
+ "playwright-rust-browser-provider",
+ "playwright-rust-cap-browser-events",
+ "playwright-rust-cap-browser-lifecycle",
+ "playwright-rust-cdp",
+ "playwright-rust-client",
+ "playwright-rust-client-browser-events",
+ "playwright-rust-client-browser-lifecycle",
+ "playwright-rust-client-control",
+ "playwright-rust-client-wire",
+ "playwright-rust-codec-browser-events",
+ "playwright-rust-codec-browser-lifecycle",
+ "playwright-rust-codec-control",
+ "playwright-rust-codec-handshake",
+ "playwright-rust-composition-chromium",
+ "playwright-rust-core",
+ "playwright-rust-process-metrics",
+ "playwright-rust-provider-cdp",
+ "playwright-rust-provider-chromium",
+ "playwright-rust-runtime",
+ "playwright-rust-runtime-control",
+ "playwright-rust-runtime-tokio",
+ "playwright-rust-server-browser-events",
+ "playwright-rust-server-browser-lifecycle",
+ "playwright-rust-server-wire",
+ "playwright-rust-transport",
+ "playwright-rust-transport-memory",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-composition-chromium-locator"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-backend-cdp-input",
+ "playwright-rust-backend-cdp-locator",
+ "playwright-rust-browser-provider",
+ "playwright-rust-cap-locator",
+ "playwright-rust-cdp",
+ "playwright-rust-codec-locator",
+ "playwright-rust-core",
+ "playwright-rust-fake",
+ "playwright-rust-provider-cdp",
+ "playwright-rust-server-locator",
+ "playwright-rust-transport",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-composition-chromium-locator-evaluation"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "playwright-rust-backend-cdp",
+ "playwright-rust-backend-cdp-evaluation",
+ "playwright-rust-backend-cdp-handle-evaluation",
+ "playwright-rust-backend-cdp-selector-runtime",
+ "playwright-rust-browser-model",
+ "playwright-rust-browser-provider",
+ "playwright-rust-cap-evaluation",
+ "playwright-rust-cap-handle-evaluation",
+ "playwright-rust-cdp",
+ "playwright-rust-codec-evaluation",
+ "playwright-rust-codec-locator",
+ "playwright-rust-composition-chromium",
+ "playwright-rust-composition-chromium-locator-resolution",
+ "playwright-rust-core",
+ "playwright-rust-fake",
+ "playwright-rust-provider-cdp",
+ "playwright-rust-runtime",
+ "playwright-rust-selector-model",
+ "playwright-rust-server-wire",
+ "playwright-rust-transport",
+ "serde_json",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-composition-chromium-locator-resolution"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "playwright-rust-backend-cdp-locator-resolution",
+ "playwright-rust-backend-cdp-selector-runtime",
+ "playwright-rust-browser-provider",
+ "playwright-rust-cdp",
+ "playwright-rust-core",
+ "playwright-rust-fake",
+ "playwright-rust-provider-cdp",
+ "playwright-rust-runtime",
+ "playwright-rust-selector-model",
+ "serde_json",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-composition-chromium-locator-screenshot"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-backend-cdp-content",
+ "playwright-rust-backend-cdp-locator-screenshot",
+ "playwright-rust-cap-locator-screenshot",
+ "playwright-rust-cdp",
+ "playwright-rust-codec-locator-screenshot",
+ "playwright-rust-core",
+ "playwright-rust-fake",
+ "playwright-rust-server-locator-screenshot",
+ "playwright-rust-transport",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-composition-chromium-mouse"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-backend-cdp-input",
+ "playwright-rust-backend-cdp-mouse",
+ "playwright-rust-browser-model",
+ "playwright-rust-cap-mouse",
+ "playwright-rust-cdp",
+ "playwright-rust-codec-mouse",
+ "playwright-rust-core",
+ "playwright-rust-fake",
+ "playwright-rust-input-model",
+ "playwright-rust-runtime",
+ "playwright-rust-server-mouse",
+ "playwright-rust-server-wire",
+ "playwright-rust-transport",
+ "serde",
+ "serde_json",
+ "tokio",
+ "url",
+]
+
+[[package]]
+name = "playwright-rust-composition-chromium-navigation"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-backend-cdp-navigation",
+ "playwright-rust-cap-navigation",
+ "playwright-rust-cdp",
+ "playwright-rust-codec-navigation",
+ "playwright-rust-core",
+ "playwright-rust-fake",
+ "playwright-rust-server-navigation",
+ "playwright-rust-transport",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-composition-chromium-network-events"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-backend-cdp-network-events",
+ "playwright-rust-browser-model",
+ "playwright-rust-cap-network-events",
+ "playwright-rust-cdp",
+ "playwright-rust-codec-control",
+ "playwright-rust-codec-network-events",
+ "playwright-rust-core",
+ "playwright-rust-network-model",
+ "playwright-rust-runtime",
+ "playwright-rust-runtime-control",
+ "playwright-rust-server-events",
+ "playwright-rust-server-wire",
+ "playwright-rust-transport",
+ "playwright-rust-transport-memory",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-composition-chromium-page-creation"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-backend-cdp-page-creation",
+ "playwright-rust-backend-cdp-topology",
+ "playwright-rust-browser-model",
+ "playwright-rust-browser-provider",
+ "playwright-rust-cap-page-creation",
+ "playwright-rust-cap-page-lifecycle",
+ "playwright-rust-cdp",
+ "playwright-rust-codec-page-creation",
+ "playwright-rust-composition-chromium-page-lifecycle",
+ "playwright-rust-core",
+ "playwright-rust-fake",
+ "playwright-rust-provider-cdp",
+ "playwright-rust-runtime",
+ "playwright-rust-server-page-creation",
+ "playwright-rust-transport",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-composition-chromium-page-events"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-backend-cdp-page-events",
+ "playwright-rust-backend-cdp-topology",
+ "playwright-rust-cap-page-events",
+ "playwright-rust-cdp",
+ "playwright-rust-codec-page-events",
+ "playwright-rust-core",
+ "playwright-rust-fake",
+ "playwright-rust-runtime-control",
+ "playwright-rust-server-events",
+ "playwright-rust-server-wire",
+ "playwright-rust-transport",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-composition-chromium-page-lifecycle"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-backend-cdp-page-lifecycle",
+ "playwright-rust-backend-cdp-topology",
+ "playwright-rust-browser-model",
+ "playwright-rust-browser-provider",
+ "playwright-rust-cap-page-lifecycle",
+ "playwright-rust-cdp",
+ "playwright-rust-codec-page-lifecycle",
+ "playwright-rust-core",
+ "playwright-rust-fake",
+ "playwright-rust-provider-cdp",
+ "playwright-rust-runtime",
+ "playwright-rust-server-page-lifecycle",
+ "playwright-rust-transport",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-composition-chromium-tokio"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-backend-cdp",
+ "playwright-rust-cdp",
+ "playwright-rust-codec-handshake",
+ "playwright-rust-codec-navigation",
+ "playwright-rust-composition-chromium",
+ "playwright-rust-core",
+ "playwright-rust-endpoint-tokio",
+ "playwright-rust-provider-cdp",
+ "playwright-rust-runtime",
+ "playwright-rust-server-wire",
+ "playwright-rust-transport",
+ "playwright-rust-transport-stream",
+ "playwright-rust-transport-tokio",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-composition-chromium-touchscreen"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-backend-cdp-input",
+ "playwright-rust-backend-cdp-touchscreen",
+ "playwright-rust-cap-touchscreen",
+ "playwright-rust-cdp",
+ "playwright-rust-core",
+ "playwright-rust-fake",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-connection-control"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-core",
+]
+
+[[package]]
+name = "playwright-rust-core"
+version = "0.1.0"
+
+[[package]]
+name = "playwright-rust-endpoint-tokio"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-client-wire",
+ "playwright-rust-codec-handshake",
+ "playwright-rust-core",
+ "playwright-rust-server-wire",
+ "playwright-rust-transport",
+ "playwright-rust-transport-stream",
+ "playwright-rust-transport-tokio",
+ "rcgen",
+ "ring",
+ "tokio",
+ "tokio-rustls",
+ "zeroize",
+]
+
+[[package]]
+name = "playwright-rust-fake"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "playwright-rust-cdp",
+ "playwright-rust-js",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-file-input-fs"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "playwright-rust-core",
+ "playwright-rust-file-input-model",
+ "playwright-rust-file-input-source",
+]
+
+[[package]]
+name = "playwright-rust-file-input-model"
+version = "0.1.0"
+
+[[package]]
+name = "playwright-rust-file-input-source"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-core",
+ "playwright-rust-file-input-model",
+]
+
+[[package]]
+name = "playwright-rust-file-input-tokio"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-core",
+ "playwright-rust-file-input-fs",
+ "playwright-rust-file-input-model",
+ "playwright-rust-file-input-source",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-har-replay"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "url",
+]
+
+[[package]]
+name = "playwright-rust-input-model"
+version = "0.1.0"
+
+[[package]]
+name = "playwright-rust-js"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
+name = "playwright-rust-network-model"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "playwright-rust-node-addon"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "napi",
+ "napi-build",
+ "napi-derive",
+ "playwright-rust-api-request",
+ "playwright-rust-api-request-auth-basic",
+ "playwright-rust-api-request-client-certificates",
+ "playwright-rust-api-request-connector-http-proxy",
+ "playwright-rust-api-request-connector-proxy-bypass",
+ "playwright-rust-api-request-connector-rustls",
+ "playwright-rust-api-request-connector-socks5",
+ "playwright-rust-api-request-cookie",
+ "playwright-rust-api-request-decompress",
+ "playwright-rust-api-request-transport",
+ "playwright-rust-browser-registry",
+ "playwright-rust-cap-navigation",
+ "playwright-rust-node-host",
+ "playwright-rust-owned-process-startup",
+ "playwright-rust-persistent-context-preflight",
+ "playwright-rust-playwright-connect-headers",
+ "playwright-rust-playwright-server-browser-ops",
+ "playwright-rust-playwright-server-connect",
+ "playwright-rust-playwright-server-endpoint-discovery",
+ "playwright-rust-playwright-server-initialize",
+ "playwright-rust-playwright-server-page-events",
+ "playwright-rust-playwright-server-session",
+ "playwright-rust-trace-playwright-v8",
+ "playwright-rust-transport-ws",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "playwright-rust-node-host"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "futures-util",
+ "mime_guess",
+ "playwright-rust-backend-cdp",
+ "playwright-rust-backend-cdp-content",
+ "playwright-rust-backend-cdp-context-creation",
+ "playwright-rust-backend-cdp-dom-content",
+ "playwright-rust-backend-cdp-drag",
+ "playwright-rust-backend-cdp-evaluation",
+ "playwright-rust-backend-cdp-file-input",
+ "playwright-rust-backend-cdp-handle-evaluation",
+ "playwright-rust-backend-cdp-input",
+ "playwright-rust-backend-cdp-locator",
+ "playwright-rust-backend-cdp-mouse",
+ "playwright-rust-backend-cdp-navigation",
+ "playwright-rust-backend-cdp-page-creation",
+ "playwright-rust-backend-cdp-page-lifecycle",
+ "playwright-rust-backend-cdp-selector-runtime",
+ "playwright-rust-backend-cdp-topology",
+ "playwright-rust-backend-cdp-touchscreen",
+ "playwright-rust-browser-model",
+ "playwright-rust-browser-provider",
+ "playwright-rust-cap-content",
+ "playwright-rust-cap-context-creation",
+ "playwright-rust-cap-context-lifecycle",
+ "playwright-rust-cap-dom-content",
+ "playwright-rust-cap-evaluation",
+ "playwright-rust-cap-handle-evaluation",
+ "playwright-rust-cap-handle-lifecycle",
+ "playwright-rust-cap-history-navigation",
+ "playwright-rust-cap-keyboard",
+ "playwright-rust-cap-locator",
+ "playwright-rust-cap-locator-screenshot",
+ "playwright-rust-cap-mouse",
+ "playwright-rust-cap-navigation",
+ "playwright-rust-cap-network-events",
+ "playwright-rust-cap-page-creation",
+ "playwright-rust-cap-page-lifecycle",
+ "playwright-rust-cap-touchscreen",
+ "playwright-rust-cdp",
+ "playwright-rust-codec-content",
+ "playwright-rust-codec-context-creation",
+ "playwright-rust-codec-context-lifecycle",
+ "playwright-rust-codec-dom-content",
+ "playwright-rust-codec-evaluation",
+ "playwright-rust-codec-handle-evaluation",
+ "playwright-rust-codec-handle-lifecycle",
+ "playwright-rust-codec-locator",
+ "playwright-rust-codec-locator-screenshot",
+ "playwright-rust-codec-navigation",
+ "playwright-rust-codec-page-creation",
+ "playwright-rust-codec-page-lifecycle",
+ "playwright-rust-composition-chromium",
+ "playwright-rust-composition-chromium-file-input",
+ "playwright-rust-composition-chromium-handle-evaluation",
+ "playwright-rust-composition-chromium-handle-lifecycle",
+ "playwright-rust-composition-chromium-keyboard",
+ "playwright-rust-composition-chromium-launch",
+ "playwright-rust-composition-chromium-locator-evaluation",
+ "playwright-rust-composition-chromium-locator-resolution",
+ "playwright-rust-composition-chromium-mouse",
+ "playwright-rust-composition-chromium-touchscreen",
+ "playwright-rust-core",
+ "playwright-rust-fake",
+ "playwright-rust-file-input-fs",
+ "playwright-rust-file-input-model",
+ "playwright-rust-file-input-source",
+ "playwright-rust-file-input-tokio",
+ "playwright-rust-har-replay",
+ "playwright-rust-input-model",
+ "playwright-rust-network-model",
+ "playwright-rust-playwright-connect-headers",
+ "playwright-rust-plugin-chromium-frame-lifecycle",
+ "playwright-rust-plugin-chromium-frame-observer",
+ "playwright-rust-plugin-chromium-session-initialization",
+ "playwright-rust-provider-cdp",
+ "playwright-rust-provider-chromium",
+ "playwright-rust-runtime",
+ "playwright-rust-runtime-control",
+ "playwright-rust-runtime-tokio",
+ "playwright-rust-server-wire",
+ "playwright-rust-trace-playwright-v8",
+ "playwright-rust-transport",
+ "regex",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tokio-tungstenite",
+ "tokio-util",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+ "zeroize",
+]
+
+[[package]]
+name = "playwright-rust-owned-process-startup"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-persistent-context-preflight"
+version = "0.1.0"
+
+[[package]]
+name = "playwright-rust-playwright-connect-headers"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-transport-ws",
+]
+
+[[package]]
+name = "playwright-rust-playwright-server-browser-ops"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-playwright-server-client-core",
+ "playwright-rust-playwright-server-session",
+ "playwright-rust-transport-ws",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-playwright-server-client-core"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "playwright-rust-playwright-server-connect"
+version = "0.1.0"
+dependencies = [
+ "futures-util",
+ "playwright-rust-playwright-server-client-core",
+ "playwright-rust-playwright-server-endpoint-discovery",
+ "playwright-rust-playwright-server-session",
+ "playwright-rust-transport-ws",
+ "serde_json",
+ "tokio",
+ "tokio-tungstenite",
+]
+
+[[package]]
+name = "playwright-rust-playwright-server-endpoint-discovery"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-transport-ws",
+ "reqwest",
+ "serde_json",
+ "tokio",
+ "url",
+]
+
+[[package]]
+name = "playwright-rust-playwright-server-initialize"
+version = "0.1.0"
+dependencies = [
+ "futures-util",
+ "playwright-rust-transport-ws",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-tungstenite",
+]
+
+[[package]]
+name = "playwright-rust-playwright-server-page-events"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-playwright-server-client-core",
+ "serde_json",
+]
+
+[[package]]
+name = "playwright-rust-playwright-server-session"
+version = "0.1.0"
+dependencies = [
+ "futures-util",
+ "playwright-rust-playwright-server-client-core",
+ "playwright-rust-playwright-server-page-events",
+ "playwright-rust-transport-ws",
+ "serde_json",
+ "tokio",
+ "tokio-tungstenite",
+]
+
+[[package]]
+name = "playwright-rust-plugin-chromium-frame-lifecycle"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-backend-cdp-navigation",
+ "playwright-rust-backend-cdp-topology",
+ "playwright-rust-cap-navigation",
+ "playwright-rust-cdp",
+ "playwright-rust-core",
+ "playwright-rust-plugin-chromium-frame-observer",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-plugin-chromium-frame-observer"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-backend-cdp-topology",
+ "playwright-rust-cdp",
+ "playwright-rust-core",
+]
+
+[[package]]
+name = "playwright-rust-plugin-chromium-session-initialization"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-backend-cdp-topology",
+ "playwright-rust-core",
+]
+
+[[package]]
+name = "playwright-rust-plugin-ordered-handle-delivery"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-browser-model",
+ "playwright-rust-cap-handle-evaluation",
+ "playwright-rust-cap-handle-lifecycle",
+ "playwright-rust-codec-control",
+ "playwright-rust-codec-handle-evaluation",
+ "playwright-rust-core",
+ "playwright-rust-runtime",
+ "playwright-rust-runtime-control",
+ "playwright-rust-server-handle-evaluation",
+ "playwright-rust-server-wire",
+ "playwright-rust-transport",
+ "playwright-rust-transport-memory",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-plugin-tracing-artifact"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-artifact-runtime",
+ "playwright-rust-artifact-service",
+ "playwright-rust-browser-model",
+ "playwright-rust-cap-artifact",
+ "playwright-rust-cap-tracing",
+ "playwright-rust-cap-tracing-artifact",
+ "playwright-rust-client",
+ "playwright-rust-client-tracing-artifact",
+ "playwright-rust-client-wire",
+ "playwright-rust-codec-control",
+ "playwright-rust-codec-tracing-artifact",
+ "playwright-rust-core",
+ "playwright-rust-runtime",
+ "playwright-rust-runtime-control",
+ "playwright-rust-server-tracing-artifact",
+ "playwright-rust-server-wire",
+ "playwright-rust-trace-format",
+ "playwright-rust-trace-model",
+ "playwright-rust-tracing-service",
+ "playwright-rust-transport",
+ "playwright-rust-transport-memory",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-plugin-tracing-navigation"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-backend-cdp",
+ "playwright-rust-browser-provider",
+ "playwright-rust-cap-navigation",
+ "playwright-rust-cap-tracing",
+ "playwright-rust-cdp",
+ "playwright-rust-core",
+ "playwright-rust-process-metrics",
+ "playwright-rust-provider-cdp",
+ "playwright-rust-trace-model",
+ "playwright-rust-tracing-service",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-process-metrics"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-core",
+]
+
+[[package]]
+name = "playwright-rust-provider-cdp"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-browser-provider",
+ "playwright-rust-cdp",
+ "playwright-rust-core",
+ "serde_json",
+ "tokio",
+ "url",
+]
+
+[[package]]
+name = "playwright-rust-provider-chromium"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-browser-provider",
+ "playwright-rust-cdp",
+ "playwright-rust-provider-cdp",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-python-addon"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "playwright-rust-api-request",
+ "playwright-rust-api-request-auth-basic",
+ "playwright-rust-api-request-client-certificates",
+ "playwright-rust-api-request-connector-rustls",
+ "playwright-rust-api-request-cookie",
+ "playwright-rust-api-request-decompress",
+ "playwright-rust-api-request-transport",
+ "playwright-rust-browser-registry",
+ "playwright-rust-cap-navigation",
+ "playwright-rust-node-host",
+ "playwright-rust-owned-process-startup",
+ "playwright-rust-playwright-server-browser-ops",
+ "playwright-rust-playwright-server-connect",
+ "playwright-rust-playwright-server-endpoint-discovery",
+ "playwright-rust-playwright-server-initialize",
+ "playwright-rust-playwright-server-session",
+ "playwright-rust-transport-ws",
+ "pyo3",
+ "pyo3-async-runtimes",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "playwright-rust-runtime"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-core",
+]
+
+[[package]]
+name = "playwright-rust-runtime-control"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-client",
+ "playwright-rust-client-control",
+ "playwright-rust-client-wire",
+ "playwright-rust-codec-control",
+ "playwright-rust-core",
+ "playwright-rust-runtime",
+ "playwright-rust-server-wire",
+ "playwright-rust-transport",
+ "playwright-rust-transport-stream",
+ "playwright-rust-transport-tokio",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-runtime-tokio"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-core",
+ "playwright-rust-runtime",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-schema-gen"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-codec-binary",
+ "playwright-rust-core",
+ "serde",
+ "serde_yaml",
+]
+
+[[package]]
+name = "playwright-rust-screenshot-model"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-core",
+]
+
+[[package]]
+name = "playwright-rust-selector-model"
+version = "0.1.0"
+
+[[package]]
+name = "playwright-rust-server-artifact"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-browser-model",
+ "playwright-rust-cap-artifact",
+ "playwright-rust-codec-artifact",
+ "playwright-rust-core",
+ "playwright-rust-server-wire",
+ "playwright-rust-transport",
+]
+
+[[package]]
+name = "playwright-rust-server-browser-events"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-cap-browser-events",
+ "playwright-rust-codec-browser-events",
+ "playwright-rust-codec-control",
+ "playwright-rust-core",
+ "playwright-rust-runtime",
+ "playwright-rust-runtime-control",
+ "playwright-rust-server-wire",
+ "playwright-rust-transport",
+ "playwright-rust-transport-memory",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-server-browser-lifecycle"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-cap-browser-lifecycle",
+ "playwright-rust-codec-browser-lifecycle",
+ "playwright-rust-server-wire",
+ "playwright-rust-transport",
+]
+
+[[package]]
+name = "playwright-rust-server-content"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-cap-content",
+ "playwright-rust-codec-content",
+ "playwright-rust-server-wire",
+ "playwright-rust-transport",
+]
+
+[[package]]
+name = "playwright-rust-server-context-creation"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-cap-context-creation",
+ "playwright-rust-codec-context-creation",
+ "playwright-rust-server-wire",
+ "playwright-rust-transport",
+]
+
+[[package]]
+name = "playwright-rust-server-context-lifecycle"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-cap-context-lifecycle",
+ "playwright-rust-codec-context-lifecycle",
+ "playwright-rust-server-wire",
+ "playwright-rust-transport",
+]
+
+[[package]]
+name = "playwright-rust-server-dom-content"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-browser-model",
+ "playwright-rust-cap-dom-content",
+ "playwright-rust-codec-dom-content",
+ "playwright-rust-core",
+ "playwright-rust-server-wire",
+ "playwright-rust-transport",
+]
+
+[[package]]
+name = "playwright-rust-server-evaluation"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-browser-model",
+ "playwright-rust-cap-evaluation",
+ "playwright-rust-codec-evaluation",
+ "playwright-rust-core",
+ "playwright-rust-server-wire",
+ "playwright-rust-transport",
+]
+
+[[package]]
+name = "playwright-rust-server-events"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-core",
+ "playwright-rust-server-wire",
+ "playwright-rust-transport",
+]
+
+[[package]]
+name = "playwright-rust-server-handle-evaluation"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-browser-model",
+ "playwright-rust-cap-evaluation",
+ "playwright-rust-cap-handle-evaluation",
+ "playwright-rust-codec-handle-evaluation",
+ "playwright-rust-core",
+ "playwright-rust-server-wire",
+ "playwright-rust-transport",
+]
+
+[[package]]
+name = "playwright-rust-server-handle-lifecycle"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-browser-model",
+ "playwright-rust-cap-handle-lifecycle",
+ "playwright-rust-codec-handle-lifecycle",
+ "playwright-rust-core",
+ "playwright-rust-server-wire",
+ "playwright-rust-transport",
+]
+
+[[package]]
+name = "playwright-rust-server-keyboard"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-browser-model",
+ "playwright-rust-cap-keyboard",
+ "playwright-rust-codec-keyboard",
+ "playwright-rust-core",
+ "playwright-rust-server-wire",
+ "playwright-rust-transport",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-server-locator"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-browser-model",
+ "playwright-rust-cap-locator",
+ "playwright-rust-codec-locator",
+ "playwright-rust-core",
+ "playwright-rust-server-wire",
+ "playwright-rust-transport",
+]
+
+[[package]]
+name = "playwright-rust-server-locator-screenshot"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-browser-model",
+ "playwright-rust-cap-locator-screenshot",
+ "playwright-rust-codec-locator-screenshot",
+ "playwright-rust-core",
+ "playwright-rust-server-wire",
+ "playwright-rust-transport",
+]
+
+[[package]]
+name = "playwright-rust-server-mouse"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-browser-model",
+ "playwright-rust-cap-mouse",
+ "playwright-rust-codec-mouse",
+ "playwright-rust-core",
+ "playwright-rust-server-wire",
+ "playwright-rust-transport",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-server-navigation"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-browser-model",
+ "playwright-rust-cap-navigation",
+ "playwright-rust-codec-navigation",
+ "playwright-rust-core",
+ "playwright-rust-server-wire",
+ "playwright-rust-transport",
+]
+
+[[package]]
+name = "playwright-rust-server-page-creation"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-cap-page-creation",
+ "playwright-rust-codec-page-creation",
+ "playwright-rust-server-wire",
+ "playwright-rust-transport",
+]
+
+[[package]]
+name = "playwright-rust-server-page-lifecycle"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-cap-page-lifecycle",
+ "playwright-rust-codec-page-lifecycle",
+ "playwright-rust-server-wire",
+ "playwright-rust-transport",
+]
+
+[[package]]
+name = "playwright-rust-server-tracing"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-browser-model",
+ "playwright-rust-cap-tracing",
+ "playwright-rust-codec-tracing",
+ "playwright-rust-core",
+ "playwright-rust-server-wire",
+ "playwright-rust-transport",
+]
+
+[[package]]
+name = "playwright-rust-server-tracing-artifact"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-browser-model",
+ "playwright-rust-cap-artifact",
+ "playwright-rust-cap-tracing",
+ "playwright-rust-cap-tracing-artifact",
+ "playwright-rust-codec-tracing-artifact",
+ "playwright-rust-core",
+ "playwright-rust-server-wire",
+ "playwright-rust-transport",
+]
+
+[[package]]
+name = "playwright-rust-server-wire"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-client",
+ "playwright-rust-client-wire",
+ "playwright-rust-codec-handshake",
+ "playwright-rust-connection-control",
+ "playwright-rust-core",
+ "playwright-rust-runtime",
+ "playwright-rust-transport",
+ "playwright-rust-transport-stream",
+ "playwright-rust-transport-tokio",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-tokio-tungstenite"
+version = "0.26.2-playwright-rust.1"
+dependencies = [
+ "futures-util",
+ "log",
+ "native-tls",
+ "playwright-rust-tungstenite",
+ "tokio",
+ "tokio-native-tls",
+]
+
+[[package]]
+name = "playwright-rust-trace-format"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-core",
+ "playwright-rust-trace-model",
+]
+
+[[package]]
+name = "playwright-rust-trace-model"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-core",
+]
+
+[[package]]
+name = "playwright-rust-trace-playwright-v8"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "playwright-rust-trace-playwright-v8-context"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-core",
+ "playwright-rust-trace-playwright-v8",
+ "serde_json",
+]
+
+[[package]]
+name = "playwright-rust-trace-sink-file"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-cap-tracing",
+ "playwright-rust-core",
+ "playwright-rust-trace-format",
+ "playwright-rust-trace-model",
+ "playwright-rust-tracing-service",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-trace-sink-pull"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-cap-tracing",
+ "playwright-rust-core",
+ "playwright-rust-trace-model",
+ "playwright-rust-tracing-service",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-tracing-service"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-browser-model",
+ "playwright-rust-cap-tracing",
+ "playwright-rust-client",
+ "playwright-rust-client-tracing",
+ "playwright-rust-client-wire",
+ "playwright-rust-codec-tracing",
+ "playwright-rust-core",
+ "playwright-rust-server-tracing",
+ "playwright-rust-server-wire",
+ "playwright-rust-trace-model",
+ "playwright-rust-transport",
+ "playwright-rust-transport-memory",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-transport"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-core",
+]
+
+[[package]]
+name = "playwright-rust-transport-memory"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-client-wire",
+ "playwright-rust-core",
+ "playwright-rust-server-wire",
+ "playwright-rust-transport",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-transport-stream"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-core",
+ "playwright-rust-transport",
+]
+
+[[package]]
+name = "playwright-rust-transport-tokio"
+version = "0.1.0"
+dependencies = [
+ "playwright-rust-core",
+ "playwright-rust-transport",
+ "playwright-rust-transport-stream",
+ "tokio",
+]
+
+[[package]]
+name = "playwright-rust-transport-ws"
+version = "0.1.0"
+dependencies = [
+ "futures-util",
+ "log",
+ "native-tls",
+ "openssl",
+ "playwright-rust-tokio-tungstenite",
+ "rcgen",
+ "tokio",
+ "tokio-native-tls",
+ "url",
+]
+
+[[package]]
+name = "playwright-rust-tungstenite"
+version = "0.26.2-playwright-rust.1"
+dependencies = [
+ "bytes",
+ "data-encoding",
+ "http",
+ "httparse",
+ "log",
+ "native-tls",
+ "rand 0.9.5",
+ "sha1",
+ "thiserror",
+ "utf-8",
+]
+
+[[package]]
 name = "portable-atomic"
 version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1065,2997 +4056,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "985e7ec9bb745e6ce6535b544d84d6cd6f7ad8bd711c398938ae983b91a766d9"
 dependencies = [
  "unicode-ident",
-]
-
-[[package]]
-name = "pwright"
-version = "0.1.0"
-dependencies = [
- "pwright-backend-cdp-selector-geometry",
- "pwright-cap-content",
- "pwright-cap-context-creation",
- "pwright-cap-context-lifecycle",
- "pwright-cap-dom-content",
- "pwright-cap-evaluation",
- "pwright-cap-handle-evaluation",
- "pwright-cap-handle-lifecycle",
- "pwright-cap-locator",
- "pwright-cap-locator-screenshot",
- "pwright-cap-navigation",
- "pwright-cap-network-events",
- "pwright-cap-page-creation",
- "pwright-cap-page-events",
- "pwright-cap-page-lifecycle",
- "pwright-cdp",
- "pwright-client",
- "pwright-client-content",
- "pwright-client-context-creation",
- "pwright-client-context-lifecycle",
- "pwright-client-dom-content",
- "pwright-client-evaluation",
- "pwright-client-handle-evaluation",
- "pwright-client-handle-lifecycle",
- "pwright-client-locator",
- "pwright-client-locator-screenshot",
- "pwright-client-navigation",
- "pwright-client-network-events",
- "pwright-client-page-creation",
- "pwright-client-page-events",
- "pwright-client-page-lifecycle",
- "pwright-composition-chromium-content",
- "pwright-composition-chromium-context-creation",
- "pwright-composition-chromium-context-lifecycle",
- "pwright-composition-chromium-dom-content",
- "pwright-composition-chromium-evaluation",
- "pwright-composition-chromium-handle-evaluation",
- "pwright-composition-chromium-handle-lifecycle",
- "pwright-composition-chromium-locator",
- "pwright-composition-chromium-locator-screenshot",
- "pwright-composition-chromium-navigation",
- "pwright-composition-chromium-network-events",
- "pwright-composition-chromium-page-creation",
- "pwright-composition-chromium-page-events",
- "pwright-composition-chromium-page-lifecycle",
- "pwright-core",
- "pwright-plugin-ordered-handle-delivery",
- "pwright-runtime",
- "pwright-runtime-tokio",
- "pwright-transport",
- "pwright-transport-tokio",
-]
-
-[[package]]
-name = "pwright-api-request"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "mime_guess",
- "thiserror",
- "tokio",
- "tokio-util",
- "url",
-]
-
-[[package]]
-name = "pwright-api-request-auth-basic"
-version = "0.1.0"
-dependencies = [
- "base64",
- "pwright-api-request",
- "thiserror",
- "url",
- "zeroize",
-]
-
-[[package]]
-name = "pwright-api-request-client-certificates"
-version = "0.1.0"
-dependencies = [
- "openssl",
- "pwright-api-request-connector-rustls",
- "rcgen",
- "thiserror",
- "url",
-]
-
-[[package]]
-name = "pwright-api-request-connector-http-proxy"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "base64",
- "httparse",
- "pwright-api-request-transport",
- "tokio",
- "tokio-util",
- "url",
- "zeroize",
-]
-
-[[package]]
-name = "pwright-api-request-connector-proxy-bypass"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "pwright-api-request-transport",
- "tokio",
- "tokio-util",
- "url",
-]
-
-[[package]]
-name = "pwright-api-request-connector-rustls"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "pwright-api-request-connector-tokio",
- "pwright-api-request-transport",
- "rcgen",
- "tokio",
- "tokio-rustls",
- "tokio-util",
- "url",
- "webpki-roots",
-]
-
-[[package]]
-name = "pwright-api-request-connector-socks5"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "pwright-api-request-transport",
- "tokio",
- "tokio-util",
- "url",
-]
-
-[[package]]
-name = "pwright-api-request-connector-tokio"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "futures-util",
- "pwright-api-request-transport",
- "tokio",
- "tokio-util",
- "url",
-]
-
-[[package]]
-name = "pwright-api-request-cookie"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "httpdate",
- "pwright-api-request",
- "tokio",
- "url",
-]
-
-[[package]]
-name = "pwright-api-request-decompress"
-version = "0.1.0"
-dependencies = [
- "brotli",
- "flate2",
- "pwright-api-request-transport",
-]
-
-[[package]]
-name = "pwright-api-request-http1"
-version = "0.1.0"
-dependencies = [
- "httparse",
- "pwright-api-request",
- "thiserror",
- "tokio-util",
- "url",
-]
-
-[[package]]
-name = "pwright-api-request-transport"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "pwright-api-request",
- "pwright-api-request-auth-basic",
- "pwright-api-request-cookie",
- "pwright-api-request-http1",
- "thiserror",
- "tokio",
- "tokio-util",
- "url",
-]
-
-[[package]]
-name = "pwright-artifact-model"
-version = "0.1.0"
-dependencies = [
- "pwright-core",
-]
-
-[[package]]
-name = "pwright-artifact-runtime"
-version = "0.1.0"
-dependencies = [
- "pwright-artifact-service",
- "pwright-browser-model",
- "pwright-cap-artifact",
- "pwright-codec-control",
- "pwright-core",
- "pwright-runtime",
- "pwright-runtime-control",
- "pwright-server-artifact",
- "pwright-trace-format",
- "pwright-trace-model",
- "pwright-transport",
- "pwright-transport-memory",
- "tokio",
-]
-
-[[package]]
-name = "pwright-artifact-service"
-version = "0.1.0"
-dependencies = [
- "pwright-artifact-model",
- "pwright-browser-model",
- "pwright-cap-artifact",
- "pwright-client",
- "pwright-client-artifact",
- "pwright-client-wire",
- "pwright-codec-artifact",
- "pwright-core",
- "pwright-server-artifact",
- "pwright-server-wire",
- "pwright-transport",
- "pwright-transport-memory",
- "tokio",
-]
-
-[[package]]
-name = "pwright-backend-cdp"
-version = "0.1.0"
-dependencies = [
- "base64",
- "pwright-backend-cdp-common",
- "pwright-backend-cdp-content",
- "pwright-backend-cdp-context-creation",
- "pwright-backend-cdp-context-lifecycle",
- "pwright-backend-cdp-dom-content",
- "pwright-backend-cdp-evaluation",
- "pwright-backend-cdp-handle-evaluation",
- "pwright-backend-cdp-handle-lifecycle",
- "pwright-backend-cdp-input",
- "pwright-backend-cdp-locator",
- "pwright-backend-cdp-locator-screenshot",
- "pwright-backend-cdp-navigation",
- "pwright-backend-cdp-network-events",
- "pwright-backend-cdp-page-creation",
- "pwright-backend-cdp-page-events",
- "pwright-backend-cdp-page-lifecycle",
- "pwright-backend-cdp-topology",
- "pwright-browser-backend",
- "pwright-browser-model",
- "pwright-browser-provider",
- "pwright-cap-content",
- "pwright-cap-context-creation",
- "pwright-cap-context-lifecycle",
- "pwright-cap-dom-content",
- "pwright-cap-evaluation",
- "pwright-cap-handle-evaluation",
- "pwright-cap-handle-lifecycle",
- "pwright-cap-history-navigation",
- "pwright-cap-locator",
- "pwright-cap-locator-screenshot",
- "pwright-cap-navigation",
- "pwright-cap-network-events",
- "pwright-cap-page-creation",
- "pwright-cap-page-events",
- "pwright-cap-page-lifecycle",
- "pwright-cdp",
- "pwright-client",
- "pwright-client-locator",
- "pwright-client-navigation",
- "pwright-core",
- "pwright-fake",
- "pwright-network-model",
- "pwright-provider-cdp",
- "pwright-runtime",
- "pwright-runtime-tokio",
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "pwright-backend-cdp-common"
-version = "0.1.0"
-dependencies = [
- "pwright-cdp",
- "pwright-core",
-]
-
-[[package]]
-name = "pwright-backend-cdp-content"
-version = "0.1.0"
-dependencies = [
- "base64",
- "pwright-backend-cdp-common",
- "pwright-browser-backend",
- "pwright-cap-content",
- "pwright-cdp",
- "pwright-core",
- "pwright-fake",
- "tokio",
-]
-
-[[package]]
-name = "pwright-backend-cdp-context-creation"
-version = "0.1.0"
-dependencies = [
- "pwright-backend-cdp-common",
- "pwright-cap-context-creation",
- "pwright-cdp",
- "pwright-core",
- "pwright-fake",
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "pwright-backend-cdp-context-lifecycle"
-version = "0.1.0"
-dependencies = [
- "pwright-backend-cdp-common",
- "pwright-backend-cdp-topology",
- "pwright-cap-context-lifecycle",
- "pwright-cdp",
- "pwright-core",
- "pwright-fake",
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "pwright-backend-cdp-dom-content"
-version = "0.1.0"
-dependencies = [
- "pwright-backend-cdp-common",
- "pwright-browser-backend",
- "pwright-cap-dom-content",
- "pwright-cdp",
- "pwright-core",
- "pwright-fake",
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "pwright-backend-cdp-drag"
-version = "0.1.0"
-dependencies = [
- "pwright-backend-cdp-input",
- "pwright-cdp",
- "pwright-core",
- "pwright-fake",
- "serde_json",
- "tokio",
- "url",
-]
-
-[[package]]
-name = "pwright-backend-cdp-evaluation"
-version = "0.1.0"
-dependencies = [
- "base64",
- "pwright-backend-cdp-common",
- "pwright-browser-backend",
- "pwright-cap-evaluation",
- "pwright-cdp",
- "pwright-core",
- "pwright-fake",
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "pwright-backend-cdp-file-input"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "base64",
- "pwright-backend-cdp-locator-resolution",
- "pwright-browser-provider",
- "pwright-cdp",
- "pwright-composition-chromium-locator-resolution",
- "pwright-core",
- "pwright-fake",
- "pwright-file-input-fs",
- "pwright-file-input-model",
- "pwright-file-input-source",
- "pwright-file-input-tokio",
- "pwright-provider-cdp",
- "pwright-runtime",
- "pwright-selector-model",
- "serde",
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "pwright-backend-cdp-handle-evaluation"
-version = "0.1.0"
-dependencies = [
- "base64",
- "pwright-backend-cdp-common",
- "pwright-backend-cdp-evaluation",
- "pwright-browser-model",
- "pwright-cap-evaluation",
- "pwright-cap-handle-evaluation",
- "pwright-cdp",
- "pwright-core",
- "pwright-fake",
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "pwright-backend-cdp-handle-lifecycle"
-version = "0.1.0"
-dependencies = [
- "pwright-backend-cdp-common",
- "pwright-cap-handle-lifecycle",
- "pwright-cdp",
- "pwright-core",
- "pwright-fake",
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "pwright-backend-cdp-input"
-version = "0.1.0"
-dependencies = [
- "pwright-cdp",
- "pwright-core",
- "pwright-fake",
- "pwright-input-model",
- "serde",
- "serde_json",
- "tokio",
- "url",
-]
-
-[[package]]
-name = "pwright-backend-cdp-keyboard"
-version = "0.1.0"
-dependencies = [
- "pwright-backend-cdp-common",
- "pwright-backend-cdp-input",
- "pwright-browser-backend",
- "pwright-cap-keyboard",
- "pwright-cdp",
- "pwright-core",
- "pwright-fake",
- "pwright-input-model",
- "serde",
- "serde_json",
- "tokio",
- "url",
-]
-
-[[package]]
-name = "pwright-backend-cdp-locator"
-version = "0.1.0"
-dependencies = [
- "pwright-backend-cdp-common",
- "pwright-backend-cdp-input",
- "pwright-backend-cdp-selector-runtime",
- "pwright-browser-model",
- "pwright-cap-locator",
- "pwright-cap-touchscreen",
- "pwright-cdp",
- "pwright-core",
- "pwright-fake",
- "pwright-runtime",
- "pwright-runtime-tokio",
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "pwright-backend-cdp-locator-resolution"
-version = "0.1.0"
-dependencies = [
- "pwright-backend-cdp-selector-runtime",
- "pwright-cdp",
- "pwright-core",
- "pwright-fake",
- "pwright-selector-model",
- "serde_json",
- "thiserror",
- "tokio",
-]
-
-[[package]]
-name = "pwright-backend-cdp-locator-screenshot"
-version = "0.1.0"
-dependencies = [
- "pwright-backend-cdp-common",
- "pwright-backend-cdp-content",
- "pwright-cap-content",
- "pwright-cap-locator-screenshot",
- "pwright-cdp",
- "pwright-core",
- "pwright-fake",
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "pwright-backend-cdp-mouse"
-version = "0.1.0"
-dependencies = [
- "pwright-backend-cdp-common",
- "pwright-backend-cdp-input",
- "pwright-browser-backend",
- "pwright-cap-mouse",
- "pwright-cdp",
- "pwright-core",
- "pwright-fake",
- "pwright-input-model",
- "serde",
- "serde_json",
- "tokio",
- "url",
-]
-
-[[package]]
-name = "pwright-backend-cdp-navigation"
-version = "0.1.0"
-dependencies = [
- "pwright-backend-cdp-common",
- "pwright-browser-backend",
- "pwright-cap-history-navigation",
- "pwright-cap-navigation",
- "pwright-cdp",
- "pwright-core",
- "pwright-fake",
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "pwright-backend-cdp-network-events"
-version = "0.1.0"
-dependencies = [
- "base64",
- "pwright-browser-model",
- "pwright-cap-network-events",
- "pwright-cdp",
- "pwright-core",
- "pwright-network-model",
- "serde_json",
-]
-
-[[package]]
-name = "pwright-backend-cdp-page-creation"
-version = "0.1.0"
-dependencies = [
- "pwright-backend-cdp-common",
- "pwright-backend-cdp-page-lifecycle",
- "pwright-cap-page-creation",
- "pwright-cdp",
- "pwright-core",
- "pwright-fake",
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "pwright-backend-cdp-page-events"
-version = "0.1.0"
-dependencies = [
- "pwright-backend-cdp-topology",
- "pwright-cap-page-events",
- "pwright-cdp",
- "pwright-core",
- "pwright-fake",
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "pwright-backend-cdp-page-lifecycle"
-version = "0.1.0"
-dependencies = [
- "futures-util",
- "pwright-backend-cdp-common",
- "pwright-cap-page-lifecycle",
- "pwright-cdp",
- "pwright-core",
- "pwright-fake",
- "serde_json",
- "tokio",
- "tokio-tungstenite",
-]
-
-[[package]]
-name = "pwright-backend-cdp-selector-geometry"
-version = "0.1.0"
-dependencies = [
- "pwright-backend-cdp-common",
- "pwright-backend-cdp-locator-screenshot",
- "pwright-backend-cdp-selector-runtime",
- "pwright-browser-provider",
- "pwright-cap-locator-screenshot",
- "pwright-cdp",
- "pwright-core",
- "pwright-fake",
- "pwright-provider-cdp",
- "pwright-selector-model",
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "pwright-backend-cdp-selector-runtime"
-version = "0.1.0"
-dependencies = [
- "pwright-core",
- "pwright-selector-model",
- "serde_json",
-]
-
-[[package]]
-name = "pwright-backend-cdp-topology"
-version = "0.1.0"
-dependencies = [
- "pwright-browser-model",
- "pwright-cdp",
- "pwright-core",
- "pwright-runtime",
- "serde_json",
-]
-
-[[package]]
-name = "pwright-backend-cdp-touchscreen"
-version = "0.1.0"
-dependencies = [
- "pwright-backend-cdp-common",
- "pwright-backend-cdp-input",
- "pwright-browser-backend",
- "pwright-cap-touchscreen",
- "pwright-cdp",
- "pwright-core",
- "pwright-fake",
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "pwright-browser-backend"
-version = "0.1.0"
-dependencies = [
- "pwright-core",
-]
-
-[[package]]
-name = "pwright-browser-install"
-version = "0.1.0"
-
-[[package]]
-name = "pwright-browser-model"
-version = "0.1.0"
-dependencies = [
- "pwright-core",
-]
-
-[[package]]
-name = "pwright-browser-provider"
-version = "0.1.0"
-
-[[package]]
-name = "pwright-browser-registry"
-version = "0.1.0"
-
-[[package]]
-name = "pwright-cap-artifact"
-version = "0.1.0"
-dependencies = [
- "pwright-artifact-model",
- "pwright-core",
-]
-
-[[package]]
-name = "pwright-cap-browser-events"
-version = "0.1.0"
-dependencies = [
- "pwright-browser-model",
- "pwright-core",
-]
-
-[[package]]
-name = "pwright-cap-browser-lifecycle"
-version = "0.1.0"
-dependencies = [
- "pwright-core",
-]
-
-[[package]]
-name = "pwright-cap-content"
-version = "0.1.0"
-dependencies = [
- "pwright-core",
- "pwright-screenshot-model",
-]
-
-[[package]]
-name = "pwright-cap-context-creation"
-version = "0.1.0"
-dependencies = [
- "pwright-core",
-]
-
-[[package]]
-name = "pwright-cap-context-lifecycle"
-version = "0.1.0"
-dependencies = [
- "pwright-core",
-]
-
-[[package]]
-name = "pwright-cap-dom-content"
-version = "0.1.0"
-dependencies = [
- "pwright-core",
-]
-
-[[package]]
-name = "pwright-cap-evaluation"
-version = "0.1.0"
-dependencies = [
- "pwright-core",
-]
-
-[[package]]
-name = "pwright-cap-handle-evaluation"
-version = "0.1.0"
-dependencies = [
- "pwright-cap-evaluation",
- "pwright-core",
-]
-
-[[package]]
-name = "pwright-cap-handle-lifecycle"
-version = "0.1.0"
-dependencies = [
- "pwright-core",
-]
-
-[[package]]
-name = "pwright-cap-history-navigation"
-version = "0.1.0"
-dependencies = [
- "pwright-core",
-]
-
-[[package]]
-name = "pwright-cap-keyboard"
-version = "0.1.0"
-dependencies = [
- "pwright-core",
- "pwright-input-model",
-]
-
-[[package]]
-name = "pwright-cap-locator"
-version = "0.1.0"
-dependencies = [
- "pwright-core",
- "pwright-input-model",
- "pwright-selector-model",
-]
-
-[[package]]
-name = "pwright-cap-locator-screenshot"
-version = "0.1.0"
-dependencies = [
- "pwright-core",
- "pwright-screenshot-model",
- "pwright-selector-model",
-]
-
-[[package]]
-name = "pwright-cap-mouse"
-version = "0.1.0"
-dependencies = [
- "pwright-core",
- "pwright-input-model",
-]
-
-[[package]]
-name = "pwright-cap-navigation"
-version = "0.1.0"
-dependencies = [
- "pwright-core",
-]
-
-[[package]]
-name = "pwright-cap-network-events"
-version = "0.1.0"
-dependencies = [
- "pwright-browser-model",
- "pwright-core",
- "pwright-network-model",
-]
-
-[[package]]
-name = "pwright-cap-page-creation"
-version = "0.1.0"
-dependencies = [
- "pwright-core",
-]
-
-[[package]]
-name = "pwright-cap-page-events"
-version = "0.1.0"
-dependencies = [
- "pwright-browser-model",
- "pwright-core",
-]
-
-[[package]]
-name = "pwright-cap-page-lifecycle"
-version = "0.1.0"
-dependencies = [
- "pwright-core",
-]
-
-[[package]]
-name = "pwright-cap-touchscreen"
-version = "0.1.0"
-dependencies = [
- "pwright-cap-locator",
- "pwright-core",
-]
-
-[[package]]
-name = "pwright-cap-tracing"
-version = "0.1.0"
-dependencies = [
- "pwright-core",
-]
-
-[[package]]
-name = "pwright-cap-tracing-artifact"
-version = "0.1.0"
-dependencies = [
- "pwright-cap-artifact",
- "pwright-cap-tracing",
- "pwright-core",
-]
-
-[[package]]
-name = "pwright-cdp"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "dashmap",
- "futures-util",
- "pwright-core",
- "serde",
- "serde_json",
- "thiserror",
- "tokio",
- "tokio-tungstenite",
- "tokio-util",
- "tracing",
- "url",
-]
-
-[[package]]
-name = "pwright-client"
-version = "0.1.0"
-dependencies = [
- "pwright-browser-model",
- "pwright-core",
- "pwright-runtime",
-]
-
-[[package]]
-name = "pwright-client-artifact"
-version = "0.1.0"
-dependencies = [
- "pwright-browser-model",
- "pwright-cap-artifact",
- "pwright-client",
- "pwright-core",
- "tokio",
-]
-
-[[package]]
-name = "pwright-client-browser-events"
-version = "0.1.0"
-dependencies = [
- "pwright-browser-model",
- "pwright-cap-browser-events",
- "pwright-client",
- "pwright-client-events",
- "pwright-codec-browser-events",
- "pwright-core",
- "pwright-transport",
-]
-
-[[package]]
-name = "pwright-client-browser-lifecycle"
-version = "0.1.0"
-dependencies = [
- "pwright-cap-browser-lifecycle",
- "pwright-client",
- "pwright-core",
- "tokio",
-]
-
-[[package]]
-name = "pwright-client-content"
-version = "0.1.0"
-dependencies = [
- "pwright-cap-content",
- "pwright-client",
- "pwright-core",
- "tokio",
-]
-
-[[package]]
-name = "pwright-client-context-creation"
-version = "0.1.0"
-dependencies = [
- "pwright-browser-model",
- "pwright-cap-context-creation",
- "pwright-client",
- "pwright-core",
- "tokio",
-]
-
-[[package]]
-name = "pwright-client-context-lifecycle"
-version = "0.1.0"
-dependencies = [
- "pwright-cap-context-lifecycle",
- "pwright-client",
- "pwright-core",
-]
-
-[[package]]
-name = "pwright-client-control"
-version = "0.1.0"
-dependencies = [
- "pwright-client",
- "pwright-client-wire",
- "pwright-core",
- "pwright-transport",
-]
-
-[[package]]
-name = "pwright-client-dom-content"
-version = "0.1.0"
-dependencies = [
- "pwright-browser-model",
- "pwright-cap-dom-content",
- "pwright-client",
- "pwright-core",
- "tokio",
-]
-
-[[package]]
-name = "pwright-client-evaluation"
-version = "0.1.0"
-dependencies = [
- "pwright-browser-model",
- "pwright-cap-evaluation",
- "pwright-cap-page-creation",
- "pwright-client",
- "pwright-core",
- "tokio",
-]
-
-[[package]]
-name = "pwright-client-events"
-version = "0.1.0"
-dependencies = [
- "pwright-client-wire",
- "pwright-core",
- "pwright-transport",
-]
-
-[[package]]
-name = "pwright-client-handle-evaluation"
-version = "0.1.0"
-dependencies = [
- "pwright-browser-model",
- "pwright-cap-evaluation",
- "pwright-cap-handle-evaluation",
- "pwright-client",
- "pwright-core",
- "tokio",
-]
-
-[[package]]
-name = "pwright-client-handle-lifecycle"
-version = "0.1.0"
-dependencies = [
- "pwright-cap-handle-lifecycle",
- "pwright-client",
- "pwright-core",
-]
-
-[[package]]
-name = "pwright-client-keyboard"
-version = "0.1.0"
-dependencies = [
- "pwright-browser-model",
- "pwright-cap-keyboard",
- "pwright-client",
- "pwright-core",
- "tokio",
-]
-
-[[package]]
-name = "pwright-client-locator"
-version = "0.1.0"
-dependencies = [
- "pwright-cap-locator",
- "pwright-client",
- "pwright-core",
- "pwright-runtime",
-]
-
-[[package]]
-name = "pwright-client-locator-screenshot"
-version = "0.1.0"
-dependencies = [
- "pwright-cap-locator-screenshot",
- "pwright-client",
- "pwright-core",
- "tokio",
-]
-
-[[package]]
-name = "pwright-client-mouse"
-version = "0.1.0"
-dependencies = [
- "pwright-browser-model",
- "pwright-cap-mouse",
- "pwright-client",
- "pwright-core",
- "tokio",
-]
-
-[[package]]
-name = "pwright-client-navigation"
-version = "0.1.0"
-dependencies = [
- "pwright-browser-model",
- "pwright-cap-navigation",
- "pwright-client",
- "pwright-core",
- "pwright-runtime",
-]
-
-[[package]]
-name = "pwright-client-network-events"
-version = "0.1.0"
-dependencies = [
- "pwright-browser-model",
- "pwright-cap-network-events",
- "pwright-client",
- "pwright-client-events",
- "pwright-client-wire",
- "pwright-codec-network-events",
- "pwright-core",
- "pwright-server-events",
- "pwright-server-wire",
- "pwright-transport",
- "pwright-transport-memory",
- "tokio",
-]
-
-[[package]]
-name = "pwright-client-page-creation"
-version = "0.1.0"
-dependencies = [
- "pwright-browser-model",
- "pwright-cap-page-creation",
- "pwright-client",
- "pwright-core",
- "tokio",
-]
-
-[[package]]
-name = "pwright-client-page-events"
-version = "0.1.0"
-dependencies = [
- "pwright-browser-model",
- "pwright-cap-page-events",
- "pwright-client",
- "pwright-client-events",
- "pwright-codec-page-events",
- "pwright-core",
- "pwright-transport",
-]
-
-[[package]]
-name = "pwright-client-page-lifecycle"
-version = "0.1.0"
-dependencies = [
- "pwright-cap-page-lifecycle",
- "pwright-client",
- "pwright-core",
- "tokio",
-]
-
-[[package]]
-name = "pwright-client-tracing"
-version = "0.1.0"
-dependencies = [
- "pwright-cap-tracing",
- "pwright-client",
- "pwright-core",
- "tokio",
-]
-
-[[package]]
-name = "pwright-client-tracing-artifact"
-version = "0.1.0"
-dependencies = [
- "pwright-browser-model",
- "pwright-cap-tracing-artifact",
- "pwright-client",
- "pwright-core",
- "tokio",
-]
-
-[[package]]
-name = "pwright-client-wire"
-version = "0.1.0"
-dependencies = [
- "pwright-client",
- "pwright-codec-handshake",
- "pwright-connection-control",
- "pwright-core",
- "pwright-transport",
-]
-
-[[package]]
-name = "pwright-codec-artifact"
-version = "0.1.0"
-dependencies = [
- "pwright-cap-artifact",
- "pwright-codec-binary",
- "pwright-codec-common",
- "pwright-core",
- "pwright-transport",
-]
-
-[[package]]
-name = "pwright-codec-binary"
-version = "0.1.0"
-dependencies = [
- "pwright-core",
-]
-
-[[package]]
-name = "pwright-codec-browser-events"
-version = "0.1.0"
-dependencies = [
- "pwright-cap-browser-events",
- "pwright-core",
- "pwright-transport",
-]
-
-[[package]]
-name = "pwright-codec-browser-lifecycle"
-version = "0.1.0"
-dependencies = [
- "pwright-cap-browser-lifecycle",
- "pwright-codec-binary",
- "pwright-codec-common",
- "pwright-core",
- "pwright-transport",
-]
-
-[[package]]
-name = "pwright-codec-common"
-version = "0.1.0"
-dependencies = [
- "pwright-codec-binary",
- "pwright-core",
-]
-
-[[package]]
-name = "pwright-codec-content"
-version = "0.1.0"
-dependencies = [
- "pwright-cap-content",
- "pwright-codec-binary",
- "pwright-codec-common",
- "pwright-codec-screenshot",
- "pwright-core",
- "pwright-transport",
-]
-
-[[package]]
-name = "pwright-codec-context-creation"
-version = "0.1.0"
-dependencies = [
- "pwright-cap-context-creation",
- "pwright-codec-binary",
- "pwright-codec-common",
- "pwright-core",
- "pwright-transport",
-]
-
-[[package]]
-name = "pwright-codec-context-lifecycle"
-version = "0.1.0"
-dependencies = [
- "pwright-cap-context-lifecycle",
- "pwright-codec-binary",
- "pwright-codec-common",
- "pwright-core",
- "pwright-transport",
-]
-
-[[package]]
-name = "pwright-codec-control"
-version = "0.1.0"
-dependencies = [
- "pwright-client-wire",
- "pwright-codec-binary",
- "pwright-core",
- "pwright-server-wire",
- "pwright-transport",
- "pwright-transport-memory",
- "tokio",
-]
-
-[[package]]
-name = "pwright-codec-dom-content"
-version = "0.1.0"
-dependencies = [
- "pwright-cap-dom-content",
- "pwright-codec-binary",
- "pwright-codec-common",
- "pwright-core",
- "pwright-transport",
-]
-
-[[package]]
-name = "pwright-codec-evaluation"
-version = "0.1.0"
-dependencies = [
- "pwright-cap-evaluation",
- "pwright-codec-binary",
- "pwright-codec-common",
- "pwright-core",
- "pwright-transport",
-]
-
-[[package]]
-name = "pwright-codec-handle-evaluation"
-version = "0.1.0"
-dependencies = [
- "pwright-cap-evaluation",
- "pwright-cap-handle-evaluation",
- "pwright-codec-binary",
- "pwright-codec-common",
- "pwright-core",
- "pwright-transport",
-]
-
-[[package]]
-name = "pwright-codec-handle-lifecycle"
-version = "0.1.0"
-dependencies = [
- "pwright-cap-handle-lifecycle",
- "pwright-codec-binary",
- "pwright-codec-common",
- "pwright-core",
- "pwright-transport",
-]
-
-[[package]]
-name = "pwright-codec-handshake"
-version = "0.1.0"
-dependencies = [
- "pwright-codec-binary",
- "pwright-core",
- "pwright-transport",
-]
-
-[[package]]
-name = "pwright-codec-json"
-version = "0.1.0"
-dependencies = [
- "pwright-core",
- "pwright-transport",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "pwright-codec-keyboard"
-version = "0.1.0"
-dependencies = [
- "pwright-cap-keyboard",
- "pwright-codec-binary",
- "pwright-codec-common",
- "pwright-core",
- "pwright-transport",
-]
-
-[[package]]
-name = "pwright-codec-locator"
-version = "0.1.0"
-dependencies = [
- "pwright-browser-model",
- "pwright-cap-locator",
- "pwright-client",
- "pwright-client-locator",
- "pwright-client-wire",
- "pwright-codec-binary",
- "pwright-codec-common",
- "pwright-codec-control",
- "pwright-core",
- "pwright-runtime",
- "pwright-runtime-control",
- "pwright-server-wire",
- "pwright-transport",
- "pwright-transport-stream",
- "pwright-transport-tokio",
- "tokio",
-]
-
-[[package]]
-name = "pwright-codec-locator-screenshot"
-version = "0.1.0"
-dependencies = [
- "pwright-cap-locator-screenshot",
- "pwright-codec-binary",
- "pwright-codec-common",
- "pwright-codec-screenshot",
- "pwright-codec-selector",
- "pwright-core",
- "pwright-selector-model",
- "pwright-transport",
-]
-
-[[package]]
-name = "pwright-codec-mouse"
-version = "0.1.0"
-dependencies = [
- "pwright-cap-mouse",
- "pwright-codec-binary",
- "pwright-codec-common",
- "pwright-core",
- "pwright-transport",
-]
-
-[[package]]
-name = "pwright-codec-navigation"
-version = "0.1.0"
-dependencies = [
- "pwright-browser-model",
- "pwright-cap-navigation",
- "pwright-client",
- "pwright-client-navigation",
- "pwright-client-wire",
- "pwright-codec-binary",
- "pwright-codec-common",
- "pwright-core",
- "pwright-runtime",
- "pwright-server-wire",
- "pwright-transport",
- "pwright-transport-stream",
- "pwright-transport-tokio",
- "tokio",
-]
-
-[[package]]
-name = "pwright-codec-network-events"
-version = "0.1.0"
-dependencies = [
- "pwright-cap-network-events",
- "pwright-codec-binary",
- "pwright-core",
- "pwright-transport",
-]
-
-[[package]]
-name = "pwright-codec-page-creation"
-version = "0.1.0"
-dependencies = [
- "pwright-cap-page-creation",
- "pwright-codec-binary",
- "pwright-codec-common",
- "pwright-core",
- "pwright-transport",
-]
-
-[[package]]
-name = "pwright-codec-page-events"
-version = "0.1.0"
-dependencies = [
- "pwright-cap-page-events",
- "pwright-core",
- "pwright-transport",
-]
-
-[[package]]
-name = "pwright-codec-page-lifecycle"
-version = "0.1.0"
-dependencies = [
- "pwright-cap-page-lifecycle",
- "pwright-codec-binary",
- "pwright-codec-common",
- "pwright-core",
- "pwright-transport",
-]
-
-[[package]]
-name = "pwright-codec-screenshot"
-version = "0.1.0"
-dependencies = [
- "pwright-core",
- "pwright-screenshot-model",
- "pwright-transport",
-]
-
-[[package]]
-name = "pwright-codec-selector"
-version = "0.1.0"
-dependencies = [
- "pwright-codec-binary",
- "pwright-codec-locator",
- "pwright-core",
- "pwright-selector-model",
-]
-
-[[package]]
-name = "pwright-codec-tracing"
-version = "0.1.0"
-dependencies = [
- "pwright-cap-tracing",
- "pwright-codec-binary",
- "pwright-codec-common",
- "pwright-core",
- "pwright-transport",
-]
-
-[[package]]
-name = "pwright-codec-tracing-artifact"
-version = "0.1.0"
-dependencies = [
- "pwright-cap-tracing-artifact",
- "pwright-codec-binary",
- "pwright-codec-common",
- "pwright-core",
- "pwright-transport",
-]
-
-[[package]]
-name = "pwright-composition-chromium"
-version = "0.1.0"
-dependencies = [
- "futures-util",
- "pwright-backend-cdp",
- "pwright-backend-cdp-common",
- "pwright-backend-cdp-input",
- "pwright-backend-cdp-navigation",
- "pwright-backend-cdp-page-lifecycle",
- "pwright-backend-cdp-topology",
- "pwright-browser-backend",
- "pwright-browser-model",
- "pwright-browser-provider",
- "pwright-cap-browser-events",
- "pwright-cap-content",
- "pwright-cap-context-creation",
- "pwright-cap-context-lifecycle",
- "pwright-cap-dom-content",
- "pwright-cap-evaluation",
- "pwright-cap-handle-evaluation",
- "pwright-cap-handle-lifecycle",
- "pwright-cap-history-navigation",
- "pwright-cap-locator",
- "pwright-cap-locator-screenshot",
- "pwright-cap-navigation",
- "pwright-cap-network-events",
- "pwright-cap-page-creation",
- "pwright-cap-page-events",
- "pwright-cap-page-lifecycle",
- "pwright-cap-touchscreen",
- "pwright-cdp",
- "pwright-client",
- "pwright-client-content",
- "pwright-client-context-creation",
- "pwright-client-context-lifecycle",
- "pwright-client-control",
- "pwright-client-dom-content",
- "pwright-client-evaluation",
- "pwright-client-events",
- "pwright-client-handle-evaluation",
- "pwright-client-navigation",
- "pwright-client-network-events",
- "pwright-client-page-creation",
- "pwright-client-page-lifecycle",
- "pwright-client-wire",
- "pwright-codec-browser-events",
- "pwright-codec-content",
- "pwright-codec-context-creation",
- "pwright-codec-context-lifecycle",
- "pwright-codec-control",
- "pwright-codec-dom-content",
- "pwright-codec-evaluation",
- "pwright-codec-handle-evaluation",
- "pwright-codec-handle-lifecycle",
- "pwright-codec-handshake",
- "pwright-codec-locator",
- "pwright-codec-locator-screenshot",
- "pwright-codec-navigation",
- "pwright-codec-network-events",
- "pwright-codec-page-creation",
- "pwright-codec-page-events",
- "pwright-codec-page-lifecycle",
- "pwright-composition-chromium-handle-evaluation",
- "pwright-composition-chromium-network-events",
- "pwright-composition-chromium-page-events",
- "pwright-core",
- "pwright-fake",
- "pwright-network-model",
- "pwright-plugin-chromium-frame-lifecycle",
- "pwright-plugin-chromium-frame-observer",
- "pwright-plugin-chromium-session-initialization",
- "pwright-plugin-ordered-handle-delivery",
- "pwright-process-metrics",
- "pwright-provider-cdp",
- "pwright-runtime",
- "pwright-runtime-control",
- "pwright-server-browser-events",
- "pwright-server-content",
- "pwright-server-context-creation",
- "pwright-server-context-lifecycle",
- "pwright-server-dom-content",
- "pwright-server-evaluation",
- "pwright-server-events",
- "pwright-server-handle-evaluation",
- "pwright-server-handle-lifecycle",
- "pwright-server-locator",
- "pwright-server-locator-screenshot",
- "pwright-server-navigation",
- "pwright-server-page-creation",
- "pwright-server-page-lifecycle",
- "pwright-server-wire",
- "pwright-transport",
- "pwright-transport-memory",
- "serde",
- "serde_json",
- "tokio",
- "tokio-tungstenite",
-]
-
-[[package]]
-name = "pwright-composition-chromium-content"
-version = "0.1.0"
-dependencies = [
- "pwright-backend-cdp-content",
- "pwright-cap-content",
- "pwright-cdp",
- "pwright-codec-content",
- "pwright-core",
- "pwright-fake",
- "pwright-server-content",
- "pwright-transport",
- "tokio",
-]
-
-[[package]]
-name = "pwright-composition-chromium-context-creation"
-version = "0.1.0"
-dependencies = [
- "pwright-backend-cdp-context-creation",
- "pwright-backend-cdp-topology",
- "pwright-browser-model",
- "pwright-browser-provider",
- "pwright-cap-context-creation",
- "pwright-cap-context-lifecycle",
- "pwright-cdp",
- "pwright-codec-context-creation",
- "pwright-composition-chromium-context-lifecycle",
- "pwright-core",
- "pwright-fake",
- "pwright-provider-cdp",
- "pwright-runtime",
- "pwright-server-context-creation",
- "pwright-transport",
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "pwright-composition-chromium-context-lifecycle"
-version = "0.1.0"
-dependencies = [
- "pwright-backend-cdp-context-lifecycle",
- "pwright-backend-cdp-topology",
- "pwright-browser-model",
- "pwright-browser-provider",
- "pwright-cap-context-lifecycle",
- "pwright-cdp",
- "pwright-codec-context-lifecycle",
- "pwright-core",
- "pwright-fake",
- "pwright-provider-cdp",
- "pwright-runtime",
- "pwright-server-context-lifecycle",
- "pwright-transport",
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "pwright-composition-chromium-dom-content"
-version = "0.1.0"
-dependencies = [
- "pwright-backend-cdp-dom-content",
- "pwright-cap-dom-content",
- "pwright-cdp",
- "pwright-codec-dom-content",
- "pwright-core",
- "pwright-fake",
- "pwright-server-dom-content",
- "pwright-transport",
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "pwright-composition-chromium-evaluation"
-version = "0.1.0"
-dependencies = [
- "pwright-backend-cdp-evaluation",
- "pwright-cap-evaluation",
- "pwright-cdp",
- "pwright-codec-evaluation",
- "pwright-core",
- "pwright-fake",
- "pwright-server-evaluation",
- "pwright-transport",
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "pwright-composition-chromium-file-input"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "pwright-backend-cdp-file-input",
- "pwright-browser-provider",
- "pwright-cdp",
- "pwright-composition-chromium-locator-resolution",
- "pwright-core",
- "pwright-fake",
- "pwright-file-input-model",
- "pwright-file-input-source",
- "pwright-provider-cdp",
- "pwright-runtime",
- "pwright-runtime-tokio",
- "pwright-selector-model",
- "serde_json",
- "thiserror",
- "tokio",
-]
-
-[[package]]
-name = "pwright-composition-chromium-handle-evaluation"
-version = "0.1.0"
-dependencies = [
- "pwright-backend-cdp-common",
- "pwright-backend-cdp-evaluation",
- "pwright-backend-cdp-handle-evaluation",
- "pwright-browser-model",
- "pwright-browser-provider",
- "pwright-cap-handle-evaluation",
- "pwright-cap-handle-lifecycle",
- "pwright-cdp",
- "pwright-codec-control",
- "pwright-codec-handle-evaluation",
- "pwright-composition-chromium-handle-lifecycle",
- "pwright-core",
- "pwright-fake",
- "pwright-plugin-ordered-handle-delivery",
- "pwright-provider-cdp",
- "pwright-runtime",
- "pwright-runtime-control",
- "pwright-server-handle-evaluation",
- "pwright-server-wire",
- "pwright-transport",
- "pwright-transport-memory",
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "pwright-composition-chromium-handle-lifecycle"
-version = "0.1.0"
-dependencies = [
- "pwright-backend-cdp-handle-lifecycle",
- "pwright-browser-model",
- "pwright-browser-provider",
- "pwright-cap-handle-lifecycle",
- "pwright-cdp",
- "pwright-codec-handle-lifecycle",
- "pwright-core",
- "pwright-fake",
- "pwright-provider-cdp",
- "pwright-runtime",
- "pwright-server-handle-lifecycle",
- "pwright-transport",
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "pwright-composition-chromium-keyboard"
-version = "0.1.0"
-dependencies = [
- "pwright-backend-cdp-input",
- "pwright-backend-cdp-keyboard",
- "pwright-browser-model",
- "pwright-cap-keyboard",
- "pwright-cdp",
- "pwright-codec-keyboard",
- "pwright-core",
- "pwright-fake",
- "pwright-runtime",
- "pwright-server-keyboard",
- "pwright-server-wire",
- "pwright-transport",
- "serde",
- "serde_json",
- "tokio",
- "url",
-]
-
-[[package]]
-name = "pwright-composition-chromium-launch"
-version = "0.1.0"
-dependencies = [
- "pwright-backend-cdp",
- "pwright-browser-model",
- "pwright-browser-provider",
- "pwright-cap-browser-events",
- "pwright-cap-browser-lifecycle",
- "pwright-cdp",
- "pwright-client",
- "pwright-client-browser-events",
- "pwright-client-browser-lifecycle",
- "pwright-client-control",
- "pwright-client-wire",
- "pwright-codec-browser-events",
- "pwright-codec-browser-lifecycle",
- "pwright-codec-control",
- "pwright-codec-handshake",
- "pwright-composition-chromium",
- "pwright-core",
- "pwright-process-metrics",
- "pwright-provider-cdp",
- "pwright-provider-chromium",
- "pwright-runtime",
- "pwright-runtime-control",
- "pwright-runtime-tokio",
- "pwright-server-browser-events",
- "pwright-server-browser-lifecycle",
- "pwright-server-wire",
- "pwright-transport",
- "pwright-transport-memory",
- "tokio",
-]
-
-[[package]]
-name = "pwright-composition-chromium-locator"
-version = "0.1.0"
-dependencies = [
- "pwright-backend-cdp-input",
- "pwright-backend-cdp-locator",
- "pwright-browser-provider",
- "pwright-cap-locator",
- "pwright-cdp",
- "pwright-codec-locator",
- "pwright-core",
- "pwright-fake",
- "pwright-provider-cdp",
- "pwright-server-locator",
- "pwright-transport",
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "pwright-composition-chromium-locator-evaluation"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "pwright-backend-cdp",
- "pwright-backend-cdp-evaluation",
- "pwright-backend-cdp-handle-evaluation",
- "pwright-backend-cdp-selector-runtime",
- "pwright-browser-model",
- "pwright-browser-provider",
- "pwright-cap-evaluation",
- "pwright-cap-handle-evaluation",
- "pwright-cdp",
- "pwright-codec-evaluation",
- "pwright-codec-locator",
- "pwright-composition-chromium",
- "pwright-composition-chromium-locator-resolution",
- "pwright-core",
- "pwright-fake",
- "pwright-provider-cdp",
- "pwright-runtime",
- "pwright-selector-model",
- "pwright-server-wire",
- "pwright-transport",
- "serde_json",
- "thiserror",
- "tokio",
-]
-
-[[package]]
-name = "pwright-composition-chromium-locator-resolution"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "pwright-backend-cdp-locator-resolution",
- "pwright-backend-cdp-selector-runtime",
- "pwright-browser-provider",
- "pwright-cdp",
- "pwright-core",
- "pwright-fake",
- "pwright-provider-cdp",
- "pwright-runtime",
- "pwright-selector-model",
- "serde_json",
- "thiserror",
- "tokio",
-]
-
-[[package]]
-name = "pwright-composition-chromium-locator-screenshot"
-version = "0.1.0"
-dependencies = [
- "pwright-backend-cdp-content",
- "pwright-backend-cdp-locator-screenshot",
- "pwright-cap-locator-screenshot",
- "pwright-cdp",
- "pwright-codec-locator-screenshot",
- "pwright-core",
- "pwright-fake",
- "pwright-server-locator-screenshot",
- "pwright-transport",
- "tokio",
-]
-
-[[package]]
-name = "pwright-composition-chromium-mouse"
-version = "0.1.0"
-dependencies = [
- "pwright-backend-cdp-input",
- "pwright-backend-cdp-mouse",
- "pwright-browser-model",
- "pwright-cap-mouse",
- "pwright-cdp",
- "pwright-codec-mouse",
- "pwright-core",
- "pwright-fake",
- "pwright-input-model",
- "pwright-runtime",
- "pwright-server-mouse",
- "pwright-server-wire",
- "pwright-transport",
- "serde",
- "serde_json",
- "tokio",
- "url",
-]
-
-[[package]]
-name = "pwright-composition-chromium-navigation"
-version = "0.1.0"
-dependencies = [
- "pwright-backend-cdp-navigation",
- "pwright-cap-navigation",
- "pwright-cdp",
- "pwright-codec-navigation",
- "pwright-core",
- "pwright-fake",
- "pwright-server-navigation",
- "pwright-transport",
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "pwright-composition-chromium-network-events"
-version = "0.1.0"
-dependencies = [
- "pwright-backend-cdp-network-events",
- "pwright-browser-model",
- "pwright-cap-network-events",
- "pwright-cdp",
- "pwright-codec-control",
- "pwright-codec-network-events",
- "pwright-core",
- "pwright-network-model",
- "pwright-runtime",
- "pwright-runtime-control",
- "pwright-server-events",
- "pwright-server-wire",
- "pwright-transport",
- "pwright-transport-memory",
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "pwright-composition-chromium-page-creation"
-version = "0.1.0"
-dependencies = [
- "pwright-backend-cdp-page-creation",
- "pwright-backend-cdp-topology",
- "pwright-browser-model",
- "pwright-browser-provider",
- "pwright-cap-page-creation",
- "pwright-cap-page-lifecycle",
- "pwright-cdp",
- "pwright-codec-page-creation",
- "pwright-composition-chromium-page-lifecycle",
- "pwright-core",
- "pwright-fake",
- "pwright-provider-cdp",
- "pwright-runtime",
- "pwright-server-page-creation",
- "pwright-transport",
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "pwright-composition-chromium-page-events"
-version = "0.1.0"
-dependencies = [
- "pwright-backend-cdp-page-events",
- "pwright-backend-cdp-topology",
- "pwright-cap-page-events",
- "pwright-cdp",
- "pwright-codec-page-events",
- "pwright-core",
- "pwright-fake",
- "pwright-runtime-control",
- "pwright-server-events",
- "pwright-server-wire",
- "pwright-transport",
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "pwright-composition-chromium-page-lifecycle"
-version = "0.1.0"
-dependencies = [
- "pwright-backend-cdp-page-lifecycle",
- "pwright-backend-cdp-topology",
- "pwright-browser-model",
- "pwright-browser-provider",
- "pwright-cap-page-lifecycle",
- "pwright-cdp",
- "pwright-codec-page-lifecycle",
- "pwright-core",
- "pwright-fake",
- "pwright-provider-cdp",
- "pwright-runtime",
- "pwright-server-page-lifecycle",
- "pwright-transport",
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "pwright-composition-chromium-tokio"
-version = "0.1.0"
-dependencies = [
- "pwright-backend-cdp",
- "pwright-cdp",
- "pwright-codec-handshake",
- "pwright-codec-navigation",
- "pwright-composition-chromium",
- "pwright-core",
- "pwright-endpoint-tokio",
- "pwright-provider-cdp",
- "pwright-runtime",
- "pwright-server-wire",
- "pwright-transport",
- "pwright-transport-stream",
- "pwright-transport-tokio",
- "tokio",
-]
-
-[[package]]
-name = "pwright-composition-chromium-touchscreen"
-version = "0.1.0"
-dependencies = [
- "pwright-backend-cdp-input",
- "pwright-backend-cdp-touchscreen",
- "pwright-cap-touchscreen",
- "pwright-cdp",
- "pwright-core",
- "pwright-fake",
- "tokio",
-]
-
-[[package]]
-name = "pwright-connection-control"
-version = "0.1.0"
-dependencies = [
- "pwright-core",
-]
-
-[[package]]
-name = "pwright-core"
-version = "0.1.0"
-
-[[package]]
-name = "pwright-endpoint-tokio"
-version = "0.1.0"
-dependencies = [
- "pwright-client-wire",
- "pwright-codec-handshake",
- "pwright-core",
- "pwright-server-wire",
- "pwright-transport",
- "pwright-transport-stream",
- "pwright-transport-tokio",
- "rcgen",
- "ring",
- "tokio",
- "tokio-rustls",
- "zeroize",
-]
-
-[[package]]
-name = "pwright-fake"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "pwright-cdp",
- "pwright-js",
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "pwright-file-input-fs"
-version = "0.1.0"
-dependencies = [
- "libc",
- "pwright-core",
- "pwright-file-input-model",
- "pwright-file-input-source",
-]
-
-[[package]]
-name = "pwright-file-input-model"
-version = "0.1.0"
-
-[[package]]
-name = "pwright-file-input-source"
-version = "0.1.0"
-dependencies = [
- "pwright-core",
- "pwright-file-input-model",
-]
-
-[[package]]
-name = "pwright-file-input-tokio"
-version = "0.1.0"
-dependencies = [
- "pwright-core",
- "pwright-file-input-fs",
- "pwright-file-input-model",
- "pwright-file-input-source",
- "tokio",
-]
-
-[[package]]
-name = "pwright-har-replay"
-version = "0.1.0"
-dependencies = [
- "base64",
- "serde",
- "serde_json",
- "thiserror",
- "url",
-]
-
-[[package]]
-name = "pwright-input-model"
-version = "0.1.0"
-
-[[package]]
-name = "pwright-js"
-version = "0.1.0"
-dependencies = [
- "serde_json",
-]
-
-[[package]]
-name = "pwright-network-model"
-version = "0.1.0"
-dependencies = [
- "pwright-core",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "pwright-node-addon"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "napi",
- "napi-build",
- "napi-derive",
- "pwright-api-request",
- "pwright-api-request-auth-basic",
- "pwright-api-request-client-certificates",
- "pwright-api-request-connector-http-proxy",
- "pwright-api-request-connector-proxy-bypass",
- "pwright-api-request-connector-rustls",
- "pwright-api-request-connector-socks5",
- "pwright-api-request-cookie",
- "pwright-api-request-decompress",
- "pwright-api-request-transport",
- "pwright-browser-registry",
- "pwright-cap-navigation",
- "pwright-node-host",
- "pwright-owned-process-startup",
- "pwright-persistent-context-preflight",
- "pwright-playwright-connect-headers",
- "pwright-playwright-server-browser-ops",
- "pwright-playwright-server-connect",
- "pwright-playwright-server-endpoint-discovery",
- "pwright-playwright-server-initialize",
- "pwright-playwright-server-page-events",
- "pwright-playwright-server-session",
- "pwright-trace-playwright-v8",
- "pwright-transport-ws",
- "serde_json",
- "tempfile",
- "tokio",
- "tokio-util",
- "tracing",
- "url",
-]
-
-[[package]]
-name = "pwright-node-host"
-version = "0.1.0"
-dependencies = [
- "base64",
- "futures-util",
- "mime_guess",
- "pwright-backend-cdp",
- "pwright-backend-cdp-content",
- "pwright-backend-cdp-context-creation",
- "pwright-backend-cdp-dom-content",
- "pwright-backend-cdp-drag",
- "pwright-backend-cdp-evaluation",
- "pwright-backend-cdp-file-input",
- "pwright-backend-cdp-handle-evaluation",
- "pwright-backend-cdp-input",
- "pwright-backend-cdp-locator",
- "pwright-backend-cdp-mouse",
- "pwright-backend-cdp-navigation",
- "pwright-backend-cdp-page-creation",
- "pwright-backend-cdp-page-lifecycle",
- "pwright-backend-cdp-selector-runtime",
- "pwright-backend-cdp-topology",
- "pwright-backend-cdp-touchscreen",
- "pwright-browser-model",
- "pwright-browser-provider",
- "pwright-cap-content",
- "pwright-cap-context-creation",
- "pwright-cap-context-lifecycle",
- "pwright-cap-dom-content",
- "pwright-cap-evaluation",
- "pwright-cap-handle-evaluation",
- "pwright-cap-handle-lifecycle",
- "pwright-cap-history-navigation",
- "pwright-cap-keyboard",
- "pwright-cap-locator",
- "pwright-cap-locator-screenshot",
- "pwright-cap-mouse",
- "pwright-cap-navigation",
- "pwright-cap-network-events",
- "pwright-cap-page-creation",
- "pwright-cap-page-lifecycle",
- "pwright-cap-touchscreen",
- "pwright-cdp",
- "pwright-codec-content",
- "pwright-codec-context-creation",
- "pwright-codec-context-lifecycle",
- "pwright-codec-dom-content",
- "pwright-codec-evaluation",
- "pwright-codec-handle-evaluation",
- "pwright-codec-handle-lifecycle",
- "pwright-codec-locator",
- "pwright-codec-locator-screenshot",
- "pwright-codec-navigation",
- "pwright-codec-page-creation",
- "pwright-codec-page-lifecycle",
- "pwright-composition-chromium",
- "pwright-composition-chromium-file-input",
- "pwright-composition-chromium-handle-evaluation",
- "pwright-composition-chromium-handle-lifecycle",
- "pwright-composition-chromium-keyboard",
- "pwright-composition-chromium-launch",
- "pwright-composition-chromium-locator-evaluation",
- "pwright-composition-chromium-locator-resolution",
- "pwright-composition-chromium-mouse",
- "pwright-composition-chromium-touchscreen",
- "pwright-core",
- "pwright-fake",
- "pwright-file-input-fs",
- "pwright-file-input-model",
- "pwright-file-input-source",
- "pwright-file-input-tokio",
- "pwright-har-replay",
- "pwright-input-model",
- "pwright-network-model",
- "pwright-playwright-connect-headers",
- "pwright-plugin-chromium-frame-lifecycle",
- "pwright-plugin-chromium-frame-observer",
- "pwright-plugin-chromium-session-initialization",
- "pwright-provider-cdp",
- "pwright-provider-chromium",
- "pwright-runtime",
- "pwright-runtime-control",
- "pwright-runtime-tokio",
- "pwright-server-wire",
- "pwright-trace-playwright-v8",
- "pwright-transport",
- "regex",
- "reqwest",
- "serde",
- "serde_json",
- "thiserror",
- "tokio",
- "tokio-tungstenite",
- "tokio-util",
- "tracing",
- "tracing-subscriber",
- "url",
- "zeroize",
-]
-
-[[package]]
-name = "pwright-owned-process-startup"
-version = "0.1.0"
-dependencies = [
- "libc",
- "tokio",
-]
-
-[[package]]
-name = "pwright-persistent-context-preflight"
-version = "0.1.0"
-
-[[package]]
-name = "pwright-playwright-connect-headers"
-version = "0.1.0"
-dependencies = [
- "pwright-transport-ws",
-]
-
-[[package]]
-name = "pwright-playwright-server-browser-ops"
-version = "0.1.0"
-dependencies = [
- "pwright-playwright-server-client-core",
- "pwright-playwright-server-session",
- "pwright-transport-ws",
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "pwright-playwright-server-client-core"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "pwright-playwright-server-connect"
-version = "0.1.0"
-dependencies = [
- "futures-util",
- "pwright-playwright-server-client-core",
- "pwright-playwright-server-endpoint-discovery",
- "pwright-playwright-server-session",
- "pwright-transport-ws",
- "serde_json",
- "tokio",
- "tokio-tungstenite",
-]
-
-[[package]]
-name = "pwright-playwright-server-endpoint-discovery"
-version = "0.1.0"
-dependencies = [
- "pwright-transport-ws",
- "reqwest",
- "serde_json",
- "tokio",
- "url",
-]
-
-[[package]]
-name = "pwright-playwright-server-initialize"
-version = "0.1.0"
-dependencies = [
- "futures-util",
- "pwright-transport-ws",
- "serde",
- "serde_json",
- "tokio",
- "tokio-tungstenite",
-]
-
-[[package]]
-name = "pwright-playwright-server-page-events"
-version = "0.1.0"
-dependencies = [
- "pwright-playwright-server-client-core",
- "serde_json",
-]
-
-[[package]]
-name = "pwright-playwright-server-session"
-version = "0.1.0"
-dependencies = [
- "futures-util",
- "pwright-playwright-server-client-core",
- "pwright-playwright-server-page-events",
- "pwright-transport-ws",
- "serde_json",
- "tokio",
- "tokio-tungstenite",
-]
-
-[[package]]
-name = "pwright-plugin-chromium-frame-lifecycle"
-version = "0.1.0"
-dependencies = [
- "pwright-backend-cdp-navigation",
- "pwright-backend-cdp-topology",
- "pwright-cap-navigation",
- "pwright-cdp",
- "pwright-core",
- "pwright-plugin-chromium-frame-observer",
- "tokio",
-]
-
-[[package]]
-name = "pwright-plugin-chromium-frame-observer"
-version = "0.1.0"
-dependencies = [
- "pwright-backend-cdp-topology",
- "pwright-cdp",
- "pwright-core",
-]
-
-[[package]]
-name = "pwright-plugin-chromium-session-initialization"
-version = "0.1.0"
-dependencies = [
- "pwright-backend-cdp-topology",
- "pwright-core",
-]
-
-[[package]]
-name = "pwright-plugin-ordered-handle-delivery"
-version = "0.1.0"
-dependencies = [
- "pwright-browser-model",
- "pwright-cap-handle-evaluation",
- "pwright-cap-handle-lifecycle",
- "pwright-codec-control",
- "pwright-codec-handle-evaluation",
- "pwright-core",
- "pwright-runtime",
- "pwright-runtime-control",
- "pwright-server-handle-evaluation",
- "pwright-server-wire",
- "pwright-transport",
- "pwright-transport-memory",
- "tokio",
-]
-
-[[package]]
-name = "pwright-plugin-tracing-artifact"
-version = "0.1.0"
-dependencies = [
- "pwright-artifact-runtime",
- "pwright-artifact-service",
- "pwright-browser-model",
- "pwright-cap-artifact",
- "pwright-cap-tracing",
- "pwright-cap-tracing-artifact",
- "pwright-client",
- "pwright-client-tracing-artifact",
- "pwright-client-wire",
- "pwright-codec-control",
- "pwright-codec-tracing-artifact",
- "pwright-core",
- "pwright-runtime",
- "pwright-runtime-control",
- "pwright-server-tracing-artifact",
- "pwright-server-wire",
- "pwright-trace-format",
- "pwright-trace-model",
- "pwright-tracing-service",
- "pwright-transport",
- "pwright-transport-memory",
- "tokio",
-]
-
-[[package]]
-name = "pwright-plugin-tracing-navigation"
-version = "0.1.0"
-dependencies = [
- "pwright-backend-cdp",
- "pwright-browser-provider",
- "pwright-cap-navigation",
- "pwright-cap-tracing",
- "pwright-cdp",
- "pwright-core",
- "pwright-process-metrics",
- "pwright-provider-cdp",
- "pwright-trace-model",
- "pwright-tracing-service",
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "pwright-process-metrics"
-version = "0.1.0"
-dependencies = [
- "pwright-core",
-]
-
-[[package]]
-name = "pwright-provider-cdp"
-version = "0.1.0"
-dependencies = [
- "pwright-browser-provider",
- "pwright-cdp",
- "pwright-core",
- "serde_json",
- "tokio",
- "url",
-]
-
-[[package]]
-name = "pwright-provider-chromium"
-version = "0.1.0"
-dependencies = [
- "pwright-browser-provider",
- "pwright-cdp",
- "pwright-provider-cdp",
- "tokio",
-]
-
-[[package]]
-name = "pwright-python-addon"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "pwright-api-request",
- "pwright-api-request-auth-basic",
- "pwright-api-request-client-certificates",
- "pwright-api-request-connector-rustls",
- "pwright-api-request-cookie",
- "pwright-api-request-decompress",
- "pwright-api-request-transport",
- "pwright-browser-registry",
- "pwright-cap-navigation",
- "pwright-node-host",
- "pwright-owned-process-startup",
- "pwright-playwright-server-browser-ops",
- "pwright-playwright-server-connect",
- "pwright-playwright-server-endpoint-discovery",
- "pwright-playwright-server-initialize",
- "pwright-playwright-server-session",
- "pwright-transport-ws",
- "pyo3",
- "pyo3-async-runtimes",
- "serde_json",
- "tempfile",
- "tokio",
- "tokio-util",
- "tracing",
- "url",
-]
-
-[[package]]
-name = "pwright-runtime"
-version = "0.1.0"
-dependencies = [
- "pwright-core",
-]
-
-[[package]]
-name = "pwright-runtime-control"
-version = "0.1.0"
-dependencies = [
- "pwright-client",
- "pwright-client-control",
- "pwright-client-wire",
- "pwright-codec-control",
- "pwright-core",
- "pwright-runtime",
- "pwright-server-wire",
- "pwright-transport",
- "pwright-transport-stream",
- "pwright-transport-tokio",
- "tokio",
-]
-
-[[package]]
-name = "pwright-runtime-tokio"
-version = "0.1.0"
-dependencies = [
- "pwright-core",
- "pwright-runtime",
- "tokio",
-]
-
-[[package]]
-name = "pwright-schema-gen"
-version = "0.1.0"
-dependencies = [
- "pwright-codec-binary",
- "pwright-core",
- "serde",
- "serde_yaml",
-]
-
-[[package]]
-name = "pwright-screenshot-model"
-version = "0.1.0"
-dependencies = [
- "pwright-core",
-]
-
-[[package]]
-name = "pwright-selector-model"
-version = "0.1.0"
-
-[[package]]
-name = "pwright-server-artifact"
-version = "0.1.0"
-dependencies = [
- "pwright-browser-model",
- "pwright-cap-artifact",
- "pwright-codec-artifact",
- "pwright-core",
- "pwright-server-wire",
- "pwright-transport",
-]
-
-[[package]]
-name = "pwright-server-browser-events"
-version = "0.1.0"
-dependencies = [
- "pwright-cap-browser-events",
- "pwright-codec-browser-events",
- "pwright-codec-control",
- "pwright-core",
- "pwright-runtime",
- "pwright-runtime-control",
- "pwright-server-wire",
- "pwright-transport",
- "pwright-transport-memory",
- "tokio",
-]
-
-[[package]]
-name = "pwright-server-browser-lifecycle"
-version = "0.1.0"
-dependencies = [
- "pwright-cap-browser-lifecycle",
- "pwright-codec-browser-lifecycle",
- "pwright-server-wire",
- "pwright-transport",
-]
-
-[[package]]
-name = "pwright-server-content"
-version = "0.1.0"
-dependencies = [
- "pwright-cap-content",
- "pwright-codec-content",
- "pwright-server-wire",
- "pwright-transport",
-]
-
-[[package]]
-name = "pwright-server-context-creation"
-version = "0.1.0"
-dependencies = [
- "pwright-cap-context-creation",
- "pwright-codec-context-creation",
- "pwright-server-wire",
- "pwright-transport",
-]
-
-[[package]]
-name = "pwright-server-context-lifecycle"
-version = "0.1.0"
-dependencies = [
- "pwright-cap-context-lifecycle",
- "pwright-codec-context-lifecycle",
- "pwright-server-wire",
- "pwright-transport",
-]
-
-[[package]]
-name = "pwright-server-dom-content"
-version = "0.1.0"
-dependencies = [
- "pwright-browser-model",
- "pwright-cap-dom-content",
- "pwright-codec-dom-content",
- "pwright-core",
- "pwright-server-wire",
- "pwright-transport",
-]
-
-[[package]]
-name = "pwright-server-evaluation"
-version = "0.1.0"
-dependencies = [
- "pwright-browser-model",
- "pwright-cap-evaluation",
- "pwright-codec-evaluation",
- "pwright-core",
- "pwright-server-wire",
- "pwright-transport",
-]
-
-[[package]]
-name = "pwright-server-events"
-version = "0.1.0"
-dependencies = [
- "pwright-core",
- "pwright-server-wire",
- "pwright-transport",
-]
-
-[[package]]
-name = "pwright-server-handle-evaluation"
-version = "0.1.0"
-dependencies = [
- "pwright-browser-model",
- "pwright-cap-evaluation",
- "pwright-cap-handle-evaluation",
- "pwright-codec-handle-evaluation",
- "pwright-core",
- "pwright-server-wire",
- "pwright-transport",
-]
-
-[[package]]
-name = "pwright-server-handle-lifecycle"
-version = "0.1.0"
-dependencies = [
- "pwright-browser-model",
- "pwright-cap-handle-lifecycle",
- "pwright-codec-handle-lifecycle",
- "pwright-core",
- "pwright-server-wire",
- "pwright-transport",
-]
-
-[[package]]
-name = "pwright-server-keyboard"
-version = "0.1.0"
-dependencies = [
- "pwright-browser-model",
- "pwright-cap-keyboard",
- "pwright-codec-keyboard",
- "pwright-core",
- "pwright-server-wire",
- "pwright-transport",
- "tokio",
-]
-
-[[package]]
-name = "pwright-server-locator"
-version = "0.1.0"
-dependencies = [
- "pwright-browser-model",
- "pwright-cap-locator",
- "pwright-codec-locator",
- "pwright-core",
- "pwright-server-wire",
- "pwright-transport",
-]
-
-[[package]]
-name = "pwright-server-locator-screenshot"
-version = "0.1.0"
-dependencies = [
- "pwright-browser-model",
- "pwright-cap-locator-screenshot",
- "pwright-codec-locator-screenshot",
- "pwright-core",
- "pwright-server-wire",
- "pwright-transport",
-]
-
-[[package]]
-name = "pwright-server-mouse"
-version = "0.1.0"
-dependencies = [
- "pwright-browser-model",
- "pwright-cap-mouse",
- "pwright-codec-mouse",
- "pwright-core",
- "pwright-server-wire",
- "pwright-transport",
- "tokio",
-]
-
-[[package]]
-name = "pwright-server-navigation"
-version = "0.1.0"
-dependencies = [
- "pwright-browser-model",
- "pwright-cap-navigation",
- "pwright-codec-navigation",
- "pwright-core",
- "pwright-server-wire",
- "pwright-transport",
-]
-
-[[package]]
-name = "pwright-server-page-creation"
-version = "0.1.0"
-dependencies = [
- "pwright-cap-page-creation",
- "pwright-codec-page-creation",
- "pwright-server-wire",
- "pwright-transport",
-]
-
-[[package]]
-name = "pwright-server-page-lifecycle"
-version = "0.1.0"
-dependencies = [
- "pwright-cap-page-lifecycle",
- "pwright-codec-page-lifecycle",
- "pwright-server-wire",
- "pwright-transport",
-]
-
-[[package]]
-name = "pwright-server-tracing"
-version = "0.1.0"
-dependencies = [
- "pwright-browser-model",
- "pwright-cap-tracing",
- "pwright-codec-tracing",
- "pwright-core",
- "pwright-server-wire",
- "pwright-transport",
-]
-
-[[package]]
-name = "pwright-server-tracing-artifact"
-version = "0.1.0"
-dependencies = [
- "pwright-browser-model",
- "pwright-cap-artifact",
- "pwright-cap-tracing",
- "pwright-cap-tracing-artifact",
- "pwright-codec-tracing-artifact",
- "pwright-core",
- "pwright-server-wire",
- "pwright-transport",
-]
-
-[[package]]
-name = "pwright-server-wire"
-version = "0.1.0"
-dependencies = [
- "pwright-client",
- "pwright-client-wire",
- "pwright-codec-handshake",
- "pwright-connection-control",
- "pwright-core",
- "pwright-runtime",
- "pwright-transport",
- "pwright-transport-stream",
- "pwright-transport-tokio",
- "tokio",
-]
-
-[[package]]
-name = "pwright-tokio-tungstenite"
-version = "0.26.2-pwright.1"
-dependencies = [
- "futures-util",
- "log",
- "native-tls",
- "pwright-tungstenite",
- "tokio",
- "tokio-native-tls",
-]
-
-[[package]]
-name = "pwright-trace-format"
-version = "0.1.0"
-dependencies = [
- "pwright-core",
- "pwright-trace-model",
-]
-
-[[package]]
-name = "pwright-trace-model"
-version = "0.1.0"
-dependencies = [
- "pwright-core",
-]
-
-[[package]]
-name = "pwright-trace-playwright-v8"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "pwright-trace-playwright-v8-context"
-version = "0.1.0"
-dependencies = [
- "pwright-core",
- "pwright-trace-playwright-v8",
- "serde_json",
-]
-
-[[package]]
-name = "pwright-trace-sink-file"
-version = "0.1.0"
-dependencies = [
- "pwright-cap-tracing",
- "pwright-core",
- "pwright-trace-format",
- "pwright-trace-model",
- "pwright-tracing-service",
- "tokio",
-]
-
-[[package]]
-name = "pwright-trace-sink-pull"
-version = "0.1.0"
-dependencies = [
- "pwright-cap-tracing",
- "pwright-core",
- "pwright-trace-model",
- "pwright-tracing-service",
- "tokio",
-]
-
-[[package]]
-name = "pwright-tracing-service"
-version = "0.1.0"
-dependencies = [
- "pwright-browser-model",
- "pwright-cap-tracing",
- "pwright-client",
- "pwright-client-tracing",
- "pwright-client-wire",
- "pwright-codec-tracing",
- "pwright-core",
- "pwright-server-tracing",
- "pwright-server-wire",
- "pwright-trace-model",
- "pwright-transport",
- "pwright-transport-memory",
- "tokio",
-]
-
-[[package]]
-name = "pwright-transport"
-version = "0.1.0"
-dependencies = [
- "pwright-core",
-]
-
-[[package]]
-name = "pwright-transport-memory"
-version = "0.1.0"
-dependencies = [
- "pwright-client-wire",
- "pwright-core",
- "pwright-server-wire",
- "pwright-transport",
- "tokio",
-]
-
-[[package]]
-name = "pwright-transport-stream"
-version = "0.1.0"
-dependencies = [
- "pwright-core",
- "pwright-transport",
-]
-
-[[package]]
-name = "pwright-transport-tokio"
-version = "0.1.0"
-dependencies = [
- "pwright-core",
- "pwright-transport",
- "pwright-transport-stream",
- "tokio",
-]
-
-[[package]]
-name = "pwright-transport-ws"
-version = "0.1.0"
-dependencies = [
- "futures-util",
- "log",
- "native-tls",
- "openssl",
- "pwright-tokio-tungstenite",
- "rcgen",
- "tokio",
- "tokio-native-tls",
- "url",
-]
-
-[[package]]
-name = "pwright-tungstenite"
-version = "0.26.2-pwright.1"
-dependencies = [
- "bytes",
- "data-encoding",
- "http",
- "httparse",
- "log",
- "native-tls",
- "rand 0.9.5",
- "sha1",
- "thiserror",
- "utf-8",
 ]
 
 [[package]]

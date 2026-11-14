@@ -167,7 +167,7 @@ def check_harness() -> None:
         sealed(ROOT / relative, expected)
     sealed(capture.SNAPSHOT_MANIFEST, SNAPSHOT_MANIFEST_SHA256)
     sealed(
-        capture.SOURCE_PACKAGE / "native" / capture.PROFILE / "pwright.node",
+        capture.SOURCE_PACKAGE / "native" / capture.PROFILE / "playwright_rust.node",
         capture.ARTIFACT_SHA256,
     )
     source = (capture.UPSTREAM / capture.SOURCE).read_text()
@@ -331,7 +331,7 @@ def transform_lines(
                     lane != "candidate"
                     or (
                         isinstance(record["error"], str)
-                        and "browserType.connect is not supported by the current Pwright native profile"
+                        and "browserType.connect is not supported by the current Playwright Rust native profile"
                         in record["error"]
                     )
                 ),

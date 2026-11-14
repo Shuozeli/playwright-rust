@@ -1,4 +1,4 @@
-use pwright::chromium_network_events::ChromiumNetworkEventDeliveryProfile;
+use playwright_rust::chromium_network_events::ChromiumNetworkEventDeliveryProfile;
 
 fn main() {
     println!(

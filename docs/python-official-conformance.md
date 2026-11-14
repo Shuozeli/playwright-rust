@@ -1,4 +1,4 @@
-<!-- agent-updated: 2026-10-21T03:39:01Z -->
+<!-- agent-updated: 2026-11-14T05:28:56Z -->
 
 # Official Playwright Python conformance
 
@@ -39,7 +39,7 @@ join currently selects `request-history`, whereas the open design target is
 an independently bounded final-response join without that requirement; its
 terminal, redirect, and close behavior is not yet official-test proved. These
 diagnostics do not alter the v10 strict ledger or establish Python parity.
-A separate [four-case Chromium security manifest](../packages/pwright-python/tests/official/response-security-chromium-sync-async-v1-manifest.json)
+A separate [four-case Chromium security manifest](../packages/playwright-rust-python/tests/official/response-security-chromium-sync-async-v1-manifest.json)
 pins the two unchanged sync and two unchanged async official IDs, both
 source files, fixture code, and HTTPS certificate assets. Its source/inventory
 checker passes 3/3; no browser outcome is yet credited to this focused
@@ -76,7 +76,7 @@ each collect all 6,501 `tests/` IDs, and both provenance sidecars verify.
 The collection-only JUnit files contain zero executed cases. The isolated
 candidate collection environment includes upstream Playwright 1.58.0
 distribution metadata solely for the pinned profile check; provenance proves
-the loaded `playwright` module is the candidate shim and `pwright` is the
+the loaded `playwright` module is the candidate shim and `playwright-rust` is the
 installed wheel. The Oracle loaded its separate official package. These
 collections do not change any strict outcome row; the 25 TodoMVC examples
 are a separate Python 3.10 profile and were not recollected on this wheel.
@@ -232,7 +232,7 @@ Only six rows per lane changed. Because the canonical row schema does not
 encode the fixture variant, read these `passed` rows with the receipt's
 fixture-only scope and `publicApiParityEvidence=false`, not as full
 BrowserServer or remote Browser support; see the
-[strict evidence note](knowledge/pwright-python-connect-refused-strict.md).
+[strict evidence note](knowledge/playwright-rust-python-connect-refused-strict.md).
 
 The preceding immutable browser-free paired successor is
 `.work/official-conformance/outcomes/python-connect-close-post-fix-strict-paired-v2/`.
@@ -299,7 +299,7 @@ for a metadata-coherent release artifact.
 The opt-in owned-process-startup Rust leaf and selected Python addon pass
 targeted release Clippy with `-D warnings`; 40 focused installed-wheel Python
 tests and the full Python addon dependency check pass. The default addon
-excludes the new leaf, while selecting it adds exactly one Pwright package.
+excludes the new leaf, while selecting it adds exactly one Playwright Rust package.
 At an earlier CDPSession checkpoint, the full feature-by-feature dependency
 script was interrupted under memory pressure; that historical result is not
 the current dependency check.
@@ -601,7 +601,7 @@ installed 100-capability wheel, the candidate passes **7/8 async** and
 **6/6**. The same `test_should_show_exception_after_fulfill` case fails in
 both candidate APIs: despite its name, the callback calls `route.continue_()`
 and then raises; the official test expects the next `page.goto` to surface
-that handler exception, but Pwright does not. This is a
+that handler exception, but Playwright Rust does not. This is a
 paired candidate-only behavior discrepancy, not a fixture skip.
 
 The candidate async JUnit/provenance SHA-256 are
@@ -774,7 +774,7 @@ Page and rechecks overlays before actions and during action retries; callbacks
 may take zero or one Locator argument, have optional invocation limits, and
 normally require the matching overlay to become hidden before the action
 continues. Removal compares the original frame/selector identity. The current
-Pwright `Locator.click`/hover retry and visibility-assertion loops are native,
+Playwright Rust `Locator.click`/hover retry and visibility-assertion loops are native,
 below Python, so a one-time Python precheck would not handle overlays raised
 mid-action. An opt-in implementation needs a native action checkpoint with
 deadline/close cancellation and nonblocking Python callback dispatch, plus
@@ -1034,7 +1034,7 @@ closure). It targets `cp39-abi3`, exports ABI **108**, and includes the
 Homebrew OpenSSL dylibs used during this local build.
 
 The frozen wheel is
-`.work/official-conformance/builds/python-select-option-20261011.GVCufI/pinned-full-wheels/shuozeli_pwright-0.1.0-cp39-abi3-macosx_11_0_arm64.whl`
+`.work/official-conformance/builds/python-select-option-20261011.GVCufI/pinned-full-wheels/shuozeli_playwright-rust-0.1.0-cp39-abi3-macosx_11_0_arm64.whl`
 (SHA-256 `1a536d38e585ce73d8ab9c313bbc7da41f60dfb5c33485ced56d16c32790b533`;
 packaged `_native.abi3.so` SHA-256
 `256a102ccf8374b8879e597dea164bcd50a75c27aaf9fe2e339672a9a6ab2681`).
@@ -1055,7 +1055,7 @@ race, so one same-select handle test must not be generalized to full
 ## Complete async Page.select_option Chromium file (2026-10-11)
 
 The new manifest
-`packages/pwright-python/tests/official/async-page-select-option-chromium-v1-manifest.json`
+`packages/playwright-rust-python/tests/official/async-page-select-option-chromium-v1-manifest.json`
 (SHA-256 `ab367fb75f37224180b1f31e9885cf56c71b3b4e12b46087f24ad6170d70ecc0`)
 pins all 24 public Chromium cases in the unchanged upstream
 `tests/async/test_page_select_option.py`. Candidate and oracle both collected
@@ -1081,7 +1081,7 @@ pass credit.
 
 The corresponding unchanged official sync file has **23** Chromium cases
 (the async-only null-item case is absent). Its separate source-pinned manifest
-is `packages/pwright-python/tests/official/sync-page-select-option-chromium-v1-manifest.json`
+is `packages/playwright-rust-python/tests/official/sync-page-select-option-chromium-v1-manifest.json`
 (SHA-256 `6cb985f0b8c4d74df0368f1b6cbe0e21b660f2b25882edf56d3191ecc1261026`).
 Both candidate and oracle collected exactly 23 IDs. No sync test body has run;
 all 23 remain `not-run` in the strict ledgers while the dedicated Chrome has
@@ -1128,7 +1128,7 @@ The completed run explicitly selected `--browser chromium` and recorded all
 ## Earlier paired async Page.evaluate shard and browserless codec repair (2026-10-11)
 
 The pinned, unchanged 36-case Chromium selection in
-`packages/pwright-python/tests/official/async-page-evaluate-chromium-v1-manifest.json`
+`packages/playwright-rust-python/tests/official/async-page-evaluate-chromium-v1-manifest.json`
 (SHA-256 `921519847572b45ed89160c88dca6f5f0bc14f6d5e6e325872fee81e5ff75a91`)
 ran one case per process with a 30-second deadline. The ABI108 candidate
 passed 26/36 and failed ten; the independent official oracle passed 36/36.
@@ -1324,7 +1324,7 @@ this diagnostic does not replace earlier oracle pass evidence.
 
 An isolated **pre-detachment-repair** full-feature wheel plus opt-in
 `element-handle-click` is frozen at
-`.work/official-conformance/builds/python-retained-click-source-20261010.ra00oP/wheels/shuozeli_pwright-0.1.0-cp39-abi3-macosx_11_0_arm64.whl`
+`.work/official-conformance/builds/python-retained-click-source-20261010.ra00oP/wheels/shuozeli_playwright-rust-0.1.0-cp39-abi3-macosx_11_0_arm64.whl`
 (SHA-256 `79f4e2eaec461dd4dd8f492d0ad9fc6c472825fbb989b6938806cb122e6f67c4`).
 Its normalized payload reproduces on a second build. Isolated Python 3.9.6
 and 3.12.14 installs each load ABI 108, report 97 selected features and the
@@ -1341,7 +1341,7 @@ actually closed Page/Frame and preserves the official
 Backend feature-on release tests pass 132/132 and focused host tests 4/4;
 the frozen wheel above predates this source repair. A separate **post-repair**
 wheel at
-`.work/official-conformance/builds/python-retained-click-detachedfix-20261010.Zw4S2S/wheels/shuozeli_pwright-0.1.0-cp39-abi3-macosx_11_0_arm64.whl`
+`.work/official-conformance/builds/python-retained-click-detachedfix-20261010.Zw4S2S/wheels/shuozeli_playwright-rust-0.1.0-cp39-abi3-macosx_11_0_arm64.whl`
 (SHA-256 `3a820d641bf4ffd41b1fb9386f6203a639207a38b3ee9ac34a83f062c0e86258`)
 has source-frozen normalized-payload reproducibility and installed Python
 3.9.6/3.12.14 gates: both report ABI 108, 97 features including the opt-in
@@ -1382,7 +1382,7 @@ The unchanged pinned official
 `tests/async/test_click.py::test_click_offscreen_buttons[chromium]` assertion
 passed **1/1** in both candidate and independent oracle lanes on the same
 frozen ABI108 v2 wheel and dedicated Chrome. The explicit
-[`offscreen_favicon_v1` manifest](../packages/pwright-python/tests/official/fixture_variants/offscreen_favicon_v1/manifest.json)
+[`offscreen_favicon_v1` manifest](../packages/playwright-rust-python/tests/official/fixture_variants/offscreen_favicon_v1/manifest.json)
 (SHA-256 `2c199fffa98bf2960fdb07c2e6216213343598ec9b9692d27132505b6405bc0c`)
 pins this one ID from the 6,526-case upstream inventory. A case-scoped plugin
 serves a valid ICO at `/favicon.ico` and confirms the route was used; it does
@@ -1494,7 +1494,7 @@ marker only after the route was used; a separate companion receipt binds the
 plugin, icon, manifest, fixed runner, base schema-5 sidecar and result hashes. The
 [capture/verify script](../scripts/playwright_python_official_favicon_v1.py)
 has SHA-256 `68b2eaa6df0f4340dca53ef962c67f410ad7905f5c78833f195ba20902b384a1`;
-the [plugin](../packages/pwright-python/tests/official/fixture_variants/offscreen_favicon_v1/pwright_official_favicon_v1.py)
+the [plugin](../packages/playwright-rust-python/tests/official/fixture_variants/offscreen_favicon_v1/playwright_rust_official_favicon_v1.py)
 has SHA-256 `eeda065fc24ba6a98e3b4e388b1c0af811f58103187e352ea6c02b246f71fff6`.
 Eight offline tests, Ruff and the pinned upstream source checker pass; the
 historical candidate/oracle sidecars still verify. An earlier preflight found
@@ -1701,7 +1701,7 @@ exclusions or applicability decisions changed.
 ## Paired ABI107 v6 eight-case official Python click shard (2026-10-10)
 
 The exact eight-case manifest
-`packages/pwright-python/tests/official/async-click-eight-chromium-manifest.json`
+`packages/playwright-rust-python/tests/official/async-click-eight-chromium-manifest.json`
 (SHA-256 `bc6c6c05c77e087d1792d9571f0afa2ab953a6069a0e3df205b83526969f4a8d`)
 is a bounded subset of the corrected 70-case click manifest; the same clean
 v1.58.0 source and fixture hashes are pinned. The source checker passed.
@@ -1772,7 +1772,7 @@ separately verified eight-case strict-ledger successor above.
 ## Paired ABI107 v6 official Chromium browser results (2026-10-10)
 
 The isolated v6 wheel at
-`.work/official-conformance/builds/python-context-strict-v6-full.SqYkNL/wheels/shuozeli_pwright-0.1.0-cp39-abi3-macosx_11_0_arm64.whl`
+`.work/official-conformance/builds/python-context-strict-v6-full.SqYkNL/wheels/shuozeli_playwright-rust-0.1.0-cp39-abi3-macosx_11_0_arm64.whl`
 (SHA-256 `bf0edae04560a7945ea08164a86552d924eac75a12d03a91531241765d6ebda2`)
 retains ABI 107 and the prior 96 selected features plus only the opt-in
 `context-strict-selectors` feature, for 97 actual selected features. Its
@@ -1825,7 +1825,7 @@ callback failure used this ordering. It needs a bounded, exact-session
 retry path and an official browser regression before the fix is credited.
 
 The new exact two-case manifest
-`packages/pwright-python/tests/official/browsercontext-strict-duplicate-chromium-manifest.json`
+`packages/playwright-rust-python/tests/official/browsercontext-strict-duplicate-chromium-manifest.json`
 has SHA-256 `7b011a5db7d7af5151c30fd4bcc6c77dca2370034b9f0405947a19a27f22d049`.
 Its separate candidate and oracle collect-only reports each identify exactly
 two but earned zero pass credit. `Frame.focus`, strict Context selectors, and
@@ -1876,7 +1876,7 @@ source-bound; no assertions were changed. Reports are under
 | Basic Context exposed function, one case | 1/1 | 1/1 | `f717f179e63b6db40b91afc9d52826db08c2aa6202bf13e0b8026077f1c7a687` / `3fea6fcc3e6f2a4b04a1b5ad97709432d51595b2f69ccb8c92d34df9e79322f1` | `1a002fa09fbeb3f98f108e1558a4d0e28f68c8fb8d8fc549a3eb716fbb5024df` / `f9027df30cd2e0db2340adc501bf512a52b5f6ec5379d8714b77a8115c5b3556` |
 
 The one-case basic binding manifest is
-`packages/pwright-python/tests/official/browsercontext-expose-function-basic-manifest.json`
+`packages/playwright-rust-python/tests/official/browsercontext-expose-function-basic-manifest.json`
 (SHA-256 `5e710318670b098a4848cace5f8e084dfe0fb15e09f7a0e7d3af8135889b4d15`).
 Its success demonstrates that the prior interrupted v4 90-second timeout is
 not deterministic in this v5 attempt; its phase and root cause remain unknown.
@@ -1933,7 +1933,7 @@ non-applicable; the latest candidate still has 5,197 applicable rows not run.
 ## Prepared complete Python async click shard (collection only, 2026-10-10)
 
 The canonical corrected selection,
-`packages/pwright-python/tests/official/async-click-chromium-v2-manifest.json`
+`packages/playwright-rust-python/tests/official/async-click-chromium-v2-manifest.json`
 (SHA-256 `e3f67855d66abb186fed974dc9b7e614e498acfc58741a557b5146aea373b02c`),
 pins the clean upstream v1.58.0 `tests/async/test_click.py` source (SHA-256
 `ea614c3891174eda1f74964c8c1d4ba84b214b74e03fa194ad878636938338e7`),
@@ -1966,14 +1966,14 @@ No browser executed, so neither strict ledger changes from this preparation.
 ## ABI107 v5 init-script wheel: browserless release checkpoint (2026-10-10)
 
 The new isolated repaired wheel is
-`.work/official-conformance/builds/python-init-scripts-v5.PeiLyY/wheels/shuozeli_pwright-0.1.0-cp39-abi3-macosx_11_0_arm64.whl`
+`.work/official-conformance/builds/python-init-scripts-v5.PeiLyY/wheels/shuozeli_playwright-rust-0.1.0-cp39-abi3-macosx_11_0_arm64.whl`
 (SHA-256 `0229c917a9745f9161eb71f7171706788fa000d499660829effcb7730585c510`),
 with native payload SHA-256
 `5c580c78a239c352d59ad6abcd4a2335fef9bd9b4a`.
 It retains ABI 107 and the v4 96-feature opt-in profile while adding the
 new-session inherited init-script `runImmediately: true` source repair.
 A second release wheel at
-`.work/official-conformance/builds/python-init-scripts-v5.PeiLyY/repro-wheels/shuozeli_pwright-0.1.0-cp39-abi3-macosx_11_0_arm64.whl`
+`.work/official-conformance/builds/python-init-scripts-v5.PeiLyY/repro-wheels/shuozeli_playwright-rust-0.1.0-cp39-abi3-macosx_11_0_arm64.whl`
 (SHA-256 `67f039c9e049a80d102b8915268bd35600b5dbc148b002b1a57b9b41a3057068`)
 has an equal normalized payload; only CycloneDX build identity/timestamp
 differs. Both carry the same native hash, and the packaged Python source
@@ -2046,7 +2046,7 @@ browser rerun has occurred, so the failed strict row remains failed.
 ## ABI107 v4 topology replay repair and paired official browser cases (2026-10-10)
 
 The earlier v4 `cp39-abi3` wheel is
-`.work/official-conformance/builds/python-context-bindings-media-final-v4.3aZRMy/wheels/shuozeli_pwright-0.1.0-cp39-abi3-macosx_11_0_arm64.whl`
+`.work/official-conformance/builds/python-context-bindings-media-final-v4.3aZRMy/wheels/shuozeli_playwright-rust-0.1.0-cp39-abi3-macosx_11_0_arm64.whl`
 (SHA-256 `7dc721ea74d0b1fc277634738fe7b46f1cf738f69aa44451f8f81da8c161d8bd`,
 installed native library SHA-256
 `5fba690beadab487ce3167bb8bcd6c95ef379c50f140a80ceb27348cc5a55ddd`).
@@ -2071,7 +2071,7 @@ basic official navigation case and a pinned Context forced-colors case at
 `context.new_page()`; native teardown reported `Page binding session
 initialized twice`. The forced-colors oracle passed its unchanged case 1/1.
 The fixed one-case selection is
-`packages/pwright-python/tests/official/context-forced-colors-chromium-manifest.json`
+`packages/playwright-rust-python/tests/official/context-forced-colors-chromium-manifest.json`
 (SHA-256 `113f829c578cd49fa503aa16b31cfcc3b3483097978cb9c0862e9ce9b756c001`).
 The v3 candidate/oracle report SHA-256 values are
 `c3c055c584cd416929019fd8ff4ba3c460d6f0a7fabbe7c4ce395ca88bd2a114` /
@@ -2106,7 +2106,7 @@ digest `31195102f6404a92903d19f35df0b73223f7e078d082fc7e419e0ae99533a090`.
 
 After the dedicated CDP service recovered externally, the unchanged pinned
 seven-case Chromium `BrowserContext.clear_cookies` manifest
-(`packages/pwright-python/tests/official/browsercontext-clear-cookies-manifest.json`,
+(`packages/playwright-rust-python/tests/official/browsercontext-clear-cookies-manifest.json`,
 SHA-256 `d83292f138c49e3a0c2734dc27e0a3f0ef152dc39b55d6267327688b0bfaed4e`)
 passed **7/7 in both the installed v4 candidate and independent oracle**.
 Candidate JUnit/provenance SHA-256 values are
@@ -2130,7 +2130,7 @@ candidate-pass/oracle-not-run gap is now 280 rows. This is a seven-case paired
 selection, not full-corpus parity.
 
 The bounded Chromium focus selection was pinned in
-`packages/pwright-python/tests/official/emulation-focus-chromium-manifest.json`
+`packages/playwright-rust-python/tests/official/emulation-focus-chromium-manifest.json`
 (SHA-256 `c6e1449fbbfc55bfc6418d4cb51ee1b6e7bfeb04e123a9d173f72ea6cda708c3`).
 It pins the unchanged upstream test file and fixture chain and selects all
 seven public-API cases in `tests/async/test_emulation_focus.py`; each was
@@ -2177,7 +2177,7 @@ event remains a hypothesis, not a confirmed fix.
 
 For a later safe-window browser check, the unchanged failing official
 Chromium case now has its own manifest,
-`packages/pwright-python/tests/official/browsercontext-expose-function-init-script-manifest.json`
+`packages/playwright-rust-python/tests/official/browsercontext-expose-function-init-script-manifest.json`
 (SHA-256 `fdaecf074e6f043415fe74a93c4ae6f541b76102840aa280fc65c67600932f15`).
 It is the exact case from the pinned 39-case Context selection, with the
 same upstream test/fixture hashes. Candidate-v4 and independent-oracle
@@ -2206,7 +2206,7 @@ oracle source-bound collections remain those recorded below.
 ## Archived ABI107 v3 wheel and complete browserless collection (2026-10-10)
 
 The v3 diagnostic `cp39-abi3` wheel is
-`.work/official-conformance/builds/python-context-bindings-media-final-v3.n1jD84/wheels/shuozeli_pwright-0.1.0-cp39-abi3-macosx_11_0_arm64.whl`
+`.work/official-conformance/builds/python-context-bindings-media-final-v3.n1jD84/wheels/shuozeli_playwright-rust-0.1.0-cp39-abi3-macosx_11_0_arm64.whl`
 (SHA-256 `3efd9af5d27f4e776c5ccea55edfbbb3757cf83136eadd51935515b044dc37f1`).
 It selects the opt-in Page/Context bindings and media/forced-colors features,
 exports ABI107, and has the same normalized payload as a second release
@@ -2249,7 +2249,7 @@ byte/count budget, not browser-level progress or a settlement fix.
 ## ABI110 BrowserContext.request oracle catch-up (2026-10-10)
 
 The existing pinned v1.58.0 exact-source
-`packages/pwright-python/tests/official/fetch-browser-context-manifest.json`
+`packages/playwright-rust-python/tests/official/fetch-browser-context-manifest.json`
 (SHA-256 `94067ae8c5817c7c21e7e18186065cb34501a56938fb302eee6b721983958f86`)
 selects unchanged async and sync `BrowserContext.request` tests. The latest
 candidate ledger already recorded 51 async and 47 sync Chromium passes from
@@ -2321,7 +2321,7 @@ Full-corpus execution and final frozen-build parity remain open.
 The outcome-independent selector is every oracle-`not-run` Chromium row in
 the pinned `tests/async/test_browsercontext.py` file: 39 IDs, including all
 25 candidate-`not-run` Chromium rows. The new
-`packages/pwright-python/tests/official/browsercontext-full-gap-chromium-manifest.json`
+`packages/playwright-rust-python/tests/official/browsercontext-full-gap-chromium-manifest.json`
 (SHA-256 `f78304a22030dad32462220b455c6b77168a7ee96272d337b0e1f7e49748c3f7`)
 matches that ledger-derived ID list exactly and pins the unchanged test,
 fixture, server and helper source hashes. The source checker passed, and the
@@ -2472,7 +2472,7 @@ accepting the Python keywords alone would not establish browser parity.
 The current source was built in release mode with the new opt-in
 `locator-click-modifiers` native method and thin async/sync `Frame.add_script_tag`
 facades. The portable repaired wheel is
-`.work/official-conformance/builds/python-context-gap-click-frame-v1.pO5u1c/repaired.X2v9sv/shuozeli_pwright-0.1.0-cp39-abi3-macosx_11_0_arm64.whl`
+`.work/official-conformance/builds/python-context-gap-click-frame-v1.pO5u1c/repaired.X2v9sv/shuozeli_playwright-rust-0.1.0-cp39-abi3-macosx_11_0_arm64.whl`
 (SHA-256 `ca97ca7b2387f69155170ad5044c264e7039eb8df934153b1083505883c977ae`).
 It loads from a new isolated environment, advertises the modifier capability,
 and passes the complete 351/351 Python unit suite. A second portable build
@@ -2500,7 +2500,7 @@ Its native artifact SHA-256 is
 `9b89957193a8a1c0aef2075eb25698b60e62a7dd61f57359cbc8e417fc6bb4ff`.
 The sidecar verifies against the pinned upstream and capture environment;
 all 39 aggregate and isolated results are accounted for. The task-owned tab
-was closed after the run, leaving its Pwright tab list empty.
+was closed after the run, leaving its Playwright Rust tab list empty.
 
 At this historical current-wheel checkpoint, seven of the 13 earlier
 oracle-pass/candidate-fail cases passed: both
@@ -2540,7 +2540,7 @@ before resume; explicit Page media overrides remain separate bounded state.
 The opt-in `context-bindings` Rust registration/dispatch path and thin Python
 async/sync facade pass 19 focused Rust release tests, seven Python units and a
 combined addon release check with forced colors; its dependency closure adds
-no new Pwright package beyond `page-bindings`. Neither feature was in that
+no new Playwright Rust package beyond `page-bindings`. Neither feature was in that
 historical portable wheel; both are in v4, with forced colors now passing and
 binding discrepancies exposed by the interrupted 39-case run above. Binding
 `runImmediately` installation can leave
@@ -2551,7 +2551,7 @@ limits is hidden by the local unit results.
 
 The sixth remaining case, `test_strict_selectors_on_context`, is design-only
 so far. Upstream uses a tri-state explicit strict override falling back to
-Context policy. The current Pwright facade rejects the Context option, and
+Context policy. The current Playwright Rust facade rejects the Context option, and
 the legacy `Page.query_selector`/`Page.text_content` behavior is not uniformly
 compatible, so admitting the keyword alone would not fix the case. This
 requires a separate opt-in Rust Context selector-policy slice and tests for
@@ -2600,7 +2600,7 @@ candidate pass was inferred from this oracle-only run.
 ### Independent complete Page-route selection and public17 promotion
 
 The existing exact-source
-`packages/pwright-python/tests/official/page-route-existing-coverage-manifest.json`
+`packages/playwright-rust-python/tests/official/page-route-existing-coverage-manifest.json`
 (SHA-256 `da5aacd59a19ee1852ffe7d7c0918a32cd8115895ce770ee409523297f8cdece`)
 pins 18 unchanged async Chromium cases from `tests/async/test_page_route.py`.
 The independent official package ran all **18/18 passed**, in isolated
@@ -2766,7 +2766,7 @@ evidence from the earlier source-bound paired execution.
 ## ABI110 Chromium BrowserContext multipage promotion (2026-10-10)
 
 The third exact-source manifest
-`packages/pwright-python/tests/official/browsercontext-lifecycle-multipage-chromium-manifest.json`
+`packages/playwright-rust-python/tests/official/browsercontext-lifecycle-multipage-chromium-manifest.json`
 (SHA-256 `281319eac629f5c879edd11184c66296a628407816a949b007c7ad54ebe28a67`)
 pins four more unchanged async Chromium public-API cases: Page lifecycle
 event ordering, cookie/localStorage isolation across two Contexts, initialized
@@ -2804,7 +2804,7 @@ not complete BrowserContext or full-corpus compatibility.
 ## ABI110 Chromium BrowserContext lifecycle follow-up (2026-10-10)
 
 The separate exact-source
-`packages/pwright-python/tests/official/browsercontext-lifecycle-followup-chromium-manifest.json`
+`packages/playwright-rust-python/tests/official/browsercontext-lifecycle-followup-chromium-manifest.json`
 (SHA-256 `8483d7c56eff097a77c02262670551c0a1ae93911b02e40941030e686c3a5141`)
 pins four additional unchanged async Chromium cases: closing a Context aborts
 its pending page-event waiter; a new Page belongs to its new Context; default
@@ -2843,7 +2843,7 @@ the multipage successor above; cross-engine compatibility remains unproven.
 
 ## ABI110 Chromium BrowserContext lifecycle promotion (2026-10-10)
 
-`packages/pwright-python/tests/official/browsercontext-lifecycle-chromium-manifest.json`
+`packages/playwright-rust-python/tests/official/browsercontext-lifecycle-chromium-manifest.json`
 (SHA-256 `ad583439cbfebb64f51efa915696dec53ed4fa0b17e70127b869bc4de35140a7`)
 pins the unchanged v1.58.0 `tests/async/test_browsercontext.py` source plus
 its async/top-level fixture and server sources. It selects three public API
@@ -3000,7 +3000,7 @@ archived-package verification.
 
 ## Four shared fixture-host failures: separate evidence check (2026-10-10)
 
-`packages/pwright-python/tests/official/python-fixture-environment-blockers.json`
+`packages/playwright-rust-python/tests/official/python-fixture-environment-blockers.json`
 (SHA-256 `7d1bf9f68d6d721a40d0fc41d363db9dd96485fe0ce346dbf94b8799086d0c9f`)
 pins the four current public-API failures: two async add-cookie tests and the
 async/sync IndexedDB storage-state tests. The read-only
@@ -3056,7 +3056,7 @@ browser launch, broader process handling, or full-suite compatibility.
 
 The unchanged pinned v1.58.0 async
 `tests/async/test_proxy.py::test_should_throw_for_bad_server_value` now passes
-3/3 for both the official oracle and Pwright candidate in `owned` mode across
+3/3 for both the official oracle and Playwright Rust candidate in `owned` mode across
 Chromium, Firefox and WebKit. Its exact-source browserless manifest has SHA-256
 `7e748448269ecbc69e9c82cf9cbf3d9b1f5c5f514e780e15194e3f495a56c43a`.
 The `browser_factory` fixture is lazy; the official Node protocol checks the
@@ -3174,14 +3174,14 @@ A separate exact-source two-case manifest now selects pinned official async
 and sync `test_browser_close_should_be_callable_twice` (SHA-256
 `b6f8c788e55b88c0aec8e8ae02ca901e51973f388993f6af6650031dff2ff854`).
 With `--browser=chromium --browser-channel=chrome`, the candidate `owned` lane
-launched installed Chrome through Pwright using temporary profiles, then
+launched installed Chrome through Playwright Rust using temporary profiles, then
 passed both unchanged official close-twice tests. Its schema-4 sidecar
 verified; JUnit/provenance SHA-256 values are
 `80a1d7293dfc9a65a7c4dafbd51cca0e75593639566d3e4ef85c856501c1a089` /
 `e1021c7fdece10d9162451684bfca72dc4c9ff08350948d1fe9d7ff17e9a0019`.
 No matching temporary-profile Chrome process remained in the post-test
 process snapshot. This is candidate-only diagnostic evidence: the genuine
-official oracle launch conflicts with the standing Pwright-only browser
+official oracle launch conflicts with the standing Playwright Rust-only browser
 control rule, so no oracle was run and neither row was promoted to the strict
 ledger. Source/JUnit provenance also does not yet bind the observed process
 identity and profile path, so child-tree cleanup is not proven.
@@ -3220,7 +3220,7 @@ is archived at
 with SHA-256
 `77b485d083121a08f0dea4fe1b9183c65ebda2b9a7e4ff3aa74f4d8726718c3a`.
 At that packaging checkpoint the editable/source installation was unchanged.
-Subsequently, its exact ABI109 `python/pwright` tree, shim/runtime and four
+Subsequently, its exact ABI109 `python/playwright_rust` tree, shim/runtime and four
 capture-tooling files were archived at
 `.work/official-conformance/python-abi109-exact-archive.yO61kG/` and the
 seven prior candidate sidecars bound to that package digest reverified
@@ -3231,11 +3231,11 @@ and its two bundled OpenSSL dylibs were then installed into the editable
 source tree. Its import path and ABI107 were checked and 308/308 browserless
 units passed. The existing official strict ledger has not advanced. For new
 captures, provenance schema 5 binds every adjacent
-`shuozeli_pwright.dylibs` file by absolute path and SHA-256 under
-`pwrightRuntimeLibraries`; the oracle records an empty list. Verification
+`shuozeli_playwright_rust.dylibs` file by absolute path and SHA-256 under
+`playwright-rustRuntimeLibraries`; the oracle records an empty list. Verification
 checks exact directory membership and file content. A `--package-root`
 archive must place the matching dylib directory beside the archived
-`python/pwright`. Focused provenance/verifier tests pass 57/57. The pinned
+`python/playwright_rust`. Focused provenance/verifier tests pass 57/57. The pinned
 browserless `test_should_work_with_glob` was rerun in candidate-owned ABI107
 for Chromium, Firefox and WebKit: 3/3 passed, and all three schema-5 sidecars
 verify against both current source and the exact archive at
@@ -3283,7 +3283,7 @@ Firefox skip.
 
 A new, separately pinned browserless manifest now certifies that same two-key
 selection without changing the historical manifest or its evidence:
-`packages/pwright-python/tests/official/persistent-context-page-argument-browserless-manifest.json`
+`packages/playwright-rust-python/tests/official/persistent-context-page-argument-browserless-manifest.json`
 (SHA-256 `3e59ca6e06feea4101e87840c5bfe1f73e72f2d326fa9a8d738198245e66b869`).
 The runner permits only one async WebKit or Firefox `owned` case, checks exact
 test AST/fixture and installed package hashes before and after execution,
@@ -3354,23 +3354,23 @@ each engine: Chromium revision 1208, Firefox 1509, WebKit 2248. None of those
 exact binaries is installed in the capture environment. All six sidecars
 independently verified; these six failed path rows remain diagnostic and are
 **not** promoted into the strict 6,526-row ledger. The `=0` browser-path mode
-has a known cross-package root difference between Pwright and the official
+has a known cross-package root difference between Playwright Rust and the official
 Node driver, so exact parity is not claimed for that mode. Schema 2 binds
 capture-tool source, not the child browser-cache environment; that additional
 binding is still required before a path result can be promoted.
 
 The `PLAYWRIGHT_BROWSERS_PATH=0` limitation was checked again through both
 public async APIs on macOS arm64 with pinned Playwright Python 1.58.0 and
-Pwright ABI107, without downloading or launching a browser or attaching CDP.
+Playwright Rust ABI107, without downloading or launching a browser or attaching CDP.
 For Chromium, Firefox and WebKit, both APIs returned the same relative
 revision/executable suffix (`chromium-1208`, `firefox-1509`, `webkit-2248`),
 but the official wheel rooted it at
-`playwright/driver/package/.local-browsers` while Pwright rooted it at its
-own `pwright/.local-browsers`. The installed official `registry/index.js` and
+`playwright/driver/package/.local-browsers` while Playwright Rust rooted it at its
+own `playwright-rust/.local-browsers`. The installed official `registry/index.js` and
 `browsers.json` have pinned SHA-256 values `15c1a6174cc9d631ffcc908ed8d040f3f5ee543a77711a8062fa3037f7cda75f`
 and `6b6e0538d6e46eef71d3e1a0dcb65f8f5ea7914033c8150529d8e207afb6030c`.
 The Oracle starts its Node driver to read the public property, but no browser
-process is required. Pwright deliberately keeps the `=0` root within its own
+process is required. Playwright Rust deliberately keeps the `=0` root within its own
 package so installing the official Playwright wheel is not a prerequisite;
 pointing at that wheel would break independently installable capabilities.
 This diagnostic is **not** exact absolute-path parity, does not establish that
@@ -3448,7 +3448,7 @@ The pinned Playwright Python v1.58.0
 `tests/async/test_dispatch_event.py` SHA-256 is
 `a4905396220267094de57d7fc721c8d733d4f0e453f37295882338c9ebe31c19`.
 The exact 12 Chromium cases are in
-`packages/pwright-python/tests/official/page-dispatch-event-manifest.json`
+`packages/playwright-rust-python/tests/official/page-dispatch-event-manifest.json`
 (SHA-256 `acbe71f2b9922e5040b17c2bcbcb3946b9096964f314de0f63ddc909353d0128`).
 The upstream Git tree at `v1.58.0` has no
 `tests/sync/test_dispatch_event.py`; the sync Locator dispatch test is in
@@ -3563,7 +3563,7 @@ and oracle to 798 passed / seven skipped / four failed / 5,717 not run
 
 ## Page check and uncheck checkpoint (2026-10-10)
 
-The fixed `packages/pwright-python/tests/official/page-check-manifest.json`
+The fixed `packages/playwright-rust-python/tests/official/page-check-manifest.json`
 (SHA-256
 `7e9b34f4ed0b0c193e213375ad2fc8dad6fbd13b622cda3f77c5d2ecf51809ae`)
 pins all 18 unchanged Playwright Python v1.58.0 Chromium async/sync
@@ -3608,7 +3608,7 @@ or Core corpus.
 ## BrowserContext add-cookies paired follow-up (2026-10-10)
 
 The existing source-pinned
-`packages/pwright-python/tests/official/browsercontext-add-cookies-manifest.json`
+`packages/playwright-rust-python/tests/official/browsercontext-add-cookies-manifest.json`
 (SHA-256
 `7c2cdf04985d4c7b869dc5ad79557a8383bcd499f2946388d4fa83f9a4109ca0`)
 selects all 19 unchanged async Chromium cases. A fresh candidate run on the
@@ -3636,7 +3636,7 @@ Core execution remain open.
 ## BrowserContext storage-state checkpoint (2026-10-10)
 
 The fixed
-`packages/pwright-python/tests/official/browsercontext-storage-state-manifest.json`
+`packages/playwright-rust-python/tests/official/browsercontext-storage-state-manifest.json`
 pins all nine Chromium invocations in the unchanged Playwright Python v1.58.0
 async (five) and sync (four) files, at upstream commit
 `47a5d35ef4f815a2021349f86ae391f7c20c02d6`. Its SHA-256 is
@@ -3792,7 +3792,7 @@ asserts `localhost`; report SHA-256 values are
 `8ec825676b02a603eee9eabbdfd6067b19d21f67d968c086e713ce3a9ba1a9ad`
 and `0c7fb9b5e3aa52043b2582db604be3bce2afbe34cfba08cb699d2b443a3ff418`.
 All four sidecars verify. Neither shared failure is promoted or used to change
-Pwright behavior.
+Playwright Rust behavior.
 
 ## Sync Page and caller-stack checkpoint (2026-10-06)
 
@@ -3800,7 +3800,7 @@ NODE-403 runs the nine still-unrun Chromium rows in
 `tests/sync/test_page.py`. The initial installed-wheel diagnostic passes seven
 and fails only the two `Page.pause` cases. Those tests receive
 `headless=True` from the upstream fixture, but the mandated dedicated Chrome is
-visibly headed; Pwright correctly reports that headed Inspector support is not
+visibly headed; Playwright Rust correctly reports that headed Inspector support is not
 installed. The diagnostic report SHA-256 is
 `d4fdf55696004c033d13b26728f2519bb3bda270f66a65481b052caf35e71603`.
 It remains diagnostic-only, and the two pause rows remain `not-run`.
@@ -4334,7 +4334,7 @@ rows. Its only failure is the 200 MiB single-file case, with the exact same
 official `Cannot transfer files larger than 50Mb to a browser not co-located
 with the server` error as the Playwright 1.58.0 oracle. The oracle passes
 16/18: it also rejects the ten-by-49-MiB chooser case at its aggregate remote
-transport guard, while Pwright passes that row through native chooser paths.
+transport guard, while Playwright Rust passes that row through native chooser paths.
 Thus all 16 oracle-executable rows agree, every directory and
 `webkitdirectory` behavior is green, and there is no candidate-only failure;
 the two environment-limited rows remain explicit rather than becoming
@@ -4452,7 +4452,7 @@ NODE-376 gives future Python candidate and oracle reports the same fail-closed
 provenance standard as Core. After a JUnit result exists, the guarded runner
 writes a sibling `.provenance.json` that hashes the pinned manifest, selected
 runtime/shim/harness trees, loaded official `playwright` package, candidate
-`pwright` package and exact ABI3 artifact, inventory and per-case reports for
+`playwright-rust` package and exact ABI3 artifact, inventory and per-case reports for
 isolated runs, and the aggregate JUnit. It also records the exact interpreter
 and version, mode/scope/API/browser/channel selection, fixture addresses,
 timeouts, exact command and exit code.
@@ -4481,7 +4481,7 @@ The facade casts now use forward-reference strings and the runner no longer
 performs the unnecessary union casts. A source audit checks all 11 package,
 runner, provenance and invocation-audit Python files and reports zero runtime
 union casts. A real CPython
-3.9.6 import of `pwright`, `pwright.async_api` and `pwright.sync_api` succeeds
+3.9.6 import of `playwright-rust`, `playwright_rust.async_api` and `playwright_rust.sync_api` succeeds
 with the existing ABI3 extension.
 
 The same checkpoint makes the Python official runner fail closed on remote
@@ -4619,7 +4619,7 @@ NODE-347 keeps ABI 93 and makes Chromium topology auto-attach match the
 selected composition: Page/OOPIF topology attaches only to `page` and
 `iframe`, adding `worker` only when a selected observer retains workers. The
 CDP filter ends with a catch-all exclusion, so an unselected service worker is
-left to Chromium instead of being paused in an unowned Pwright session. The
+left to Chromium instead of being paused in an unowned Playwright Rust session. The
 unchanged official service-worker-precedence row passes the final installed
 candidate 1/1, final-wheel collection remains 6,526/6,526, and the ledger is
 854 passed, zero failed, seven skipped and 5,665 not run, SHA-256
@@ -5110,30 +5110,30 @@ The cross-language completion criteria and core JS/TS inventory are in
 The upstream repository is `microsoft/playwright-python`, tag `v1.58.0`, commit
 `47a5d35ef4f815a2021349f86ae391f7c20c02d6`. The selected source files and their
 SHA-256 digests are recorded in
-`packages/pwright-python/tests/official/manifest.json`.
+`packages/playwright-rust-python/tests/official/manifest.json`.
 
 ABI 33 custom-engine execution uses
-`packages/pwright-python/tests/official/selector-custom-engine-manifest.json`
+`packages/playwright-rust-python/tests/official/selector-custom-engine-manifest.json`
 and
-`packages/pwright-python/tests/official/selector-custom-engine-worlds-manifest.json`.
+`packages/playwright-rust-python/tests/official/selector-custom-engine-worlds-manifest.json`.
 Both pin the exact async/sync source hashes; together they fix six Chromium
 invocations without permitting an ad-hoc green-node filter.
 
 NODE-253 layout execution uses
-`packages/pwright-python/tests/official/selector-layout-manifest.json`. It pins
+`packages/playwright-rust-python/tests/official/selector-layout-manifest.json`. It pins
 the same exact async/sync source hashes and fixes only
 `test_should_work_with_layout_selectors`; browser selection expands it to the
 two Chromium invocations recorded here. `--manifest-cases --manifest-api`
 forbids an ad-hoc green-node filter.
 
 NODE-254 basic Locator execution uses
-`packages/pwright-python/tests/official/locator-basic-manifest.json`. It pins
+`packages/playwright-rust-python/tests/official/locator-basic-manifest.json`. It pins
 unchanged async/sync `test_locators.py` source hashes and 34 exact function
 rows. `--manifest-cases --manifest-api async|sync --browser chromium` is the
 only accepted green selection.
 
 NODE-255 Locator execution and count expectation uses
-`packages/pwright-python/tests/official/locator-execution-manifest.json`,
+`packages/playwright-rust-python/tests/official/locator-execution-manifest.json`,
 SHA-256
 `ed03f8d21b9d27cd400b3a3cb98203a20a35fdc4c7f57aa6e03ec00c92411e09`.
 It pins the same unchanged async/sync source hashes and ten exact Chromium
@@ -5141,7 +5141,7 @@ invocations. `--manifest-cases --manifest-api async|sync --browser chromium`
 is the only accepted green selection.
 
 NODE-256 Locator description execution uses
-`packages/pwright-python/tests/official/locator-description-manifest.json`,
+`packages/playwright-rust-python/tests/official/locator-description-manifest.json`,
 SHA-256
 `d578cddad1cbb56d29d098b4fb1c19a20bd1d24a739809a25bdacb03d6591374`.
 The pinned upstream sync source contains no corresponding description tests;
@@ -5149,7 +5149,7 @@ the manifest therefore fixes only the three real async Chromium invocations
 instead of manufacturing a sync lane.
 
 NODE-257 typed Locator composition uses
-`packages/pwright-python/tests/official/locator-composition-manifest.json`,
+`packages/playwright-rust-python/tests/official/locator-composition-manifest.json`,
 SHA-256
 `78e5b01d4582222168c51fea88add9a89987374914de5bac4711e2a7e4d4755f`.
 It pins the unchanged async/sync `test_locators.py` hashes and exactly four
@@ -5158,48 +5158,48 @@ first/last/nth derivation. `--manifest-cases --manifest-api async|sync
 --browser chromium` is the only accepted green selection.
 
 Client-certificate execution additionally uses
-`packages/pwright-python/tests/official/client-certificates-manifest.json`.
+`packages/playwright-rust-python/tests/official/client-certificates-manifest.json`.
 That manifest pins both source-file hashes and exactly four test functions;
 their browser parametrization expands to 12 invocations. `--manifest-cases`
 forbids ad-hoc test filters, while `--manifest-api async|sync` keeps the
 upstream async and sync session fixtures in separate processes.
 
 ABI 13 Handle/tag execution uses
-`packages/pwright-python/tests/official/handles-tags-manifest.json` and
-`packages/pwright-python/tests/official/jshandle-core-manifest.json`. Both pin
+`packages/playwright-rust-python/tests/official/handles-tags-manifest.json` and
+`packages/playwright-rust-python/tests/official/jshandle-core-manifest.json`. Both pin
 the exact upstream file digest and function list. They expand to 18 and seven
 Chromium invocations respectively; no ad-hoc green-node filter is accepted.
 
 ABI 14 Page-binding execution uses
-`packages/pwright-python/tests/official/page-bindings-manifest.json`; it pins
+`packages/playwright-rust-python/tests/official/page-bindings-manifest.json`; it pins
 the exact Page source digest and 12 explicit functions. ABI 15 lifecycle
 execution uses
-`packages/pwright-python/tests/official/page-lifecycle-events-manifest.json`,
+`packages/playwright-rust-python/tests/official/page-lifecycle-events-manifest.json`,
 which pins the same source digest and exactly six load, DOMContentLoaded,
 close and opener functions. Both require `--manifest-cases`; neither permits
 an ad-hoc passing-node filter.
 
 ABI 16 Page-error execution uses
-`packages/pwright-python/tests/official/page-errors-manifest.json`. It pins the
+`packages/playwright-rust-python/tests/official/page-errors-manifest.json`. It pins the
 same source digest and exactly five Error name/message/stack, primitive, object
 and Window functions. It also requires `--manifest-cases`.
 
 ABI 17 Page-route execution uses
-`packages/pwright-python/tests/official/page-routes-manifest.json`. It pins the
+`packages/playwright-rust-python/tests/official/page-routes-manifest.json`. It pins the
 same source digest and exactly five caller-stack, set-content resource/timeout,
 and continue-during/after-close functions. It requires `--manifest-cases` and
 the canonical lane additionally selects `--browser chromium`; no ad-hoc green
 node filter is accepted.
 
 ABI 18 Request-size execution uses
-`packages/pwright-python/tests/official/request-sizes-manifest.json`. It pins
+`packages/playwright-rust-python/tests/official/request-sizes-manifest.json`. It pins
 the same Page source digest and exactly the two async body/header-size
 functions. It requires `--manifest-cases` and the canonical lane selects
 Chromium; the manifest is a fixed replacement slice, not the complete Core
 network-size suite.
 
 ABI 19 drag execution uses
-`packages/pwright-python/tests/official/drag-and-drop-manifest.json`. It pins
+`packages/playwright-rust-python/tests/official/drag-and-drop-manifest.json`. It pins
 the exact async/sync Page and Locator source digests and eight explicit
 functions. `--manifest-cases --manifest-api async|sync` executes the two API
 halves in separate processes; the canonical lane also selects Chromium. Four
@@ -5208,7 +5208,7 @@ and four are newly recorded, so exact JUnit selection is required before ledger
 merging to prevent double counting.
 
 ABI 20 dialog execution uses
-`packages/pwright-python/tests/official/page-dialogs-manifest.json`. It pins
+`packages/playwright-rust-python/tests/official/page-dialogs-manifest.json`. It pins
 the exact async Dialog, async Page and sync source digests and 11 explicit
 functions. `--manifest-cases --manifest-api async|sync` executes the API halves
 in separate processes and the canonical lane selects Chromium. Two
@@ -5217,20 +5217,20 @@ report; eight async Dialog rows and one sync row are newly recorded. Exact
 JUnit selection and Page-report replacement prevent double counting.
 
 ABI 21 route-fulfill execution uses
-`packages/pwright-python/tests/official/route-fulfill-manifest.json`. It pins
+`packages/playwright-rust-python/tests/official/route-fulfill-manifest.json`. It pins
 the exact base-URL source digest and one explicit function. The canonical lane
 selects Chromium and proves relative string-route matching, `Route.fulfill`,
 `expect_request`, `expect_response` and `Response.body` without editing the
 upstream assertion. The result replaces the existing failed base-URL row once.
 
 ABI 21 terminal-waiter execution uses
-`packages/pwright-python/tests/official/download-terminal-manifest.json`. It
+`packages/playwright-rust-python/tests/official/download-terminal-manifest.json`. It
 pins the exact Page source digest and the one explicit function that arms
 `expect_download`, closes the Page and requires Playwright's target-closed
 error. It does not claim successful download publication or artifacts.
 
 ABI 22 persistent-Context execution uses
-`packages/pwright-python/tests/official/persistent-context-manifest.json`. It
+`packages/playwright-rust-python/tests/official/persistent-context-manifest.json`. It
 pins the exact base-URL source digest and the one explicit function that
 launches Chromium with a user-data directory, requires the returned default
 Context to resolve `base_url`, and closes it. The canonical candidate and
@@ -5240,11 +5240,11 @@ The earlier missing-shell oracle report is retained as an infrastructure
 failure; it is not converted into a product failure or a skip.
 
 ABI 23 Page-pause execution uses
-`packages/pwright-python/tests/official/page-pause-manifest.json`. It pins the
+`packages/playwright-rust-python/tests/official/page-pause-manifest.json`. It pins the
 exact Page source digest and the two functions that require default and custom
 operation/navigation timeouts to be restored after a headless pause. The
 candidate and official oracle attach to the same task-owned headless Chrome
-launched through Pwright; the visible shared browser is not used as a fake
+launched through Playwright Rust; the visible shared browser is not used as a fake
 headless oracle.
 
 The source checker rejects a different commit, a dirty checkout, a changed
@@ -5298,7 +5298,7 @@ upstream checkout. It does not copy or edit the test body. Oracle and candidate
 run in separate virtual environments:
 
 - oracle installs `playwright==1.58.0`;
-- candidate installs only the built `shuozeli-pwright` wheel plus a test-only
+- candidate installs only the built `shuozeli-playwright-rust` wheel plus a test-only
   `playwright.async_api` namespace adapter;
 - both use the same fixture plugin, attach to the same dedicated Chromium CDP
   endpoint, create an owned Context and Page, and run the same upstream
@@ -5317,11 +5317,11 @@ claim those capabilities. Actual candidate runs keep the upstream assertions
 unchanged and record any placeholder or unsupported-method use as a failure.
 
 For real candidate execution, a separate fixture adapter maps the official
-`BrowserType.launch(headless=...)` session fixture to Pwright's dedicated
+`BrowserType.launch(headless=...)` session fixture to Playwright Rust's dedicated
 Chromium `connect_over_cdp`. It rejects other launch options and non-Chromium
 engines. The unchanged upstream HTTP and HTTPS fixture servers bind only to the
 specified Tailscale IP and publish the full MagicDNS hostname; this adaptation
-is test infrastructure, not a Pwright public capability.
+is test infrastructure, not a Playwright Rust public capability.
 
 The independent oracle has the symmetric launch-only adapter: its official
 Playwright Python `BrowserType.launch(headless=...)` fixture call is mapped to
@@ -5332,7 +5332,7 @@ official oracle implementation for every exercised API and assertion.
 
 The upstream sync server helper assumes the official binding's greenlet loop
 is running on the test thread. Candidate execution replaces only that helper's
-request waiter with a thread-safe waiter compatible with Pwright's dedicated
+request waiter with a thread-safe waiter compatible with Playwright Rust's dedicated
 sync loop thread. It preserves the same path registration, request observation
 and post-request value assertion; no test body or assertion is changed.
 
@@ -5366,11 +5366,11 @@ uv run --no-project python scripts/check_playwright_python_official_source.py \
 # Run async and sync certificate selections in separate processes.
 <candidate-venv>/bin/python scripts/run_playwright_python_official_conformance.py \
   candidate /Users/cyuan/projects/thirdparty/playwright-python \
-  --manifest packages/pwright-python/tests/official/client-certificates-manifest.json \
+  --manifest packages/playwright-rust-python/tests/official/client-certificates-manifest.json \
   --manifest-cases --manifest-api async --result <async-report.xml>
 <candidate-venv>/bin/python scripts/run_playwright_python_official_conformance.py \
   candidate /Users/cyuan/projects/thirdparty/playwright-python \
-  --manifest packages/pwright-python/tests/official/client-certificates-manifest.json \
+  --manifest packages/playwright-rust-python/tests/official/client-certificates-manifest.json \
   --manifest-cases --manifest-api sync --result <sync-report.xml>
 
 # One bounded candidate execution shard:
@@ -5383,25 +5383,25 @@ uv run --no-project python scripts/check_playwright_python_official_source.py \
 <candidate-venv>/bin/python scripts/run_playwright_python_official_conformance.py \
   candidate /Users/cyuan/projects/thirdparty/playwright-python \
   --browser chromium \
-  --manifest packages/pwright-python/tests/official/page-routes-manifest.json \
-  --manifest-cases --server-prefix "$PWRIGHT_OFFICIAL_SERVER_PREFIX" \
+  --manifest packages/playwright-rust-python/tests/official/page-routes-manifest.json \
+  --manifest-cases --server-prefix "$PLAYWRIGHT_RUST_OFFICIAL_SERVER_PREFIX" \
   --result <page-routes-report.xml>
 
 # The fixed ABI 18 async Request-size selection:
 <candidate-venv>/bin/python scripts/run_playwright_python_official_conformance.py \
   candidate /Users/cyuan/projects/thirdparty/playwright-python \
   --browser chromium \
-  --manifest packages/pwright-python/tests/official/request-sizes-manifest.json \
-  --manifest-cases --server-prefix "$PWRIGHT_OFFICIAL_SERVER_PREFIX" \
+  --manifest packages/playwright-rust-python/tests/official/request-sizes-manifest.json \
+  --manifest-cases --server-prefix "$PLAYWRIGHT_RUST_OFFICIAL_SERVER_PREFIX" \
   --result <request-sizes-report.xml>
 
 # Historical seven-case execution only:
 <candidate-venv>/bin/python scripts/run_playwright_python_official_conformance.py \
   candidate /Users/cyuan/projects/thirdparty/playwright-python \
-  --bootstrap-only --server-prefix "$PWRIGHT_OFFICIAL_SERVER_PREFIX"
+  --bootstrap-only --server-prefix "$PLAYWRIGHT_RUST_OFFICIAL_SERVER_PREFIX"
 ```
 
-`PWRIGHT_OFFICIAL_SERVER_PREFIX` must be a verified full Tailscale MagicDNS URL
+`PLAYWRIGHT_RUST_OFFICIAL_SERVER_PREFIX` must be a verified full Tailscale MagicDNS URL
 for a `serve-lib` registration of the pinned `tests/assets` directory. The
 2026-09-23 clean-wheel checkpoint is oracle 7/7 and candidate 7/7. After native
 artifacts were assessed, the final same-runner executions completed in 3.51
@@ -5725,7 +5725,7 @@ fields. The first wheel vendors its OpenSSL dylibs, passes 19/19 installed-wheel
 tests, and recollects 6,526/6,526. The collection artifact SHA-256 is
 `102dc195db37a1f6d0c54f5846448a85b7ffd3701d1ea5165ab489135cfa39eb`;
 collection is inventory coverage, not execution evidence. Native launch
-accepts only an empty or already Pwright-marked profile and shutdown reaches
+accepts only an empty or already Playwright Rust-marked profile and shutdown reaches
 zero owned process/connection resources.
 The final-source ABI 23 route-close-repaired wheel archive SHA-256 values are
 `a65ac8096484f11a1a71c1b7e13dddbb88b6300c764a16648fd94dc9fc3a95fd`
@@ -5745,7 +5745,7 @@ resumption validates and reuses both exact case reports. The repaired full
 Page candidate/oracle reports above are the current product evidence.
 
 ABI 24 pins both complete request-GC files in
-`packages/pwright-python/tests/official/page-request-gc-manifest.json` and reruns
+`packages/playwright-rust-python/tests/official/page-request-gc-manifest.json` and reruns
 their exact unchanged functions. Candidate and independent official-oracle
 Chromium lanes pass 1/1 async and 1/1 sync. Candidate report SHA-256 values are
 `f4a28daac38c4c122401c171e71e157852ebab003c7dc4c7dae04f8ab454053f`
@@ -5771,7 +5771,7 @@ fields. The installed first wheel passes 21/21 local tests and recollects
 
 ABI 25 pins the unchanged async and sync
 `test_page_errors_should_work[chromium]` rows in
-`packages/pwright-python/tests/official/page-errors-history-manifest.json`.
+`packages/playwright-rust-python/tests/official/page-errors-history-manifest.json`.
 Candidate and independent official-oracle lanes each pass 1/1 async and 1/1
 sync. Candidate report SHA-256 values are
 `bb61ff804068782deec28497cd7a7a9375d6f2d175a309c202f73d12a38f8ec9`
@@ -5797,7 +5797,7 @@ full-suite pass.
 
 ABI 26 pins the unchanged async and sync
 `test_console_messages_should_work[chromium]` rows in
-`packages/pwright-python/tests/official/console-history-manifest.json`.
+`packages/playwright-rust-python/tests/official/console-history-manifest.json`.
 Candidate and independent official-oracle lanes each pass 1/1 async and 1/1
 sync. Candidate report SHA-256 values are
 `95c417b6bdcaf56255146a92374fd0c95cdc2828cf9f746e416661175bf320fb`
@@ -5825,7 +5825,7 @@ full-suite pass.
 
 ABI 27 pins the unchanged async and sync
 `test_should_return_last_requests[chromium]` rows in
-`packages/pwright-python/tests/official/request-history-manifest.json`. The
+`packages/playwright-rust-python/tests/official/request-history-manifest.json`. The
 manifest records async source SHA-256
 `f0e5eef63b0d9707bc622e06453869e3d29c093398b4e1c52378c79ca2920435`
 and sync source SHA-256
@@ -5857,7 +5857,7 @@ full-suite pass.
 
 ABI 28 pins the complete unchanged
 `tests/async/test_device_descriptors.py` source in
-`packages/pwright-python/tests/official/device-descriptors-manifest.json` at
+`packages/playwright-rust-python/tests/official/device-descriptors-manifest.json` at
 SHA-256
 `0ce770e824526029a38991b7bad0ce6176dac8eb2593faf793252a394411c560`.
 The file expands to three browser invocations. Final-wheel candidate and
@@ -5888,7 +5888,7 @@ full-suite pass.
 ## ABI 29 response-listener checkpoint (2026-09-27)
 
 ABI 29 pins the complete unchanged `tests/async/test_listeners.py` source in
-`packages/pwright-python/tests/official/async-listeners-manifest.json` at
+`packages/playwright-rust-python/tests/official/async-listeners-manifest.json` at
 SHA-256
 `dbda3cea63f1820b2d0ac4587e9bcaf938c43c318ca815294f00bcabbbbba4a9`.
 The final installed-wheel candidate and independent official oracle each pass
@@ -5928,7 +5928,7 @@ full-suite pass.
 
 The public native ABI remains 29. This checkpoint pins the complete unchanged
 `tests/sync/test_listeners.py` source in
-`packages/pwright-python/tests/official/sync-listeners-manifest.json` at
+`packages/playwright-rust-python/tests/official/sync-listeners-manifest.json` at
 SHA-256
 `24c14d60da2cc007ca29c68de83982644b3a82320249145953e0a7125fa88658`.
 The final installed-wheel candidate and independent official oracle each pass
@@ -6000,7 +6000,7 @@ This closes one official invocation, not the complete Python corpus.
 ## ABI 30 async selector regression checkpoint (2026-09-27)
 
 The independent async source is pinned in
-`packages/pwright-python/tests/official/async-selectors-misc-manifest.json` at
+`packages/playwright-rust-python/tests/official/async-selectors-misc-manifest.json` at
 SHA-256
 `44746147b5adaf40bdd879468b34d9fb2d31b4c64d3a397c9c94a47961b41b0f`.
 Its exact Chromium invocation passes 1/1 through the installed ABI 30 wheel
@@ -6020,7 +6020,7 @@ binding parity for one capability and is not a full-suite pass.
 
 ## ABI 31 selector registration checkpoint (2026-09-27)
 
-`packages/pwright-python/tests/official/selector-registration-manifest.json`
+`packages/playwright-rust-python/tests/official/selector-registration-manifest.json`
 pins the complete unchanged `tests/async/test_selectors_misc.py` source at
 SHA-256
 `44746147b5adaf40bdd879468b34d9fb2d31b4c64d3a397c9c94a47961b41b0f`
@@ -6065,7 +6065,7 @@ Core JS/TS corpus are still incomplete.
 
 ## ABI 32 selector validation checkpoint (2026-09-27)
 
-`packages/pwright-python/tests/official/selector-registration-errors-manifest.json`
+`packages/playwright-rust-python/tests/official/selector-registration-errors-manifest.json`
 pins the unchanged async and sync `test_queryselector.py` sources at SHA-256
 `da8882e3b969ad83a159bec555c05971939d6b419e4c5b9be16165b60aa28708`
 and `6799dd725cfb7c99a1e90ba0cfc5dc4a83943a9fb673a22a4fb1f00f78f9bda1`.
@@ -6296,7 +6296,7 @@ Rust owns the expected-count comparison, total deadline, typed `Count` reads,
 retry on navigation/context replacement and bounded 10 ms sleep. Python's
 async/sync `expect` facades forward only selector, expected integer, timeout
 and negation. Python ABI advances from 33 to 34 because the native export
-`locator_expect_count` was added; no Cargo feature, Pwright package or
+`locator_expect_count` was added; no Cargo feature, Playwright Rust package or
 dependency edge changes. Node `_expect('to.have.count')` reuses the same Rust
 owner and adds no JavaScript polling loop.
 
@@ -6417,7 +6417,7 @@ Python rows remain open; no complete-suite claim is made.
 ## ABI 41 Locator DOM actions and Handle checkpoint (2026-09-28)
 
 NODE-267 adds a separate `locator-dom-actions` feature for Rust-owned
-`dispatch_event` and `select_text`; selecting it adds no Pwright package to the
+`dispatch_event` and `select_text`; selecting it adds no Playwright Rust package to the
 108-package base closure. `Locator.evaluate_handle` instead reuses the existing
 Handle feature: Rust performs strict Locator resolution, executes against the
 temporary element handle, publishes the owned result handle and computes its
@@ -6948,7 +6948,7 @@ failure values, report SHA-256
 In each lane, read and add return the real
 `macbookpro-yuacx.tail8f3b66.ts.net` cookie domain while the unchanged test
 expects `localhost`; clear and third-party rows pass. The two failures are
-therefore fixture/provider applicability gaps, not Pwright discrepancies, and
+therefore fixture/provider applicability gaps, not Playwright Rust discrepancies, and
 remain `not-run` in the formal ledger.
 
 The exact applicable candidate report passes 2/2, SHA-256
@@ -7053,7 +7053,7 @@ launch tuple. Rust admits the default device policy before initial Page
 topology, applies the existing device/user-agent initializer only to that
 default Context and counts it against the existing fixed 16-Context / 64 KiB
 device registry. Later owned Contexts remain explicitly selected and external
-Contexts remain unaffected. The leaf adds no Pwright package beyond the
+Contexts remain unaffected. The leaf adds no Playwright Rust package beyond the
 persistent launch closure.
 
 The first candidate pass exposed one binding discrepancy after browser
@@ -7104,7 +7104,7 @@ launch tuple. Rust admits the persistent default policy before initial Page
 topology, applies the existing Chromium Security initializer only to that
 default Context and counts it against the existing fixed 16-policy capacity.
 Later owned Contexts remain explicitly selected and external Contexts remain
-unaffected. The leaf adds no Pwright package beyond the persistent launch
+unaffected. The leaf adds no Playwright Rust package beyond the persistent launch
 closure.
 
 The final installed candidate passes the unchanged row 1/1, report SHA-256
@@ -7252,7 +7252,7 @@ NODE-307 advances the exact package/native handshake to ABI 66 because the
 persistent launch tuple now carries an optional default-Context locale. The
 independently selectable `persistent-context-locale` feature composes
 `persistent-context` and `context-locale`; executable dependency proof shows
-that it adds no Pwright package beyond the existing persistent-Context closure.
+that it adds no Playwright Rust package beyond the existing persistent-Context closure.
 Python async and sync facades only forward `locale` before native launch.
 
 Rust pre-admits the default policy before initial Page topology initialization
@@ -7313,7 +7313,7 @@ NODE-306 advances the exact package/native handshake to ABI 65 because
 `Browser.new_context` now admits an optional locale. The independently
 selectable `context-locale` feature owns validation, Context-scoped retention,
 Page/OOPIF session initialization and removal. Dependency proof shows that it
-adds no Pwright package. Python only forwards the optional string through thin
+adds no Playwright Rust package. Python only forwards the optional string through thin
 async and sync facades.
 
 Rust admits at most 16 live locale policies of at most 256 UTF-8 bytes each.
@@ -7371,7 +7371,7 @@ selected console notice gains an ordered Handle-descriptor field and
 `handle_json_value` now dispatches retained Worker Handles. The independently
 selectable `worker-console-argument-handles` feature composes
 `worker-console-events` and `worker-handle-evaluation`; executable dependency
-proof shows that it adds no Pwright package beyond the existing Worker Handle
+proof shows that it adds no Playwright Rust package beyond the existing Worker Handle
 closure. The legacy 11-field notice shape remains accepted by Python, while
 the selected ABI 64 profile returns the 12-field shape.
 
@@ -7448,7 +7448,7 @@ remain unfinished.
 NODE-304 advances the exact package/native handshake to ABI 63 because it adds
 native Worker Handle evaluation and descriptor dispatch. The optional
 `worker-handle-evaluation` feature composes `worker-events` plus `handles`;
-the executable dependency proof shows that its Pwright package closure is
+the executable dependency proof shows that its Playwright Rust package closure is
 exactly Page events plus Handles. Unselected Worker and Handle profiles retain
 their previous behavior.
 
@@ -7573,7 +7573,7 @@ NODE-302 keeps the exact package/native handshake at ABI 62 because it adds no
 native method or descriptor. The optional `worker-error-events` feature
 composes `worker-events` and `page-errors`; neither prerequisite changes when
 the leaf is unselected, and dependency proof shows that the selected leaf adds
-no Pwright package beyond the existing `page-events` closure.
+no Playwright Rust package beyond the existing `page-events` closure.
 
 The Rust Page-error observer continues to resolve an exception through its
 Frame execution route or Page target session first. If neither route owns the
@@ -7619,7 +7619,7 @@ or unexecuted as recorded.
 NODE-301 advances the exact package/native handshake because it exports a new
 bounded Worker-console notice read. `worker-console-events` is independently
 selectable over `worker-events` and `console-events`; dependency proof shows
-that it adds no Pwright package beyond the existing `page-events` closure.
+that it adds no Playwright Rust package beyond the existing `page-events` closure.
 
 Rust observes `Runtime.consoleAPICalled` only on an exact retained Worker
 session, reuses the bounded console value/location codec, and owns the entire
@@ -7716,7 +7716,7 @@ NODE-299 keeps native ABI 61 and closes the last discrepancy in the unchanged
 Chromium `tests/sync/test_sync.py`. A caller-thread asyncio loop now exposes the
 same `_dispatcher_fiber.switch()` contract used by the official sync fixture.
 When a sync call is made from a child greenlet, the facade submits its
-coroutine to Pwright's existing background loop, yields to the caller loop and
+coroutine to Playwright Rust's existing background loop, yields to the caller loop and
 resumes only after the concurrent future completes. Browser/CDP work does not
 move into Python. The existing semaphore limits these pending calls to 32;
 ordinary root-greenlet calls retain the direct blocking path. Stop and failed
@@ -7750,7 +7750,7 @@ the complete Core JS/TS corpus remain unexecuted or unresolved as recorded.
 
 NODE-298 adds independently selectable dedicated-Worker publication and
 evaluation without moving target ownership or CDP traffic into Python.
-`worker-events` has the same 108-package Pwright dependency closure as
+`worker-events` has the same 108-package Playwright Rust dependency closure as
 `page-events`. Rust retains only Worker children of a known Page/OOPIF or an
 already retained Worker, records exact Page ownership and creation order,
 enables Runtime plus recursive auto-attach before debugger resume, and waits
@@ -7797,7 +7797,7 @@ remain unfinished.
 
 NODE-297 adds independently selectable successful download publication without
 moving download policy, event correlation or artifact lifetime into Python.
-`download-events` has the same 108-package Pwright dependency closure as
+`download-events` has the same 108-package Playwright Rust dependency closure as
 `page-events`. Rust installs `Browser.setDownloadBehavior` for each opted-in
 Context, maps `Browser.downloadWillBegin` from its native Frame to the portable
 Page/Context, retains GUID-named temporary artifacts, settles exact owners from
@@ -8023,7 +8023,7 @@ The installed candidate baseline is 9 passed / 16 failed, SHA-256
 `d8bb9824057c1381c2d32158d84c5d92570ea743f69f60a5ebc68ed36dc99626`.
 
 The repair is deliberately narrow. Page, BrowserContext, Browser and
-BrowserType gain the exact public repr shapes. Pwright has no bundled browser,
+BrowserType gain the exact public repr shapes. Playwright Rust has no bundled browser,
 so `BrowserType.executable_path` is the honest empty string. The official shim
 alone exposes `_impl_obj` because the unchanged upstream assertion uses that
 private object to construct its expected text. Separately, Rust already owns
@@ -8085,7 +8085,7 @@ instead of the official `Page.evaluate:` public API name. Its report SHA-256 is
 
 The repair is confined to the Python API boundary. It rebuilds the same native
 exception type with one API-name prefix, preserves the stable
-`PWRIGHT_JAVASCRIPT` code plus explicit name and browser stack, and does not
+`PLAYWRIGHT_RUST_JAVASCRIPT` code plus explicit name and browser stack, and does not
 catch cancellation. Rust remains the source of classification; ABI 55,
 protocol behavior, feature selection, dependency closure and resource limits
 are unchanged.
@@ -8129,7 +8129,7 @@ existing sync Page executing `set_content`, `evaluate` and
 The ABI 55 candidate baseline passes both cancellation and sync rows. Its only
 failure is `AttributeError` when the official test reads
 `TimeoutError.name`. Rust already classifies the failure as
-`PWRIGHT_TIMEOUT`; the repair adds Playwright-shaped `name` access to the
+`PLAYWRIGHT_RUST_TIMEOUT`; the repair adds Playwright-shaped `name` access to the
 existing Python-visible native exception classes while retaining mutable name
 overrides used by `Page.page_errors()`. It changes no protocol, wait owner,
 resource limit, native feature or handshake version.
@@ -8348,7 +8348,7 @@ ABI 52 selects `response-finished` on top of bounded response publication.
 Rust owns terminal Pending/Finished/Failed/Closed state, subscriptions and
 wakeups. At most 256 owners retain 64 KiB total state; owner slots return on
 drop, and Page/session retirement closes pending owners. The terminal feature
-does not pull in request history or any Pwright package beyond the existing
+does not pull in request history or any Playwright Rust package beyond the existing
 response-event closure. Async Python forwards only the native Response owner;
 the sync facade submits that coroutine once through the existing bounded loop.
 
@@ -8983,7 +8983,7 @@ The final focus/blur discrepancy was not a special browser-event serialization
 rule. The official browser binding also serializes the listener's `Event`
 argument. Playwright Python's public handler wrapper truncates delivered
 arguments to the callback's declared signature, so a zero-argument callback is
-invoked with zero arguments. Pwright now applies the same thin Python-language
+invoked with zero arguments. Playwright Rust now applies the same thin Python-language
 adapter while Rust continues to own binding serialization, publication
 admission and final-result delivery. The current independent oracle rerun of
 the async row passes 1/1, and the existing complete oracle reports remain
@@ -9096,9 +9096,9 @@ ABI 35 exports an immutable native Locator owner. Root selector admission,
 typed `Within` composition, nth derivation and subsequent read/count execution
 stay under Rust's existing bounded query/FFI owners. Python stores only the
 native facade reference plus optional description metadata; it contains no
-selector-chain grammar or polling loop. No Cargo feature, Pwright package or
+selector-chain grammar or polling loop. No Cargo feature, Playwright Rust package or
 dependency edge is added, and the executable dependency proof remains 108
-base Pwright packages.
+base Playwright Rust packages.
 
 Final repaired wheel SHA-256 values are
 `d95c176835f2e557d7ff6780e398ae0e8db372a8edb9fa608b113de3c20afa11`
@@ -9140,7 +9140,7 @@ SHA-256
 Description is immutable Python facade metadata: `describe` returns a new
 wrapper over the same Page and selector. It issues no browser command and
 retains no native/protocol/resource state. ABI stays 34 and no Cargo feature,
-Pwright package or dependency edge changes. Final repaired wheel SHA-256
+Playwright Rust package or dependency edge changes. Final repaired wheel SHA-256
 values are
 `5d8b1d17925414c497f5fa81a0fcba7d769e1a997700709e5624015d95c1dd7f`
 and `f43a4098f6d5e9bccf25cf403c9a8798e4aa1db8eea63e9f653ae6b308923231`;

@@ -1,4 +1,4 @@
-use pwright::chromium_context_lifecycle::{
+use playwright_rust::chromium_context_lifecycle::{
     ChromiumContextLifecycleProfile, NoopChromiumContextRetirement,
 };
 

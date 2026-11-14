@@ -1,0 +1,13 @@
+[package]
+name = "playwright-rust-server-events"
+description = "Bounded typed server event producers and outbound adapters for Playwright Rust"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+playwright-rust-core = { workspace = true }
+playwright-rust-server-wire = { workspace = true }
+playwright-rust-transport = { workspace = true }

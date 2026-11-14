@@ -35,11 +35,11 @@ OUTPUT_DIR = OUTCOMES / "python-navigation-url-match-chromium-strict-paired-v5"
 
 BUILD_DIR = WORK / "builds/python-navigation-url-match-abi130-v2-oct20.srSIiv"
 CANDIDATE_PACKAGE = (
-    BUILD_DIR / "candidate-abi130-v2/lib/python3.12/site-packages/pwright"
+    BUILD_DIR / "candidate-abi130-v2/lib/python3.12/site-packages/playwright-rust"
 )
 REPORT = BUILD_DIR / "results/navigation-url-match-candidate-abi130-v2.xml"
 IDENTITY = BUILD_DIR / "results/abi130-v2-identity.json"
-WHEEL = BUILD_DIR / "wheel/shuozeli_pwright-0.1.0-cp39-abi3-macosx_11_0_arm64.whl"
+WHEEL = BUILD_DIR / "wheel/shuozeli_playwright-rust-0.1.0-cp39-abi3-macosx_11_0_arm64.whl"
 REPORT_SHA256 = "d0e3f4d643d9093c40f5bc6627f36cd35b00dc5f7cf5edf5dcee2572f9316dfe"
 PROVENANCE_SHA256 = "16be690a4210ba3c1b4dd6cb669d5ed50c3a9500643eb1783b3fb7323137be22"
 IDENTITY_SHA256 = "aeb78b8ff2a6acd554b210491f8b73e9e27cae47faa29ddd128106b38ae7f2f7"
@@ -70,7 +70,7 @@ UPSTREAM_COMMIT = "47a5d35ef4f815a2021349f86ae391f7c20c02d6"
 UPSTREAM_NAVIGATION_SHA256 = (
     "f04af8cbdee3dffb2c578d61d7685f02e5186ca565906323d71b6f92f96cd144"
 )
-MANIFEST = ROOT / "packages/pwright-python/tests/official/manifest.json"
+MANIFEST = ROOT / "packages/playwright-rust-python/tests/official/manifest.json"
 MANIFEST_SHA256 = "6d4f86fee517e300319cfa87014a54302980bdf8cf538fa21c1daff4219ea724"
 INVENTORY = WORK / "playwright-python-v1.58.0-profiled.jsonl"
 INVENTORY_SHA256 = "3dfb11b6ad7eb4736166ee2c4f7fa32cda78063324ad8314ce12f3e2d49b9d41"
@@ -131,9 +131,9 @@ def wheel_package_identity() -> None:
     members: dict[str, bytes] = {}
     with zipfile.ZipFile(WHEEL) as archive:
         for info in archive.infolist():
-            if not info.filename.startswith("pwright/") or info.is_dir():
+            if not info.filename.startswith("playwright_rust/") or info.is_dir():
                 continue
-            relative = info.filename.removeprefix("pwright/")
+            relative = info.filename.removeprefix("playwright_rust/")
             require(
                 relative
                 and not relative.startswith("/")
@@ -206,7 +206,7 @@ def identity() -> dict[str, Any]:
     require(
         value.get("schema") == 1
         and value.get("kind")
-        == "pwright-python-navigation-url-match-abi130-v2-source-bound-identity"
+        == "playwright-rust-python-navigation-url-match-abi130-v2-source-bound-identity"
         and value.get("wheelPath") == str(WHEEL)
         and value.get("wheelSha256") == WHEEL_SHA256
         and isinstance(installed, dict)
@@ -356,9 +356,9 @@ def report() -> tuple[dict[str, Any], dict[str, float]]:
         and payload.get("caseReportsSha256") is None
         and payload.get("result") == str(REPORT)
         and payload.get("resultSha256") == REPORT_SHA256
-        and payload.get("pwrightPackageSha256") == PACKAGE_SHA256
-        and payload.get("pwrightArtifactSha256") == ARTIFACT_SHA256
-        and payload.get("pwrightPackage") == str(CANDIDATE_PACKAGE)
+        and payload.get("playwright_rustPackageSha256") == PACKAGE_SHA256
+        and payload.get("playwright_rustArtifactSha256") == ARTIFACT_SHA256
+        and payload.get("playwright_rustPackage") == str(CANDIDATE_PACKAGE)
         and payload.get("fixtureBind") == "100.78.97.63"
         and payload.get("fixtureHost") == "macbookpro-yuacx.tail8f3b66.ts.net"
         and payload.get("exitCode") == 0
@@ -424,12 +424,12 @@ def source_pins(payload: dict[str, Any]) -> bytes:
         "wheelName": WHEEL.name,
         "abi130Identity": str(IDENTITY),
         "abi130IdentitySha256": IDENTITY_SHA256,
-        "pwrightPackageSha256": payload["pwrightPackageSha256"],
-        "pwrightArtifactSha256": payload["pwrightArtifactSha256"],
+        "playwright_rustPackageSha256": payload["playwright_rustPackageSha256"],
+        "playwright_rustArtifactSha256": payload["playwright_rustArtifactSha256"],
         "playwrightPackageSha256": payload["playwrightPackageSha256"],
         "harnessInputs": payload["harnessInputs"],
         "toolingSources": payload["toolingSources"],
-        "pwrightRuntimeLibraries": payload["pwrightRuntimeLibraries"],
+        "playwright_rustRuntimeLibraries": payload["playwright_rustRuntimeLibraries"],
     }
     return (json.dumps(pins, indent=2, sort_keys=True) + "\n").encode()
 

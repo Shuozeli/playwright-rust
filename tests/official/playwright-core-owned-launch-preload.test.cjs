@@ -30,9 +30,9 @@ function fixture(mode, marker = {}) {
   };
   const process = {
     env: {
-      PWRIGHT_OFFICIAL_OWNED_LAUNCH_MODE: mode,
-      PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM: upstream,
-      PWRIGHT_OFFICIAL_OWNED_LAUNCH_RECEIPT: '/test-only/receipt',
+      PLAYWRIGHT_RUST_OFFICIAL_OWNED_LAUNCH_MODE: mode,
+      PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM: upstream,
+      PLAYWRIGHT_RUST_OFFICIAL_OWNED_LAUNCH_RECEIPT: '/test-only/receipt',
       CRPATH: executable,
       ...marker,
     },
@@ -84,7 +84,7 @@ test('oracle owned lane keeps official default-option merger in control', async 
 
 test('owned lane rejects CDP adapter inheritance before installing hooks', () => {
   // Arrange
-  const inherited = { PWRIGHT_CANDIDATE_CDP_ENDPOINT: 'http://127.0.0.1:9222' };
+  const inherited = { PLAYWRIGHT_RUST_CANDIDATE_CDP_ENDPOINT: 'http://127.0.0.1:9222' };
 
   // Act and Assert
   assert.throws(() => fixture('candidate', inherited), /forbids the historical CDP adapter/);

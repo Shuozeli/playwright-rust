@@ -1,4 +1,4 @@
-use pwright::chromium_content::{
+use playwright_rust::chromium_content::{
     CdpScreenshotProductionProfile, ChromiumContentProfile, ContentCodecLimits, FrameLimits,
     ProtocolVersion,
 };

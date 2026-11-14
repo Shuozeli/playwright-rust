@@ -214,7 +214,7 @@ function installNoIoGuard({ allowRunnerFork = false, workerScript = '' } = {}) {
       if (modulePath !== workerScript || Array.isArray(argsOrOptions) ||
           !forkOptions || forkOptions.detached !== false ||
           !Array.isArray(forkOptions.stdio) || forkOptions.stdio[3] !== 'ipc' ||
-          !forkOptions.env || forkOptions.env.PWRIGHT_CORE_SOURCE_ONLY_ACTIVE !== '1' ||
+          !forkOptions.env || forkOptions.env.PLAYWRIGHT_RUST_CORE_SOURCE_ONLY_ACTIVE !== '1' ||
           forkOptions.env.NODE_OPTIONS !== process.env.NODE_OPTIONS)
         throw new Error('source-only runner forbids unpinned child_process.fork');
       return originalFork.call(this, modulePath, argsOrOptions);
@@ -237,12 +237,12 @@ function installNoIoGuard({ allowRunnerFork = false, workerScript = '' } = {}) {
 }
 
 function activate() {
-  const installed = Symbol.for('pwright.coreSourceOnlyGuardInstalled');
+  const installed = Symbol.for('playwright.rust.coreSourceOnlyGuardInstalled');
   if (globalThis[installed]) return;
-  const manifest = process.env.PWRIGHT_CORE_SOURCE_ONLY_MANIFEST;
-  const suite = process.env.PWRIGHT_CORE_SOURCE_ONLY_SUITE;
-  const upstream = process.env.PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM;
-  const receipt = process.env.PWRIGHT_CORE_SOURCE_ONLY_GUARD_RECEIPT;
+  const manifest = process.env.PLAYWRIGHT_RUST_CORE_SOURCE_ONLY_MANIFEST;
+  const suite = process.env.PLAYWRIGHT_RUST_CORE_SOURCE_ONLY_SUITE;
+  const upstream = process.env.PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM;
+  const receipt = process.env.PLAYWRIGHT_RUST_CORE_SOURCE_ONLY_GUARD_RECEIPT;
   if (!manifest || !suite || !upstream || !receipt)
     throw new Error('source-only guard environment is incomplete');
   const verified = verifySuite(manifest, suite, upstream);
@@ -250,7 +250,7 @@ function activate() {
   // Node preloads run before argv[1] is populated on supported Node releases.
   // Playwright uses child_process.fork with IPC for every loader/test worker.
   const isWorker = !workerThreads.isMainThread || typeof process.send === 'function' ||
-      process.env.PWRIGHT_CORE_SOURCE_ONLY_TEST_WORKER === '1';
+      process.env.PLAYWRIGHT_RUST_CORE_SOURCE_ONLY_TEST_WORKER === '1';
   const runnerScript = path.join(upstream, 'packages/playwright/cli.js');
   if (process.argv[1] && path.resolve(process.argv[1]) !== (isWorker ? workerScript : runnerScript))
     throw new Error(`source-only guard is attached to an unapproved Node entrypoint: ${process.argv[1]}`);
@@ -267,7 +267,7 @@ if (require.main === module) {
   if (process.argv[2] !== '--check' || process.argv.length !== 6)
     throw new Error('usage: guard --check MANIFEST SUITE UPSTREAM');
   process.stdout.write(JSON.stringify(verifySuite(process.argv[3], process.argv[4], process.argv[5])) + '\n');
-} else if (process.env.PWRIGHT_CORE_SOURCE_ONLY_ACTIVE === '1') {
+} else if (process.env.PLAYWRIGHT_RUST_CORE_SOURCE_ONLY_ACTIVE === '1') {
   activate();
 }
 

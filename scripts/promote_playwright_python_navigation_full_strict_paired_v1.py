@@ -35,14 +35,14 @@ BUILD_DIR = (
 RESULT_DIR = BUILD_DIR / "results"
 SOURCE_PINS = BUILD_DIR / "source-pins.json"
 SOURCE_PINS_SHA256 = "cd5f3360d8b25a5546162600ed71bb63bcc73c997e1bbb4f71e0a91bf2a063a3"
-WHEEL = BUILD_DIR / "frozen/shuozeli_pwright-0.1.0-cp39-abi3-macosx_11_0_arm64.whl"
+WHEEL = BUILD_DIR / "frozen/shuozeli_playwright-rust-0.1.0-cp39-abi3-macosx_11_0_arm64.whl"
 WHEEL_SHA256 = "05142f1065ec5e3de608da0ebad697d8888131f480099b7bb12a3472b2b5eeb4"
 UPSTREAM = Path("/Users/cyuan/projects/thirdparty/playwright-python")
 UPSTREAM_COMMIT = "47a5d35ef4f815a2021349f86ae391f7c20c02d6"
 UPSTREAM_NAVIGATION_SHA256 = (
     "f04af8cbdee3dffb2c578d61d7685f02e5186ca565906323d71b6f92f96cd144"
 )
-MANIFEST = ROOT / "packages/pwright-python/tests/official/manifest.json"
+MANIFEST = ROOT / "packages/playwright-rust-python/tests/official/manifest.json"
 MANIFEST_SHA256 = "6d4f86fee517e300319cfa87014a54302980bdf8cf538fa21c1daff4219ea724"
 INVENTORY = ROOT / ".work/official-conformance/playwright-python-v1.58.0-profiled.jsonl"
 INVENTORY_SHA256 = "3dfb11b6ad7eb4736166ee2c4f7fa32cda78063324ad8314ce12f3e2d49b9d41"
@@ -390,9 +390,9 @@ def reports(targets: list[str]) -> dict[str, dict[str, Any]]:
             "counts": dict(sorted(counts.items())),
         }
     require(
-        verified["candidate"]["payload"]["pwrightArtifactSha256"]
+        verified["candidate"]["payload"]["playwright_rustArtifactSha256"]
         == "f4afce01a1a0efca9851200444ca015f373e5986d16920ac3bfbdbd9534021b9"
-        and verified["oracle"]["payload"]["pwrightArtifactSha256"] is None,
+        and verified["oracle"]["payload"]["playwright_rustArtifactSha256"] is None,
         "candidate/oracle runtime identity differs",
     )
     return verified

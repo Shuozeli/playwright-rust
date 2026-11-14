@@ -48,7 +48,7 @@ PINNED_HARNESS = {
 }
 PROFILE = "official-conformance-page-cdp-errors"
 ARTIFACT_SHA256 = "0d7dcb931c42d5e912b594ec20fd12e202cc76590c7cab93187fe6829388f5c6"
-SOURCE_PACKAGE = ROOT / "packages/pwright"
+SOURCE_PACKAGE = ROOT / "packages/playwright-rust"
 FROZEN_SNAPSHOT = (
     ROOT
     / ".work/official-conformance/results/core-cdp-error-slice-strict-v3/candidate-package-snapshot-v1"
@@ -197,19 +197,19 @@ def _check_environment() -> None:
         "BIDI_CRPATH",
         "BIDI_FFPATH",
         "PWTEST_FIREFOX_USER_PREFS",
-        "PWRIGHT_CANDIDATE_CDP_ENDPOINT",
-        "PWRIGHT_ORACLE_CDP_ENDPOINT",
-        "PWRIGHT_CDP_ENDPOINT",
-        "PWRIGHT_CDP_WS_URL",
-        "PWRIGHT_NATIVE_PROFILE",
-        "PWRIGHT_NODE_CANDIDATE",
-        "PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM",
-        "PWRIGHT_OFFICIAL_SERVER_IP",
-        "PWRIGHT_OFFICIAL_SERVER_HOST",
-        "PWRIGHT_OFFICIAL_CROSS_ORIGIN_FORWARD",
+        "PLAYWRIGHT_RUST_CANDIDATE_CDP_ENDPOINT",
+        "PLAYWRIGHT_RUST_ORACLE_CDP_ENDPOINT",
+        "PLAYWRIGHT_RUST_CDP_ENDPOINT",
+        "PLAYWRIGHT_RUST_CDP_WS_URL",
+        "PLAYWRIGHT_RUST_NATIVE_PROFILE",
+        "PLAYWRIGHT_RUST_NODE_CANDIDATE",
+        "PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM",
+        "PLAYWRIGHT_RUST_OFFICIAL_SERVER_IP",
+        "PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST",
+        "PLAYWRIGHT_RUST_OFFICIAL_CROSS_ORIGIN_FORWARD",
         "TAILSCALE_IP",
         "TAILSCALE_HOST",
-        "PWRIGHT_CORE_CDP_ERROR_SLICE_GUARD_RECEIPT",
+        "PLAYWRIGHT_RUST_CORE_CDP_ERROR_SLICE_GUARD_RECEIPT",
     )
     if any(key in os.environ for key in forbidden):
         raise ValueError(
@@ -330,7 +330,7 @@ def run(mode: str) -> dict[str, Any]:
         output["receipt"].open("x").close()
         env = os.environ.copy()
         env["NODE_OPTIONS"] = f"--require={URL_ONLY_PRELOAD}"
-        env["PWRIGHT_CORE_CDP_ERROR_SLICE_GUARD_RECEIPT"] = str(output["receipt"])
+        env["PLAYWRIGHT_RUST_CORE_CDP_ERROR_SLICE_GUARD_RECEIPT"] = str(output["receipt"])
         command = [
             "uv",
             "run",
@@ -370,7 +370,7 @@ def run(mode: str) -> dict[str, Any]:
         assert completed.returncode == (0 if selected[0]["status"] == "expected" else 1)
         if mode == "oracle":
             assert selected[0]["status"] == "expected"
-        assert ("[pwright-candidate]" in output["log"].read_text()) == (
+        assert ("[playwright-rust-candidate]" in output["log"].read_text()) == (
             mode == "candidate"
         )
         runs.append(

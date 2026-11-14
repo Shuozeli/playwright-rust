@@ -63,7 +63,7 @@ def test_pair_reverification_uses_snapshot_artifact_and_restores_original(
 ) -> None:
     # Arrange
     original = promotion.ARTIFACT_PATH
-    expected = capture.SNAPSHOT_PACKAGE / "native" / capture.PROFILE / "pwright.node"
+    expected = capture.SNAPSHOT_PACKAGE / "native" / capture.PROFILE / "playwright_rust.node"
 
     def verify_existing() -> dict:
         assert promotion.ARTIFACT_PATH == expected

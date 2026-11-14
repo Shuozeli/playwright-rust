@@ -387,7 +387,7 @@ def main() -> None:
         "--registry",
         type=Path,
         default=root
-        / "packages/pwright-python/tests/official/python-fixture-environment-blockers.json",
+        / "packages/playwright-rust-python/tests/official/python-fixture-environment-blockers.json",
     )
     args = parser.parse_args()
     try:

@@ -6,7 +6,7 @@ cd "$repo_dir"
 
 dependency_closure() {
   local features=$1
-  local -a arguments=(--locked -p pwright-node-addon --no-default-features
+  local -a arguments=(--locked -p playwright-rust-node-addon --no-default-features
     --edges normal --prefix none --format '{p}')
   if [[ -n "$features" ]]; then
     arguments+=(--features "$features")
@@ -31,6 +31,6 @@ if [[ -n "$removed" || "$added" != "$expected" ]]; then
   exit 1
 fi
 
-CARGO_INCREMENTAL=0 cargo check --release --locked -p pwright-node-addon \
+CARGO_INCREMENTAL=0 cargo check --release --locked -p playwright-rust-node-addon \
   --no-default-features --features context-cookies
-echo 'Node Context cookies dependency proof passed (four regex packages, no Pwright leaf)'
+echo 'Node Context cookies dependency proof passed (four regex packages, no Playwright Rust leaf)'

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run pinned Firefox/WebKit :64 through isolated official and Pwright lanes.
+"""Run pinned Firefox/WebKit :64 through isolated official and Playwright Rust lanes.
 
 The only executable substituted by the harness is the exact upstream exit-1
 dummy Node asset. The upstream test body and assertions are never changed.
@@ -232,8 +232,8 @@ def run(mode: str, engine: str, upstream: Path, result: Path) -> None:
     ]
     sandbox = base.sandbox_profile(allowed)
     base.probe_sandbox(sandbox)
-    candidate = ROOT / "packages/pwright" if mode == "candidate" else None
-    artifact = candidate / "native/playwright-trace/pwright.node" if candidate else None
+    candidate = ROOT / "packages/playwright-rust" if mode == "candidate" else None
+    artifact = candidate / "native/playwright-trace/playwright_rust.node" if candidate else None
     if candidate and (
         base.source_digest(candidate) != manifest["candidateSourceSha256"]
         or artifact is None
@@ -273,30 +273,30 @@ def run(mode: str, engine: str, upstream: Path, result: Path) -> None:
     env = os.environ.copy()
     env.pop("CI", None)
     env["PWTEST_MODE"] = "default"
-    env["PWRIGHT_OFFICIAL_SERVER_IP"] = bind
-    env["PWRIGHT_OFFICIAL_SERVER_HOST"] = host
-    env["PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM"] = str(upstream)
-    env["PWRIGHT_OTHER_DUMMY_MODE"] = mode
-    env["PWRIGHT_OTHER_DUMMY_ENGINE"] = engine
-    env["PWRIGHT_OTHER_DUMMY_RUN_ID"] = run_id
-    env["PWRIGHT_OTHER_DUMMY_HARNESS_PID"] = str(os.getpid())
-    env["PWRIGHT_OTHER_DUMMY_MANIFEST"] = str(MANIFEST)
-    env["PWRIGHT_OTHER_DUMMY_MANIFEST_SHA256"] = MANIFEST_SHA256
-    env["PWRIGHT_OTHER_DUMMY_ASSET"] = str(upstream / ASSET)
-    env["PWRIGHT_OTHER_DUMMY_REAL_NODE"] = str(node)
-    env["PWRIGHT_OTHER_DUMMY_LAUNCH_RECEIPT"] = str(paths["launchReceipt"])
-    env["PWRIGHT_OTHER_DUMMY_PROFILE_RECEIPT"] = str(paths["profileReceipt"])
-    env["PWRIGHT_OTHER_DUMMY_PROCESS_RECEIPT"] = str(paths["processReceipt"])
+    env["PLAYWRIGHT_RUST_OFFICIAL_SERVER_IP"] = bind
+    env["PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST"] = host
+    env["PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM"] = str(upstream)
+    env["PLAYWRIGHT_RUST_OTHER_DUMMY_MODE"] = mode
+    env["PLAYWRIGHT_RUST_OTHER_DUMMY_ENGINE"] = engine
+    env["PLAYWRIGHT_RUST_OTHER_DUMMY_RUN_ID"] = run_id
+    env["PLAYWRIGHT_RUST_OTHER_DUMMY_HARNESS_PID"] = str(os.getpid())
+    env["PLAYWRIGHT_RUST_OTHER_DUMMY_MANIFEST"] = str(MANIFEST)
+    env["PLAYWRIGHT_RUST_OTHER_DUMMY_MANIFEST_SHA256"] = MANIFEST_SHA256
+    env["PLAYWRIGHT_RUST_OTHER_DUMMY_ASSET"] = str(upstream / ASSET)
+    env["PLAYWRIGHT_RUST_OTHER_DUMMY_REAL_NODE"] = str(node)
+    env["PLAYWRIGHT_RUST_OTHER_DUMMY_LAUNCH_RECEIPT"] = str(paths["launchReceipt"])
+    env["PLAYWRIGHT_RUST_OTHER_DUMMY_PROFILE_RECEIPT"] = str(paths["profileReceipt"])
+    env["PLAYWRIGHT_RUST_OTHER_DUMMY_PROCESS_RECEIPT"] = str(paths["processReceipt"])
     env["PLAYWRIGHT_JSON_OUTPUT_FILE"] = str(result)
     env["PATH"] = f"{GUARD.parent}:/opt/homebrew/bin:/usr/bin:/bin"
     preloads = [SERVER_PRELOAD]
     if candidate:
-        env["PWRIGHT_NODE_CANDIDATE"] = str(candidate)
-        env["PWRIGHT_NATIVE_PROFILE"] = "playwright-trace"
+        env["PLAYWRIGHT_RUST_NODE_CANDIDATE"] = str(candidate)
+        env["PLAYWRIGHT_RUST_NATIVE_PROFILE"] = "playwright-trace"
         preloads.append(CANDIDATE_PRELOAD)
     else:
-        env.pop("PWRIGHT_NODE_CANDIDATE", None)
-        env.pop("PWRIGHT_NATIVE_PROFILE", None)
+        env.pop("PLAYWRIGHT_RUST_NODE_CANDIDATE", None)
+        env.pop("PLAYWRIGHT_RUST_NATIVE_PROFILE", None)
     preloads.append(PRELOAD)
     env["NODE_OPTIONS"] = " ".join(f"--require={source}" for source in preloads)
     command = [

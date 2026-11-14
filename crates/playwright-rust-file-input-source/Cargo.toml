@@ -1,0 +1,12 @@
+[package]
+name = "playwright-rust-file-input-source"
+description = "Ledger-admitted file-input content ownership for Playwright Rust"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+playwright-rust-core.workspace = true
+playwright-rust-file-input-model.workspace = true

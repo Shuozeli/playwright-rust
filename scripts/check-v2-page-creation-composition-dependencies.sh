@@ -14,32 +14,32 @@ cargo tree \
   --edges normal \
   --prefix none \
   --format '{p}' \
-  | awk '/^pwright-/ { print $1 }' \
+  | awk '/^playwright-rust-/ { print $1 }' \
   | sort -u >"$tree_file"
 
 required_packages=(
-  pwright-v2-page-creation-composition-only-example
-  pwright-backend-cdp-common
-  pwright-backend-cdp-page-creation
-  pwright-backend-cdp-page-lifecycle
-  pwright-backend-cdp-topology
-  pwright-browser-model
-  pwright-cap-page-creation
-  pwright-cap-page-lifecycle
-  pwright-cdp
-  pwright-codec-binary
-  pwright-codec-common
-  pwright-codec-page-creation
-  pwright-codec-page-lifecycle
-  pwright-composition-chromium-page-creation
-  pwright-composition-chromium-page-lifecycle
-  pwright-connection-control
-  pwright-core
-  pwright-runtime
-  pwright-server-page-creation
-  pwright-server-page-lifecycle
-  pwright-server-wire
-  pwright-transport
+  playwright-rust-v2-page-creation-composition-only-example
+  playwright-rust-backend-cdp-common
+  playwright-rust-backend-cdp-page-creation
+  playwright-rust-backend-cdp-page-lifecycle
+  playwright-rust-backend-cdp-topology
+  playwright-rust-browser-model
+  playwright-rust-cap-page-creation
+  playwright-rust-cap-page-lifecycle
+  playwright-rust-cdp
+  playwright-rust-codec-binary
+  playwright-rust-codec-common
+  playwright-rust-codec-page-creation
+  playwright-rust-codec-page-lifecycle
+  playwright-rust-composition-chromium-page-creation
+  playwright-rust-composition-chromium-page-lifecycle
+  playwright-rust-connection-control
+  playwright-rust-core
+  playwright-rust-runtime
+  playwright-rust-server-page-creation
+  playwright-rust-server-page-lifecycle
+  playwright-rust-server-wire
+  playwright-rust-transport
 )
 
 for package in "${required_packages[@]}"; do
@@ -58,9 +58,9 @@ while IFS= read -r package; do
     fi
   done
   if [[ "$allowed" != true ]]; then
-    echo "Page-creation composition proof found forbidden Pwright package: $package" >&2
+    echo "Page-creation composition proof found forbidden Playwright Rust package: $package" >&2
     exit 1
   fi
 done <"$tree_file"
 
-echo "Page-creation composition dependency proof passed (${#required_packages[@]} Pwright packages)"
+echo "Page-creation composition dependency proof passed (${#required_packages[@]} Playwright Rust packages)"

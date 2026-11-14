@@ -1,0 +1,12 @@
+[package]
+name = "playwright-rust-cap-handle-evaluation"
+description = "Portable opt-in JavaScript handle evaluation contracts for Playwright Rust"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+playwright-rust-cap-evaluation = { workspace = true }
+playwright-rust-core = { workspace = true }

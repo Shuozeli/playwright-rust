@@ -13,7 +13,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).parents[1]
 UPSTREAM = Path.home() / "projects/thirdparty/playwright-python"
-OFFICIAL = ROOT / "packages/pwright-python/tests/official"
+OFFICIAL = ROOT / "packages/playwright-rust-python/tests/official"
 MANIFEST = OFFICIAL / "sync-network-service-worker-secure-chromium-paired-v1-manifest.json"
 ORIGINAL = OFFICIAL / "sync-network-full-v1-manifest.json"
 ORACLE_ONLY = (

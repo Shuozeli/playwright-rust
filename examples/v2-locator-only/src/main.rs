@@ -1,4 +1,4 @@
-use pwright_backend_cdp_locator::CdpLocatorService;
+use playwright_rust_backend_cdp_locator::CdpLocatorService;
 
 fn main() {
     println!(

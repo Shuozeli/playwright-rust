@@ -1,6 +1,6 @@
 """Verify one pinned upstream-private Android glob source-only invocation.
 
-Both labels run the same upstream utility. Neither label attests a Pwright
+Both labels run the same upstream utility. Neither label attests a Playwright Rust
 runtime or public API behavior.
 """
 
@@ -101,7 +101,7 @@ def verify_manifest() -> dict[str, Any]:
         "runner": _RUNNER,
         "config": _CONFIG,
         "args": _ARGS,
-        "sourceOnlyAdapter": "upstream-private-source-only-no-pwright-runtime",
+        "sourceOnlyAdapter": "upstream-private-source-only-no-playwright-rust-runtime",
         "requiresBrowser": False,
         "fixtureMode": "pinned-private-source-only-no-io",
         "sourceOnlyCase": _CASE,
@@ -241,7 +241,7 @@ def verify(provenance_path: Path) -> dict[str, Any]:
     _require(record.get("schema") == 1 and record.get("kind") == "pinned-upstream-private-android-glob-source-only"
              and record.get("mode") in {"candidate", "oracle"} and record.get("suite") == _SUITE
              and record.get("suiteRole") == "implementation-internal-source-only"
-             and record.get("adapter") == "upstream-private-source-only-no-pwright-runtime"
+             and record.get("adapter") == "upstream-private-source-only-no-playwright-rust-runtime"
              and record.get("requiresBrowser") is False and record.get("project") == _PROJECT
              and record.get("filters") == _ARGS and record.get("workers") == 1 and record.get("exitCode") == 0,
              "provenance scope, selection, or exit code changed")

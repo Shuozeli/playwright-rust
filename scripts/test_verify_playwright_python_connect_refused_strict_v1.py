@@ -17,7 +17,7 @@ import run_playwright_python_connect_refused_strict_v1 as runner
 import verify_playwright_python_connect_refused_strict_v1 as strict
 
 sys.path.insert(0, str(strict.GUARD))
-import pwright_official_connect_refused_guard_v1 as guard
+import playwright_rust_official_connect_refused_guard_v1 as guard
 
 
 def _unready_policy() -> dict[str, object]:
@@ -92,7 +92,7 @@ def test_candidate_feature_probe_checks_actual_package_abi_and_leaf() -> None:
     # Assert
     assert selected is True
     script = process.call_args.args[0][-1]
-    assert "from pwright import native_capabilities" in script
+    assert "from playwright_rust import native_capabilities" in script
     assert "'playwright-server-initialize' in selected_features()" in script
     with patch.object(
         strict.subprocess, "run", return_value=SimpleNamespace(stdout="0\n")
@@ -276,14 +276,14 @@ def test_guard_preserves_async_public_call_after_real_fixture_lifecycle(
     receipt.touch()
     test_id = strict.TEST_IDS[1]
     environment = {
-        "PWRIGHT_PYTHON_REFUSED_V1_EXPECTED_TEST": test_id,
-        "PWRIGHT_PYTHON_REFUSED_V1_UPSTREAM": str(upstream),
-        "PWRIGHT_PYTHON_REFUSED_V1_PORT": "48000",
-        "PWRIGHT_PYTHON_REFUSED_V1_RECEIPT": str(receipt),
-        "PWRIGHT_PYTHON_REFUSED_V1_NONCE": "a" * 32,
-        "PWRIGHT_OFFICIAL_TAILSCALE_HOST": "machine.tail8f3b66.ts.net",
-        "PWRIGHT_OFFICIAL_TAILSCALE_IP": "100.78.97.63",
-        "PWRIGHT_OFFICIAL_MODE": "candidate",
+        "PLAYWRIGHT_RUST_PYTHON_REFUSED_V1_EXPECTED_TEST": test_id,
+        "PLAYWRIGHT_RUST_PYTHON_REFUSED_V1_UPSTREAM": str(upstream),
+        "PLAYWRIGHT_RUST_PYTHON_REFUSED_V1_PORT": "48000",
+        "PLAYWRIGHT_RUST_PYTHON_REFUSED_V1_RECEIPT": str(receipt),
+        "PLAYWRIGHT_RUST_PYTHON_REFUSED_V1_NONCE": "a" * 32,
+        "PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_HOST": "machine.tail8f3b66.ts.net",
+        "PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_IP": "100.78.97.63",
+        "PLAYWRIGHT_RUST_OFFICIAL_MODE": "candidate",
     }
     conftest = ModuleType("tests.conftest")
     original_server = type("RemoteServer", (), {})
@@ -367,14 +367,14 @@ def test_guard_preserves_sync_public_call_after_real_fixture_lifecycle(
     receipt.touch()
     test_id = strict.TEST_IDS[4]
     environment = {
-        "PWRIGHT_PYTHON_REFUSED_V1_EXPECTED_TEST": test_id,
-        "PWRIGHT_PYTHON_REFUSED_V1_UPSTREAM": str(upstream),
-        "PWRIGHT_PYTHON_REFUSED_V1_PORT": "48000",
-        "PWRIGHT_PYTHON_REFUSED_V1_RECEIPT": str(receipt),
-        "PWRIGHT_PYTHON_REFUSED_V1_NONCE": "a" * 32,
-        "PWRIGHT_OFFICIAL_TAILSCALE_HOST": "machine.tail8f3b66.ts.net",
-        "PWRIGHT_OFFICIAL_TAILSCALE_IP": "100.78.97.63",
-        "PWRIGHT_OFFICIAL_MODE": "oracle",
+        "PLAYWRIGHT_RUST_PYTHON_REFUSED_V1_EXPECTED_TEST": test_id,
+        "PLAYWRIGHT_RUST_PYTHON_REFUSED_V1_UPSTREAM": str(upstream),
+        "PLAYWRIGHT_RUST_PYTHON_REFUSED_V1_PORT": "48000",
+        "PLAYWRIGHT_RUST_PYTHON_REFUSED_V1_RECEIPT": str(receipt),
+        "PLAYWRIGHT_RUST_PYTHON_REFUSED_V1_NONCE": "a" * 32,
+        "PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_HOST": "machine.tail8f3b66.ts.net",
+        "PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_IP": "100.78.97.63",
+        "PLAYWRIGHT_RUST_OFFICIAL_MODE": "oracle",
     }
     conftest = ModuleType("tests.conftest")
     original_server = type("RemoteServer", (), {})

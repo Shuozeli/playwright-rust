@@ -1,0 +1,10 @@
+[package]
+name = "playwright-rust-browser-provider"
+description = "Executor-independent browser acquisition and ownership contracts for Playwright Rust"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]

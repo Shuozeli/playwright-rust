@@ -1,0 +1,20 @@
+[package]
+name = "playwright-rust-backend-cdp-content"
+description = "Isolated Chromium CDP adapter for Playwright Rust Page screenshots"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+base64 = { workspace = true }
+playwright-rust-backend-cdp-common = { workspace = true }
+playwright-rust-browser-backend = { workspace = true }
+playwright-rust-cap-content = { workspace = true }
+playwright-rust-cdp = { workspace = true }
+playwright-rust-core = { workspace = true }
+
+[dev-dependencies]
+playwright-rust-fake = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt", "test-util"] }

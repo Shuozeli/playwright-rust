@@ -21,8 +21,8 @@ RESULT_PARENT = v1.RESULT_PARENT
 RUNTIME = v1.RUNTIME
 SHIM = v1.SHIM
 LEGACY_PLUGIN_DIR = v1.PLUGIN_DIR
-PLUGIN_DIR = ROOT / "packages/pwright-python/tests/official/connect_lifecycle_synthetic_v2"
-PLUGIN = PLUGIN_DIR / "pwright_python_connect_lifecycle_synthetic_v2.py"
+PLUGIN_DIR = ROOT / "packages/playwright-rust-python/tests/official/connect_lifecycle_synthetic_v2"
+PLUGIN = PLUGIN_DIR / "playwright_rust_python_connect_lifecycle_synthetic_v2.py"
 MANIFEST = PLUGIN_DIR / "manifest.json"
 SERVER = v1.SERVER
 WHEEL_NAME = v1.WHEEL_NAME
@@ -35,7 +35,7 @@ TEST_BODIES = tuple(
 EXPECTED_IDS = tuple(f"{body}[{engine}]" for engine in ENGINES for body in TEST_BODIES)
 FIXTURE_SOURCE_HASHES = {
     "manifest.json": "43120394b192fd1e70ff1130620390ed692782f9c914873bb050306404b71d1d",
-    "pwright_python_connect_lifecycle_synthetic_v1.py": (
+    "playwright_rust_python_connect_lifecycle_synthetic_v1.py": (
         "fc4f4c4a612af65a8cb8c8ac5018c5c1f81eabe3914883d5a4778e1b6722dc5d"
     ),
     "server.cjs": "7bac458b95db9153e1feea7a4d4710d39c7ad7e5025e88ce0b2f69bed744d48b",
@@ -44,11 +44,11 @@ HARNESS_INPUTS = (
     MANIFEST,
     PLUGIN,
     LEGACY_PLUGIN_DIR / "manifest.json",
-    LEGACY_PLUGIN_DIR / "pwright_python_connect_lifecycle_synthetic_v1.py",
+    LEGACY_PLUGIN_DIR / "playwright_rust_python_connect_lifecycle_synthetic_v1.py",
     SERVER,
-    RUNTIME / "pwright_official_server_runtime.py",
-    RUNTIME / "pwright_official_oracle_runtime.py",
-    SHIM / "pwright_candidate_runtime.py",
+    RUNTIME / "playwright_rust_official_server_runtime.py",
+    RUNTIME / "playwright_rust_official_oracle_runtime.py",
+    SHIM / "playwright_rust_candidate_runtime.py",
     SHIM / "playwright/async_api.py",
     SHIM / "playwright/sync_api.py",
     ROOT / "scripts/run_playwright_python_connect_lifecycle_synthetic_v2.py",
@@ -117,7 +117,7 @@ def verify_wheel_install(wheel: Path, site_packages: Path) -> dict[str, str]:
     installed: dict[str, str] = {}
     with zipfile.ZipFile(wheel) as archive:
         for name in archive.namelist():
-            if not (name.startswith("pwright/") or name.startswith("pwright.libs/")):
+            if not (name.startswith("playwright_rust/") or name.startswith("playwright_rust.libs/")):
                 continue
             if name.endswith("/"):
                 continue
@@ -127,7 +127,7 @@ def verify_wheel_install(wheel: Path, site_packages: Path) -> dict[str, str]:
             require(sha256(target) == digest, f"installed wheel file drifted: {name}")
             installed[name] = digest
     require(
-        "pwright/_native.abi3.so" in installed and "pwright/async_api.py" in installed,
+        "playwright_rust/_native.abi3.so" in installed and "playwright_rust/async_api.py" in installed,
         "selected wheel lacks native extension or async facade",
     )
     return installed
@@ -210,7 +210,7 @@ def receipt(
     else:
         require(
             imported.get("publicApiPath") == str((SHIM / "playwright/async_api.py").resolve())
-            and imported.get("candidatePackagePath") == str((site_packages / "pwright/__init__.py").resolve()),
+            and imported.get("candidatePackagePath") == str((site_packages / "playwright_rust/__init__.py").resolve()),
             "candidate did not import frozen wheel through public shim",
         )
     adapted = by_kind["fixture-adapted"][0]
@@ -297,8 +297,8 @@ def expected_command(python: Path, engine: str, xml: Path, mode: str) -> list[st
     return [
         str(python), "-m", "pytest", "-q", "--tb=short", "--override-ini", "addopts=",
         "--import-mode=importlib", "-c", str(UPSTREAM / "pyproject.toml"),
-        "-p", "pwright_official_server_runtime", "-p", "pwright_python_connect_lifecycle_synthetic_v2",
-        "-p", "pwright_candidate_runtime" if mode == "candidate" else "pwright_official_oracle_runtime",
+        "-p", "playwright_rust_official_server_runtime", "-p", "playwright_rust_python_connect_lifecycle_synthetic_v2",
+        "-p", "playwright_rust_candidate_runtime" if mode == "candidate" else "playwright_rust_official_oracle_runtime",
         f"--browser={engine}", "--timeout=30", "--timeout-method=signal", f"--junitxml={xml}",
         *(str(UPSTREAM / body.split("::", 1)[0]) + "::" + body.split("::", 1)[1] for body in TEST_BODIES),
     ]
@@ -317,7 +317,7 @@ def verify_directory(result_dir: Path) -> dict[str, Any]:
     wheel = result_dir / WHEEL_NAME
     site_packages = result_dir / "venv/lib/python3.12/site-packages"
     installed = verify_wheel_install(wheel, site_packages)
-    native = site_packages / "pwright/_native.abi3.so"
+    native = site_packages / "playwright_rust/_native.abi3.so"
     oracle_tree = v1._package_tree_sha256(site_packages / "playwright")
     freeze_path = result_dir / "tooling-freeze.txt"
     require(freeze_path.is_file() and not freeze_path.is_symlink(), "pinned tooling freeze missing")
@@ -330,7 +330,7 @@ def verify_directory(result_dir: Path) -> dict[str, Any]:
     )
     python = result_dir / "venv/bin/python"
     runtime = subprocess.check_output(
-        [str(python), "-c", "import json, pwright; print(json.dumps(pwright.native_capabilities(), sort_keys=True))"],
+        [str(python), "-c", "import json, playwright_rust; print(json.dumps(playwright_rust.native_capabilities(), sort_keys=True))"],
         text=True,
     )
     capabilities = json.loads(runtime)
@@ -369,8 +369,8 @@ def verify_directory(result_dir: Path) -> dict[str, Any]:
             environment = provenance.get("environment")
             require(isinstance(environment, dict), "lane environment missing")
             pair = (
-                environment.get("PWRIGHT_OFFICIAL_TAILSCALE_IP"),
-                environment.get("PWRIGHT_OFFICIAL_TAILSCALE_HOST"),
+                environment.get("PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_IP"),
+                environment.get("PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_HOST"),
             )
             require(
                 isinstance(pair[0], str) and pair[0].startswith("100.")
@@ -383,15 +383,15 @@ def verify_directory(result_dir: Path) -> dict[str, Any]:
             expected_pythonpath = [str(SHIM), str(RUNTIME), str(PLUGIN_DIR), str(LEGACY_PLUGIN_DIR)] if mode == "candidate" else [str(RUNTIME), str(PLUGIN_DIR), str(LEGACY_PLUGIN_DIR)]
             expected_environment = {
                 "PYTHONPATH": ":".join(expected_pythonpath),
-                "PWRIGHT_OFFICIAL_LAUNCH_MODE": "owned",
-                "PWRIGHT_OFFICIAL_TAILSCALE_IP": pair[0],
-                "PWRIGHT_OFFICIAL_TAILSCALE_HOST": pair[1],
-                "PWRIGHT_PYTHON_LIFECYCLE_MODE": mode,
-                "PWRIGHT_PYTHON_LIFECYCLE_ENGINE_FILTER": engine,
-                "PWRIGHT_PYTHON_LIFECYCLE_RECEIPT": str(receipt_path),
-                "PWRIGHT_PYTHON_LIFECYCLE_SERVER": str(SERVER),
-                "PWRIGHT_PYTHON_LIFECYCLE_UPSTREAM": str(UPSTREAM),
-                "PWRIGHT_PYTHON_LIFECYCLE_CORE_UPSTREAM": str(CORE),
+                "PLAYWRIGHT_RUST_OFFICIAL_LAUNCH_MODE": "owned",
+                "PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_IP": pair[0],
+                "PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_HOST": pair[1],
+                "PLAYWRIGHT_RUST_PYTHON_LIFECYCLE_MODE": mode,
+                "PLAYWRIGHT_RUST_PYTHON_LIFECYCLE_ENGINE_FILTER": engine,
+                "PLAYWRIGHT_RUST_PYTHON_LIFECYCLE_RECEIPT": str(receipt_path),
+                "PLAYWRIGHT_RUST_PYTHON_LIFECYCLE_SERVER": str(SERVER),
+                "PLAYWRIGHT_RUST_PYTHON_LIFECYCLE_UPSTREAM": str(UPSTREAM),
+                "PLAYWRIGHT_RUST_PYTHON_LIFECYCLE_CORE_UPSTREAM": str(CORE),
             }
             require(environment == expected_environment, "oracle/candidate import or fixture isolation changed")
             counts = receipt(

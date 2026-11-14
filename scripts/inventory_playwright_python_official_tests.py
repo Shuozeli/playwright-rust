@@ -214,7 +214,7 @@ def main() -> None:
     parser.add_argument(
         "--manifest",
         type=Path,
-        default=root / "packages/pwright-python/tests/official/manifest.json",
+        default=root / "packages/playwright-rust-python/tests/official/manifest.json",
     )
     parser.add_argument(
         "--examples-python",

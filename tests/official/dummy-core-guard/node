@@ -73,9 +73,9 @@ def ancestry(harness_pid: int) -> list[dict[str, object]]:
 
 
 def main() -> int:
-    asset = Path(os.environ["PWRIGHT_DUMMY_PROCESS_ASSET"])
-    receipt = Path(os.environ["PWRIGHT_DUMMY_PROCESS_RECEIPT"])
-    real_node = Path(os.environ["PWRIGHT_DUMMY_REAL_NODE"])
+    asset = Path(os.environ["PLAYWRIGHT_RUST_DUMMY_PROCESS_ASSET"])
+    receipt = Path(os.environ["PLAYWRIGHT_RUST_DUMMY_PROCESS_RECEIPT"])
+    real_node = Path(os.environ["PLAYWRIGHT_RUST_DUMMY_REAL_NODE"])
     if (
         len(sys.argv) < 2
         or Path(sys.argv[1]) != asset
@@ -89,7 +89,7 @@ def main() -> int:
         or not real_node.is_file()
     ):
         raise SystemExit("dummy Core guard rejected an unpinned Node invocation")
-    run_id = os.environ.get("PWRIGHT_DUMMY_STRICT_RUN_ID")
+    run_id = os.environ.get("PLAYWRIGHT_RUST_DUMMY_STRICT_RUN_ID")
     profile = None
     profile_stat = None
     if run_id:
@@ -106,12 +106,12 @@ def main() -> int:
             or profile.is_symlink()
             or not profile.is_dir()
             or (
-                os.environ["PWRIGHT_DUMMY_LAUNCH_MODE"] == "candidate"
+                os.environ["PLAYWRIGHT_RUST_DUMMY_LAUNCH_MODE"] == "candidate"
                 and profile.resolve() != profile
             )
             or (
-                os.environ["PWRIGHT_DUMMY_LAUNCH_MODE"] == "candidate"
-                and not profile.name.startswith("pwright-node-")
+                os.environ["PLAYWRIGHT_RUST_DUMMY_LAUNCH_MODE"] == "candidate"
+                and not profile.name.startswith("playwright-rust-node-")
             )
         ):
             raise ValueError(
@@ -121,7 +121,7 @@ def main() -> int:
         if stat.st_uid != os.getuid():
             raise ValueError("dummy Core strict launch profile has another owner")
         profile_stat = {"device": stat.st_dev, "inode": stat.st_ino, "uid": stat.st_uid}
-    chain = ancestry(int(os.environ["PWRIGHT_DUMMY_HARNESS_PID"])) if run_id else None
+    chain = ancestry(int(os.environ["PLAYWRIGHT_RUST_DUMMY_HARNESS_PID"])) if run_id else None
     child = subprocess.Popen([str(real_node), *sys.argv[1:]])
     child_snapshot = process_snapshot(child.pid) if run_id else None
     result = child.wait()
@@ -138,15 +138,15 @@ def main() -> int:
             event.update(
                 {
                     "runId": run_id,
-                    "mode": os.environ["PWRIGHT_DUMMY_LAUNCH_MODE"],
+                    "mode": os.environ["PLAYWRIGHT_RUST_DUMMY_LAUNCH_MODE"],
                     "guardPid": os.getpid(),
                     "guardParentPid": os.getppid(),
                     "childPid": child.pid,
                     "childReaped": child.returncode == result,
                     "childSnapshot": child_snapshot,
                     "ancestry": chain,
-                    "candidateProfile": os.environ.get("PWRIGHT_NATIVE_PROFILE"),
-                    "harnessPid": int(os.environ["PWRIGHT_DUMMY_HARNESS_PID"]),
+                    "candidateProfile": os.environ.get("PLAYWRIGHT_RUST_NATIVE_PROFILE"),
+                    "harnessPid": int(os.environ["PLAYWRIGHT_RUST_DUMMY_HARNESS_PID"]),
                     "browserProfilePath": str(profile),
                     "browserProfileStat": profile_stat,
                     "browserArguments": sys.argv[2:],
@@ -160,8 +160,8 @@ if __name__ == "__main__":
     try:
         raise SystemExit(main())
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
-        if os.environ.get("PWRIGHT_DUMMY_STRICT_RUN_ID"):
-            with Path(os.environ["PWRIGHT_DUMMY_PROCESS_RECEIPT"]).open("a") as stream:
+        if os.environ.get("PLAYWRIGHT_RUST_DUMMY_STRICT_RUN_ID"):
+            with Path(os.environ["PLAYWRIGHT_RUST_DUMMY_PROCESS_RECEIPT"]).open("a") as stream:
                 stream.write(
                     json.dumps({"event": "guard-error", "message": str(error)}) + "\n"
                 )

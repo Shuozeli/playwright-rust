@@ -180,7 +180,7 @@ def check_harness() -> None:
     for relative, expected in HARNESS_PINS.items():
         sealed(ROOT / relative, expected)
     sealed(
-        capture.SOURCE_PACKAGE / "native" / capture.PROFILE / "pwright.node",
+        capture.SOURCE_PACKAGE / "native" / capture.PROFILE / "playwright_rust.node",
         capture.ARTIFACT_SHA256,
     )
     sealed(capture.SNAPSHOT_MANIFEST, SNAPSHOT_MANIFEST_SHA256)

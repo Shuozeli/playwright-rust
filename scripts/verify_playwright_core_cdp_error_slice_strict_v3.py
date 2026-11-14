@@ -122,7 +122,7 @@ def verify_strict(strict_path: Path) -> dict[str, Any]:
         assert provenance["candidateProfile"] == capture.PROFILE
         assert provenance["candidateArtifactSha256"] == capture.ARTIFACT_SHA256
         assert provenance["candidate"] is not None
-        assert "[pwright-candidate]" in log
+        assert "[playwright-rust-candidate]" in log
         assert strict["pairedOracleStrictSha256"] == base.sha256(capture.ORACLE_SIDECAR)
         oracle = verify_strict(capture.ORACLE_SIDECAR)
         assert oracle["mode"] == "oracle"
@@ -132,7 +132,7 @@ def verify_strict(strict_path: Path) -> dict[str, Any]:
         assert strict["pairedOracleStrictSha256"] is None
         assert provenance["candidate"] is None
         assert provenance["candidateArtifactSha256"] is None
-        assert "[pwright-candidate]" not in log
+        assert "[playwright-rust-candidate]" not in log
     selected = worker_aware.selected_tests(json.loads(result.read_text()))
     assert selected == strict["selected"]
     assert strict["exitCode"] == (

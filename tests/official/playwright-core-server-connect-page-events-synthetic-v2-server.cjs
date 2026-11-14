@@ -8,12 +8,12 @@ const { promises: dns } = require('node:dns');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const bind = process.env.PWRIGHT_OFFICIAL_SERVER_IP;
-const host = process.env.PWRIGHT_OFFICIAL_SERVER_HOST;
-const upstream = process.env.PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM;
-const receipt = process.env.PWRIGHT_CORE_PAGE_EVENTS_SYNTHETIC_RECEIPT;
-const mode = process.env.PWRIGHT_CORE_PAGE_EVENTS_SYNTHETIC_MODE;
-const probeToken = process.env.PWRIGHT_CORE_PAGE_EVENTS_SYNTHETIC_PROBE_TOKEN;
+const bind = process.env.PLAYWRIGHT_RUST_OFFICIAL_SERVER_IP;
+const host = process.env.PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST;
+const upstream = process.env.PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM;
+const receipt = process.env.PLAYWRIGHT_RUST_CORE_PAGE_EVENTS_SYNTHETIC_RECEIPT;
+const mode = process.env.PLAYWRIGHT_RUST_CORE_PAGE_EVENTS_SYNTHETIC_MODE;
+const probeToken = process.env.PLAYWRIGHT_RUST_CORE_PAGE_EVENTS_SYNTHETIC_PROBE_TOKEN;
 if (!bind || !host || !upstream || !receipt || !['candidate', 'oracle'].includes(mode))
   throw new Error('Page-events synthetic server requires pinned lane and Tailscale address');
 const { WebSocketServer } = require(require.resolve('ws', { paths: [path.resolve(upstream)] }));
@@ -79,7 +79,7 @@ function emitPositiveEvents(ws, connection) {
   const page = { guid: 'page@1' };
   create(ws, 'context@1', 'Request', request.guid, {
     frame: { guid: 'frame@1' }, url: eventUrl, method: 'POST',
-    resourceType: 'fetch', headers: [{ name: 'X-Pwright-Probe', value: 'positive-v2' }],
+    resourceType: 'fetch', headers: [{ name: 'X-Playwright Rust-Probe', value: 'positive-v2' }],
     isNavigationRequest: false, hasResponse: true,
   });
   create(ws, request.guid, 'Response', response.guid, {
@@ -134,7 +134,7 @@ const server = createServer((request, response) => {
     return;
   }
   if (request.method === 'POST' && request.url === '/emit-positive' && probeToken &&
-      request.headers['x-pwright-probe-token'] === probeToken &&
+      request.headers['x-playwright-rust-probe-token'] === probeToken &&
       active?.phase === 3 && !active.positiveEmitted && !active.positiveRequested) {
     active.positiveRequested = response;
     maybeEmitPositive();

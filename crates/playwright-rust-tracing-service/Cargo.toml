@@ -1,0 +1,25 @@
+[package]
+name = "playwright-rust-tracing-service"
+description = "Task-free Context-scoped tracing recorder and injected sink composition"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+playwright-rust-cap-tracing = { workspace = true }
+playwright-rust-core = { workspace = true }
+playwright-rust-server-tracing = { workspace = true }
+playwright-rust-trace-model = { workspace = true }
+
+[dev-dependencies]
+playwright-rust-browser-model = { workspace = true }
+playwright-rust-client = { workspace = true }
+playwright-rust-client-tracing = { workspace = true }
+playwright-rust-client-wire = { workspace = true }
+playwright-rust-codec-tracing = { workspace = true }
+playwright-rust-server-wire = { workspace = true }
+playwright-rust-transport = { workspace = true }
+playwright-rust-transport-memory = { workspace = true }
+tokio = { workspace = true }

@@ -20,7 +20,7 @@ OUTCOMES = (
 
 def _manifest(api: str) -> dict[str, object]:
     path = (
-        ROOT / "packages/pwright-python/tests/official/"
+        ROOT / "packages/playwright-rust-python/tests/official/"
         f"{api}-element-handle-evaluate-handle-preview-chromium-v1-manifest.json"
     )
     return json.loads(path.read_text())

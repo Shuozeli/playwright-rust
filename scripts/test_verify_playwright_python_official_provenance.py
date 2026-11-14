@@ -62,13 +62,13 @@ def _fixture(
     launch_mode: str | None = None,
     source_package: bool = False,
 ) -> tuple[dict[str, object], Path, Path, Path]:
-    official = root / "packages/pwright-python/tests/official"
+    official = root / "packages/playwright-rust-python/tests/official"
     runtime_harness = official / "runtime"
     candidate_harness = official / "shim"
     runtime_harness.mkdir(parents=True)
     candidate_harness.mkdir()
-    (runtime_harness / "pwright_official_server_runtime.py").write_text("\n")
-    (candidate_harness / "pwright_candidate_runtime.py").write_text("\n")
+    (runtime_harness / "playwright_rust_official_server_runtime.py").write_text("\n")
+    (candidate_harness / "playwright_rust_candidate_runtime.py").write_text("\n")
 
     upstream = root / "upstream"
     upstream.mkdir()
@@ -119,17 +119,17 @@ def _fixture(
         )
 
     playwright_package = root / "site/playwright"
-    pwright_package = (
-        root / "packages/pwright-python/python/pwright" if source_package else root / "site/pwright"
+    playwright_rust_package = (
+        root / "packages/playwright-rust-python/python/playwright_rust" if source_package else root / "site/playwright_rust"
     )
     playwright_package.mkdir(parents=True)
-    pwright_package.mkdir(parents=True)
+    playwright_rust_package.mkdir(parents=True)
     (playwright_package / "__init__.py").write_text("\n")
-    (pwright_package / "__init__.py").write_text("\n")
-    artifact = pwright_package / "_native.abi3.so"
+    (playwright_rust_package / "__init__.py").write_text("\n")
+    artifact = playwright_rust_package / "_native.abi3.so"
     artifact.write_bytes(b"native")
     if schema5:
-        libraries = pwright_package.parent / "shuozeli_pwright.dylibs"
+        libraries = playwright_rust_package.parent / "shuozeli_playwright_rust.dylibs"
         libraries.mkdir()
         (libraries / "libcrypto-a12805a1.3.dylib").write_bytes(b"crypto")
         (libraries / "libssl-ffd8ac69.3.dylib").write_bytes(b"ssl")
@@ -137,12 +137,12 @@ def _fixture(
         "pythonExecutable": str(Path(sys.executable).absolute()),
         "pythonVersion": platform.python_version(),
         "playwrightPackage": str(playwright_package),
-        "pwrightPackage": str(pwright_package),
-        "pwrightArtifact": str(artifact),
+        "playwright_rustPackage": str(playwright_rust_package),
+        "playwright_rustArtifact": str(artifact),
     }
     result = root / "result.xml"
     launch_property = (
-        '<properties><property name="pwright.official.launchMode" '
+        '<properties><property name="playwright_rust.official.launchMode" '
         f'value="{launch_mode}"/></properties>'
         if launch_mode is not None
         else ""
@@ -163,9 +163,9 @@ def _fixture(
         command.extend(
             [
                 "-p",
-                "pwright_official_server_runtime",
+                "playwright_rust_official_server_runtime",
                 "-p",
-                "pwright_candidate_runtime",
+                "playwright_rust_candidate_runtime",
             ]
         )
     command.extend(
@@ -224,7 +224,7 @@ def _fixture(
     )
     provenance_path = result.with_suffix(".provenance.json")
     provenance_path.write_text(json.dumps(provenance, sort_keys=True) + "\n")
-    return provenance, provenance_path, result, pwright_package
+    return provenance, provenance_path, result, playwright_rust_package
 
 
 def _loop_fixture(root: Path, *, schema2: bool = False) -> tuple[dict[str, object], Path, Path]:
@@ -276,9 +276,9 @@ def _loop_fixture(root: Path, *, schema2: bool = False) -> tuple[dict[str, objec
                 "-c",
                 str(upstream / "pyproject.toml"),
                 "-p",
-                "pwright_official_server_runtime",
+                "playwright_rust_official_server_runtime",
                 "-p",
-                "pwright_candidate_runtime",
+                "playwright_rust_candidate_runtime",
                 str(source.resolve()) + "::test_sync_playwright_multiple_times",
                 str(source.resolve()) + "::test_sync_playwright_stop_multiple_times",
                 f"--junitxml={result}",
@@ -313,14 +313,14 @@ def _registry_fixture(
     command[-2] = str(source.resolve()) + "::test_browser_type_executable_path_should_work"
     if mode == "oracle":
         provenance["mode"] = "oracle"
-        provenance["pwrightPackage"] = None
-        provenance["pwrightPackageSha256"] = None
-        provenance["pwrightArtifact"] = None
-        provenance["pwrightArtifactSha256"] = None
+        provenance["playwright_rustPackage"] = None
+        provenance["playwright_rustPackageSha256"] = None
+        provenance["playwright_rustArtifact"] = None
+        provenance["playwright_rustArtifactSha256"] = None
         provenance["harnessInputs"] = cast(list[dict[str, str]], provenance["harnessInputs"])[1:]
-        command[command.index("pwright_candidate_runtime")] = "pwright_official_oracle_runtime"
+        command[command.index("playwright_rust_candidate_runtime")] = "playwright_rust_official_oracle_runtime"
         if schema5:
-            provenance["pwrightRuntimeLibraries"] = []
+            provenance["playwright_rustRuntimeLibraries"] = []
     provenance["manifestSha256"] = file_sha256(manifest_path)
     provenance["tag"] = "v1.58.0"
     provenance["selections"] = [case_id]
@@ -328,8 +328,8 @@ def _registry_fixture(
         "pythonExecutable": cast(str, provenance["pythonExecutable"]),
         "pythonVersion": cast(str, provenance["pythonVersion"]),
         "playwrightPackage": cast(str, provenance["playwrightPackage"]),
-        "pwrightPackage": cast(str | None, provenance["pwrightPackage"]),
-        "pwrightArtifact": cast(str | None, provenance["pwrightArtifact"]),
+        "playwright_rustPackage": cast(str | None, provenance["playwright_rustPackage"]),
+        "playwright_rustArtifact": cast(str | None, provenance["playwright_rustArtifact"]),
     }
     environment = os.environ.copy()
     browsers_json = probe_official_browsers_json(sys.executable, cwd=root, env=environment)
@@ -345,7 +345,7 @@ def _registry_fixture(
     provenance["exitCode"] = 1
     result = Path(cast(str, provenance["result"]))
     launch_property = (
-        '<properties><property name="pwright.official.launchMode" value="owned"/></properties>'
+        '<properties><property name="playwright_rust.official.launchMode" value="owned"/></properties>'
         if schema5
         else ""
     )
@@ -407,7 +407,7 @@ class VerifyPythonOfficialProvenanceTests(unittest.TestCase):
                 launch_mode="owned",
                 source_package=True,
             )
-            libraries = package.parent / "shuozeli_pwright.dylibs"
+            libraries = package.parent / "shuozeli_playwright_rust.dylibs"
 
             # Act
             verified = verify_provenance(
@@ -420,7 +420,7 @@ class VerifyPythonOfficialProvenanceTests(unittest.TestCase):
             # Assert
             self.assertEqual(verified["schema"], 5)
             self.assertEqual(
-                verified["pwrightRuntimeLibraries"],
+                verified["playwright_rustRuntimeLibraries"],
                 [
                     {"path": str(path), "sha256": file_sha256(path)}
                     for path in sorted(libraries.iterdir())
@@ -439,7 +439,7 @@ class VerifyPythonOfficialProvenanceTests(unittest.TestCase):
                     launch_mode="owned",
                     source_package=True,
                 )
-                libraries = package.parent / "shuozeli_pwright.dylibs"
+                libraries = package.parent / "shuozeli_playwright_rust.dylibs"
                 crypto = libraries / "libcrypto-a12805a1.3.dylib"
                 if drift == "content":
                     crypto.write_bytes(b"changed")
@@ -472,9 +472,9 @@ class VerifyPythonOfficialProvenanceTests(unittest.TestCase):
                     launch_mode="owned",
                     source_package=True,
                 )
-                libraries = package.parent / "shuozeli_pwright.dylibs"
+                libraries = package.parent / "shuozeli_playwright_rust.dylibs"
                 if drift == "path":
-                    records = cast(list[dict[str, str]], provenance["pwrightRuntimeLibraries"])
+                    records = cast(list[dict[str, str]], provenance["playwright_rustRuntimeLibraries"])
                     records[0]["path"] = str(root / "unrelated/libcrypto.dylib")
                     message = "wrong adjacent path"
                 else:
@@ -505,12 +505,12 @@ class VerifyPythonOfficialProvenanceTests(unittest.TestCase):
                 launch_mode="owned",
                 source_package=True,
             )
-            archived_package = root / "archive/pwright"
-            archived_libraries = archived_package.parent / "shuozeli_pwright.dylibs"
+            archived_package = root / "archive/playwright_rust"
+            archived_libraries = archived_package.parent / "shuozeli_playwright_rust.dylibs"
             shutil.copytree(live_package, archived_package)
-            shutil.copytree(live_package.parent / "shuozeli_pwright.dylibs", archived_libraries)
+            shutil.copytree(live_package.parent / "shuozeli_playwright_rust.dylibs", archived_libraries)
             (live_package / "__init__.py").write_text("changed\n")
-            (live_package.parent / "shuozeli_pwright.dylibs/libssl-ffd8ac69.3.dylib").write_bytes(
+            (live_package.parent / "shuozeli_playwright_rust.dylibs/libssl-ffd8ac69.3.dylib").write_bytes(
                 b"changed"
             )
 
@@ -525,7 +525,7 @@ class VerifyPythonOfficialProvenanceTests(unittest.TestCase):
 
             # Assert
             self.assertEqual(verified["schema"], 5)
-            self.assertEqual(len(cast(list[object], verified["pwrightRuntimeLibraries"])), 2)
+            self.assertEqual(len(cast(list[object], verified["playwright_rustRuntimeLibraries"])), 2)
 
             # Act and Assert: an archive with an altered sibling is not equivalent.
             (archived_libraries / "libssl-ffd8ac69.3.dylib").write_bytes(b"changed")
@@ -549,7 +549,7 @@ class VerifyPythonOfficialProvenanceTests(unittest.TestCase):
                 launch_mode="owned",
                 source_package=True,
             )
-            archived_package = root / "archive/pwright"
+            archived_package = root / "archive/playwright_rust"
             shutil.copytree(live_package, archived_package)
 
             # Act and Assert
@@ -571,17 +571,17 @@ class VerifyPythonOfficialProvenanceTests(unittest.TestCase):
             )
             provenance["mode"] = "oracle"
             for key in (
-                "pwrightPackage",
-                "pwrightPackageSha256",
-                "pwrightArtifact",
-                "pwrightArtifactSha256",
+                "playwright_rustPackage",
+                "playwright_rustPackageSha256",
+                "playwright_rustArtifact",
+                "playwright_rustArtifactSha256",
             ):
                 provenance[key] = None
-            provenance["pwrightRuntimeLibraries"] = []
+            provenance["playwright_rustRuntimeLibraries"] = []
             provenance["harnessInputs"] = cast(list[object], provenance["harnessInputs"])[1:]
             command = cast(list[str], provenance["command"])
-            candidate_plugin = command.index("pwright_candidate_runtime")
-            command[candidate_plugin] = "pwright_official_oracle_runtime"
+            candidate_plugin = command.index("playwright_rust_candidate_runtime")
+            command[candidate_plugin] = "playwright_rust_official_oracle_runtime"
 
             # Act
             verified = verify_provenance(
@@ -592,10 +592,10 @@ class VerifyPythonOfficialProvenanceTests(unittest.TestCase):
             )
 
             # Assert
-            self.assertEqual(verified["pwrightRuntimeLibraries"], [])
+            self.assertEqual(verified["playwright_rustRuntimeLibraries"], [])
 
             # Act and Assert: oracle cannot claim candidate-owned libraries.
-            provenance["pwrightRuntimeLibraries"] = [
+            provenance["playwright_rustRuntimeLibraries"] = [
                 {"path": str(root / "libssl.dylib"), "sha256": "0" * 64}
             ]
             with self.assertRaisesRegex(ProvenanceValidationError, "oracle provenance"):
@@ -613,7 +613,7 @@ class VerifyPythonOfficialProvenanceTests(unittest.TestCase):
             provenance, provenance_path, _, _ = _fixture(
                 root, schema2=True, schema5=True, launch_mode="owned"
             )
-            del provenance["pwrightRuntimeLibraries"]
+            del provenance["playwright_rustRuntimeLibraries"]
 
             # Act and Assert
             with self.assertRaisesRegex(ProvenanceValidationError, "fields differ"):
@@ -708,13 +708,13 @@ class VerifyPythonOfficialProvenanceTests(unittest.TestCase):
             provenance, provenance_path, _, _ = _fixture(root, schema2=True)
             archive = root / "archive"
             archive.mkdir()
-            shutil.copytree(root / "packages/pwright-python/tests/official/shim", archive / "shim")
+            shutil.copytree(root / "packages/playwright-rust-python/tests/official/shim", archive / "shim")
             shutil.copytree(
-                root / "packages/pwright-python/tests/official/runtime",
+                root / "packages/playwright-rust-python/tests/official/runtime",
                 archive / "runtime",
             )
             (
-                root / "packages/pwright-python/tests/official/shim/pwright_candidate_runtime.py"
+                root / "packages/playwright-rust-python/tests/official/shim/playwright_rust_candidate_runtime.py"
             ).write_text("changed\n")
 
             # Act
@@ -734,7 +734,7 @@ class VerifyPythonOfficialProvenanceTests(unittest.TestCase):
         with TemporaryDirectory() as directory:
             root = Path(directory)
             provenance, provenance_path, _, _ = _fixture(root, schema2=True)
-            shim = root / "packages/pwright-python/tests/official/shim"
+            shim = root / "packages/playwright-rust-python/tests/official/shim"
             shim_package = shim / "playwright"
             shim_package.mkdir()
             (shim_package / "__init__.py").write_text("old\n")
@@ -746,7 +746,7 @@ class VerifyPythonOfficialProvenanceTests(unittest.TestCase):
             archive.mkdir()
             shutil.copytree(shim, archive / "shim")
             shutil.copytree(
-                root / "packages/pwright-python/tests/official/runtime",
+                root / "packages/playwright-rust-python/tests/official/runtime",
                 archive / "runtime",
             )
             (shim_package / "__init__.py").write_text("new\n")
@@ -773,7 +773,7 @@ class VerifyPythonOfficialProvenanceTests(unittest.TestCase):
             provenance, provenance_path, _, live_package = _fixture(
                 root, schema2=True, source_package=True
             )
-            archive = root / "archive/pwright"
+            archive = root / "archive/playwright_rust"
             shutil.copytree(live_package, archive)
             (live_package / "__init__.py").write_text("changed\n")
             (live_package / "_native.abi3.so").write_bytes(b"changed native")
@@ -788,9 +788,9 @@ class VerifyPythonOfficialProvenanceTests(unittest.TestCase):
             )
 
             # Assert
-            self.assertEqual(verified["pwrightPackageSha256"], tree_sha256(archive))
+            self.assertEqual(verified["playwright_rustPackageSha256"], tree_sha256(archive))
             self.assertEqual(
-                verified["pwrightArtifactSha256"],
+                verified["playwright_rustArtifactSha256"],
                 file_sha256(archive / "_native.abi3.so"),
             )
 
@@ -801,13 +801,13 @@ class VerifyPythonOfficialProvenanceTests(unittest.TestCase):
             provenance, provenance_path, _, live_package = _fixture(
                 root, schema2=True, source_package=True
             )
-            archive = root / "archive/pwright"
+            archive = root / "archive/playwright_rust"
             shutil.copytree(live_package, archive)
             (archive / "__init__.py").write_text("not captured\n")
 
             # Act and Assert
             with self.assertRaisesRegex(
-                ProvenanceValidationError, "pwright package SHA-256 mismatch"
+                ProvenanceValidationError, "playwright_rust package SHA-256 mismatch"
             ):
                 verify_provenance(
                     provenance,
@@ -826,14 +826,14 @@ class VerifyPythonOfficialProvenanceTests(unittest.TestCase):
             provenance, provenance_path, _, live_package = _fixture(
                 root, schema2=True, source_package=True
             )
-            archive = root / "archive/pwright"
+            archive = root / "archive/playwright_rust"
             shutil.copytree(live_package, archive)
             (archive / "_native.abi3.so").write_bytes(b"not captured")
-            provenance["pwrightPackageSha256"] = tree_sha256(archive)
+            provenance["playwright_rustPackageSha256"] = tree_sha256(archive)
 
             # Act and Assert
             with self.assertRaisesRegex(
-                ProvenanceValidationError, "pwright artifact SHA-256 mismatch"
+                ProvenanceValidationError, "playwright_rust artifact SHA-256 mismatch"
             ):
                 verify_provenance(
                     provenance,
@@ -848,7 +848,7 @@ class VerifyPythonOfficialProvenanceTests(unittest.TestCase):
         with TemporaryDirectory() as directory:
             root = Path(directory)
             provenance, provenance_path, _, live_package = _fixture(root, schema2=True)
-            archive = root / "archive/pwright"
+            archive = root / "archive/playwright_rust"
             shutil.copytree(live_package, archive)
 
             # Act and Assert
@@ -870,9 +870,9 @@ class VerifyPythonOfficialProvenanceTests(unittest.TestCase):
             provenance, provenance_path, _, live_package = _fixture(
                 root, schema2=True, source_package=True
             )
-            archive = root / "archive/pwright"
+            archive = root / "archive/playwright_rust"
             shutil.copytree(live_package, archive)
-            provenance["pwrightArtifact"] = str(root / "unrelated/_native.abi3.so")
+            provenance["playwright_rustArtifact"] = str(root / "unrelated/_native.abi3.so")
 
             # Act and Assert
             with self.assertRaisesRegex(ProvenanceValidationError, "inside the recorded package"):
@@ -891,9 +891,9 @@ class VerifyPythonOfficialProvenanceTests(unittest.TestCase):
             provenance, provenance_path, _, live_package = _fixture(
                 root, schema2=True, source_package=True
             )
-            archive = root / "archive/pwright"
+            archive = root / "archive/playwright_rust"
             shutil.copytree(live_package, archive)
-            linked_root = root / "linked-pwright"
+            linked_root = root / "linked-playwright_rust"
             linked_root.symlink_to(archive, target_is_directory=True)
 
             # Act and Assert
@@ -913,7 +913,7 @@ class VerifyPythonOfficialProvenanceTests(unittest.TestCase):
             provenance, provenance_path, _, live_package = _fixture(
                 root, schema2=True, source_package=True
             )
-            archive = root / "archive/pwright"
+            archive = root / "archive/playwright_rust"
             shutil.copytree(live_package, archive)
             outside = root / "outside.py"
             outside.write_text("outside\n")
@@ -936,7 +936,7 @@ class VerifyPythonOfficialProvenanceTests(unittest.TestCase):
             provenance, provenance_path, _, live_package = _fixture(
                 root, schema2=True, source_package=True
             )
-            archive = root / "archive/pwright"
+            archive = root / "archive/playwright_rust"
             shutil.copytree(live_package, archive)
             provenance["mode"] = "oracle"
 
@@ -1335,12 +1335,12 @@ class VerifyPythonOfficialProvenanceTests(unittest.TestCase):
     def test_candidate_package_tampering_is_rejected(self) -> None:
         # Arrange
         with TemporaryDirectory() as directory:
-            provenance, provenance_path, _, pwright_package = _fixture(Path(directory))
-            (pwright_package / "__init__.py").write_text("tampered = True\n")
+            provenance, provenance_path, _, playwright_rust_package = _fixture(Path(directory))
+            (playwright_rust_package / "__init__.py").write_text("tampered = True\n")
 
             # Act and Assert
             with self.assertRaisesRegex(
-                ProvenanceValidationError, "pwright package SHA-256 mismatch"
+                ProvenanceValidationError, "playwright_rust package SHA-256 mismatch"
             ):
                 verify_provenance(
                     provenance,

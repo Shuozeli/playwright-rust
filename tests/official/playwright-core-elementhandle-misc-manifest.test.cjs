@@ -10,7 +10,7 @@ const readline = require('node:readline');
 const test = require('node:test');
 
 const root = path.resolve(__dirname, '../..');
-const upstream = process.env.PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM
+const upstream = process.env.PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM
   || path.join(os.homedir(), 'projects/thirdparty/playwright-v1.58.0');
 const relativeSource = 'tests/page/elementhandle-misc.spec.ts';
 const manifest = JSON.parse(fs.readFileSync(path.join(

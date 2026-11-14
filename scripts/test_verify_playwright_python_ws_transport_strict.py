@@ -16,7 +16,7 @@ import pytest
 import verify_playwright_python_ws_transport_strict as strict
 
 sys.path.insert(0, str(strict.GUARD))
-import pwright_official_ws_guard as guard
+import playwright_rust_official_ws_guard as guard
 
 
 class PolicyTests(unittest.TestCase):
@@ -103,14 +103,14 @@ class GuardTests(unittest.TestCase):
         self.host = "test.tail8f3b66.ts.net"
         self.port = 48000
         self.env = {
-            "PWRIGHT_PYTHON_WS_EXPECTED_TEST": strict.TEST_IDS[0],
-            "PWRIGHT_PYTHON_WS_UPSTREAM": str(self.root),
-            "PWRIGHT_PYTHON_WS_PORT": str(self.port),
-            "PWRIGHT_PYTHON_WS_RECEIPT": str(self.receipt),
-            "PWRIGHT_PYTHON_WS_NONCE": "a" * 32,
-            "PWRIGHT_OFFICIAL_TAILSCALE_HOST": self.host,
-            "PWRIGHT_OFFICIAL_TAILSCALE_IP": "100.78.97.63",
-            "PWRIGHT_OFFICIAL_MODE": self.mode,
+            "PLAYWRIGHT_RUST_PYTHON_WS_EXPECTED_TEST": strict.TEST_IDS[0],
+            "PLAYWRIGHT_RUST_PYTHON_WS_UPSTREAM": str(self.root),
+            "PLAYWRIGHT_RUST_PYTHON_WS_PORT": str(self.port),
+            "PLAYWRIGHT_RUST_PYTHON_WS_RECEIPT": str(self.receipt),
+            "PLAYWRIGHT_RUST_PYTHON_WS_NONCE": "a" * 32,
+            "PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_HOST": self.host,
+            "PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_IP": "100.78.97.63",
+            "PLAYWRIGHT_RUST_OFFICIAL_MODE": self.mode,
         }
         guard._selected_test = None
         guard._invocations = 0

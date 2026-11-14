@@ -1,0 +1,18 @@
+[package]
+name = "playwright-rust-server-locator"
+description = "Generated composable server bindings for the Playwright Rust locator capability"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+playwright-rust-cap-locator = { workspace = true }
+playwright-rust-codec-locator = { workspace = true }
+playwright-rust-core = { workspace = true }
+playwright-rust-server-wire = { workspace = true }
+playwright-rust-transport = { workspace = true }
+
+[dev-dependencies]
+playwright-rust-browser-model = { workspace = true }

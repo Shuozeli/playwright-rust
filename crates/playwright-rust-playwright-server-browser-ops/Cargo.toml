@@ -1,0 +1,23 @@
+[package]
+name = "playwright-rust-playwright-server-browser-ops"
+description = "Opt-in typed Browser, Context, Page, and Frame protocol operations"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[features]
+default = []
+page-events = ["playwright-rust-playwright-server-session/page-events"]
+close-state = ["playwright-rust-playwright-server-session/close-notices"]
+frame-title = ["playwright-rust-playwright-server-session/frame-title"]
+
+[dependencies]
+playwright-rust-playwright-server-client-core = { workspace = true }
+playwright-rust-playwright-server-session = { workspace = true, features = ["supervisor"] }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+playwright-rust-transport-ws = { workspace = true }
+tokio = { workspace = true }

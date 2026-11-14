@@ -72,8 +72,8 @@ TOOL_SHA256 = {
         "3d436ed9e0ea6bfcc7196ce59e01e5b700f8a9eeba7eed748a214be1370ead56"
     ),
     (
-        "packages/pwright-python/tests/official/ws_connect_refused_guard_strict_v1/"
-        "pwright_official_connect_refused_guard_v1.py"
+        "packages/playwright-rust-python/tests/official/ws_connect_refused_guard_strict_v1/"
+        "playwright_rust_official_connect_refused_guard_v1.py"
     ): "10d6ede9b5a8ecf552bb6caaab6d33474e40d23cc1ca9a00de1a988cfa9d9450",
 }
 SIDECAR_SHA256 = {
@@ -442,7 +442,7 @@ def reports() -> dict[tuple[str, str, str], dict[str, Any]]:
         lane = [verified[(mode, api, engine)] for api, engine in CASES]
         fields = ("pythonExecutable", "playwrightPackage", "driverNode")
         if mode == "candidate":
-            fields += ("pwrightPackageSha256", "nativeSha256", "runtimeLibraries")
+            fields += ("playwright_rustPackageSha256", "nativeSha256", "runtimeLibraries")
         for field in fields:
             require(
                 all(report.get(field) == lane[0].get(field) for report in lane),

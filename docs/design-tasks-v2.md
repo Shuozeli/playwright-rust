@@ -1,4 +1,4 @@
-<!-- agent-updated: 2026-10-21T03:43:07Z -->
+<!-- agent-updated: 2026-11-14T05:28:56Z -->
 
 Current full-corpus execution coverage checkpoint (2026-10-21):
 
@@ -8,7 +8,7 @@ Current full-corpus execution coverage checkpoint (2026-10-21):
   pins every input SHA-256 and identifies 2,610 source-only `expected` rows
   per lane. Its 19 reviewed-public rows (nine plain public and ten public with
   a private test helper) remain applicable but runtime-unproven; do not count
-  them as executed Pwright passes or silently exclude them. Eight focused
+  them as executed Playwright Rust passes or silently exclude them. Eight focused
   audit tests pass. No v22 outcome changes or parity credit follow.
 
 - [x] Recollect the full 6,501-ID Python `core` profile on the rebuilt
@@ -64,7 +64,7 @@ Current full-corpus execution coverage checkpoint (2026-10-21):
   on the second run. Do not promote this file from an Oracle-red, unstable
   candidate pair; investigate the fixture and CDP hang separately.
   Python
-  [sync network manifest](../packages/pwright-python/tests/official/sync-network-full-v1-manifest.json)
+  [sync network manifest](../packages/playwright-rust-python/tests/official/sync-network-full-v1-manifest.json)
   pins all 18 browser-expanded IDs from six upstream functions; its checker
   passes 3/3. The six Chromium cases ran source-bound: usable
   [candidate v2](../.work/official-conformance/results/python-sync-network6-chromium-candidate-20261021-v2.xml)
@@ -86,7 +86,7 @@ Current full-corpus execution coverage checkpoint (2026-10-21):
   [Oracle-only secure-fixture diagnostic](../.work/official-conformance/results/python-sync-network-sw2-secure-chromium-oracle-20261021-v1.xml)
   passes both Service Worker cases over trusted Tailscale HTTPS (2/2), with
   independently verified provenance. A separate pinned
-  [paired secure diagnostic](../packages/pwright-python/tests/official/sync-network-service-worker-secure-chromium-paired-v1-manifest.json)
+  [paired secure diagnostic](../packages/playwright-rust-python/tests/official/sync-network-service-worker-secure-chromium-paired-v1-manifest.json)
   reports candidate 1/2, Oracle 2/2, both source-bound. Candidate passes the
   response-from-Service-Worker case; BrowserContext `serviceworker` events
   remain missing. Keep the original six-case HTTP result and v10 receipt
@@ -391,7 +391,7 @@ Current full-corpus execution coverage checkpoint (2026-10-21):
   `framenavigated` implementation. Its installed-wheel Python contract suite
   passes 290/290, but the 30 filtered Rust frame-tree assertions printed
   PASS before their test command was interrupted (exit 130); a subsequent
-  clean `cargo test --release -p pwright-node-host --features frame-events
+  clean `cargo test --release -p playwright-rust-node-host --features frame-events
   frame_trees --lib` exits zero with 80 passed and two dedicated-Chrome tests
   ignored. The real-Chrome attach/navigation and close/cancel lifecycle gate
   remains before declaring the capability complete.
@@ -434,7 +434,7 @@ Current full-corpus execution coverage checkpoint (2026-10-21):
   `net::ERR_FAILED` test may be related but its callback cause is not proven
   by the report, so diagnose it independently.
 - [x] Add the first default-off `network-raw-headers` Rust value leaf in
-  `pwright-network-model`. It distinguishes CDP extra-info newline-separated
+  `playwright-rust-network-model`. It distinguishes CDP extra-info newline-separated
   values from provisional headers and retains repeated array entries. An
   explicit reader policy joins first-seen unique values for Python while
   preserving duplicates for Node, matching their different pinned upstream
@@ -552,7 +552,7 @@ Current full-corpus execution coverage checkpoint (2026-10-21):
   not run the new step yet.
 - [x] Capture and strictly promote 15 exact upstream Python browser-marker
   skips in an isolated
-  [strict dual-lane diagnostic](../packages/pwright-python/tests/official/upstream-skip-markers-strict-v1-manifest.json).
+  [strict dual-lane diagnostic](../packages/playwright-rust-python/tests/official/upstream-skip-markers-strict-v1-manifest.json).
   The final-v2 candidate and oracle each record 15/15 `skipped` before test-body
   execution; all 15 pairs independently reverify. The immutable
   [paired successor receipt](../.work/official-conformance/outcomes/python-upstream-skip-markers-strict-paired-v1/promotion-receipt.json)
@@ -772,7 +772,7 @@ Current full-corpus execution coverage checkpoint (2026-10-21):
   package-boundary check passes locally and proves the selected exact Cargo
   closure adds only its addon marker and browser-neutral startup leaf beyond
   `playwright-trace`; older profiles remain unchanged. Full-dependency strict
-  Clippy still hits pre-existing `pwright-node-host` `too_many_arguments`
+  Clippy still hits pre-existing `playwright-rust-node-host` `too_many_arguments`
   warnings at lines 1268 and 1324.
   A browserless selected-profile CI step is added but not remotely run.
 - [x] Rerun and independently verify all six unchanged official
@@ -1247,7 +1247,7 @@ Python/Node full-official-corpus checkpoint (2026-10-10):
   detach, passes both focused release regressions and strict Clippy; the v4
   installed wheel passes the unchanged official Chromium navigation smoke
   1/1 with verified source-bound provenance. No full-corpus claim follows.
-- [x] Rerun the full release `pwright-composition-chromium` library suite
+- [x] Rerun the full release `playwright-rust-composition-chromium` library suite
   after fixing three stale test-only fixtures/assertions: 411 executed pass,
   zero fail, 16 explicitly ignored. Strict release Clippy, workspace format,
   and diff-whitespace gates pass; this does not promote official-test rows.
@@ -1650,7 +1650,7 @@ Official Python BrowserContext lifecycle conformance checkpoint (2026-10-10):
 
 WebSocket transport / official Python fake-peer tranche (2026-10-10):
 
-- [x] Add a standalone opt-in protocol-neutral `pwright-transport-ws` Rust
+- [x] Add a standalone opt-in protocol-neutral `playwright-rust-transport-ws` Rust
   boundary with checked endpoints/headers, explicit per-connection limits,
   injectable fake peer, and parser-accepted Close-frame reason separate from
   EOF. The optional `live-tokio` adapter performs direct client I/O only; no
@@ -1835,7 +1835,7 @@ Current owned-launch implementation checkpoint (2026-10-10):
   oracle 1,406 / six / nine / 47,056 (SHA-256
   `eb54dc153626706a97e54fad339f1c610e0d9f23232a7c614f74da59ef1bda6e`).
   Full classification SHA-256 stays v3. These 18 passes add zero public-API
-  parity evidence; Pwright is not needed for either private test body. The
+  parity evidence; Playwright Rust is not needed for either private test body. The
   strict rows retain immutable inventory `sourceClassification` metadata;
   their corrected per-invocation internal label is in the separate audit.
 - [x] Add a pnpm-only CI replay for all eight Core455 schema-3 sidecars. A
@@ -1887,7 +1887,7 @@ Current owned-launch implementation checkpoint (2026-10-10):
   490/490 package units in each of three Node profiles.
 - [x] Extract persistent-Context certificate-shape and engine-argument
   decisions into the zero-third-party-dependency
-  `pwright-persistent-context-preflight` Rust leaf and wire a separate opt-in
+  `playwright-rust-persistent-context-preflight` Rust leaf and wire a separate opt-in
   Node N-API profile. JS still finishes `Promise.all` file reads, Buffer
   truthiness, boxed-string normalization, fixture-default merging and public
   `Error` construction. Pure Rust release tests pass 28/28; default,
@@ -1987,14 +1987,14 @@ Current owned-launch implementation checkpoint (2026-10-10):
   isolated ABI107 Python wheel are verified. Rust all-features release check
   and 76/76 focused browserless release tests pass; async event publication
   and exhaustive entrypoint review remain open.
-- [x] Archive the exact ABI109 `python/pwright` tree and provenance-bound
+- [x] Archive the exact ABI109 `python/playwright_rust` tree and provenance-bound
   harness/tooling before replacing the editable Python extension. Seven prior
   candidate sidecars reverified against that archive; the wheel's ABI107
   extension and two bundled OpenSSL dylibs were installed, source import
   resolved to ABI107, and 308/308 browserless units passed. The old strict
   ledger is unchanged.
 - [x] Extend Python official provenance to schema 5: candidate records the
-  exact adjacent `shuozeli_pwright.dylibs` members with absolute paths and
+  exact adjacent `shuozeli_playwright_rust.dylibs` members with absolute paths and
   SHA-256, oracle records an empty list, and `--package-root` verification
   requires a matching sibling directory. Focused tests pass 57/57; historical
   schema-1 through schema-4 sidecars remain unchanged.
@@ -2050,7 +2050,7 @@ Current owned-launch implementation checkpoint (2026-10-10):
   the two pinned official Python async/sync tests. Both pass with a verified
   source-bound sidecar and no matching temporary-profile Chrome process in a
   post-test snapshot. Do not promote: oracle remains unrun under the global
-  Pwright-only browser rule, and process/profile identity is not yet bound.
+  Playwright Rust-only browser rule, and process/profile identity is not yet bound.
 - [ ] Prove positive public owned launch, Page/Context behavior and close
   against paired pinned official tests; execute the distinct Core owned-launch
   lane without the historical `launch -> connectOverCDP` adapter.
@@ -2132,7 +2132,7 @@ Browserless cross-engine conformance and evidence boundary (2026-10-10):
   11 expected/four upstream skips in both lanes. Node 458/458 units, types and
   boundaries pass; valid launch/server/connect capabilities remain absent.
 - [ ] Design a real composable BrowserServer/launchServer capability for valid
-  requests; the preflight facade returns `PWRIGHT_UNSUPPORTED` by design.
+  requests; the preflight facade returns `PLAYWRIGHT_RUST_UNSUPPORTED` by design.
 - [ ] Finish the 12-row async/sync launch-preflight selection in the genuine
   owned-launch lane. Four Chromium rows now have paired-green provenance and
   strict-ledger promotion; eight Firefox/WebKit rows remain unexecuted. The
@@ -2188,7 +2188,7 @@ Launcher ownership and honest-oracle design checkpoint (2026-10-10):
   only as preflight coverage, not as browser-support evidence.
 - [ ] Build an independent `BrowserServer` owner and a versioned Playwright
   WebSocket protocol adapter before exposing valid `launchServer` or
-  `wsEndpoint()`. The current Pwright server wire and CDP endpoint are not
+  `wsEndpoint()`. The current Playwright Rust server wire and CDP endpoint are not
   interchangeable with that protocol. Specify authentication, Tailscale-only
   binding, client Context isolation, disconnect cleanup and process authority.
 - [ ] Resolve the literal upstream `launch server > should work with host`
@@ -2216,7 +2216,7 @@ they cannot be excluded as a group and require an adapted Rust-backed harness
 before any result is promoted. The 300 browser-cycle rows additionally depend
 on unresolved launcher ownership. Mixed private stress assertions need
 portable replacement contracts, while upstream object-count internals need
-explicit reasoning plus Pwright-owned RSS/lease/Handle budget tests, since
+explicit reasoning plus Playwright Rust-owned RSS/lease/Handle budget tests, since
 memory use is a central goal. Playwright Test contains public connection and
 APIRequest obligations even if its runner is out of product scope. MCP,
 package installer, Electron, Android and application examples each require an
@@ -2236,7 +2236,7 @@ The separate Python v1.58.0 async source
 `tests/async/test_dispatch_event.py` (SHA-256
 `a4905396220267094de57d7fc721c8d733d4f0e453f37295882338c9ebe31c19`)
 has 12 exact Chromium cases in
-`packages/pwright-python/tests/official/page-dispatch-event-manifest.json`
+`packages/playwright-rust-python/tests/official/page-dispatch-event-manifest.json`
 (SHA-256 `acbe71f2b9922e5040b17c2bcbcb3946b9096964f314de0f63ddc909353d0128`).
 The pinned Python tag has no `tests/sync/test_dispatch_event.py`; its sync
 Locator dispatch case resides in `tests/sync/test_locators.py` and is not a
@@ -2317,7 +2317,7 @@ and oracle to 1,284 expected / one skipped / six unexpected / 47,186 not run
 (SHA-256 `1b08b44e3351da8442652333694aef39a0ac7ab07ff866dea7d3e5b5f10fdb3c`).
 The `launchServer` discrepancy is a server-protocol design task, not just a
 missing JS method: Rust has an opt-in owned Chromium launcher, but the Node
-addon exposes only CDP attach and Pwright's current server wire is not the
+addon exposes only CDP attach and Playwright Rust's current server wire is not the
 Playwright JSON/WebSocket dispatcher consumed by `connect()`. Design an
 opt-in Rust-owned server, protocol adapter, authenticated Tailscale-only
 listener, and multi-client close/kill lifecycle before advertising a
@@ -2397,7 +2397,7 @@ and no cause or fix is proven by the earlier zero-lease DataTransfer probe.
 NODE-434 (Page check/uncheck, paired Python and Core tranches): The unchanged
 Playwright Python v1.58.0 async/sync Chromium `test_check.py` files contribute
 18 exact cases in
-`packages/pwright-python/tests/official/page-check-manifest.json` (SHA-256
+`packages/playwright-rust-python/tests/official/page-check-manifest.json` (SHA-256
 `7e9b34f4ed0b0c193e213375ad2fc8dad6fbd13b622cda3f77c5d2ecf51809ae`).
 The preserved candidate v1 is 0/18, failing at missing `Page.check()` /
 `Page.uncheck()` methods; independent oracle v1 passes 18/18. Candidate v1
@@ -2490,7 +2490,7 @@ Python BrowserContext storage-state (nine-case red baseline): The pinned
 Playwright Python v1.58.0 source at
 `47a5d35ef4f815a2021349f86ae391f7c20c02d6` has nine exact Chromium
 cases across the unchanged async (five) and sync (four) storage-state files.
-`packages/pwright-python/tests/official/browsercontext-storage-state-manifest.json`
+`packages/playwright-rust-python/tests/official/browsercontext-storage-state-manifest.json`
 pins their source hashes and IDs (SHA-256
 `5c18d9019844547ae881d988a81bc3d1f515cc87bc6fccc1a773e9e8ea14cc12`).
 The candidate v1 fails all nine: seven call an unimplemented
@@ -3410,7 +3410,7 @@ public-API discrepancy.
   keep registry state in the lazily shared `NativeEnvironment`.
 - [x] Route session, Locator, FrameLocator, semantic test-id and strict-action
   paths through the existing bounded Rust registry when selected.
-- [x] Prove no added Pwright package dependency; pass default/selected release
+- [x] Prove no added Playwright Rust package dependency; pass default/selected release
   checks, selected clippy, package boundary, native load, 317/317 Node units,
   strict TypeScript and eight Rust registry units.
 - [x] Pass repaired candidate 9/9 and oracle 9/9 with verified provenance;
@@ -3521,7 +3521,7 @@ NODE-406: Promote Keyboard-plus parity and preserve shared environment reds.
 - [x] Promote exactly one row, reaching 1,188 passed / eight skipped / 5,330
   not run with no other ledger mutation.
 - [x] Preserve the popup-dialog Page-timing and Tailscale-cookie-domain paired
-  failures as shared-red diagnostics, not Pwright regressions or false passes.
+  failures as shared-red diagnostics, not Playwright Rust regressions or false passes.
 - [x] Keep ABI104/90, the wheel and every capability/resource boundary
   unchanged.
 - [ ] Execute and account for every remaining applicable Python and Core JS/TS
@@ -3927,7 +3927,7 @@ row through the official Bidi project matrix.
 - [x] Rebuild and load-verify the selected release artifact before candidate
   execution.
 - [x] Pass validation 6/6 and direct requests 42/42 in both candidate and
-  independent oracle lanes; candidate logs confirm the local Pwright adapter.
+  independent oracle lanes; candidate logs confirm the local Playwright Rust adapter.
 - [x] Advance the Core ledgers to candidate 1,291 expected / one skipped / 31
   unexpected / 47,154 not-run and oracle 974 expected / 47,503 not-run.
 - [ ] Implement HTTPS target tunneling through HTTP CONNECT and SOCKS5, then
@@ -3945,7 +3945,7 @@ official Bidi project matrix.
   keep every selection browser/CDP independent.
 - [x] Pass authenticated HTTP CONNECT 6/6, HTTPS proxy-server ALPN 6/6 and
   SOCKS5 6/6 in both candidate and oracle lanes; candidate logs confirm the
-  local Pwright adapter in all 18 invocations.
+  local Playwright Rust adapter in all 18 invocations.
 - [x] Advance the Core ledgers to candidate 1,243 expected / one skipped / 31
   unexpected / 47,202 not-run and oracle 926 expected / 47,551 not-run.
 - [ ] Continue the context-request proxy rows and the complete remaining Core
@@ -3956,7 +3956,7 @@ official Bidi project matrix.
 NODE-359: Add an independently selectable Rust SOCKS5 request connector and
 establish exact official candidate/oracle evidence.
 
-- [x] Add `pwright-api-request-connector-socks5` behind the exact
+- [x] Add `playwright-rust-api-request-connector-socks5` behind the exact
   `api-request-socks5-proxy = api-request + SOCKS5 leaf` profile; keep the base
   request and HTTP CONNECT profiles free of the leaf.
 - [x] Bound the proxy URL and handshake, advertise only no-auth, encode remote
@@ -4009,7 +4009,7 @@ ALPN evidence without broadening the base request profile.
 NODE-357: Add an independently selectable Rust HTTP CONNECT proxy leaf and
 establish official Node candidate/oracle evidence.
 
-- [x] Add `pwright-api-request-connector-http-proxy` behind the exact
+- [x] Add `playwright-rust-api-request-connector-http-proxy` behind the exact
   `api-request-http-proxy = api-request + proxy leaf` profile; keep the base
   request profile free of proxy code.
 - [x] Bound proxy URL, username, password and response-head bytes; redact
@@ -4680,7 +4680,7 @@ replay and Rust-owned computed-style assertion polling.
   `test_should_support_har_option` row in
   `persistent-context-har-manifest.json`, SHA-256
   `a3e57ce38826a608a730a6e382c60e65967cc4b81891aa6cf5118cc0790adf08`.
-- [x] Add a backend-neutral `pwright-har-replay` crate and prove the selected
+- [x] Add a backend-neutral `playwright-rust-har-replay` crate and prove the selected
   host dependency delta over `page-routes` is exactly that policy crate.
 - [x] Bound archive/file/entry/header/POST/response/redirect storage; compose
   internal HAR decisions with the existing Fetch event driver and reclaim the
@@ -5145,7 +5145,7 @@ Context device emulation.
   first missing-browser oracle attempt diagnostic-only.
 - [x] Add `persistent-context-device-emulation` over `persistent-context` plus
   `device-emulation`. Admit the default device policy before initial Page
-  topology initialization and prove the leaf adds no Pwright package beyond
+  topology initialization and prove the leaf adds no Playwright Rust package beyond
   the persistent-launch closure.
 - [x] Reuse the existing Rust device installation, user-agent composition and
   Page/OOPIF initializer. Select the persistent default only for
@@ -5190,7 +5190,7 @@ Context HTTPS-error bypass.
   1.58.0 oracle passes 1/1.
 - [x] Add `persistent-context-ignore-https-errors` over `persistent-context`
   plus `ignore-https-errors`. Admit the default-Context policy before initial
-  Page topology initialization and prove the leaf adds no Pwright package
+  Page topology initialization and prove the leaf adds no Playwright Rust package
   beyond the persistent-launch closure.
 - [x] Reuse the existing Rust installation and Chromium
   `Security.setIgnoreCertificateErrors` initializer. Select the persistent
@@ -5302,7 +5302,7 @@ Context locale.
 
 - [x] Add `persistent-context-locale` over `persistent-context` plus
   `context-locale`. Admit the default-Context locale before initial Page
-  topology initialization and prove the leaf adds no Pwright package beyond
+  topology initialization and prove the leaf adds no Playwright Rust package beyond
   the existing persistent-Context closure.
 - [x] Match both upstream Chromium locale commands on every selected Page and
   OOPIF. One stateless composition boundary emits exactly one
@@ -5345,7 +5345,7 @@ Context locale.
 NODE-306: Advance Python to ABI 65 with independently selectable Context locale.
 
 - [x] Add `context-locale` as a bounded owned-Context policy and prove that it
-  adds no Pwright package beyond the existing base closure.
+  adds no Playwright Rust package beyond the existing base closure.
 - [x] Retain at most 16 nonempty, control-free locale strings of 256 UTF-8
   bytes each. Apply `Emulation.setLocaleOverride` to each owned Page/OOPIF
   session and suppress only Chromium's exact shared-renderer duplicate-locale
@@ -5385,7 +5385,7 @@ NODE-305: Advance Python to ABI 64 with independently selectable Worker-console
 argument Handles.
 
 - [x] Add `worker-console-argument-handles` over `worker-console-events` plus
-  `worker-handle-evaluation`; prove its selected Pwright package closure is
+  `worker-handle-evaluation`; prove its selected Playwright Rust package closure is
   exactly the existing Worker Handle closure.
 - [x] Admit, validate and transfer every ordered console RemoteObject as one
   batch. On parsing, capacity, queue or close failure, release each native
@@ -5415,7 +5415,7 @@ NODE-304: Advance Python to ABI 63 with independently selectable dedicated-
 Worker Handle evaluation.
 
 - [x] Add `worker-handle-evaluation` over `worker-events` plus `handles` and
-  prove its selected Pwright package closure equals Page events plus Handles.
+  prove its selected Playwright Rust package closure equals Page events plus Handles.
 - [x] Evaluate and publish Handles in the exact retained Worker session and
   unique execution context. Reuse the opaque Handle registry instead of
   routing Worker values through a Frame or main-world alias.
@@ -5475,7 +5475,7 @@ NODE-302: Keep Python at ABI 62 and add independently selectable dedicated-
 Worker error publication.
 
 - [x] Add `worker-error-events` as a separate host/addon/package feature over
-  `worker-events` plus `page-errors`; prove it adds no Pwright package beyond
+  `worker-events` plus `page-errors`; prove it adds no Playwright Rust package beyond
   the existing `page-events` closure.
 - [x] Resolve ordinary Frame and Page sessions first, then use the exact
   retained Worker session as the owning-Page fallback for
@@ -5503,7 +5503,7 @@ NODE-301: Advance Python to ABI 62 with independently selectable dedicated-
 Worker console events.
 
 - [x] Add `worker-console-events` as a separate host/addon/package feature
-  over `worker-events` plus `console-events`; prove it adds no Pwright package
+  over `worker-events` plus `console-events`; prove it adds no Playwright Rust package
   beyond the existing `page-events` closure.
 - [x] Keep exact Worker-session correlation, the 128-notice/16 MiB FIFO,
   diagnostic RemoteObject release and cleanup admission in Rust. Release the
@@ -5582,7 +5582,7 @@ NODE-298: Advance Python to ABI 61 with independently selectable dedicated
 Worker events and replace the exact official sync discrepancy.
 
 - [x] Add independent host/addon/package `worker-events` features over
-  `page-events`; prove the leaf adds no Pwright package beyond that closure.
+  `page-events`; prove the leaf adds no Playwright Rust package beyond that closure.
 - [x] Keep Worker session retention, exact Page/nested-Worker association,
   creation order, readiness and detach retirement in Rust. Bound the leaf at
   64 live owners, 128 notices, 1 MiB URLs and eight concurrent evaluations.
@@ -5833,7 +5833,7 @@ unchanged async `test_asyncio.py`.
 - [x] Pin unchanged `tests/async/test_asyncio.py` at SHA-256
   `544f9193333ed0df5d87e0f5978b00f04b709aaba80e477cae1e5d1701b1a0ae`.
 - [x] Preserve the first independent-oracle attempt as red infrastructure
-  evidence: without the Pwright marker Page, fixture setup fails because the
+  evidence: without the Playwright Rust marker Page, fixture setup fails because the
   dedicated-CDP adapter cannot create a Context. With the marker restored, the
   unchanged oracle passes both selected rows; report SHA-256 values are
   `a5ea2c01f248e1fafa01df574c8cef8627fa02724d0911735b9c4f0d18536dae`
@@ -6725,7 +6725,7 @@ NODE-267: Advance Python to ABI 41 for independently selectable Locator DOM
 actions and reuse the existing bounded Handle owner for `evaluate_handle`.
 
 - [x] Add the separate `locator-dom-actions` feature for Rust-owned
-  `dispatch_event` and `select_text`; its 108-package Pwright dependency
+  `dispatch_event` and `select_text`; its 108-package Playwright Rust dependency
   closure is identical to the base addon closure.
 - [x] Resolve `Locator.evaluate_handle` strictly in Rust, execute through the
   existing Handle leaf and return an owned native Handle with a bounded,
@@ -7024,7 +7024,7 @@ Chromium layout rows in async/sync `test_queryselector.py`.
   outside the green ledger; run final installed-wheel candidate and independent
   official-oracle lanes unchanged, 2/2 in each.
 - [x] Add independently selectable `layout-selectors` host/addon features with
-  no new Pwright package edge. Keep parsing, clause validation, geometry score
+  no new Playwright Rust package edge. Keep parsing, clause validation, geometry score
   formulas and result ordering in Rust-generated bounded browser programs.
 - [x] Bound admission to the existing 64 KiB selector source ceiling, at most
   256 structural parts and a 256 KiB emitted program; support the official
@@ -7119,7 +7119,7 @@ through Python ABI 31 and close the first official registration discrepancy.
   reads before copying into the native call.
 - [x] Keep `selector-registration` independently composable: feature-cold,
   feature-selected and exact wheel profiles compile; the dependency proof
-  remains at the same 108-Pwright-package base closure.
+  remains at the same 108-Playwright Rust-package base closure.
 - [x] Preserve the initial ABI 30 `Playwright.selectors` setup failure and the
   first ABI 31 shim-collection failure outside the green ledger, then pass the
   unchanged final-wheel candidate 1/1 and independent oracle 1/1.
@@ -7222,7 +7222,7 @@ NODE-246: Add bounded Rust-owned Page `response` listener publication through
 Python ABI 29 without folding callbacks into `network-events`.
 
 - [x] Add an independent `response-events` feature with exactly the existing
-  `network-events` Pwright package closure.
+  `network-events` Playwright Rust package closure.
 - [x] Activate response interest before Context publication and preserve the
   shared subscription when `request-history` is selected at the same time.
 - [x] Bound response publication at 16 Contexts, 256 queued notices and the
@@ -7364,7 +7364,7 @@ NODE-241: Expose the existing Rust Page garbage-collection leaf through Python
 ABI 24 and close both official Chromium bindings.
 
 - [x] Add an independently selectable `request-gc` addon feature that forwards
-  only the bounded Page ID to `pwright-node-host/request-gc`; add no Pwright
+  only the bounded Page ID to `playwright-rust-node-host/request-gc`; add no Playwright Rust
   package, Python protocol client, task, queue, timer, or retained state.
 - [x] Add thin async and sync `Page.request_gc()` facades, an exact native stub,
   ABI/profile assertions, and an AAA delegation test.
@@ -7443,7 +7443,7 @@ NODE-238: Add bounded headless `Page.pause()` timeout restoration through
 Python ABI 23.
 
 - [x] Add separately selectable `page-pause` addon and host features over the
-  existing timeout-settings leaf without adding a Pwright package.
+  existing timeout-settings leaf without adding a Playwright Rust package.
 - [x] Keep headless detection, Page/Context timeout snapshots, temporary zero
   overrides and drop-safe exact restoration in Rust; headed Inspector pause is
   explicitly unsupported.
@@ -7471,7 +7471,7 @@ Python ABI 22.
 
 - [x] Add separately selectable `persistent-context` addon and host features;
   keep attach sessions process-authority-free.
-- [x] Accept only an empty or Pwright-marked profile and reject nonempty
+- [x] Accept only an empty or Playwright Rust-marked profile and reject nonempty
   unmarked state before launching a browser.
 - [x] Keep executable/channel selection, ephemeral loopback CDP, connection,
   process lease and bounded graceful/forced shutdown in Rust.
@@ -7508,7 +7508,7 @@ NODE-233: Add bounded Rust-owned Page/Locator drag-and-drop through Python ABI
 - [x] Replace exactly four existing Page rows, add four previously not-run
   Locator/sync rows and rebuild both 6,526-row ledgers without duplicate
   outcomes: candidate 412/7/5/6102 and oracle 329/4/6193.
-- [x] Prove the feature adds exactly one Pwright package, pass 469 Rust host
+- [x] Prove the feature adds exactly one Playwright Rust package, pass 469 Rust host
   tests with ten explicit live-test ignores, 15/15 installed-wheel tests,
   strict Clippy/Ruff/Pyright/format gates and repaired-wheel payload
   reproducibility.
@@ -7915,7 +7915,7 @@ capability, not a Node fetch shim or an implicit Chromium dependency.
 
 - [x] Pin Playwright 1.58.0 status, timeout-zero, redirect, disposal,
   response-retention and BrowserContext/global cookie ownership semantics.
-- [x] Add `pwright-api-request` with no concrete HTTP, CDP, browser or language
+- [x] Add `playwright-rust-api-request` with no concrete HTTP, CDP, browser or language
   runtime dependency and an injected async transport port.
 - [x] Validate and bound request method, URL, headers/body, response metadata,
   body, per-response log and aggregate retained bytes before registration.
@@ -8061,7 +8061,7 @@ real-Chrome raw-binding cases; each also passes the separate
 instrumentation supplies the same post-prevalidation pause for empty/multiple,
 listener-throw, late-type, timeout, Frame-detach and navigation comparisons.
 The matrix records rather than hides two compatibility differences: Playwright
-resolves when the main document navigates during that pause while Pwright fails
+resolves when the main document navigates during that pause while Playwright Rust fails
 closed, and the current channel strips caller `lastModifiedMs`. Public
 `ElementHandle.setInputFiles` remains a later design task that must choose those
 policies and add the public error/stack facade explicitly.
@@ -8096,7 +8096,7 @@ browser mutation.
 - [ ] Expose and differentially verify public `ElementHandle.setInputFiles`
   only after mutation, event and error-order semantics are closed.
 
-[Canonical contract and current verification](knowledge/pwright-node-handles.md#node-190-bounded-rust-ownership-for-the-serialized-payload-graph).
+[Canonical contract and current verification](knowledge/playwright-rust-node-handles.md#node-190-bounded-rust-ownership-for-the-serialized-payload-graph).
 
 NODE-189: Preserve Playwright's late utility call-argument serialization after
 input instrumentation without copying payload bytes into Rust prematurely.
@@ -8127,7 +8127,7 @@ input instrumentation without copying payload bytes into Rust prematurely.
 - [ ] Add Playwright error transport and public differential
   `ElementHandle.setInputFiles` only after mutation semantics are closed.
 
-[Canonical contract and current verification](knowledge/pwright-node-handles.md#node-189-late-call-argument-serialization-on-the-retained-owner).
+[Canonical contract and current verification](knowledge/playwright-rust-node-handles.md#node-189-late-call-argument-serialization-on-the-retained-owner).
 
 NODE-188: Model Playwright's awaited `onBeforeInputAction` boundary as an
 independently selectable Node composition phase.
@@ -8159,7 +8159,7 @@ independently selectable Node composition phase.
 - [ ] Add mutation/event completion, terminal cleanup/publication, Playwright
   error transport and public differential `ElementHandle.setInputFiles`.
 
-[Canonical contract and current verification](knowledge/pwright-node-handles.md#node-188-awaited-input-action-instrumentation-boundary).
+[Canonical contract and current verification](knowledge/playwright-rust-node-handles.md#node-188-awaited-input-action-instrumentation-boundary).
 
 NODE-187: Consume the retained marked target in DOM prevalidation without
 opening an ownership gap or widening existing profiles.
@@ -8183,7 +8183,7 @@ opening an ownership gap or widening existing profiles.
 - [ ] Map the full Playwright language-error surface and expose/differentially
   verify public `ElementHandle.setInputFiles`.
 
-[Canonical contract and current verification](knowledge/pwright-node-handles.md#node-187-same-owner-retained-dom-prevalidation).
+[Canonical contract and current verification](knowledge/playwright-rust-node-handles.md#node-187-same-owner-retained-dom-prevalidation).
 
 NODE-186: Preserve marked-target ownership across exact Playwright carrier
 projection without widening admission.
@@ -8205,7 +8205,7 @@ projection without widening admission.
 - [ ] Continue with `onBeforeInputAction`, late utility-world serialization,
   mutation/cleanup and public differential `ElementHandle.setInputFiles`.
 
-[Canonical contract and current verification](knowledge/pwright-node-handles.md#node-186-retained-marked-owner-and-same-ticket-carrier-projection).
+[Canonical contract and current verification](knowledge/playwright-rust-node-handles.md#node-186-retained-marked-owner-and-same-ticket-carrier-projection).
 
 NODE-185: Put materialization and marking under one selected public-call
 envelope without widening admission.
@@ -8228,7 +8228,7 @@ envelope without widening admission.
 - [ ] Expose and differentially verify public `ElementHandle.setInputFiles`;
   the green internal 26-case binding lane is not public API parity.
 
-[Canonical contract and current verification](knowledge/pwright-node-handles.md#node-185-session-call-identity-and-one-node-deadline).
+[Canonical contract and current verification](knowledge/playwright-rust-node-handles.md#node-185-session-call-identity-and-one-node-deadline).
 
 NODE-184: The internal Node preparation now has a real same-admission native
 target-marking phase.
@@ -8250,7 +8250,7 @@ target-marking phase.
   serialization and mutation on the same ticket; then make the pinned public
   differential lane green.
 
-[Canonical contract and current verification](knowledge/pwright-node-handles.md#node-184-same-admission-node-target-marking-handoff).
+[Canonical contract and current verification](knowledge/playwright-rust-node-handles.md#node-184-same-admission-node-target-marking-handoff).
 
 NODE-183: The default-off Rust host `retained-target-marking` selection now
 owns persistent exact-utility-world marker caching. This completes the host
@@ -8276,7 +8276,7 @@ ownership prerequisite, not Node preparation promotion or retained upload.
 - [ ] Compose marking, projection, DOM prevalidation, instrumentation and late
   serialization/mutation, then verify the public retained upload API.
 
-[Canonical contract and current verification](knowledge/pwright-node-handles.md#node-183-host-owned-utility-world-marker-cache).
+[Canonical contract and current verification](knowledge/playwright-rust-node-handles.md#node-183-host-owned-utility-world-marker-cache).
 Earlier checkpoints retain their historical scope and verification status.
 
 NODE-182: Persistent native target marking is a default-off composable primitive,
@@ -8299,7 +8299,7 @@ not yet a selected Node capability.
 - [ ] Compose carrier projection, DOM prevalidation, instrumentation, late
   serialization and upload, then run public differential verification.
 
-[Canonical contract and verification](knowledge/pwright-node-handles.md#node-182-persistent-native-target-marking).
+[Canonical contract and verification](knowledge/playwright-rust-node-handles.md#node-182-persistent-native-target-marking).
 
 NODE-181: Inert original NativeHandle binding is implemented without adding a
 strong pin, root, capacity, feature or budget. It is a preparation prerequisite,
@@ -8324,7 +8324,7 @@ not a native phase or public retained upload.
 
 Exact completed offline/Rust/Clippy/dependency verification belongs to the
 canonical record; historical entries retain their original scope.
-[Canonical contract and verification](knowledge/pwright-node-handles.md#node-181-original-native-wrapper-binding).
+[Canonical contract and verification](knowledge/playwright-rust-node-handles.md#node-181-original-native-wrapper-binding).
 
 NODE-180: Exact-session host revocation hooks now precede native drains. This
 implements the session-registry prerequisite from NODE-179, not the eventual
@@ -8346,7 +8346,7 @@ Node/native upload handoff. No package/feature or browser pass is added.
 Exact final test/dependency evidence belongs to the canonical checkpoint; no
 pending gate is recorded as passed here. Historical checkpoints below retain
 their original scope.
-[Canonical contract and verification](knowledge/pwright-node-handles.md#node-180-session-bound-revocation-before-native-drains).
+[Canonical contract and verification](knowledge/playwright-rust-node-handles.md#node-180-session-bound-revocation-before-native-drains).
 
 NODE-179: Added same-admission typed FFI parking/resumption and a synchronous
 Rust raw-carrier projection diagnostic. These are prerequisites, not an actual
@@ -8371,7 +8371,7 @@ unit-result admission. Exact verification belongs in the canonical checkpoint.
 
 No native marking, new production ticket phase or public retained upload is
 claimed. Historical checkpoints below retain their original scope.
-[Canonical contract and verification](knowledge/pwright-node-handles.md#node-179-same-admission-ffi-handoff-and-raw-carrier-projection).
+[Canonical contract and verification](knowledge/playwright-rust-node-handles.md#node-179-same-admission-ffi-handoff-and-raw-carrier-projection).
 
 NODE-178: Implemented standalone default-off retained native DOM prevalidation,
 one-shot result/exception admission, exact retargeted receiver ownership and
@@ -8390,7 +8390,7 @@ open; no new browser result or addon rebuild is claimed.
 - [ ] Execute live binding/native/public-upload gates once dedicated Chrome
   is available under the existing browser and shared-service authority rules.
 
-[Canonical contract and verification](knowledge/pwright-node-handles.md#node-178-owned-native-file-input-prevalidation).
+[Canonical contract and verification](knowledge/playwright-rust-node-handles.md#node-178-owned-native-file-input-prevalidation).
 
 NODE-177: Implemented selected two-checkpoint registration gating around server
 schema and an empty instrumentation await, using exact owner-ticket plus creation
@@ -8405,14 +8405,14 @@ checks/retarget -> onBeforeInputAction -> late utility serializer -> browser
 atob/File. Eager PreparedFileInput conversion is not a valid integration step.
 Keep actual native authority/promotion, float deadlines, full instrumentation,
 error transport, path/stream support and the browser gate explicit.
-[Canonical contract and verification](knowledge/pwright-node-handles.md#node-177-deferred-registration-gates-before-materialization).
+[Canonical contract and verification](knowledge/playwright-rust-node-handles.md#node-177-deferred-registration-gates-before-materialization).
 
 NODE-176: Server-direction schema and raw payload helper are implemented;
 both selected artifacts pass 76 new offline cases plus regressions. Remaining integration requires
 real deferred target admission/revalidation, instrumentation/error transport,
 float deadlines, bounded typed decoding and same-permit execution promotion.
 Public retained upload and the full browser discrepancy gate stay incomplete.
-[Canonical contract and current evidence](knowledge/pwright-node-handles.md#node-176-server-direction-validation-and-raw-payload-materialization).
+[Canonical contract and current evidence](knowledge/playwright-rust-node-handles.md#node-176-server-direction-validation-and-raw-payload-materialization).
 
 NODE-175 (2026-09-17): Implement and verify the synchronous Rust
 ArgumentsReady to ChannelReady validator, replacing root six under existing
@@ -8438,7 +8438,7 @@ CDP remains blocked without restart permission and no new browser pass is claime
 Remaining: public API error prefix/stack; deferred server bytes/path preparation;
 float deadline semantics; typed move-only FfiPreparation promotion, renewed
 native-source authority and submission; public ElementHandle.setInputFiles;
-actual-ticket/browser and full discrepancy gates. [Canonical status and evidence](knowledge/pwright-node-handles.md)
+actual-ticket/browser and full discrepancy gates. [Canonical status and evidence](knowledge/playwright-rust-node-handles.md)
 own completion claims; earlier tasks below remain historical.
 
 NODE-174 (2026-09-17): Production creation-Page association now uses a bounded
@@ -8464,7 +8464,7 @@ and older artifact paths remain; no feature/profile/dependency/class is added.
 Remaining: public default setters and arbitrary JS default state; channel
 validation/error phases; deferred Buffer serialization/path work; native float
 deadline mapping, promotion/submission and public ElementHandle.setInputFiles;
-then actual-ticket, browser and discrepancy gates. [Canonical NODE-174 status](knowledge/pwright-node-handles.md#node-174-canonical-creation-page-timeout-binding)
+then actual-ticket, browser and discrepancy gates. [Canonical NODE-174 status](knowledge/playwright-rust-node-handles.md#node-174-canonical-creation-page-timeout-binding)
 owns exact evidence, not these routing notes. Earlier tasks retain historical
 scope and are not fresh browser-pass claims.
 
@@ -8490,7 +8490,7 @@ integration; channel validation/error phases; deferred Buffer serialization
 and paths; native timeout-domain mapping; promotion/submission and public
 `ElementHandle.setInputFiles`, then browser/discrepancy gates. No new feature,
 profile, dependency package or server is introduced.
-[Canonical checkpoint and verification status](knowledge/pwright-node-handles.md#node-173-rust-owned-argument-assembly-and-live-timeout-settings)
+[Canonical checkpoint and verification status](knowledge/playwright-rust-node-handles.md#node-173-rust-owned-argument-assembly-and-live-timeout-settings)
 own exact oracle/candidate evidence; written tests are not passed gates.
 Earlier entries below preserve their original completion scope.
 
@@ -8519,7 +8519,7 @@ ordering, deferred byte materialization, promotion/native submission and public
 Paths currently fail explicitly at the parent boundary. Stateless selected
 diagnostics and their differential harness cover the shared kernel, not a
 completed session-bound API. No new features, dependencies or artifact profiles
-are introduced. [Canonical checkpoint and verification status](knowledge/pwright-node-handles.md#node-172-rust-owned-preflight-and-reentrant-language-phases)
+are introduced. [Canonical checkpoint and verification status](knowledge/playwright-rust-node-handles.md#node-172-rust-owned-preflight-and-reentrant-language-phases)
 own evidence; pending gates are not passes. Earlier entries below preserve
 their original completion scope.
 
@@ -8540,26 +8540,26 @@ Do not claim immediate raw peer-close reclamation without watcher delivery:
 later publication, explicit close, wrapper Drop or environment shutdown can
 still be required. Fixed administrative bytes do not bound retained closed
 wrappers, weak tombstone allocations or user V8 graphs.
-[Canonical checkpoint and exact verification](knowledge/pwright-node-handles.md#node-171-session-bound-node-preparation-registry).
+[Canonical checkpoint and exact verification](knowledge/playwright-rust-node-handles.md#node-171-session-bound-node-preparation-registry).
 Earlier entries below preserve their original completion scope.
 
 NODE-170 (2026-09-17): Implement the host's revocable preparation-to-execution admission split without widening any budgets. Next: the session-bound Node root registry, explicit abort/close hooks, public ownerFrame/context observations, phase-specific exception handling, delayed Buffer serialization/copy, fractional timeout and path observation/materialization. Public retained upload and browser parity remain open.
-[Canonical contract and evidence](knowledge/pwright-node-handles.md#node-170-revocable-ffi-preparation-before-execution).
+[Canonical contract and evidence](knowledge/playwright-rust-node-handles.md#node-170-revocable-ffi-preparation-before-execution).
 
 NODE-169 (2026-09-17): Implement the host-only exact retained upload submission path and characterize pinned upstream ingress offline. Remaining work is the phase-accurate Node preparation ticket/rendezvous, delayed byte materialization, separate path stat/read phases, public producers and selected addon artifact, followed by native/differential/Worker gates. The public Node upload method is still absent.
-[Canonical contract and evidence](knowledge/pwright-node-handles.md#node-169-safe-host-retained-upload-and-pinned-ingress-oracle).
+[Canonical contract and evidence](knowledge/playwright-rust-node-handles.md#node-169-safe-host-retained-upload-and-pinned-ingress-oracle).
 
 NODE-168 (2026-09-17): Implement the default-off exact-node group owner and
 coherent utility-world snapshot prerequisite; validate cancellation, malformed
 native results, numeric reuse, cleanup/error and resource boundaries. The
-[canonical checkpoint](knowledge/pwright-node-handles.md#node-168-group-owned-retained-adoption-and-deferred-upload-ingress)
+[canonical checkpoint](knowledge/playwright-rust-node-handles.md#node-168-group-owned-retained-adoption-and-deferred-upload-ingress)
 records current evidence. Remaining upload work includes the Rust preparation
 ticket, phase-accurate Node rendezvous, deferred byte copying, stat-versus-read
 path split, public producer APIs, combined artifact and full differential gates.
 Do not call the Node upload API implemented merely because its owner exists.
 
 NODE-167 (2026-09-17): Implement and validate current-DOM ownerFrame as the
-first retained-upload prerequisite; [the canonical checkpoint](knowledge/pwright-node-handles.md)
+first retained-upload prerequisite; [the canonical checkpoint](knowledge/playwright-rust-node-handles.md)
 records exact current evidence. Remaining upload work is one bounded
 preparation ticket, preflight-before-getter order, Node conversion rendezvous,
 independently group-owned exact-node adoption, mutation/cleanup continuation,
@@ -8571,7 +8571,7 @@ NODE-166 (2026-09-17): Implemented the Node getProperties vertical slice:
 pre-admitted native batches, complete addressable property-response cleanup,
 independent sibling ownership, atomic publication and failure-safe language
 wrappers. Also repaired exact native-world receipts after confirmed Page.close.
-[The canonical checkpoint](knowledge/pwright-node-handles.md) owns green/red
+[The canonical checkpoint](knowledge/playwright-rust-node-handles.md) owns green/red
 verification status. This supersedes the implementation-missing batch notes
 below, not the full compatibility goal. Remaining: preview/toString,
 ownerFrame/adoption, retained ElementHandle actions/uploads, broader Worker,
@@ -8585,7 +8585,7 @@ parse or JavaScript failure while retaining evaluation admission. The shared
 parser remains pure; invalid, absent-for-retained, or oversized IDs report
 unresolved Cleanup rather than fabricated release success. This supersedes the
 addressable-ID implementation gap noted in NODE-164, not every native-ownership
-gap. [Canonical verification and follow-ups](knowledge/pwright-node-handles.md)
+gap. [Canonical verification and follow-ups](knowledge/playwright-rust-node-handles.md)
 separate newly tested behavior from pending gates.
 
 Next design tasks are retained-to-settlement Runtime.getProperties and admission
@@ -8594,11 +8594,11 @@ group for unaddressable IDs, Node getProperties sibling/batch ownership, and
 the still-incomplete full compatibility corpus. No package, feature, portable
 schema or public Node API is added in this slice.
 
-NODE-164 (2026-09-17): The priority raw-native cross-build audit gap now has a crate-wide module-local TypeTag implementation using the actual N-API argument/receiver checks. Portable HandleGetProperty also uses identity-preserving snapshots, pre-I/O route admission and shared publication, while abandoned Cleanup outcomes remain failures. This supersedes those implementation gaps; [the canonical checkpoint](knowledge/pwright-node-handles.md) records exact verification and remaining gates. Node getProperties, batch ownership and the full-corpus compatibility tasks remain open.
+NODE-164 (2026-09-17): The priority raw-native cross-build audit gap now has a crate-wide module-local TypeTag implementation using the actual N-API argument/receiver checks. Portable HandleGetProperty also uses identity-preserving snapshots, pre-I/O route admission and shared publication, while abandoned Cleanup outcomes remain failures. This supersedes those implementation gaps; [the canonical checkpoint](knowledge/playwright-rust-node-handles.md) records exact verification and remaining gates. Node getProperties, batch ownership and the full-corpus compatibility tasks remain open.
 
-Historical NODE-164 audit priority (addressable-ID acquisition implementation superseded by NODE-165 above): close the malformed RemoteObject parse-before-owner cleanup gap, with native-release ownership and failure-injection evidence recorded in [the canonical checkpoint](knowledge/pwright-node-handles.md).
+Historical NODE-164 audit priority (addressable-ID acquisition implementation superseded by NODE-165 above): close the malformed RemoteObject parse-before-owner cleanup gap, with native-release ownership and failure-injection evidence recorded in [the canonical checkpoint](knowledge/playwright-rust-node-handles.md).
 
-NODE-163: Implement and verify single-result Handle producers, preserving Promise-valued properties instead of awaiting them. Keep the full producer lane visible: the five getProperties cases must remain red until atomic batch admission, distinct sibling owner identities, deferred batch publication and N-API/JS rollback are implemented. Canonical evidence and the batch design are in knowledge/pwright-node-handles.md. Broader corpus, preview, adoption, Worker and retained-action/upload gates remain open.
+NODE-163: Implement and verify single-result Handle producers, preserving Promise-valued properties instead of awaiting them. Keep the full producer lane visible: the five getProperties cases must remain red until atomic batch admission, distinct sibling owner identities, deferred batch publication and N-API/JS rollback are implemented. Canonical evidence and the batch design are in knowledge/playwright-rust-node-handles.md. Broader corpus, preview, adoption, Worker and retained-action/upload gates remain open.
 
 Priority audit follow-up: raw native addon classes still rely on stable content-derived napi-rs type tags. Design module-local validation before any mixed-build native pointer cast, including NativeHandle and NativeSession; public wrapper-argument isolation is not proof of this separate boundary. Do not invoke a known incompatible Rust layout as a test. The existing call allowance is now shared through delayed caller/native completion, with no extra lease or call slot.
 
@@ -8627,105 +8627,105 @@ NODE-152: Native host Handle profile/leaf installation and bounded route metrics
 NODE-151: Added the retained-node payload backend seam and an 18-case public Handle lane. Oracle passes; candidate is red on missing Handle producers. Next install/publish bounded native Handles and current ownerFrame/lifecycle, then compose upload ownership and cancellation. Do not emulate a Handle with a Locator.
 
 NODE-150: Page/Frame upload wrappers and native-scoped query composition pass 43/43 x3 standalone and 43/43 combined. Full corpus remains 53/57 matching, with the click mismatch now reversed. Continue handle/directory/timing coverage; raw-click controls indicate fresh-document timing sensitivity shared with upstream, not a verified production fix.
-[Page/Frame upload contract and verification](knowledge/pwright-file-input.md#node-150-page-and-frame-selector-taking-upload-apis).
+[Page/Frame upload contract and verification](knowledge/playwright-rust-file-input.md#node-150-page-and-frame-selector-taking-upload-apis).
 
 NODE-149 checkpoint: selected/combined upload verification is complete for the documented 32-case surface. Full shared upload now matches; overall 57-case corpus remains non-green (53 matches). Next: remaining Page/Frame/handle/directory/timing surfaces and the retained click/download/history gaps.
 
 NODE-149: Selected N-API ingress, isolated profiles and public Locator upload are implemented and their differential/Worker gates pass. Next close remaining API surfaces, directory mutation and slow-preparation timing parity.
-[Selected Node upload boundary and verification](knowledge/pwright-file-input.md#node-149-selected-node-buffer-ingress-and-public-locator-uploads).
+[Selected Node upload boundary and verification](knowledge/playwright-rust-file-input.md#node-149-selected-node-buffer-ingress-and-public-locator-uploads).
 
 NODE-148: Implemented selected safe-host buffered/path upload composition, shared exact-world resolution, deadline/cancellation and shutdown drain. Next implement Node Buffer ingress, thin public wrappers and a selected addon artifact; native directories, worker-thread proof and public differential gates remain open.
-[Selected safe-host upload contract](knowledge/pwright-file-input.md#node-148-selected-safe-host-upload-integration).
+[Selected safe-host upload contract](knowledge/playwright-rust-file-input.md#node-148-selected-safe-host-upload-integration).
 
 NODE-147: Implemented the opt-in large outbound transport prerequisite and selected buffered backend path. Next: public source/Buffer ingress, shared resolver ownership, cancellation/Page/Frame/Worker integration and isolated Node artifact; native directories and full differential acceptance remain open.
-[Large outbound admission and remaining gates](knowledge/pwright-file-input.md#node-147-independently-admitted-large-outbound-commands).
+[Large outbound admission and remaining gates](knowledge/playwright-rust-file-input.md#node-147-independently-admitted-large-outbound-commands).
 
 NODE-146: Implemented the single-use payload continuation and opt-in CDP settlement prerequisite. Still wire public operation cancellation/deadline publication, exact Page/Frame retirement and worker shutdown/drain, portable capability/codec, memory-payload preparation, native directory completion, selected FFI/message budgets and public differential cases. These low-level continuations do not finish the Node upload action.
-[Upload continuation and remaining gates](knowledge/pwright-file-input.md#node-146-single-use-upload-continuations).
+[Upload continuation and remaining gates](knowledge/playwright-rust-file-input.md#node-146-single-use-upload-continuations).
 
 NODE-145: Implement and verify the actual Chromium buffered-file mutation slice. Keep native file/directory commands with cancellable directory event waits, large-message limits, full operation cleanup, memory-payload preparation and Node/public differential integration open. Low-level live tests are not substituted for those acceptance gates.
-[Remaining file-input work](knowledge/pwright-file-input.md#node-145-chromium-payload-mutation).
+[Remaining file-input work](knowledge/playwright-rust-file-input.md#node-145-chromium-payload-mutation).
 
 NODE-144: Complete the separately selectable admitted blocking-executor slice and verify capacity, cancellation, runtime shutdown, panic cleanup and shared production-plan composition. Keep Node operation/Page lifecycle integration, payload MIME conversion, browser upload and differential gates open. Executor unit tests are not public upload completion.
-[Remaining file-input implementation work](knowledge/pwright-file-input.md#node-144-admitted-blocking-executor).
+[Remaining file-input implementation work](knowledge/playwright-rust-file-input.md#node-144-admitted-blocking-executor).
 
 NODE-143: Implement path/stat/MIME services and admitted path/descriptor retention with actual Unix file reading and native directory routing. Keep executor admission, browser upload/cancellation, transport peak budgets and public Node wiring open. File-source preparation alone does not complete setInputFiles.
-[Remaining upload work](knowledge/pwright-file-input.md#node-143-filesystem-preparation-and-pinned-mime).
+[Remaining upload work](knowledge/playwright-rust-file-input.md#node-143-filesystem-preparation-and-pinned-mime).
 
 NODE-142: Complete the bounded source-content ownership subtask with real-file, source-growth, budget-before-read and abandoned-result tests. Keep the larger materializer task open: relative paths/stat/MIME, native-directory retention and executor/handle admission are not implemented by this content leaf. No public upload completion is claimed.
-[Remaining file-input implementation tasks](knowledge/pwright-file-input.md#node-142-ledger-admitted-content-ownership).
+[Remaining file-input implementation tasks](knowledge/playwright-rust-file-input.md#node-142-ledger-admitted-content-ownership).
 
 NODE-141: File-upload preparation policy is implemented and source/oracle-characterized. Next add explicit filesystem/MIME and byte owners, exact Locator/native upload with directory-event cancellation, selected transport/FFI admission and public bindings. Keep path, memory-file, directory, lifecycle and shared-corpus gates open; model tests are not upload completion.
-[File-input policy, evidence and remaining work](knowledge/pwright-file-input.md).
+[File-input policy, evidence and remaining work](knowledge/playwright-rust-file-input.md).
 
 NODE-140: Broader verification remains non-green. Preserve arrival-close failures; investigate bounded Page/request capacity attribution and raw input misses without retries or weakened assertions. File upload/download remain unsupported, and history is unimplemented with a failing upstream reference. Equal outputs do not prove intended behavior when both sides miss an interaction.
 [Expanded verification and retained failures](knowledge/testing-strategy.md#node-140-broadened-node-ffi-verification-remains-non-green).
 
 NODE-139: Implement the Page-lifetime publication boundary and verify it independently from native navigation phase differences. Stable committed-document close cases already passed on NODE-138, so they are regression controls rather than a claimed red/green reproduction. Full compatibility, borrowed/default-context concurrent close paths and complete peak accounting remain open.
-[Page lifetime publication contract and verification](knowledge/pwright-frame-navigation.md#node-139-page-lifetime-through-navigation-publication).
+[Page lifetime publication contract and verification](knowledge/playwright-rust-frame-navigation.md#node-139-page-lifetime-through-navigation-publication).
 
 NODE-138: Actual Node close-driver integration is implemented behind concurrent-close, including bounded admission, post-transaction completion and stop-time native drain. The final rebuilt combined artifact passes the original controlled/transparent close gates, three controlled repeats and 27 lifecycle regressions. The then-observed Context-close Frame.goto error difference was investigated in NODE-139 and involved different native document phases; it is not a proven same-phase semantic defect. Full compatibility and complete peak accounting remain open.
-[Node close-driver integration and final verification](knowledge/pwright-close-cascade.md#node-138-opt-in-node-close-driver-integration).
+[Node close-driver integration and final verification](knowledge/playwright-rust-close-cascade.md#node-138-opt-in-node-close-driver-integration).
 
 NODE-137: Implemented the native-proven local retirement API and borrowed Handle cleanup, including an explicit notification owner that can outlive an attachment lock scope. Next wire bounded close jobs into the actual Node driver, drain written work before shutdown waits and rerun real Node/Chrome differential gates.
-[Native local retirement and post-lock notification contract](knowledge/pwright-close-cascade.md#node-137-native-proven-local-retirement-and-post-session-lock-notification).
+[Native local retirement and post-lock notification contract](knowledge/playwright-rust-close-cascade.md#node-137-native-proven-local-retirement-and-post-session-lock-notification).
 
 NODE-136: Joined capacity ownership and consuming native completions are implemented. Next integrate route/Handle/network/native-world retirement, full peak ownership and real publication into the short commit, then select and drain concurrent close scheduling in Node. Keep the controlled ancestor-dispatch browser gate open.
-[Joined close capacity and native completion contract](knowledge/pwright-close-cascade.md#node-136-joined-close-capacity-and-consuming-native-completions).
+[Joined close capacity and native completion contract](knowledge/playwright-rust-close-cascade.md#node-136-joined-close-capacity-and-consuming-native-completions).
 
 NODE-135: Implemented runtime-locked local publication/disposal to prevent transport invalidation between local commit phases. Ten new tests pass; runtime ordinary/selected/combined totals are 113/178/196 and default host 416 (8 ignored). Next finish stable commit scratch/graph ownership and compose native, topology, routes, Handles, network and publication before switching Node scheduling.
-[Runtime-locked publication/disposal contract and evidence](knowledge/pwright-close-cascade.md#node-135-runtime-locked-local-publication-and-disposal).
+[Runtime-locked publication/disposal contract and evidence](knowledge/playwright-rust-close-cascade.md#node-135-runtime-locked-local-publication-and-disposal).
 
 NODE-134: Implemented runtime-owned preallocated outbox backing with 14 new runtime/two core tests. Runtime ordinary/selected/combined passes 113/168/186; core passes 75, strict lint, doctest and Node boundaries pass. Next finish graph/table and topology/Handle/network peak ownership, compose current-state close commits and wire/drain the Node scheduler. Controlled ancestor-dispatch remains open.
-[Preallocated runtime outbox contract and evidence](knowledge/pwright-close-cascade.md#node-134-preallocated-runtime-control-outbox-storage).
+[Preallocated runtime outbox contract and evidence](knowledge/playwright-rust-close-cascade.md#node-134-preallocated-runtime-control-outbox-storage).
 
 NODE-133: Implemented exact native Page destruction for retained paired/utility worlds, including late events after route removal. Selected/combined composition pass 397/486 (16 ignored each), default host 416 (8 ignored), Node unit 84 and two rebuilt addon profiles pass 28 focused Chrome cases. Strict lint, types, dependency boundaries and formatting pass. Next finish full close peak ownership/commit and Node scheduler integration, then rerun the controlled ancestor-dispatch gate; no new commit/push.
-[Native Page world-retirement contract and evidence](knowledge/pwright-close-cascade.md#node-133-retained-worlds-follow-exact-native-page-destruction).
+[Native Page world-retirement contract and evidence](knowledge/playwright-rust-close-cascade.md#node-133-retained-worlds-follow-exact-native-page-destruction).
 
 NODE-132: Implemented attachment-bound native close/topology commit scope with under-lock identity validation and borrowed native keys. Final combined/authority release suites pass 474/394 (16 ignored each), including all 12 new scope cases in the combined run; three strict Clippy configurations, dependency/Node boundaries, formatting and diff checks pass. Next integrate pre-admitted runtime/routes/Handles/network/native-world/publication into this scope and wire host scheduling; full goal remains active, with no addon/browser compatibility claim or new commit/push.
-[Native close commit-scope contract and evidence](knowledge/pwright-close-cascade.md#node-132-attachment-bound-native-close-commit-scope).
+[Native close commit-scope contract and evidence](knowledge/playwright-rust-close-cascade.md#node-132-attachment-bound-native-close-commit-scope).
 
 NODE-131: Implemented deferred runtime commit and traversal/notification collection-payload peak admission. Runtime tests pass 113/154/172 (ordinary/selected/combined), including 13 new cases; host regressions pass 416/464. Strict lint, doctest, dependency/Node boundaries and formatting pass. Next admit long-lived runtime/outbox storage plus topology/Handle/network scratch, compose latest-state retirement/publication, select native scheduling in the host and rerun the controlled browser gate. No full compatibility claim or new commit/push.
-[Deferred runtime close commit contract and evidence](knowledge/pwright-close-cascade.md#node-131-deferred-runtime-disposal-notifications).
+[Deferred runtime close commit contract and evidence](knowledge/playwright-rust-close-cascade.md#node-131-deferred-runtime-disposal-notifications).
 
 NODE-130: Implemented the route phase of short close commits: deletion-only survivor checks, preserved provider identities, navigation revocation, subscription pruning and post-lock readiness wake. All 13 new tests pass; selected/combined release suites pass 385/462 (16 ignored each). Next join it with reserved topology/runtime/publication and native scheduler receipts; no full host integration or browser pass yet.
-[Deletion-only close route contract and evidence](knowledge/pwright-close-cascade.md#node-130-deletion-only-close-route-retirement).
+[Deletion-only close route contract and evidence](knowledge/playwright-rust-close-cascade.md#node-130-deletion-only-close-route-retirement).
 
 NODE-129: Implemented the native half of concurrent close coordination: fixed admission, retained native futures/ancestor joins, payload ownership, fair completions and guarded initiation. Verification passes 416 composition tests (16 ignored), 38 native-leaf tests and six ordinary-leaf tests; strict lint and dependency boundaries pass. Next derive and compose the complete retirement/publication peak budget, wire serialized current-state commits into the host, rebuild both addons, and rerun the controlled browser gate. Full goal remains active; no new commit/push.
-[Bounded native scheduler contract and evidence](knowledge/pwright-close-cascade.md#node-129-bounded-native-close-scheduler).
+[Bounded native scheduler contract and evidence](knowledge/playwright-rust-close-cascade.md#node-129-bounded-native-close-scheduler).
 
 NODE-128: Completed opt-in Context ancestor authority with 22 new identity/admission/native-peer tests (394 selected composition passes, 16 ignored). Next compose it with native Page phases, topology/runtime/publication reservations and full peak budgets in the bounded coordinator, then pass the original controlled dispatch gate. No new commit/push.
-[Native ancestor authority contract and evidence](knowledge/pwright-close-cascade.md#node-128-exact-native-context-ancestor-authority).
+[Native ancestor authority contract and evidence](knowledge/playwright-rust-close-cascade.md#node-128-exact-native-context-ancestor-authority).
 
 NODE-127: Completed native Page-close command/receipt phase separation and 15 new production-CDP peer tests (36 selected total). Next bind exact Context/epoch/ancestry retirement authority, compose the storage reservations into bounded native scheduling and pass the controlled NODE-123 dispatch gate. Overall compatibility remains unfinished; no new commit/push.
-[Native close phase contract and evidence](knowledge/pwright-close-cascade.md#node-127-native-command-and-destruction-wait-phases).
+[Native close phase contract and evidence](knowledge/playwright-rust-close-cascade.md#node-127-native-command-and-destruction-wait-phases).
 
 NODE-126: Deferred publication admission/preparation is implemented as the third storage prerequisite after topology and runtime reservations. Next compose exact native intents/ancestor receipts, complete peak ownership budgets and serialized commits, then rerun the red NODE-123 controlled dispatch gate.
-[Deferred publication contract and evidence](knowledge/pwright-close-cascade.md#node-126-deferred-close-publication-capacity).
+[Deferred publication contract and evidence](knowledge/playwright-rust-close-cascade.md#node-126-deferred-close-publication-capacity).
 
 NODE-125: Completed opt-in runtime waiting/outbox admission and latest-state disposal preparation, including closed-transport priority, partial-admission rollback and lifetime-handoff interaction. Tests pass 142 selected, 159 combined, 113 ordinary. Next implement bounded native close intents and exact ancestor receipts; derive commit-scratch/publication/native-future budgets, rebase publication and serialize short commits; then pass NODE-123 controlled dispatch without releasing child retirement first. No additional commit or push.
-[Runtime reservation contract and evidence](knowledge/pwright-close-cascade.md#node-125-opt-in-runtime-disposal-and-outbox-reservations).
+[Runtime reservation contract and evidence](knowledge/playwright-rust-close-cascade.md#node-125-opt-in-runtime-disposal-and-outbox-reservations).
 
 NODE-124: Completed opt-in topology transition reservations and 27 new ownership/capacity/latest-state tests (76 selected total; 49 ordinary). Next implement runtime disposal/control-message reservations without a long-held lifecycle gate; then wire bounded native intents, exact ancestor receipts and serialized publication. Keep the NODE-123 controlled ancestor-dispatch gate red until the actual scheduling change passes; no additional commit or push.
-[Topology reservation contract and evidence](knowledge/pwright-close-cascade.md#node-124-opt-in-topology-transition-reservations).
+[Topology reservation contract and evidence](knowledge/playwright-rust-close-cascade.md#node-124-opt-in-topology-transition-reservations).
 
 NODE-123: Fixed Context interruption semantics and the later reply-producer/request-queue-loss settlement window. Final rebuilt profiles each pass 50 close-related cases plus two extra six-case confirmation repeats; retain the intermediate peer-repeat failure. A controlled red probe proves ancestor disposal remains blocked behind pending Page confirmation despite host/FFI admission. Next: implement additive retirement-capacity reservations without long-held mutation gates; compose bounded native intents, authoritative ancestor receipts and serialized latest-state publication; then pass the controlled dispatch gate without releasing Page retirement first. Preserve ordinary/v1 paths, failed-parent continuation and full discrepancy scope. No additional commit or push.
-[Close cascade requirements](knowledge/pwright-close-cascade.md).
+[Close cascade requirements](knowledge/playwright-rust-close-cascade.md).
 
 NODE-122: Implemented selected native close confirmation, explicit call/source/error budgets, independent cursor, continuation retirement and Rust terminal-settlement fencing. Both final artifacts pass the 48-case close/lifecycle/connection matrix, and strict Rust/type/dependency checks pass. The extra Frame-navigation gate remains 27/29: retain the arrival-boundary close reproducer, isolate exact native receipts/cleanup sequencing next, and do not manufacture success or change deadlines. The overall Node compatibility goal remains active; no additional commit or push.
-[Selected confirmation](knowledge/pwright-page-close.md#node-122-selected-native-destruction-confirmation).
+[Selected confirmation](knowledge/playwright-rust-page-close.md#node-122-selected-native-destruction-confirmation).
 
 NODE-121: Transparent tracing of the original mutation/close-reentry scenarios passes 16 samples per profile; no natural failure was captured. Pinned 1.58.2 source nevertheless proves ordinary close waits for actual closure, unlike the Node selection's finite absence-check policy. Next implement separately admitted native close confirmation, preserving ordinary/v1 polling, native ownership and cancellation/publication gates; do not keep repeating unchanged probes or claim the unidentified timeout fixed.
-[Transparent trace and next confirmation contract](knowledge/pwright-browser-close.md#node-121-transparent-original-scenario-tracing).
+[Transparent trace and next confirmation contract](knowledge/playwright-rust-browser-close.md#node-121-transparent-original-scenario-tracing).
 
 NODE-120: Retained native driver failures now carry bounded phase attribution. Both profiles pass a controlled Page.enable response-timeout test and full 18-case listener corpus. A native Page-close absence-check exhaustion also recurred; neither natural failure is declared fixed. Next capture the naturally failing method/session and close-confirmation timeline before changing deadlines.
-[Close attribution contract and evidence](knowledge/pwright-browser-close.md#node-120-attribute-retained-native-driver-failures).
+[Close attribution contract and evidence](knowledge/playwright-rust-browser-close.md#node-120-attribute-retained-native-driver-failures).
 
 NODE-119: Ready/linkage source integration is implemented. Both final profiles pass the full 7-case lifecycle and 18-case listener corpora, 39 prior regressions, Frame-tree 18/18 and lookup 41/41 plus three boundaries. A combined mutation repetition failed in browser.close with a driver-response timeout; two subsequent planned repetitions passed. Diagnose that failure without assuming it is NODE-118's absence-check issue. The overall Node compatibility matrix remains open.
-[Native ready-source contract and evidence](knowledge/pwright-node-lifecycle-events.md#node-119-native-ready-and-popup-source).
+[Native ready-source contract and evidence](knowledge/playwright-rust-node-lifecycle-events.md#node-119-native-ready-and-popup-source).
 
 NODE-118: Ready/popup wrapper conversion is implemented and unit-tested. Next join authoritative PageReady/PopupLinked effects to native groups, preserve exact visibility across full snapshots, pre-admit source capacity, and run the whole differential corpus. Do not count conversion alone as completed creation-event support.
-[Creation-conversion contract and evidence](knowledge/pwright-node-lifecycle-events.md#node-118-precommit-creation-wrapper-conversion).
+[Creation-conversion contract and evidence](knowledge/playwright-rust-node-lifecycle-events.md#node-118-precommit-creation-wrapper-conversion).
 
 Also retain the NODE-118 native close-confirmation stability task: two initial
 default corpus cases exhausted the existing 20 checks with 10-ms pauses. Final
@@ -8734,47 +8734,47 @@ that is not a root-cause fix. Preserve those failures while investigating an
 appropriate injected completion/deadline policy and its cancellation/resource proof.
 
 NODE-117: External Page-close delivery now matches the Worker-confirmed upstream scenario in both profiles. Ready/creation and popup linkage remain next; admit wrapper identities before publication and preserve dependent-event ordering. The overall Node compatibility goal remains active.
-[External-close source contract and evidence](knowledge/pwright-node-lifecycle-events.md#node-117-pre-admitted-external-close-source).
+[External-close source contract and evidence](knowledge/playwright-rust-node-lifecycle-events.md#node-117-pre-admitted-external-close-source).
 
 NODE-116: Explicit Page/Context close sources now have real Node delivery. Next join external committed disposal and ready/linkage sources, retaining exact planned views and pre-admission. Default live evidence is 14/18 listeners and 4/7 lifecycle-event cases; creation/popup/external Page close remain unfinished.
-[Explicit-close source contract and evidence](knowledge/pwright-node-lifecycle-events.md#node-116-explicit-close-source-integration).
+[Explicit-close source contract and evidence](knowledge/playwright-rust-node-lifecycle-events.md#node-116-explicit-close-source-integration).
 
 NODE-115: Node terminal dispatch is implemented; ordinary ready/linkage and explicit-close source joining remains next. Preserve exact planned collection visibility when composing those sources. Do not mark the overall Node compatibility goal complete.
-[Terminal dispatcher contract and evidence](knowledge/pwright-node-lifecycle-events.md#node-115-environment-thread-terminal-dispatch).
+[Terminal dispatcher contract and evidence](knowledge/playwright-rust-node-lifecycle-events.md#node-115-environment-thread-terminal-dispatch).
 
-# Pwright Rust v2 design tasks
+# Playwright Rust v2 design tasks
 
 NODE-114: Implemented and exercised the terminal native source. Next join ready/linkage and explicit-close receipts to exact planned visibility, then integrate one environment-owned FFI dispatcher. The current terminal entry point is an experimental partial composition, not completion of the Node compatibility goal.
-[Terminal source contract and evidence](knowledge/pwright-node-lifecycle-events.md#node-114-pre-admitted-native-terminal-source).
+[Terminal source contract and evidence](knowledge/playwright-rust-node-lifecycle-events.md#node-114-pre-admitted-native-terminal-source).
 
 NODE-113: Implemented the bounded group/cursor primitive. Next join driver and explicit-close receipts to planned collection views, pre-admit terminal groups at creation, then route every FFI fence through one environment-owned callback port. Do not stage groups in the selected host while legacy whole-fence delivery remains.
-[Group contract and evidence](knowledge/pwright-node-lifecycle-events.md#node-113-bounded-dependent-publication-groups).
+[Group contract and evidence](knowledge/playwright-rust-node-lifecycle-events.md#node-113-bounded-dependent-publication-groups).
 
 NODE-112: Explicit Page/Context close effects now have a two-phase, opt-in native input.
 Next integrate ready/linkage, explicit close and saturation-safe terminal inputs
 into one bounded dependent journal, then join intermediate visibility and the
 exclusive publication drain to unlocked Node delivery.
-[NODE-112 close receipt contract and verification](knowledge/pwright-node-lifecycle-events.md#node-112-pre-admitted-explicit-close-receipts).
+[NODE-112 close receipt contract and verification](knowledge/playwright-rust-node-lifecycle-events.md#node-112-pre-admitted-explicit-close-receipts).
 
 NODE-111: The borrowed driver-effect input is implemented and tested. Next, preserve the
 native prepared Page/Context close effects currently discarded by direct service
 commits, with pre-admission and post-commit publication. Then integrate bounded
 dependent groups and unlocked Node delivery; final-state diffing is insufficient.
-[NODE-111 source contract and verification](knowledge/pwright-node-lifecycle-events.md#node-111-borrowed-committed-driver-effects).
+[NODE-111 source contract and verification](knowledge/playwright-rust-node-lifecycle-events.md#node-111-borrowed-committed-driver-effects).
 
 NODE-110 characterizes listener mutation, async gates, reentrant close and
 synchronous/asynchronous failure channels; it fixes the supported Browser
 notification's synchronous exception channel. Next: native dependent cause
 groups, per-group completion/failure receipts, intermediate visibility and
 bounded foreign delivery. Five missing-event scenarios remain RED.
-[NODE-110 contracts, fix and verification](knowledge/pwright-node-lifecycle-events.md#node-110-listener-failure-boundaries-and-scoped-exception-reporting).
+[NODE-110 contracts, fix and verification](knowledge/playwright-rust-node-lifecycle-events.md#node-110-listener-failure-boundaries-and-scoped-exception-reporting).
 
 NODE-109 implements and tests the exclusive, fixed-watermark Rust queue owner.
 Remaining: native lifecycle cause journal, atomic callback-state transactions,
 listener throw/reentry characterization, unified FFI fence delivery and bounded
 foreign port admission. Do not mark Node lifecycle-event compatibility complete
 from this lower-level ownership primitive.
-[NODE-109 contract and verification](knowledge/pwright-node-lifecycle-events.md#node-109-exclusive-fixed-watermark-publication-owner).
+[NODE-109 contract and verification](knowledge/playwright-rust-node-lifecycle-events.md#node-109-exclusive-fixed-watermark-publication-owner).
 
 NODE-108 adds precise bounded retirement receipts and revalidates existing
 retirement handling: CDP 91, probe suites 19 each, fresh native layouts 6/6 each,
@@ -8783,7 +8783,7 @@ stall reproduced in these fresh traces; previous failures remain unexplained.
 Continue the admitted Rust event-step owner/native cause journal and listener
 failure/reentry design. Use exact receipts for another reproduced attach stall;
 do not replace the existing typed SessionDetached path based on aggregate counts.
-[NODE-108 receipts and verification](knowledge/pwright-chromium-topology-events.md#node-108-bounded-native-lifecycle-identity-receipts).
+[NODE-108 receipts and verification](knowledge/playwright-rust-chromium-topology-events.md#node-108-bounded-native-lifecycle-identity-receipts).
 
 NODE-107 handoff: Rust tests 304/352 and strict checks pass, but the rebuilt
 combined live gate is incomplete due to initialization timeouts. The real-Rust
@@ -8791,7 +8791,7 @@ combined probe reproduces four observer-layout timeouts, narrowing outstanding
 commands to Page.enable / Network.enable on other targets. Next characterize
 retirement and observer interactions without restarting shared Chrome or extending
 deadlines. The admitted event step owner/journal/foreign dispatch remains open.
-[Evidence and outstanding work](knowledge/pwright-node-lifecycle-events.md#combined-profile-reproduction-and-incomplete-live-gate).
+[Evidence and outstanding work](knowledge/playwright-rust-node-lifecycle-events.md#combined-profile-reproduction-and-incomplete-live-gate).
 
 NODE-107 completes validated cross-revision view rebasing, including foreign
 domain rejection, metadata/order preservation, hidden additions, full-capacity
@@ -8799,7 +8799,7 @@ replacement and final-owner release. Next admit the one-shot fixed-watermark
 step owner and native cause journal, characterize listener failures/reentry,
 and then route every foreign fence through it. Preserve NODE-106's unexplained
 discovery timeout; neither this primitive nor a rerun marks that issue fixed.
-[NODE-107 contracts and evidence](knowledge/pwright-node-lifecycle-events.md#node-107-validated-cross-revision-visibility-rebasing).
+[NODE-107 contracts and evidence](knowledge/playwright-rust-node-lifecycle-events.md#node-107-validated-cross-revision-visibility-rebasing).
 
 NODE-106 completes the immutable single-revision visibility building block and
 layout measurements, with 14 new Rust tests (284 default / 332 combined passed).
@@ -8811,7 +8811,7 @@ Live regressions passed apart from an initial combined borrowed-discovery
 readiness timeout (6/7); unchanged repeat passed 7/7 and targeted case 1/1.
 Keep that intermittent timeout unresolved. Both lifecycle candidates remain
 0/7 versus the freshly verified 7/7 reference. No task-owned runtime remains.
-[Implementation status](knowledge/pwright-node-lifecycle-events.md#node-106-immutable-single-revision-visibility-foundation).
+[Implementation status](knowledge/playwright-rust-node-lifecycle-events.md#node-106-immutable-single-revision-visibility-foundation).
 
 NODE-105 completes reference characterization and a reproducible RED event gate:
 7/7 upstream; 0/7 on both candidates, with final state equality. Page/Context
@@ -8821,7 +8821,7 @@ listener failure/reentry, then integrate all command/watch fences and typed
 Page/popup/close notifications. Existing Page-event/opener capabilities are reuse
 points. No production implementation/rebuild or commit/push in this checkpoint;
 full goal remains active.
-[Design and required verification](knowledge/pwright-node-lifecycle-events.md).
+[Design and required verification](knowledge/playwright-rust-node-lifecycle-events.md).
 
 NODE-104 completes seven creation/discovery collection-publication observations:
 corrected reference, default and combined each pass twice. No production patch or
@@ -8831,7 +8831,7 @@ Next characterize and implement bounded Rust-owned Context page, Page/Context
 close and popup events with exact handler-visible state/order and cleanup.
 Current getters alone do not prove event compatibility. Overall goal stays active;
 no staging, commit or push.
-[Checkpoint and limits](knowledge/pwright-frame-publication.md#node-104-creation-and-discovery-publication-characterization).
+[Checkpoint and limits](knowledge/playwright-rust-frame-publication.md#node-104-creation-and-discovery-publication-characterization).
 
 NODE-103 implements the NODE-102 producer/getter integration and resolves all
 six NODE-101 early-removal discrepancies on both rebuilt profiles. Rust batches
@@ -8842,7 +8842,7 @@ baseURL TypeError mismatch is fixed in Rust; getter identity remains intact.
 Next characterize creation/discovery visibility while Node is blocked, then
 continue close/crash event ordering and remaining API discrepancy gates.
 No staging, new commit or push. The overall Node-compatible Rust goal remains active.
-[Exact checkpoint and verification](knowledge/pwright-frame-publication.md#node-103-rust-collection-producers-and-published-node-reads).
+[Exact checkpoint and verification](knowledge/playwright-rust-frame-publication.md#node-103-rust-collection-producers-and-published-node-reads).
 NODE-102 next-step/artifact statements below are historical, now superseded.
 
 NODE-102 implements and verifies collection storage/fence primitives: explicit
@@ -8853,7 +8853,7 @@ Next integrate native creation/discovery/retirement producers and selected Node
 collection getters with atomic Page-close membership publication, then rebuild
 and rerun the unchanged NODE-101 red gate. Storage tests are not browser parity.
 No staging, new commit, push or installed addon replacement; goal stays active.
-[Code, proof and concrete next integration steps](knowledge/pwright-frame-publication.md#node-102-bounded-rust-collection-revision-storage).
+[Code, proof and concrete next integration steps](knowledge/playwright-rust-frame-publication.md#node-102-bounded-rust-collection-revision-storage).
 
 NODE-101 completes characterization of Context/Page collection publication:
 six reproducible early-removal discrepancies on both NODE-100 artifacts; only
@@ -8863,7 +8863,7 @@ storage/terminal work, fixed fences and uncached retained descriptors, then turn
 this unchanged red gate green and rerun resource/Worker/enumeration regressions.
 Creation/discovery timing and public close-event ordering remain open gates.
 No production change, native rebuild, staging, commit or push in this checkpoint.
-[Evidence and concrete implementation requirements](knowledge/pwright-frame-publication.md#node-101-context-and-page-collection-publication-discrepancy).
+[Evidence and concrete implementation requirements](knowledge/playwright-rust-frame-publication.md#node-101-context-and-page-collection-publication-discrepancy).
 
 NODE-100 completes the bounded Browser.isConnected publication audit and fix:
 Rust owns readiness, published state and duplicate suppression; default/combined
@@ -8872,7 +8872,7 @@ tests pass 245/293, Node units/types/boundaries and strict Clippy pass.
 Next characterize Browser.contexts() / BrowserContext.pages() under blocked Node
 shutdown. Native-index timing is only a hypothesis until independently tested.
 The full goal stays active; no staging, new commit or push.
-[Contract and verification](knowledge/pwright-browser-close.md#node-100-rust-owned-browser-disconnect-publication).
+[Contract and verification](knowledge/playwright-rust-browser-close.md#node-100-rust-owned-browser-disconnect-publication).
 
 NODE-099 implements Rust-owned Page.isClosed with pre-admitted terminal queue
 slots, fixed Node publication fences and allocation-free native teardown. Both
@@ -8882,7 +8882,7 @@ Rust gate passes 286 tests and strict Clippy; default passes 238. Worker teardow
 passes 3/3 on both final artifacts; Node units/types and boundaries pass.
 Next audit Browser.isConnected at the same event-loop boundary, then continue
 Page event/API work. The full goal is not complete; no staging, commit or push.
-[Contract and verification](knowledge/pwright-page-close.md#node-099-rust-owned-page-close-publication).
+[Contract and verification](knowledge/playwright-rust-page-close.md#node-099-rust-owned-page-close-publication).
 
 NODE-098 establishes the Page.isClosed contract with eight real-browser oracle
 cases, including crash, borrowed disconnect and a blocked Node event loop.
@@ -8891,7 +8891,7 @@ the API is missing. This is a red test/design checkpoint, not implementation.
 Next prove bounded terminal close publication in Rust, then expose the getter
 and rerun this unchanged gate. Do not publish the native close flag directly.
 No Rust rebuild, new commit or push in this checkpoint.
-[Contract, evidence and implementation gate](knowledge/pwright-page-close.md#node-098-pageisclosed-reference-contract-and-failing-candidate-baseline).
+[Contract, evidence and implementation gate](knowledge/playwright-rust-page-close.md#node-098-pageisclosed-reference-contract-and-failing-candidate-baseline).
 
 NODE-097 isolates Page-scoped auto-attach by a second client as a native paused-
 iframe retirement trigger. Pinned Playwright and Rust show the same timeout and
@@ -8899,7 +8899,7 @@ explicit recovery; the direct matrix passes combined/default 11/11. Keep the
 old uncoordinated stress failure, but do not treat this native signature alone as
 a Rust discrepancy or alter production timeouts. Next implement Page.isClosed
 from Rust-owned lifecycle state, then continue broader API/Worker coverage.
-[Evidence and scope](knowledge/pwright-chromium-topology-events.md#node-097-page-auto-attachment-from-a-second-client).
+[Evidence and scope](knowledge/playwright-rust-chromium-topology-events.md#node-097-page-auto-attachment-from-a-second-client).
 
 NODE-096 adds bounded timing/native-retirement evidence and a four-combination
 borrowing-peer disconnect control. It corrects the earlier interpretation:
@@ -8907,7 +8907,7 @@ one matching load arrives AFTER deadline-triggered stopLoading, not before.
 The controlled combined peer probe passes 4/4; churn overlap still fails.
 Next isolate peer attachment during paused OOPIF initialization and native
 replacement. Rust production code and deadlines are unchanged; no new commit
-or push. [Checkpoint](knowledge/pwright-chromium-topology-events.md#node-096-navigation-timing-and-borrowing-peer-control).
+or push. [Checkpoint](knowledge/playwright-rust-chromium-topology-events.md#node-096-navigation-timing-and-borrowing-peer-control).
 
 NODE-095 proves exact detach events can arrive while Rust initialization still
 waits for native replies. A controlled baseline fails both new pre-receipt
@@ -8918,29 +8918,29 @@ composition and 274 host tests. Headers overlap passes 35/35, but two child
 runs pass only 6/8 each. Next investigate navigation timeout timing relative to
 exact main-loader load with no native calls pending, plus replacement
 iframe/evaluate progress. Preserve wider API/Worker work; the goal is not complete.
-[Checkpoint](knowledge/pwright-chromium-topology-events.md#node-095-native-detach-before-an-initialization-response).
+[Checkpoint](knowledge/playwright-rust-chromium-topology-events.md#node-095-native-detach-before-an-initialization-response).
 
 NODE-094 reproduces queued disposed-Context root-detach failure and corrects the
 selected Playwright fallback, preserving strict-mode behavior and borrowed
 Context ownership. The expanded old-artifact baseline is 1/2; rebuilt default
 and combined controls pass 2/2 each. Rust regressions pass 374 composition and
 274 host tests. Repeated overlap passes headers 35/35 but child headers 6/8,
-including candidate navigation/disconnect timeouts after Pwright builds finish.
+including candidate navigation/disconnect timeouts after Playwright Rust builds finish.
 Next inspect outstanding native commands and event-driver ordering at those
 timeouts; do not increase deadlines or infer closure from arbitrary CDP errors.
 Full compatibility remains open.
-[Checkpoint](knowledge/pwright-chromium-topology-events.md#node-094-queued-attachments-from-disposed-contexts).
+[Checkpoint](knowledge/playwright-rust-chromium-topology-events.md#node-094-queued-attachments-from-disposed-contexts).
 
 NODE-093 resumes implementation after the user's explicit go-ahead. Typed
 header-initialization retirement is corrected after a 7/8 failing baseline;
 combined attachment 8/8 and headers-only 6/6 now pass. The root-detach race
 remains open; no full compatibility claim or new commit/push is made.
-[Checkpoint](knowledge/pwright-extra-http-headers.md#node-093-typed-header-initialization-retirement).
+[Checkpoint](knowledge/playwright-rust-extra-http-headers.md#node-093-typed-header-initialization-retirement).
 
 NODE-092 addresses the demonstrated second-stage -32602 child-detach race in
 Rust. Native tests pass 79; the initial paired retired/live Worker lane passes
 2/2. The separate concurrent disconnect timeout and other compatibility gaps
-remain open. [Checkpoint](knowledge/pwright-chromium-topology-events.md#node-092-child-disappears-between-resume-and-detach).
+remain open. [Checkpoint](knowledge/playwright-rust-chromium-topology-events.md#node-092-child-disappears-between-resume-and-detach).
 
 NODE-092 public status: default 2/2, combined 2/2 plus repeat, serial child headers
 8/8 and attachment 7/7. The deliberately overlapping run still fails: headers
@@ -8957,7 +8957,7 @@ NODE-091 implements native session-close watches for header fanout after a 4/6
 baseline exposed Page/Context rollback discrepancies. Follow up on blocked-driver
 receipt/detach ordering, crashes/replacement, Worker shutdown, initializer native
 error preservation and Page.isClosed. The foundation commit remains local; no
-push. [Evidence](knowledge/pwright-extra-http-headers.md#node-091-native-session-closure-during-header-fanout).
+push. [Evidence](knowledge/playwright-rust-extra-http-headers.md#node-091-native-session-closure-during-header-fanout).
 
 Final NODE-091 gates: combined 8/8 plus an 8/8 repeat; headers-only 8/8;
 header regression 35/35; attachment 7/7; host 274 pass (9 ignored). Preserve the
@@ -8970,7 +8970,7 @@ Public tests pass 7/7 plus three repeats, headers 35/35, CDP 78, composition 373
 and host 269. Next: real OOPIF/replacement/Worker retirement, other Page-local
 initialization errors, compensation/shutdown lifetime and broader API coverage.
 The original foundation commit remains local; no push is authorized.
-[Checkpoint](knowledge/pwright-chromium-topology-events.md#node-090-missing-session-retirement-before-page-publication).
+[Checkpoint](knowledge/playwright-rust-chromium-topology-events.md#node-090-missing-session-retirement-before-page-publication).
 
 NODE-089 final gates pass 35/35 public tests and three 4/4 held-receipt repeats;
 269 host tests and isolated live cleanup pass. Preserve the earlier missing-
@@ -8982,41 +8982,41 @@ native protocol-error projection. Four controlled public success/failure cases
 pass; release host tests pass 269. Next: OOPIF/session-close behavior, Page-order
 and route handoff under churn, compensation failure and shutdown retirement.
 The broad compatible Node API goal remains active, not complete.
-[Checkpoint](knowledge/pwright-extra-http-headers.md#node-089-native-receipt-gates-and-context-page-sequencing).
+[Checkpoint](knowledge/playwright-rust-extra-http-headers.md#node-089-native-receipt-gates-and-context-page-sequencing).
 
 NODE-088 implements bounded caller-polled native header fanout and early primary
 result with retained compensation. Host tests pass 266 and combined public header
 tests 31/31. Next: controlled real-CDP/Node early-failure timing, session-close
 suppression, attachment handoff and shutdown retirement/foreign-waker audit; typed
 contracts, Worker/OOPIF coverage and the broader compatibility goal remain open.
-[Checkpoint](knowledge/pwright-extra-http-headers.md#node-088-caller-polled-native-jobs-and-early-primary-rejection).
+[Checkpoint](knowledge/playwright-rust-extra-http-headers.md#node-088-caller-polled-native-jobs-and-early-primary-rejection).
 
 NODE-087 implements synchronous Rust setter/navigation preparation, queue-before-
 publication admission and frozen per-Page native plans; combined public tests pass
 30/30. Next: concurrent driver progress, attachment handoff and early primary
 settlement with bounded compensation ownership; these are not completed by the
 logical ordering fix. Broader Node compatibility remains the unchanged goal.
-[Checkpoint](knowledge/pwright-extra-http-headers.md#node-087-synchronous-rust-preparation-and-frozen-dispatch).
+[Checkpoint](knowledge/playwright-rust-extra-http-headers.md#node-087-synchronous-rust-preparation-and-frozen-dispatch).
 
 NODE-086 reproduced an unawaited-setter/Frame.goto race. The bounded overlapping
 metadata model passes 53 tests and 128 pinned internal traces; the host remains
 single-writer. Next: Rust call-order preparation, per-dispatch snapshots, bounded
 concurrent driver progress and early primary settlement with tracked compensation.
 The new public regression is intentionally retained, not marked resolved.
-[Design and evidence](knowledge/pwright-extra-http-headers.md#node-086-pending-setter-race-and-bounded-overlapping-model).
+[Design and evidence](knowledge/playwright-rust-extra-http-headers.md#node-086-pending-setter-race-and-bounded-overlapping-model).
 
 NODE-085 wires the first-original-Page Referer rule into public Page/Frame.goto;
 combined selected tests pass 24/24. Remaining header work includes pending setter
 races, native fanout/early rejection, worker/OOPIF wire behavior, typed contracts
 and creation fault/cancellation verification. Full navigation parity remains open.
-[Checkpoint](knowledge/pwright-extra-http-headers.md#node-085-navigation-referrer-reconciliation).
+[Checkpoint](knowledge/playwright-rust-extra-http-headers.md#node-085-navigation-referrer-reconciliation).
 
 NODE-084 implements selected Context creation headers in the Rust transaction;
 header-only release passes 21/21 public cases. Remaining work includes creation
 fault/cancellation paths, navigation referer reconciliation, typed header contracts,
 concurrent native fanout and early rejection, worker/OOPIF/event coverage. Do not
 mark the full Node compatibility goal complete on this subset.
-[Checkpoint](knowledge/pwright-extra-http-headers.md#node-084-context-creation-headers).
+[Checkpoint](knowledge/playwright-rust-extra-http-headers.md#node-084-context-creation-headers).
 
 NODE-083 Context-creation investigation reproduced three early-syntax failures
 and a shared-attachment shutdown on invalid Page initialization. Rust desired
@@ -9024,7 +9024,7 @@ storage now defers syntax validation; expected initialization rejection closes
 only the new Page and keeps Context usable. The expanded header-only lane passes
 15/15, including 18 failed-Page retirements. Context creation's header option is
 still next, not completed by this prerequisite correction.
-[Checkpoint and remaining scope](knowledge/pwright-extra-http-headers.md#node-083-deferred-syntax-and-page-local-initialization-failure).
+[Checkpoint and remaining scope](knowledge/playwright-rust-extra-http-headers.md#node-083-deferred-syntax-and-page-local-initialization-failure).
 
 NODE-082 implements selected N-API/public Page and Context header setters,
 eight composable artifact selections and a supervised public comparison lane.
@@ -9032,7 +9032,7 @@ Two observed discrepancies (premature boxed conversion and conversion-error
 prefixing) were fixed; the final header-only run passes 10/10 tests. Next work
 remains Context header creation options, navigation referer integration, native
 fanout/compensation/cancellation timing and OOPIF/workers, not a full-parity claim.
-[Detailed checkpoint](knowledge/pwright-extra-http-headers.md#node-082-public-selected-setters-and-language-phase-differential).
+[Detailed checkpoint](knowledge/playwright-rust-extra-http-headers.md#node-082-public-selected-setters-and-language-phase-differential).
 
 NODE-081 installs optional Rust-native header setters and attachment initialization.
 Two isolated Chrome runs pass nine wire observations, 18 Page retirement cycles
@@ -9041,26 +9041,26 @@ and addressed with acknowledged obsolete-session clearing. Host tests: 231 pass,
 seven existing ignored; model: 46 pass; strict selected Clippy passes. Next:
 concurrent fanout/compensation timing, Context options, navigation referer,
 workers/OOPIF gates, typed N-API and selected public differential artifacts.
-[Native installation and remaining work](knowledge/pwright-extra-http-headers.md#node-081-selected-rust-host-and-native-session-reconciliation).
+[Native installation and remaining work](knowledge/playwright-rust-extra-http-headers.md#node-081-selected-rust-host-and-native-session-reconciliation).
 
 NODE-080 implements the admitted Rust Context/Page settings registry and
 proposal/restore/acknowledgement lifecycle. Tests pass 45/45; internal setter
 metadata matches 54/54 and merge/referrer matches 484/484. Next: actual host
 selection, native fanout/compensation, typed FFI setters and public browser gates.
-[Transaction boundary](knowledge/pwright-extra-http-headers.md#node-080-bounded-desired-settings-transactions).
+[Transaction boundary](knowledge/playwright-rust-extra-http-headers.md#node-080-bounded-desired-settings-transactions).
 
 NODE-079 implements identity-aware native initialization before Page readiness.
 Three focused tests and 335 composition tests pass (15 existing tests ignored).
 Next remains the actual admitted settings registry, transactional fanout/rollback,
 worker routing and public FFI setters; no header side effect is implemented yet.
-[Scoped integration boundary](knowledge/pwright-extra-http-headers.md#node-079-identity-aware-native-initialization).
+[Scoped integration boundary](knowledge/playwright-rust-extra-http-headers.md#node-079-identity-aware-native-initialization).
 
 NODE-078 verifies the optional Rust extra-header policy (25 crate tests,
 484 internal comparisons) and repeats 23 public upstream observations.
 Next: identity-aware session initialization, admitted settings transactions and
 native rollback, followed by typed host/FFI setters and paired wire tests.
 The header Node API is not implemented; the full goal stays active.
-[Required integration evidence](knowledge/pwright-extra-http-headers.md#native-integration-plan-and-required-evidence).
+[Required integration evidence](knowledge/playwright-rust-extra-http-headers.md#native-integration-plan-and-required-evidence).
 
 NODE-077 verifies post-execution close and timeout-then-browser-continuation in
 both native profiles. Each has 27 paired matches; the arrival-close comparison
@@ -9069,7 +9069,7 @@ Worker-owned pending/queued cleanup and borrowed-Page preservation pass 3/3
 per profile. These are additional evidence, not a production close fix or full
 Worker coverage. Next: header/referer reconciliation, exact errors/redirect
 adoption and continued native close-boundary investigation; full FFI goal active.
-[Evidence](knowledge/pwright-frame-navigation.md#node-077-causal-close-timeout-continuation-and-worker-teardown).
+[Evidence](knowledge/playwright-rust-frame-navigation.md#node-077-causal-close-timeout-continuation-and-worker-teardown).
 
 NODE-076 exposes selected public Node Frame.goto, bounded FFI conversion,
 Context baseURL reuse and exact Response.frame identity. Independent and
@@ -9079,7 +9079,7 @@ but upstream held-response Page.close exceeds its diagnostic deadline. Combined
 drag/Keyboard/Locator passes 10/10. Keep the close comparison failed and
 investigate its causal boundary. Header reconciliation, exact navigation errors/redirects,
 Worker teardown and remaining Playwright coverage are still pending.
-[Current checkpoint](knowledge/pwright-frame-navigation.md#node-076-public-node-frame-navigation).
+[Current checkpoint](knowledge/playwright-rust-frame-navigation.md#node-076-public-node-frame-navigation).
 
 NODE-075 adds typed Rust host Frame.goto values and bounded response projection.
 An independent admitted result owner survives host shutdown; the real Chrome
@@ -9087,7 +9087,7 @@ HTTP/hash/404/OOPIF/cancellation/escaped-result gate passes. This is not a publi
 Node method or generated-service installation. Next are Context option
 reconciliation, foreign-copy admission/Response.frame identity and pinned
 public differential tests; the full Node FFI objective remains active.
-[Checkpoint](knowledge/pwright-frame-navigation.md#node-075-typed-rust-host-result-ownership).
+[Checkpoint](knowledge/playwright-rust-frame-navigation.md#node-075-typed-rust-host-result-ownership).
 
 NODE-074 completes the opt-in navigation 1.2 schema, generated models/server,
 all four typed command/result codecs and Rust Frame client extension. Root
@@ -9096,7 +9096,7 @@ strict selected Clippy, generation freshness and the 15-package legacy boundary
 pass. Next: connect the selected Rust host executor to this contract, then
 admit foreign results/errors and expose public Node Frame.goto with pinned
 differential verification. This is not completion of the FFI goal.
-[Checkpoint](knowledge/pwright-frame-navigation.md#node-074-opt-in-typed-navigation-12-contract).
+[Checkpoint](knowledge/playwright-rust-frame-navigation.md#node-074-opt-in-typed-navigation-12-contract).
 
 NODE-073 joins exact native Frame dispatch to the Rust host's ordered waiter,
 absolute deadline, host shutdown and final publication fence. Explicit admission
@@ -9105,26 +9105,26 @@ units, strict selected/readiness checks, the 131-observation internal oracle and
 live HTTP/hash/404/OOPIF/cancellation checks pass. Two preceding attachment
 failures remain recorded and unexplained. Generated commands, precise foreign
 error/response ownership and public Node FFI differential work remain.
-[Checkpoint](knowledge/pwright-frame-navigation.md#node-073-rust-host-dispatch-scheduling-and-cancellation).
+[Checkpoint](knowledge/playwright-rust-frame-navigation.md#node-073-rust-host-dispatch-scheduling-and-cancellation).
 
 NODE-072 integrates admitted navigation registrations into the production Page
 lifecycle lock and adds a distinct Rust host `frame-navigation` selection.
 651 Rust units, strict selected/readiness Clippy, the 131-observation oracle and
 actual host HTTP/hash/shutdown checks pass. Host-owned native dispatch and
 pending-call cancellation, generated Frame commands and public FFI gates remain.
-[Checkpoint](knowledge/pwright-frame-navigation.md#node-072-ordered-operation-registration-and-actual-rust-host-observation).
+[Checkpoint](knowledge/playwright-rust-frame-navigation.md#node-072-ordered-operation-registration-and-actual-rust-host-observation).
 
 NODE-071 implements the bounded Rust navigation matcher/response owner: 67 leaf
 unit tests and 29 pinned internal traces (131 observations) pass. Host operation
 registration/scheduling, native cancellation, redirected-navigation adoption,
 generated Frame commands and public FFI gates remain open.
-[Checkpoint](knowledge/pwright-frame-navigation.md#node-071-bounded-navigation-matching-and-response-retention).
+[Checkpoint](knowledge/playwright-rust-frame-navigation.md#node-071-bounded-navigation-matching-and-response-retention).
 
 NODE-070 bounded multi-Page lifecycle composition and opt-in Rust host
 installation pass 574 Rust tests, strict combined-feature Clippy and the real-host
 Chrome gate, including escaped shutdown lease release. The host sink is explicitly
 readiness-only, not the missing navigation response/waiter implementation.
-[Checkpoint](knowledge/pwright-frame-navigation.md#node-070-bounded-multi-page-registry-and-opt-in-rust-host-selection).
+[Checkpoint](knowledge/playwright-rust-frame-navigation.md#node-070-bounded-multi-page-registry-and-opt-in-rust-host-selection).
 
 NODE-069 implements an opt-in production ordered lifecycle observer and admitted
 one-Page owner. Two real-Chrome document lifecycle gates pass after exposing and
@@ -9133,7 +9133,7 @@ internal lifecycle snapshots pass. Strict Clippy and cleanup pass. This advances
 the full Frame.goto
 path; multi-Page/Worker ownership, waiter/response/cancellation semantics,
 generated commands and Node host/public differential work remain open.
-[Current checkpoint](knowledge/pwright-frame-navigation.md#node-069-opt-in-production-ordered-lifecycle-observation).
+[Current checkpoint](knowledge/playwright-rust-frame-navigation.md#node-069-opt-in-production-ordered-lifecycle-observation).
 
 NODE-068 fixes the production driver/topology document-commit retirement gap.
 Two live cases verify same-origin descendant disposal and cross-origin renderer
@@ -9142,7 +9142,7 @@ Verification passes 378 units, strict Clippy, both Node host/addon source
 configurations and the unchanged five-package topology dependency proof.
 Next install the bounded lifecycle owner with its initialization fence and
 response/cancellation ownership; portable Frame.goto and Node FFI remain open.
-[Evidence and pending gates](knowledge/pwright-frame-navigation.md#node-068-production-document-commit-topology-retirement).
+[Evidence and pending gates](knowledge/playwright-rust-frame-navigation.md#node-068-production-document-commit-topology-retirement).
 
 NODE-067 implements bounded native CDP-to-Rust lifecycle normalization and passes
 41 navigation units, strict Clippy and a live local/nested Chromium lifecycle test.
@@ -9150,7 +9150,7 @@ Document responses, descendant pruning and hash preservation are exercised throu
 the real transport. This is not public Frame.goto: next integrate initialization,
 topology/session handoff and operation response/cancellation ownership, then the
 portable command and Node FFI. The full goal remains incomplete.
-[Scope, evidence and remaining gates](knowledge/pwright-frame-navigation.md#node-067-bounded-native-lifecycle-normalization).
+[Scope, evidence and remaining gates](knowledge/playwright-rust-frame-navigation.md#node-067-bounded-native-lifecycle-normalization).
 
 NODE-066 implements opt-in retained Frame navigation routes in the production
 composition transaction, with budgeted snapshots and permanent observed
@@ -9161,14 +9161,14 @@ Clippy, both host/addon source configurations, 46 Node units and type/boundary
 checks pass. Fifteen ignored native tests remain unexecuted; addons are unchanged.
 Next connect native lifecycle/document/response normalization and cancellation,
 then generate/expose Frame.goto over FFI and verify the public API.
-[Contract and verification status](knowledge/pwright-frame-navigation.md#node-066-retained-routes-in-the-production-topology-transaction).
+[Contract and verification status](knowledge/playwright-rust-frame-navigation.md#node-066-retained-routes-in-the-production-topology-transaction).
 
 NODE-065 adds an opt-in, pre-admitted Rust Frame lifecycle reducer. It matches
 93/93 pinned internal snapshots across 11 traces; 31 navigation unit tests pass.
 Next wire exact retained routing and bounded native-event normalization, then
 document/response matching, cancellation, the portable command and Node FFI.
 The full goal and public Frame.goto remain unfinished.
-[Contract and current evidence](knowledge/pwright-frame-navigation.md#node-065-optional-normalized-lifecycle-reducer).
+[Contract and current evidence](knowledge/playwright-rust-frame-navigation.md#node-065-optional-normalized-lifecycle-reducer).
 
 NODE-064 implements borrowed world-independent Frame navigation routes and
 explicit native initiation. Six pinned local/nested/OOPIF observations match;
@@ -9176,57 +9176,57 @@ explicit native initiation. Six pinned local/nested/OOPIF observations match;
 Next: admitted owned invocation, persistent lifecycle/subtree observation,
 distinct generated Frame command, cancellation and Node response identity;
 then rebuild the selected addon and run the public differential corpus.
-[Full design and remaining gates](knowledge/pwright-frame-navigation.md).
+[Full design and remaining gates](knowledge/playwright-rust-frame-navigation.md).
 
 NODE-063 implements public page.frame name/glob/RegExp/predicate lookup through
 Rust selection and scoped N-API values. The pinned public gate passes 41/41,
 three resource groups, Page 7/7 and Frame 18/18. Next: remaining Frame APIs/events,
 wider differential coverage and the open connection-reliability investigation.
 The broad Node FFI goal is not complete.
-[Contract, limits and evidence](knowledge/pwright-frame-lookup.md#node-063-public-lookup-over-the-rust-kernel).
+[Contract, limits and evidence](knowledge/playwright-rust-frame-lookup.md#node-063-public-lookup-over-the-rust-kernel).
 
 NODE-062 Context baseURL is implemented and verified: 16/16 pinned public
 observations, four resource/lifetime groups, Page 7/7 and glob 1647/1647 plus seven
 checks on the final selected addon. Context metadata returns to its 560-byte
 fixed index after last GC. Next integrate public page.frame matcher/cache behavior;
 Frame.goto and broader API parity remain open. Connection reliability is not fixed.
-[Contract and evidence](knowledge/pwright-context-creation.md#verification-status-and-remaining-gates).
+[Contract and evidence](knowledge/playwright-rust-context-creation.md#verification-status-and-remaining-gates).
 
 NODE-061 refreshes original-layout glob/Page gates on the unchanged artifact and
 corrects the existing bounded attachment diagnostic. Reliability remains open;
 no production scheduler or timeout was changed. Next implement Rust-owned Context
 baseURL with pre-creation admission and consistent enumeration/retained ownership,
 then complete lookup matcher/cache integration and public differential tests.
-[Current evidence](knowledge/pwright-chromium-topology-events.md#node-061-reuse-the-bounded-attachment-collector).
+[Current evidence](knowledge/playwright-rust-chromium-topology-events.md#node-061-reuse-the-bounded-attachment-collector).
 
 NODE-060 implements the internal native URL-glob conversion port. A labelled
 late-observer run passes 1647 comparisons and seven boundary checks; original
 attachment/Page regression failures remain open. Next: Context baseURL ownership,
 full matcher/cache integration, Node parser memory attribution and attachment
 reliability. This is not public page.frame support.
-[Contract and evidence](knowledge/pwright-frame-lookup.md#node-060-actual-n-api-url-value-conversion-port).
+[Contract and evidence](knowledge/playwright-rust-frame-lookup.md#node-060-actual-n-api-url-value-conversion-port).
 
 NODE-059 implements bounded Rust glob preprocessing/restoration; 1647 exact
 patterns match the pinned oracle using a diagnostic Rust URL parser. Next admit
 the production parser and Context baseURL ownership, then complete N-API
 matcher/exception/identity integration and full public lookup/order coverage.
 The diagnostic parser does not satisfy the production resource gate.
-[Contract and evidence](knowledge/pwright-frame-lookup.md#node-059-bounded-glob-preprocessing-and-borrowed-url-resolution).
+[Contract and evidence](knowledge/playwright-rust-frame-lookup.md#node-059-bounded-glob-preprocessing-and-borrowed-url-resolution).
 
 NODE-058 implements the Rust FrameLookup kernel and a pre-admitted resolved-glob
 compiler; 2810 patterns match the pinned oracle exactly. Next complete bounded
 baseURL preprocessing and Context ownership, then N-API matcher/exception/cache
 integration and full public lookup differential tests. The existing name-only
 API and these kernel tests do not complete lookup.
-[Implementation, limits and evidence](knowledge/pwright-frame-lookup.md#node-058-rust-traversal-and-bounded-resolved-glob-compiler).
+[Implementation, limits and evidence](knowledge/playwright-rust-frame-lookup.md#node-058-rust-traversal-and-bounded-resolved-glob-compiler).
 
-NODE-057 pins the next [Frame lookup implementation gates](knowledge/pwright-frame-lookup.md)
+NODE-057 pins the next [Frame lookup implementation gates](knowledge/playwright-rust-frame-lookup.md)
 with 14 passing oracle-only characterization tests. The moving upstream checkout
 differs from Playwright 1.58.2 in RegExp state, glob validation and URLPattern;
 implement against the pinned target. BaseURL ownership and multi-Frame first-match
 ordering remain required dependencies, not silent omissions.
 The unchanged addon now passes Mouse 44/44 in both experimental background and
-original modes; [earlier intermittent failures remain unexplained](knowledge/pwright-raw-mouse.md#node-057-setup-experiment-not-a-causal-fix).
+original modes; [earlier intermittent failures remain unexplained](knowledge/playwright-rust-raw-mouse.md#node-057-setup-experiment-not-a-causal-fix).
 
 NODE-056 implements Rust-backed `Frame.name()`, optional bounded name storage
 and atomic navigation publication. The shared local/OOPIF Frame gate passes
@@ -9234,14 +9234,14 @@ and atomic navigation publication. The shared local/OOPIF Frame gate passes
 Frame event delivery/order, Locator/Handle activation and attachment diagnosis.
 The current Mouse regression is also open: extra moves appear without input
 requests; bounded idle windows suggest, but do not prove, an initial-event race.
-[Contract and evidence](knowledge/pwright-frame-publication.md#node-056-bounded-navigation-names-and-public-framename).
+[Contract and evidence](knowledge/playwright-rust-frame-publication.md#node-056-bounded-navigation-names-and-public-framename).
 
 NODE-055 completes the Page-descriptor read/boxing gate and cache-aware public
 enumeration. Its 7-case shared workload includes popup discovery and a stale
 cache larger than the live Page limit. Node Page/Frame value evaluation now
 selects explicit transient activation. Next: Frame name/lookup/event metadata,
 Locator/Handle activation parity and the unresolved intermittent attach issue.
-[Contract and evidence](knowledge/pwright-frame-publication.md#node-055-admitted-page-descriptors-and-cache-aware-enumeration).
+[Contract and evidence](knowledge/playwright-rust-frame-publication.md#node-055-admitted-page-descriptors-and-cache-aware-enumeration).
 
 NODE-054 closes the public new-Page root-binding exhaustion gate with a real
 before/after target-leak reproduction and pre-native Rust reservation. Frame,
@@ -9249,7 +9249,7 @@ Mouse and drag regressions now pass on the rebuilt addon. The attachment matrix
 does not reproduce earlier timeouts; preserve that intermittent investigation.
 Next gate general Page-descriptor conversion/boxing and add Frame name/lookup
 metadata before designing public Frame event delivery and ordering.
-[Contract and evidence](knowledge/pwright-frame-publication.md#node-054-creation-time-root-binding-admission).
+[Contract and evidence](knowledge/playwright-rust-frame-publication.md#node-054-creation-time-root-binding-admission).
 
 NODE-053 completes admitted N-API collection reads, retained Frame bindings and
 public `frames`, parent/child and detach methods. Ten settled-state public
@@ -9258,59 +9258,59 @@ checks. First diagnose connection-initialization timeouts preventing final
 Mouse/drag regression results and gate wrapper exhaustion during new-Page
 construction. Then design Frame name/lookup metadata and event delivery/ordering;
 complex initial-attachment collection order remains an explicit parity gate.
-[Contract and evidence](knowledge/pwright-frame-publication.md#node-053-public-node-frame-collections-and-retained-wrappers).
+[Contract and evidence](knowledge/playwright-rust-frame-publication.md#node-053-public-node-frame-collections-and-retained-wrappers).
 
 NODE-052 completes host topology projection, pre-native Page metadata admission
 and the real local/OOPIF metadata gate. It also fixes two attachment defects
 exposed by owned-Page navigation, with a rebuilt selected addon and input
 regressions passing. Next: admitted N-API conversion and public Frame wrappers;
 full compatibility remains open.
-[Evidence and remaining gates](knowledge/pwright-frame-publication.md#node-052-live-host-projection-and-paused-oopif-attachment).
+[Evidence and remaining gates](knowledge/playwright-rust-frame-publication.md#node-052-live-host-projection-and-paused-oopif-attachment).
 
 NODE-051 completes the bounded Frame metadata kernel and shared URL/tree
 publication fence (27 new tests). Next connect the authoritative host topology,
 budget N-API conversion and expose stable public Frame wrappers. The upstream
 identity probe is not yet a paired candidate conformance result.
-[Contract and integration gates](knowledge/pwright-frame-publication.md).
+[Contract and integration gates](knowledge/playwright-rust-frame-publication.md).
 
 NODE-050 completes the 18-case native Frame lifecycle gate and exposes a separate
 opt-in Node addon build. Actual selected Node parity is 44/44 Mouse, 24/24
 Keyboard and 10/10 drag/Keyboard/Locator. Next verify pending native cancellation
 during owner destruction and the broader Node corpus; full compatibility is open.
-[Selection, evidence and remaining work](knowledge/pwright-chromium-drag.md#node-050-native-lifetime-gates-and-selected-node-addon).
+[Selection, evidence and remaining work](knowledge/playwright-rust-chromium-drag.md#node-050-native-lifetime-gates-and-selected-node-addon).
 
 NODE-049 fixes the post-focus Frame detach discrepancy with an optional atomic
 Frame-to-Page lifetime handoff. The expanded native gate matches 12/12. Next:
 native pre-focus detach and Page/Context destruction during the continuation;
 public child-Frame wrappers and selected addon parity remain open.
-[Contract, evidence and remaining gates](knowledge/pwright-chromium-drag.md#node-049-optional-frame-to-page-lifetime-handoff).
+[Contract, evidence and remaining gates](knowledge/playwright-rust-chromium-drag.md#node-049-optional-frame-to-page-lifetime-handoff).
 
 NODE-048: real local/OOPIF Frame coverage exposes a mandatory failing lifetime
 gate (8/10 match). Post-focus Frame detach currently cancels the Rust command,
 but Playwright keeps Page input pending until its deadline. Next implement an
 explicit Frame-to-Page continuation handoff, not error normalization.
-[Requirements and evidence](knowledge/pwright-chromium-drag.md#node-048-native-frame-gate-exposes-a-lifetime-discrepancy).
+[Requirements and evidence](knowledge/playwright-rust-chromium-drag.md#node-048-native-frame-gate-exposes-a-lifetime-discrepancy).
 
 NODE-047 connects Locator press/sequential input to the exact owning Page drag
 controller. Ten native host/oracle scenarios match, including delayed-press
 timeout. Real child/OOPIF and native destruction/interruption gates remain;
-public addon drag is still unselected. [Details](knowledge/pwright-chromium-drag.md#node-047-locator-keyboard-selects-the-owning-page).
+public addon drag is still unselected. [Details](knowledge/playwright-rust-chromium-drag.md#node-047-locator-keyboard-selects-the-owning-page).
 
 NODE-046 implements selected Rust Keyboard Escape cancellation, with five native
 oracle matches and retained cancellation owners. Next gates include selecting the
 same provider for Locator-owned input and exact Page/Context native retirement;
-public drag is not enabled. [Evidence](knowledge/pwright-chromium-drag.md#node-046-optional-rust-keyboard-escape-interception).
+public drag is not enabled. [Evidence](knowledge/playwright-rust-chromium-drag.md#node-046-optional-rust-keyboard-escape-interception).
 
 NODE-045 resolves the maximum-click slot/pending-command mismatch and rebuilds
 the default Node addon. Host raw Mouse is 25/25; public Node is 39/44.
 Escape, destruction and overlapping drag integration remain required.
-[Evidence](knowledge/pwright-chromium-drag.md#node-045-maximum-click-batches-and-matching-host-admission).
+[Evidence](knowledge/playwright-rust-chromium-drag.md#node-045-maximum-click-batches-and-matching-host-admission).
 
 NODE-044 implements opt-in Rust HostSession drag dispatch and close cancellation.
 Before selecting it in the addon, resolve Escape, Page/Context destruction,
 high-count/overlap admission and repeat public differential tests. This is an
 integration checkpoint, not full Mouse parity or goal completion.
-[Details](knowledge/pwright-chromium-drag.md#node-044-opt-in-hostsession-mouse-integration).
+[Details](knowledge/playwright-rust-chromium-drag.md#node-044-opt-in-hostsession-mouse-integration).
 
 NODE-043 adds an opt-in host `drag-source`: fresh Page utility snapshots now
 remain owned through movement results, retirement and quarantine. Exact world
@@ -9318,53 +9318,53 @@ destruction drains started listener requests without issuing new cleanup there.
 Default/selected host closures are **234/235**; only the drag leaf is added.
 HostSession Mouse/close/Escape selection and public differential checks remain
 pending; the addon and public **36/41** baseline are unchanged.
-[Production source and evidence](knowledge/pwright-chromium-drag.md#node-043-retained-production-page-drag-source).
+[Production source and evidence](knowledge/playwright-rust-chromium-drag.md#node-043-retained-production-page-drag-source).
 
 NODE-042 adds immediate, budgeted snapshots of a Page's existing utility worlds,
 including child Frames/OOPIFs without waiting for a main world. Utility-only
 native destruction receipts retain snapshot admission and remain distinct from
 route invalidation and owned-session retirement. Production drag-source/host
 integration is still pending; no addon rebuild or public **36/41** change.
-[Snapshot ownership and verification](knowledge/pwright-chromium-drag.md#node-042-existing-page-utility-world-snapshots).
+[Snapshot ownership and verification](knowledge/playwright-rust-chromium-drag.md#node-042-existing-page-utility-world-snapshots).
 
 NODE-041 implements the explicit `mouse-dispatch` feature and Page-owned cleanup
 driver: **82** unit tests and **4** selected-Mouse native cases pass, alongside
-the prior **10** native cases. Default/feature closures are **3/5** Pwright
+the prior **10** native cases. Default/feature closures are **3/5** Playwright Rust
 packages. Host Frame-source/lifecycle and Keyboard Escape integration remain
 pending; no addon rebuild or public **36/41** change.
-[Selected dispatcher and evidence](knowledge/pwright-chromium-drag.md#node-041-selected-mouse-dispatcher-and-page-cleanup-driver).
+[Selected dispatcher and evidence](knowledge/playwright-rust-chromium-drag.md#node-041-selected-mouse-dispatcher-and-page-cleanup-driver).
 
 NODE-040 adds Page-owned drag state and retained native enter/over/drop/cancel.
 **70** unit tests and **10** native scenarios pass, including actual drop and
-cancel with dragend checks. The optional leaf remains **3** Pwright packages;
+cancel with dragend checks. The optional leaf remains **3** Playwright Rust packages;
 Mouse dispatch/forClick/down suppression, Keyboard Escape and Node host selection
 are still pending. The addon/public **36/41** evidence is unchanged.
-[Page state and verification](knowledge/pwright-chromium-drag.md#node-040-page-drag-state-and-native-event-owners).
+[Page state and verification](knowledge/playwright-rust-chromium-drag.md#node-040-page-drag-state-and-native-event-owners).
 
 NODE-039 adds the caller-polled intercepted-movement composition (**57** unit
 tests; **9** native cases). Next implement Page drag state and the real Mouse
 dispatcher/live-state callback adapter, bounded Frame snapshot source and host
 ownership/teardown. The composed helper is not public Node parity.
-[Current scope](knowledge/pwright-chromium-drag.md#node-039-composed-intercepted-movement).
+[Current scope](knowledge/playwright-rust-chromium-drag.md#node-039-composed-intercepted-movement).
 
 NODE-038 implements fixed-session capture ownership, fresh event subscriptions,
 local checked epochs and retained interception enable/disable. **17** new tests
 (**44** total) and the **6** native listener cases pass. Next compose the actual
 move callback, Frame snapshot and Page drag state; then select the provider in
 the host and rebuild/rerun public gates.
-[Capture boundary](knowledge/pwright-chromium-drag.md#node-038-retained-capture-lifecycle).
+[Capture boundary](knowledge/playwright-rust-chromium-drag.md#node-038-retained-capture-lifecycle).
 
 NODE-037 completes bounded typed drag-data storage in the optional leaf:
 **14** new tests (**27** total) and real captured-text delivery pass. Next add
 capture subscription/epoch ownership, then compose the Page-scoped dispatcher
 and host teardown. No addon rebuild or public gate change.
-[Data boundary and remaining work](knowledge/pwright-chromium-drag.md#node-037-admitted-intercepted-data).
+[Data boundary and remaining work](knowledge/playwright-rust-chromium-drag.md#node-037-admitted-intercepted-data).
 
 NODE-036 implements the Rust-owned browser drag-listener stage: **13** unit
 tests, **6** native Chrome cases and an independent **3-package** leaf. Next
 compose Frame snapshots, admitted intercepted data, Page drag state and host
 teardown. This helper is not the complete dispatcher and does not change public
-Mouse **36/41**. [Precise remaining requirements](knowledge/pwright-chromium-drag.md#next-implementation-requirements).
+Mouse **36/41**. [Precise remaining requirements](knowledge/playwright-rust-chromium-drag.md#next-implementation-requirements).
 
 NODE-035 completes optional dispatcher selection in the native factory/Page
 route, including standalone buttons. **13** new deterministic tests and fresh
@@ -9372,14 +9372,14 @@ default/passthrough **22/22** browser lanes pass. Still implement a budgeted rea
 Chromium drag provider, Page-scoped sharing across host calls and persistent
 provider teardown; a provider created per command would not preserve drag state.
 The addon is not rebuilt and public Mouse remains **36/41** on the prior artifact.
-[Current selection boundary](knowledge/pwright-raw-mouse.md#page-scoped-dispatcher-selection-node-035).
+[Current selection boundary](knowledge/playwright-rust-raw-mouse.md#page-scoped-dispatcher-selection-node-035).
 
 NODE-034 implements an optional Rust Mouse dispatch ownership seam: separate
 result/cleanup polling, live Page-state reader with retained admission, and
 forClick tagging. Ten new deterministic tests pass (input **81** total).
 Typed native factory/Page/host selection and a budgeted Chromium drag provider
 are still pending. No addon rebuild or improved public **36/41** claim belongs
-to this checkpoint. [Scope and evidence](knowledge/pwright-raw-mouse.md#optional-mouse-dispatch-ownership-node-034).
+to this checkpoint. [Scope and evidence](knowledge/playwright-rust-raw-mouse.md#optional-mouse-dispatch-ownership-node-034).
 
 NODE-033: the expanded 41-case Mouse gate reproduces start-order races and the
 missing drag path independently. A 32-slot Rust first-poll boundary shared by
@@ -9388,7 +9388,7 @@ tests pass (**115 / 6 ignored** total). Keep the five left-held-move failures as
 required cases. Next implement an optional budgeted drag delegate (including
 forClick bypass), then verify broader continuation/runtime-queue ordering and
 first-error fidelity; do not substitute whole-action serialization or fake delay.
-[Evidence and limits](knowledge/pwright-raw-mouse.md#same-turn-input-ordering-node-033).
+[Evidence and limits](knowledge/playwright-rust-raw-mouse.md#same-turn-input-ordering-node-033).
 
 Final NODE-033 artifact gate: Mouse **36/41**, Worker/profile **3/3**, Keyboard
 **24/24**, typing **30/38**, actions **24/27**, screenshot **12/12**, lifecycle
@@ -9417,7 +9417,7 @@ retirement boundaries. **22/22** pinned Chrome event/state cases match; input
 captures Page state before awaiting earlier replies, with no hidden task or JS
 automation. Next finish concurrent error ordering, HTML drag composition and
 artifact-specific verification. Public `page.mouse` is now exposed.
-[Design, bounded storage and remaining gates](knowledge/pwright-raw-mouse.md).
+[Design, bounded storage and remaining gates](knowledge/playwright-rust-raw-mouse.md).
 
 NODE-030 minimal native reproducer is now implemented and exercised twice:
 the raw CDP response-boundary close acknowledges but target presence persists
@@ -9425,14 +9425,14 @@ at 200/1000 ms, with no host/navigation/runtime/FFI or reload cancellation loade
 CDP **73 + 11 + 3** tests and strict release Clippy pass. Keep the native issue
 and original **16/18** public gate open, preserve absence/rollback semantics,
 and continue remaining Node API integration independently.
-[Raw isolation](knowledge/pwright-page-reload.md#minimal-raw-cdp-isolation).
+[Raw isolation](knowledge/playwright-rust-page-reload.md#minimal-raw-cdp-isolation).
 The Mouse addon now completes the unchanged 57-case shared corpus: **53 match /
 2 unsupported / 1 oracle-error / 1 setup-error**. Upload/download remain
 unsupported; mouse-backed touch now matches without proving real Touchscreen.
 The goBack case hits a candidate 5 s topology-init timeout before operations;
 retain NODE-013 and do not turn setup failure into an oracle-error or skip.
 Same-artifact Keyboard/typing/actions/screenshot/lifecycle pass **24/38/27/12/45**;
-reload stays **16/18**. [Evidence](knowledge/pwright-raw-mouse.md#same-artifact-regression).
+reload stays **16/18**. [Evidence](knowledge/playwright-rust-raw-mouse.md#same-artifact-regression).
 
 NODE-030 diagnostic checkpoint: bounded native controls reproduce an acknowledged
 close with the target still present after reload timeout **without host Page
@@ -9441,13 +9441,13 @@ replay. Stop-loading is timing-sensitive and not adopted as a production fix.
 Next isolate the native race and design close/cancellation settlement without
 weakening absence proof or adding a mandatory navigation dependency. Host **99**
 offline tests pass; the existing **16/18** public reload gate remains open.
-[Causal evidence](knowledge/pwright-page-reload.md#causal-native-close-diagnostic).
+[Causal evidence](knowledge/playwright-rust-page-reload.md#causal-native-close-diagnostic).
 
 Latest full regression on Keyboard addon `1319fa02...ded25dc1`: typing **38/38**,
 actions **27/27**, screenshots **12/12**, lifecycle **45/45**, reload **16/18**.
 Every held-modifier typing catalog entry now runs through the public API.
 The two original short-response Page-close failures remain, and intermittent
-attachment/window causes remain open. [Evidence](knowledge/pwright-raw-keyboard.md#same-artifact-post-keyboard-regression).
+attachment/window causes remain open. [Evidence](knowledge/playwright-rust-raw-keyboard.md#same-artifact-post-keyboard-regression).
 
 NODE-031 raw Keyboard primitives now pass **42** input tests, **103** Locator
 regressions and **14/14** real-Chrome oracle cases, including empty-key timing.
@@ -9464,7 +9464,7 @@ The regenerated wire path passes a fresh **14/14** Chrome comparison.
 Rust host/N-API and all five public `page.keyboard` methods now pass **24/24**
 paired Chrome cases. Host **95**, root **295** tests pass; host closure is **229**.
 Shared coverage advances to **52 match / 3 unsupported / 2 oracle-error**.
-[Contract and integration tasks](knowledge/pwright-raw-keyboard.md).
+[Contract and integration tasks](knowledge/playwright-rust-raw-keyboard.md).
 
 NODE-030 typed navigation 1.1, codec/client/server, composition, host/addon and
 public Node reload are implemented. Backend/client/codec tests pass **14/6/22**,
@@ -9474,7 +9474,7 @@ reload is **16/18**: arrival-boundary Page close fails, but the added post-commi
 close case passes. Full lifecycle is **44/45** on NODE-014 window geometry, and
 screenshots are **0/12** at attachment. Next: native timing at the arrival boundary,
 then Browser/Worker ownership, cache/redirect and broader option tests.
-[Contract and implementation gates](knowledge/pwright-page-reload.md).
+[Contract and implementation gates](knowledge/playwright-rust-page-reload.md).
 
 NODE-029 sequential typing now has frozen 1.22/2.5 baselines, generated 1.23/2.6
 routes, strict focus/input composition, client/server/backend dispatch and public
@@ -9485,7 +9485,7 @@ action** tests, correcting the prior overlap and NODE-022 sample while keeping
 default Rust exclusivity. It also fixes literal versus physical-code Shift
 resolution. Mid-input target replacement, native enqueue/ack cancellation,
 cross-Frame state and broader timeout-state parity remain open.
-[Contract and evidence](knowledge/pwright-sequential-typing.md).
+[Contract and evidence](knowledge/playwright-rust-sequential-typing.md).
 
 Lifecycle supervision checkpoint: the same native artifact now passes **45/45
 in 192.715 seconds**. Bounded phase tracing showed the old 180-second aggregate
@@ -9522,7 +9522,7 @@ this does not complete VS5. [Current evidence](node-ffi-compatibility-design.md#
 
 Attachment investigation: a bounded, owned-page reconnect probe now distinguishes
 named utility-world retention from connection success and memory measurements.
-Stable-topology Pwright reconnects reuse one name; oracle reconnects add worlds.
+Stable-topology Playwright Rust reconnects reuse one name; oracle reconnects add worlds.
 Reload creates a new main world without reducing the observed utility counts.
 Next design questions are Page-ID churn and overlapping-session latency, not an
 assumed memory fix. NODE-013 remains open. See [evidence](node-ffi-compatibility-design.md#node-013-retained-world-diagnostic-2026-09-07).
@@ -9571,17 +9571,17 @@ prototype is needed to answer one narrow question.
 
 ## Agreed workflow
 
-Before approving Pwright v2 design decisions, we will study Playwright one
+Before approving Playwright Rust v2 design decisions, we will study Playwright one
 topic at a time. Each lesson must cover the user-visible capability, the
 internal design model, relevant upstream source locations, important costs or
-limitations, and questions raised for Pwright. Learning notes are evidence for
+limitations, and questions raised for Playwright Rust. Learning notes are evidence for
 later design tasks; they are not architecture decisions by themselves.
 
 ## Implementation checkpoint
 
 On 2026-09-01 the user authorized implementation to begin. The first bounded,
 exploratory slice is recorded in `architecture-v2.md` and implemented as the
-new `pwright-core` crate. It contains only:
+new `playwright-rust-core` crate. It contains only:
 
 - dependency-free typed `Service`, `Layer`, and `Stack` composition;
 - capability/plugin metadata and protocol-version identifiers;
@@ -9590,7 +9590,7 @@ new `pwright-core` crate. It contains only:
 
 The slice passed eight release-profile unit tests, release-profile Clippy with
 warnings denied, and a normal dependency-tree check containing only
-`pwright-core`. It does not connect to a browser and does not alter legacy v1
+`playwright-rust-core`. It does not connect to a browser and does not alter legacy v1
 behavior.
 
 This checkpoint starts implementation but does not mark DT-001 through DT-072
@@ -9617,7 +9617,7 @@ implemented behavior now proves:
 - no container starts tasks, reads a clock, or grows its live item count beyond
   the configured limit.
 
-The expanded `pwright-core` suite passes 29 release-profile tests, Clippy with
+The expanded `playwright-rust-core` suite passes 29 release-profile tests, Clippy with
 warnings denied, rustdoc with warnings denied, and still has no normal
 dependencies. The complete existing workspace also passes its release-profile
 test suite after adding the new workspace member; environment-dependent Docker
@@ -9627,12 +9627,12 @@ Page API is implemented yet.
 
 The first backend-connected checkpoint adds three provisional crates:
 
-- `pwright-cap-navigation` defines the portable typed `BeginNavigation`
-  primitive and depends only on `pwright-core`;
-- `pwright-runtime` dispatches typed commands in process without serialization,
+- `playwright-rust-cap-navigation` defines the portable typed `BeginNavigation`
+  primitive and depends only on `playwright-rust-core`;
+- `playwright-rust-runtime` dispatches typed commands in process without serialization,
   rejects stale target objects, reserves bounded pending-call slots, correlates
   results, and releases pending entries when a dispatch future is dropped;
-- `pwright-backend-cdp` maps that primitive to the existing `pwright-cdp`
+- `playwright-rust-backend-cdp` maps that primitive to the existing `playwright-rust-cdp`
   `Page.navigate` implementation and is the only new crate in the slice that
   imports CDP and Serde JSON.
 
@@ -9649,7 +9649,7 @@ field, but the v2 live test deliberately uses owned-context disposal and polls
 `Target.getTargets` until the exact target disappears. This is evidence for
 DT-032 and DT-050: command acknowledgement is not resource-termination proof,
 and an owned BrowserContext provides a stronger cleanup boundary. The two test
-targets from the failed attempts were removed with Pwright's verified HTTP
+targets from the failed attempts were removed with Playwright Rust's verified HTTP
 closer; unrelated browser targets were preserved.
 
 This checkpoint still does not implement public `Page::goto`. Commit/load
@@ -9658,21 +9658,21 @@ and page/frame close races remain required before that compatibility claim.
 
 The browser-provider ownership checkpoints add four provisional crates:
 
-- `pwright-browser-provider` is standard-library-only and defines distinct
+- `playwright-rust-browser-provider` is standard-library-only and defines distinct
   attach and launch contracts. External attachments contain only a connection;
   launched browsers additionally contain an explicit, consuming process lease.
-- `pwright-provider-cdp` accepts only explicit, validated `ws://` or `wss://`
+- `playwright-rust-provider-cdp` accepts only explicit, validated `ws://` or `wss://`
   endpoints and returns an external attachment through an injectable connector.
   It contains no discovery, launch, install, download, cache, or termination
   path.
-- `pwright-provider-chromium` is separately opt-in. It discovers an already
+- `playwright-rust-provider-chromium` is separately opt-in. It discovers an already
   installed browser or accepts an explicit executable, requires either a fresh
   empty profile or an explicitly marked persistent profile, forces an
   ephemeral loopback CDP endpoint, waits for the browser-owned
   `DevToolsActivePort`, and returns a CDP connection plus a consuming process
   lease. It contains no browser bytes, download, installer, cache, or Node.js
   driver.
-- `pwright-browser-install` is a separate standard-library-only contract. An
+- `playwright-rust-browser-install` is a separate standard-library-only contract. An
   exact engine/revision/target/integrity request consumes an explicit one-use
   download permission and composes injected resolve, fetch, verify, and install
   stages. It contains no stage implementation and no provider depends on it.
@@ -9697,7 +9697,7 @@ not command acknowledgement, is authoritative. Persistent profiles require an
 opaque token initialized in an empty directory plus an exact versioned marker;
 ordinary nonempty Chrome profiles remain invalid. The provider never deletes
 caller-owned profile data. The final DT-050 checkpoint adds the independent
-`pwright-browser-install` contract. An installation root must be canonical and
+`playwright-rust-browser-install` contract. An installation root must be canonical and
 empty both when selected and immediately before resolution. Verification is a
 typed mandatory stage before installation; the installed receipt has neither
 launch nor termination authority. Compile-fail tests require explicit download
@@ -9707,7 +9707,7 @@ completes DT-050's provider, ownership, profile, shutdown, and optional managed
 installation boundaries; concrete download/catalog/archive implementations and
 failure rollback remain later operational/plugin work.
 
-The DT-051 backend checkpoint adds `pwright-browser-backend`, which depends only
+The DT-051 backend checkpoint adds `playwright-rust-browser-backend`, which depends only
 on core. A backend descriptor names its engine and native protocol, then maps
 each supported portable command to its owning capability, minimum version, and
 native or emulated implementation classification. `BackendManifest` validates
@@ -9717,7 +9717,7 @@ features before its inner adapter can run. `ChromiumCdpBackend` declares direct
 begin-navigation as native and the composed goto/click/fill behaviors as
 emulated. CDP access requires the explicit
 `NativeBackendAccess<ChromiumCdpBackend>` trait on adapter-owned services.
-Portable capability/client/model crates neither depend on `pwright-cdp` nor
+Portable capability/client/model crates neither depend on `playwright-rust-cdp` nor
 name its identities or messages. This completes DT-051's responsibility and
 escape-hatch boundary; actual Firefox/WebKit/BiDi adapters remain independent
 future implementations rather than changes to portable command contracts.
@@ -9735,7 +9735,7 @@ local iframe plus OOPIF events share one Frame identity. Ambiguous OOPIF detach
 requires a synchronization confirmation before disposal. Crashes mark the
 exact page, session detach and context close clean exact subtrees, and
 connection epochs prevent stale pre-reconnect events from deleting rebound
-objects. Only main and Pwright utility execution worlds are retained, keyed by
+objects. Only main and Playwright Rust utility execution worlds are retained, keyed by
 session plus execution-context ID. Generated CDP event normalizers, runtime
 `Complete`-topology integration, and AAA race tests make these rules executable.
 The state machine chooses no event pump, executor, transport, provider, browser
@@ -9823,7 +9823,7 @@ serialize the Chromium topology and native-context route before a public
 
 The next context-lifecycle checkpoint now supplies that first end-to-end
 server-side transaction. The generated, independently selectable
-`pwright.context_lifecycle` 1.0 surface owns only method `0x0003_0001`,
+`playwright.rust.context_lifecycle` 1.0 surface owns only method `0x0003_0001`,
 `browser-context.close`, targeted at BrowserContext. Separate contract, binary
 codec, client-extension, and generated server-handler crates keep it absent
 unless selected. The codec rejects attachments and rejects timeout or
@@ -9877,7 +9877,7 @@ continuable attached factory.
 
 The Page-lifecycle checkpoint follows Playwright's two-contract design rather
 than hiding it behind one boolean. Generated optional capability
-`pwright.page_lifecycle` owns Page-only `page.close` and
+`playwright.rust.page_lifecycle` owns Page-only `page.close` and
 `page.run_before_unload`, with separate codec, client-extension, and generated
 server crates. Ordinary Chromium close uses browser-session
 `Target.closeTarget`, bounded exact-target absence confirmation, paired
@@ -9895,12 +9895,12 @@ The following Browser-lifecycle audit records why the next command cannot be a
 generic CDP adapter method. Playwright's launched Browser close consumes
 process shutdown authority, while `connectOverCDP` close only closes its
 synthetic transport and a remote prelaunched dispatcher ignores stop/kill.
-Pwright will preserve that public outcome but keep external disconnect in
+Playwright Rust will preserve that public outcome but keep external disconnect in
 connection control and permit owned close only in a launched composition that
 holds the unique `BrowserProcessLease` plus explicit remote authorization.
 The separately opt-in launched composition now exists and owns the first half
 of that boundary: a plan/ledger-proven CDP connection plus the unique process
-lease and bounded local shutdown. The portable `pwright.browser_lifecycle`
+lease and bounded local shutdown. The portable `playwright.rust.browser_lifecycle`
 command is now implemented as four independent
 capability/codec/client/server crates. Only the launch leaf can add it to its
 handshake manifest and convert an owner into a non-cloneable grant after the
@@ -9916,7 +9916,7 @@ implemented. Client-side reason persistence is also bounded and root-shared:
 the first-polled close installs one `Arc<str>` before dispatch, descendants
 reuse it, and operations first attempted after disposal report it without
 retaining the connection. Source anchors and the remaining contract are
-recorded in `knowledge/pwright-browser-close.md`.
+recorded in `knowledge/playwright-rust-browser-close.md`.
 
 The first disconnected-event foundation is now independently packaged as
 capability, fixed-size codec, client helper, and queue-free one-shot server
@@ -9946,10 +9946,10 @@ object from the one later claimed by a typed result. Native creation uses
 `disposeOnDetach`; post-CDP publication failure must compensate by disposing
 the exact new context. The four-owner transaction, non-reusing object-ID rule,
 remote Create-before-Result fence, and acceptance gates are recorded in
-`knowledge/pwright-context-creation.md`.
+`knowledge/playwright-rust-context-creation.md`.
 
 The Page-creation checkpoint extends that inverse lifecycle design to the first
-related-object transaction. Optional capability `pwright.page_creation` owns
+related-object transaction. Optional capability `playwright.rust.page_creation` owns
 only BrowserContext `new_page` and depends on Page lifecycle. Its portable
 result initializes a Page and its required main Frame together; CDP target,
 session, context, and frame strings remain backend-private. Chromium creates
@@ -9973,18 +9973,18 @@ cannot expose a half-created Page. The dedicated Chrome 152 proof exercises the
 production attach/runtime/factory path, verifies `about:blank`, main-Frame and
 Page-route publication, closes Page and Context through their typed lifecycle
 services, and confirms the externally owned browser survives. The detailed
-contract and evidence are recorded in `knowledge/pwright-page-creation.md`.
+contract and evidence are recorded in `knowledge/playwright-rust-page-creation.md`.
 
 The value-only evaluation checkpoint now implements the approved boundary.
 Playwright's
 Page convenience delegates to its main Frame, while by-value evaluation and
-live JS/Element Handles remain different protocol operations. Pwright
-therefore makes `pwright.evaluation` independently installable and leaves Handle
+live JS/Element Handles remain different protocol operations. Playwright Rust
+therefore makes `playwright.rust.evaluation` independently installable and leaves Handle
 identity, disposal, and retention to a later dependent capability. Its tagged
 value graph, Chromium main/local/OOPIF execution-world routing, bounded browser-side serializer,
 typed JavaScript failures, production resource peak, explicit non-goals, and
 acceptance tests and implementation evidence are recorded in
-`knowledge/pwright-value-evaluation.md`. The separate capability/model,
+`knowledge/playwright-rust-value-evaluation.md`. The separate capability/model,
 generated schema/reference/server surface, bounded binary codec, Page/Frame
 client extension, Chromium backend, production factory, exact session plus
 `uniqueContextId` route, and composition selector are all present. Frame route
@@ -9997,9 +9997,9 @@ advances DT-020, DT-021, DT-031, DT-033, DT-040, DT-043,
 DT-051, DT-052, DT-060, and DT-070 without treating Handle semantics as solved.
 
 The explicit Handle-lifecycle checkpoint now establishes the first dependent
-foundation without changing value-only evaluation. `pwright-browser-model`
+foundation without changing value-only evaluation. `playwright-rust-browser-model`
 adds stable `JsHandle` and `ElementHandle` kinds under `Frame`, while the
-independently installable `pwright.handle_lifecycle` capability owns only
+independently installable `playwright.rust.handle_lifecycle` capability owns only
 `handle.dispose`. Its generated schema, bounded binary codec, generated server
 handler, and opt-in client extension are separate crates. Rust `Drop` still
 sends no I/O; the explicit async request has no action timeout/cancellation
@@ -10008,11 +10008,11 @@ as idempotent success. The Chromium adapter binds a bounded native object ID to
 its exact CDP session and sends exactly one `Runtime.releaseObject` with no
 hidden retry. Child-first client invalidation proves that disposing a Frame
 family makes both Handle types locally stale. See
-`knowledge/pwright-handle-lifecycle.md`.
+`knowledge/playwright-rust-handle-lifecycle.md`.
 
 The next Handle-evaluation checkpoint implements a bounded creation and
 explicit-disposal foundation. The independently installable
-`pwright.handle_evaluation` capability depends on Handle lifecycle and owns
+`playwright.rust.handle_evaluation` capability depends on Handle lifecycle and owns
 `evaluation.evaluate_handle` without changing value-only evaluation. Its
 schema, binary codec, generated server binding, and Page/Frame client extension
 produce a portable initializer with concrete JSHandle or ElementHandle kind;
@@ -10029,7 +10029,7 @@ a no-op, and leaves the external browser alive. This advances DT-022, DT-031,
 DT-040, DT-043, DT-051, DT-052, DT-060, and DT-070.
 
 The additive 1.1 checkpoint now implements Handle-valued arguments without
-adding Handle knowledge to `pwright.evaluation`. A separate recursive graph
+adding Handle knowledge to `playwright.rust.evaluation`. A separate recursive graph
 supports nested portable Handle leaves, retains the original depth/node/entry/
 string/binary bounds, and deduplicates native arguments in first-appearance
 order. The 1.0 schema is frozen as its compatibility baseline; a connection
@@ -10075,17 +10075,17 @@ only for source compatibility. Cross-world adoption is now an explicit
 aggregate backend option that contributes its own temporary-object resource
 peak without adding another negotiated capability. The
 Handle-local design is
-now locked as the additive `pwright.handle_evaluation` 1.2 surface: five
+now locked as the additive `playwright.rust.handle_evaluation` 1.2 surface: five
 commands cover `evaluate`, `evaluateHandle`, `jsonValue`, `getProperty`, and
 `getProperties` on both Handle kinds, with atomic property-batch publication,
 bounded browser-side enumeration, and inherited Frame/world ownership. See
-`knowledge/pwright-handle-operations.md`. The 1.2 schema, generated server,
+`knowledge/playwright-rust-handle-operations.md`. The 1.2 schema, generated server,
 binary codec, typed client, bounded CDP backend, optional composition, ordered
 Create-before-Result fences, cancellation cleanup, and real-Chrome duplex proof
 are now implemented. Cross-world ElementHandle adoption remains an independent
 compatibility decision.
 
-The independent `pwright-composition-chromium-handle-evaluation` leaf now
+The independent `playwright-rust-composition-chromium-handle-evaluation` leaf now
 implements the six-command 1.2 direct server composition over the smaller
 lifecycle leaf. It adds bounded Frame/world routes, pre-CDP lifecycle
 reservations, atomic single/batch runtime-plus-route publication, native
@@ -10093,7 +10093,7 @@ compensation, and caller-owned abandoned-result cleanup. Nineteen direct tests a
 dedicated Chrome 152 test pass, while a 24-package exact allowlist proves the
 normal closure omits aggregates, topology, Context/Page commands, clients,
 providers, launchers, installers, Tokio, Node.js, and browser bytes. The
-backend-neutral `pwright-plugin-ordered-handle-delivery` now composes the
+backend-neutral `playwright-rust-plugin-ordered-handle-delivery` now composes the
 remote boundary from the leaf's exposed protocol/raw services: bounded
 pre-admission, ordered single/batch Create-before-Result, physical Result-send
 ownership, abandonment cleanup, and ordered Dispose. Six plugin AAA tests and
@@ -10108,7 +10108,7 @@ prepared descendant retirement integrated with explicit Page and owned-Context
 close. Route ownership by Frame/Page also folds main-world replacement, Frame
 detach, Page crash, and reconnect into the topology/runtime lifecycle batch.
 An opt-in Handle-aware runtime target retires all remaining routes and leases
-when the Pwright connection closes. The complete application recipe now makes
+when the Playwright Rust connection closes. The complete application recipe now makes
 that wrapper its concrete runtime type and delegates the common cancellation
 and ordered-control traits through it. A caller-reserved continuation rejects
 before CDP when saturated and completes plus disposes a Handle created after
@@ -10122,7 +10122,7 @@ own CDP route budget, and preparation rejects mismatched limits, scope reuse,
 or runtime capacity below topology plus maximum Handles. Handshake selection
 then installs only the accepted codecs, backend routes, and generated handlers.
 Its default remote-handler factory delegates creation, physical Result delivery,
-and Dispose ordering to `pwright-plugin-ordered-handle-delivery`; the aggregate
+and Dispose ordering to `playwright-rust-plugin-ordered-handle-delivery`; the aggregate
 keeps its older public decorators only for source compatibility, not as a
 second active delivery policy. Dropping while Result send is pending performs
 one ordered Dispose, and failed Create publication compensates the native
@@ -10136,7 +10136,7 @@ negotiates Handle evaluation 1.1, drives lifecycle Create messages into the
 typed client, passes the returned ElementHandle through a second encoded
 command, and completes graceful close without taking browser ownership. The
 codec preserves the channel-generated cancellation ID while still rejecting
-unsupported timeout metadata. See `knowledge/pwright-handle-evaluation.md`.
+unsupported timeout metadata. See `knowledge/playwright-rust-handle-evaluation.md`.
 
 The Chromium topology-event checkpoint now replaces manual Page/popup and
 child-Frame/OOPIF publication with optional production components. It is deliberately
@@ -10176,18 +10176,18 @@ detects an abandoned polled turn, and terminates the supervisor as
 that pump as a retained fourth lane beside its unique reader, bounded command
 set, and serial outbound lane with rotating priority. Its complete application
 run performs reasoned cleanup and write-half shutdown while preserving dual
-failures. Constructing a new remote Pwright transport together with a fresh CDP
+failures. Constructing a new remote Playwright Rust transport together with a fresh CDP
 attachment, runtime object graph, and unambiguous event view remains open, so
 DT-052 and DT-061 are not complete. Native CDP sessions will not be replaced
 inside an existing Browser graph.
 The boundary is recorded in
-`knowledge/pwright-chromium-topology-events.md`.
+`knowledge/playwright-rust-chromium-topology-events.md`.
 
 The next DT-052/DT-061 checkpoint resolves an earlier ambiguity by inspecting
 the local Playwright sources. Chromium protocol closure is terminal there:
 `CRConnection._onClose` disposes the root session, `CRBrowser._didDisconnect`
 closes Pages and workers, Browser closes Contexts and emits `disconnected`, and
-`BrowserDispatcher` closes and disposes the channel object. Pwright now exposes
+`BrowserDispatcher` closes and disposes the channel object. Playwright Rust now exposes
 one owned `CdpConnection::closed()` future and an independent,
 caller-polled `ChromiumCdpLivenessBackend`. It makes native closure a terminal
 supervisor backend failure even when no topology-event capability is selected.
@@ -10199,7 +10199,7 @@ Tests prove sticky connection closure, sticky topology-stream closure, plugin
 fairness, and release of a pending topology turn when liveness terminates the
 connection. Transparent CDP WebSocket replacement was removed: a new native
 attachment must create a new Browser/object graph. Establishing a complete
-fresh remote Pwright client attachment, runtime graph, and event view remains
+fresh remote Playwright Rust client attachment, runtime graph, and event view remains
 open, so DT-052 and DT-061 are not complete.
 
 The following checkpoint adds the reusable `ChromiumAttachFactory` above the
@@ -10381,8 +10381,8 @@ behavior while keeping the generic runtime executor-independent:
 - cleanup failures are classified separately as `Cleanup`;
 - `DirectDispatcher` rejects execution-control metadata instead of silently
   ignoring it;
-- `pwright-runtime-tokio` supplies an explicitly installed Tokio timer adapter,
-  while `pwright-runtime` continues to depend only on `pwright-core`.
+- `playwright-rust-runtime-tokio` supplies an explicitly installed Tokio timer adapter,
+  while `playwright-rust-runtime` continues to depend only on `playwright-rust-core`.
 
 The CDP navigation adapter now implements its portable cancellation hook using
 `Page.stopLoading`. The v2 foundation passes 58 non-browser release tests plus
@@ -10416,9 +10416,9 @@ object graph, pending-call table, and command dispatcher:
   call backend cancellation because the capability operation never started.
 
 The v2 foundation now passes 69 non-browser release tests plus the compile-fail
-ownership doctest. `pwright-runtime` still has only `pwright-core` as a normal
+ownership doctest. `playwright-rust-runtime` still has only `playwright-rust-core` as a normal
 dependency; the optional Tokio timer remains isolated in
-`pwright-runtime-tokio`. This is executable evidence toward DT-032, DT-033,
+`playwright-rust-runtime-tokio`. This is executable evidence toward DT-032, DT-033,
 DT-060, and DT-061, not completion: transport-close fan-out, a bounded cleanup
 executor, connection-wide admission/fairness, object-backend disposal ordering,
 and multi-command transactions remain open.
@@ -10444,7 +10444,7 @@ shutdown and dropped futures observable rather than implicit:
   rejected, queued, peak, completed, and failed counts; no runtime task is
   spawned.
 
-The optional `pwright-runtime-tokio` adapter now also supplies a
+The optional `playwright-rust-runtime-tokio` adapter now also supplies a
 `TokioCleanupExecutor`. It requires an active caller-owned Tokio runtime, bounds
 active cleanup jobs with a fixed semaphore, rejects saturation or missing
 runtime state, and reports current/peak, accepted, rejected, completed, and
@@ -10462,8 +10462,8 @@ permits without invoking a backend hook before the backend starts.
 bound; `with_active_commands` can lower it independently. Both direct and
 controlled dispatchers expose current and peak connection admission metrics.
 
-The codec-neutral wire checkpoint adds `pwright-transport`, which depends only
-on `pwright-core`. It provides typed frame routes; hard payload, attachment, and
+The codec-neutral wire checkpoint adds `playwright-rust-transport`, which depends only
+on `playwright-rust-core`. It provides typed frame routes; hard payload, attachment, and
 aggregate byte limits; exact-length fragmented-byte assembly; inclusive
 same-major version policy; generic codec and executor-neutral transport traits;
 and a bounded client-side call correlator. Both outgoing codec output and
@@ -10476,15 +10476,15 @@ the lease into its non-cloneable finished output. Rejection, incomplete input,
 assembler drop, and output drop have deterministic accounting, so custom
 non-Tokio stream adapters no longer need an unbudgeted fragment path.
 
-The optional JSON-codec checkpoint adds `pwright-codec-json` as the only new
+The optional JSON-codec checkpoint adds `playwright-rust-codec-json` as the only new
 crate importing Serde and `serde_json`. It serializes any generated or
 application message implementing `RoutedMessage`, verifies that decoded routing
 matches the outer frame route, and explicitly rejects malformed JSON and binary
-attachments. Its dependency tree is separate: `pwright-core` remains
-dependency-free, while `pwright-runtime` and `pwright-transport` still depend
+attachments. Its dependency tree is separate: `playwright-rust-core` remains
+dependency-free, while `playwright-rust-runtime` and `playwright-rust-transport` still depend
 only on core.
 
-The handshake checkpoint extends `pwright-transport` with bounded owned wire
+The handshake checkpoint extends `playwright-rust-transport` with bounded owned wire
 capability IDs, installed manifests, required/optional requests, and
 codec-neutral client/server hello values. Negotiation chooses the highest minor
 in the common major range, preserves directional receive limits, fails on
@@ -10492,9 +10492,9 @@ missing or incompatible required capabilities, omits unavailable optional
 capabilities, enables no unrequested capability, and returns deterministic
 capability ordering. No browser operation can start as part of negotiation.
 
-The typed-client checkpoint adds `pwright-client`, whose normal dependency
-graph contains only `pwright-core` and the core-only
-`pwright-browser-model` vocabulary.
+The typed-client checkpoint adds `playwright-rust-client`, whose normal dependency
+graph contains only `playwright-rust-core` and the core-only
+`playwright-rust-browser-model` vocabulary.
 `Client` owns the channel and injected call-ID source; typed `Page` handles keep
 only weak references, compare connection identity as well as object identity,
 and fail deterministically after disconnect. The atomic ID source cannot wrap,
@@ -10510,8 +10510,8 @@ query representation, and combines only when both values share exact remote
 scope and connection identity.
 
 The object-kind checkpoint removes the client-owned numeric kind table.
-`pwright-core` provides generic semantic IDs, descriptors, catalogs, and marker
-traits; the core-only `pwright-browser-model` owns the canonical Browser,
+`playwright-rust-core` provides generic semantic IDs, descriptors, catalogs, and marker
+traits; the core-only `playwright-rust-browser-model` owns the canonical Browser,
 BrowserContext, Page, and Frame vocabulary. Capability schemas declare
 canonical command targets, which are emitted on `CommandSpec` and included in
 minor compatibility. Remote server inventories reject missing target metadata,
@@ -10539,7 +10539,7 @@ result without copying its parent graph. A stale operation now reports
 handle nor client `Drop` sends protocol traffic.
 
 The opt-in client-capability checkpoint moves navigation into
-`pwright-client-navigation`. Its `PageNavigationExt` trait adds
+`playwright-rust-client-navigation`. Its `PageNavigationExt` trait adds
 `begin_navigation` only when the extension crate is installed and imported;
 the base client knows no navigation types. Generic `Remote::dispatch` owns
 call-ID allocation, handle/connection validation, portable failure mapping,
@@ -10553,8 +10553,8 @@ The portable high-level command defaults to `load`, supports Playwright's four
 wait states, carries referrer, and leaves timeout/cancellation in shared call
 metadata.
 
-The encoded-client checkpoint adds opt-in `pwright-client-wire`, depending only
-on `pwright-core` and `pwright-transport`. Its cloneable typed command channel
+The encoded-client checkpoint adds opt-in `playwright-rust-client-wire`, depending only
+on `playwright-rust-core` and `playwright-rust-transport`. Its cloneable typed command channel
 and unique caller-driven receive driver share a bounded pending/tombstone table;
 they start no executor task. Commands register before send, non-result frames
 are returned for composition, and typed decode happens after raw call-ID
@@ -10629,7 +10629,7 @@ pending client handshake drops its transport handle. A real Tokio duplex test
 performs both peer handshakes and a typed runtime round trip on the same stream.
 
 The authenticated-local-endpoint checkpoint adds optional
-`pwright-endpoint-tokio` above the generic transport and server layers. A
+`playwright-rust-endpoint-tokio` above the generic transport and server layers. A
 private Unix listener uses mode `0600`, starts no task or accept loop, and reads
 kernel peer UID/GID/PID. The client verifies an injected expected server UID;
 the server converts the accepted identity into a UID authorization gate that
@@ -10649,7 +10649,7 @@ nonce and direction-separated HMAC-SHA256 proofs. The key is never transmitted
 or formatted and its owned allocation is zeroized. The fixed versioned exchange
 is exactly 105 bytes; it has no length-controlled allocation, retry queue,
 accept loop, task, or implicit deadline. A proof-carrying `TailnetPeerGate`
-then supplies the authenticated source address to the unchanged Pwright
+then supplies the authenticated source address to the unchanged Playwright Rust
 handshake gate.
 
 Tests reject loopback/LAN/public binds before socket creation, cover the exact
@@ -10663,11 +10663,11 @@ The authenticated-mTLS checkpoint adds a separate general TCP adapter rather
 than weakening that Tailnet policy. The caller supplies rustls client/server
 configuration, trust roots, server name, and a fixed-capacity set of authorized
 SHA-256 leaf-certificate fingerprints. Both sides require the exact
-`pwright/1` ALPN, normal rustls certificate verification, a presented peer
+`playwright-rust/1` ALPN, normal rustls certificate verification, a presented peer
 certificate, and an exact pin before a frame transport exists. A two-entry pin
 set permits a bounded old/new overlap during rotation; empty and duplicate sets
 are rejected. Only a successfully accepted value can construct
-`MutualTlsPeerGate`, so the unchanged Pwright handshake receives proof-carrying
+`MutualTlsPeerGate`, so the unchanged Playwright Rust handshake receives proof-carrying
 peer identity rather than credentials in ClientHello.
 
 The endpoint rejects wildcard binds, acquires one of a caller-declared number
@@ -10675,22 +10675,22 @@ of handshake slots before accepting another socket, and starts no accept loop,
 task, runtime, or clock. rustls 0.23 defensively caps one buffered handshake
 message at 65,535 bytes and one certificate at 65,536 bytes; each TLS
 connection also receives an explicit outbound buffer ceiling equal to the
-larger of 65,536 bytes and the configured length-prefixed Pwright envelope.
+larger of 65,536 bytes and the configured length-prefixed Playwright Rust envelope.
 Those rustls-owned buffers are a documented third-party boundary, not falsely
-charged as exact Pwright `WireBytes`. The caller still owns handshake/drain
+charged as exact Playwright Rust `WireBytes`. The caller still owns handshake/drain
 deadlines, PKI issuance and revocation, durable key storage, and the operational
 rotation schedule.
 
 Tests cover mutual authentication, absent client certificates, a CA-valid but
 unpinned server, exact ALPN, bounded pin rotation, bounded output buffers, and
-preservation of the first Pwright frame after TLS. A selected live test bound
+preservation of the first Playwright Rust frame after TLS. A selected live test bound
 this Mac's actual Tailscale interface and completed mTLS, pin verification, and
 the canonical ClientHello/ServerHello exchange. This completes DT-035's
 transport/authentication boundary foundation; deploying a public listener
 still requires an explicit application policy under DT-063.
 
 The authenticated Chromium endpoint checkpoint adds the optional
-`pwright-composition-chromium-tokio` leaf rather than making the base Chromium
+`playwright-rust-composition-chromium-tokio` leaf rather than making the base Chromium
 root depend on endpoint policy. Its `AcceptedChromiumEndpoint` boundary covers
 Tailnet and mTLS directly and wraps Unix with one explicit allowed UID. It
 keeps the endpoint-derived gate paired with the exact accepted transport,
@@ -10707,7 +10707,7 @@ caller-owned. This advances DT-035, DT-041, DT-043, DT-051, DT-052, DT-060,
 DT-061, and DT-063 without selecting a universal deployment transport.
 
 The bounded-drain checkpoint adds `run_with_drain_deadline` without importing a
-clock or executor into `pwright-server-wire`. Its injected future is dormant
+clock or executor into `playwright-rust-server-wire`. Its injected future is dormant
 until EOF leaves admitted work active. Commands that become ready during the
 transport-close transition win before an simultaneously ready deadline;
 otherwise expiry drops the remaining bounded work, records one deadline metric,
@@ -10724,7 +10724,7 @@ disjoint optional ranges are omitted; the client rejects a selected version
 above its maximum. The ranged ClientHello has a new canonical tag while the
 decoder retains the legacy minimum-only representation.
 
-The new `pwright-codec-binary` crate centralizes allocation-aware network-order
+The new `playwright-rust-codec-binary` crate centralizes allocation-aware network-order
 writing, borrowed bounded reading, exact malformed-input diagnostics, and
 static positional schema metadata. Control, handshake, navigation, and locator
 codecs now use it and publish validated top-level layouts, with golden-byte
@@ -10759,7 +10759,7 @@ The first source-IDL checkpoint records the local Playwright schema/generator
 evidence and evaluates YAML, Protocol Buffers, FlatBuffers, and Rust-only
 declarations. A strict, smaller Playwright-shaped YAML grammar is selected
 provisionally, owned independently by each capability. The development-only
-`pwright-schema-gen` crate rejects unknown keys, noncanonical IDs/tags,
+`playwright-rust-schema-gen` crate rejects unknown keys, noncanonical IDs/tags,
 duplicate fields, missing references, excessive shapes, and unsupported
 recursive Rust models, then deterministically emits Rust wire models and a
 complete static catalog. It has an explicit non-mutating `--check` mode; there
@@ -10774,7 +10774,7 @@ allows new types and appended higher-tag union variants but rejects removed or
 retyped types, record layout changes, existing union changes, version
 regression, and changed nested references. The evaluated alternatives,
 commands, and remaining gates are recorded in
-`knowledge/pwright-protocol-idl.md`. At that checkpoint DT-031 remained open for
+`knowledge/playwright-rust-protocol-idl.md`. At that checkpoint DT-031 remained open for
 declarative string/collection/cross-field validators, dispatch metadata,
 user-facing docs, transitive imports, recursive models, generated public-model
 conversions, and a second-language fixture.
@@ -10789,7 +10789,7 @@ navigation models now implement these codecs; a simple generated goto is
 byte-for-byte identical to the published hand-written payload, while tests
 prove field-attributed string/depth failures and header-body preflight.
 
-`pwright-schema-gen --previous` now compares the previous published source with
+`playwright-rust-schema-gen --previous` now compares the previous published source with
 the candidate before generation or drift checking. Navigation keeps a checked-in
 1.0 baseline. New types and appended union variants pass; record changes and
 mutated old variants fail in generator tests. At that checkpoint DT-031
@@ -10829,7 +10829,7 @@ The shared-library checkpoint separates reusable wire values from capability
 roots. A source declares exactly one `library`, `capability`, or non-installable
 `protocol` family; capabilities list direct imports and the generator requires
 the matching library sources.
-`pwright-codec-common` now owns call metadata, duration, and failure kind.
+`playwright-rust-codec-common` now owns call metadata, duration, and failure kind.
 Navigation reexports those exact generated Rust types and stable schema
 constants, while its composed catalog and compatibility checks include the
 imported graph. Consumers still install only the capability and its small
@@ -10868,16 +10868,16 @@ uses `build.rs`. Commands will declare semantic params/results/errors and the
 generator will synthesize common call/result envelopes while preserving the
 current navigation golden bytes. The exact dependency graph, atomic emission
 contract, rejected ownership models, and migration order are recorded in
-`knowledge/pwright-generator-output-ownership.md`.
+`knowledge/playwright-rust-generator-output-ownership.md`.
 
 The first multi-output implementation moves navigation's canonical source and
-baseline into `pwright-cap-navigation/schema`. Its symbolic command names now
+baseline into `playwright-rust-cap-navigation/schema`. Its symbolic command names now
 drive a second committed generated artifact containing capability/command IDs,
 methods, the command list, and `NavigationCapability::DESCRIPTOR`; the former
 hand-written definitions are gone. `--capability-output` renders this core-only
 surface alongside the codec output, and check mode detects drift in either.
-The verified normal dependency tree for `pwright-cap-navigation` still contains
-only `pwright-core`.
+The verified normal dependency tree for `playwright-rust-cap-navigation` still contains
+only `playwright-rust-core`.
 
 The reference-output checkpoint adds a third committed artifact generated from
 that same navigation source. `--reference-output` emits deterministic Markdown
@@ -10927,21 +10927,21 @@ operation. A capability with no dependencies, including navigation, keeps the
 same generated surface and dependency tree.
 
 The locator-schema checkpoint exercises the same design with a recursive and
-policy-rich capability. `pwright-cap-locator/schema/locator.yml` is now 1.22;
+policy-rich capability. `playwright-rust-cap-locator/schema/locator.yml` is now 1.22;
 its preserved 1.21 baseline proves the ScrollIntoViewIfNeeded route is a compatible
 append-only command after the 1.21 SelectOption checkpoint.
 It generates AllInnerTexts/AllTextContents/Blur/Click/Count/Fill/Focus/GetAttribute/Hover/InnerHtml/InnerText/InputValue/IsChecked/IsEditable/IsEnabled/IsVisible/Press/ScrollIntoViewIfNeeded/SelectOption/SetChecked/TextContent/WaitFor IDs, methods, targets, the
 recursive boxed selector wire tree, a complete catalog, protocol reference,
-and the optional `pwright-server-locator` handler chain. The generator rejects
+and the optional `playwright-rust-server-locator` handler chain. The generator rejects
 recursive models that have no finite wire value. `public_external` keeps
 validated options, params, errors, and the unit result hand-written in the
 core-only capability while preserving their stable schema names and mappings.
 The immutable selector and matcher values now live in zero-dependency,
-command-free `pwright-selector-model` and are reexported unchanged by
-`pwright-cap-locator`. Both protocol majors and all downstream layers retain
+command-free `playwright-rust-selector-model` and are reexported unchanged by
+`playwright-rust-cap-locator`. Both protocol majors and all downstream layers retain
 the same type identity. The nine-type wire closure is also published as the
-command-free `pwright.selector` 1.0 library and generated
-`pwright-codec-selector` crate. Generator tests compare each definition exactly
+command-free `playwright.rust.selector` 1.0 library and generated
+`playwright-rust-codec-selector` crate. Generator tests compare each definition exactly
 with both published Locator tracks and compile a consumer that imports selector
 types without importing Locator commands. Existing fill golden bytes remain unchanged, while round trips now
 cover string and regex text/label/role/attribute matching, exact and regex test
@@ -11099,7 +11099,7 @@ The all-inner-texts checkpoint adds a separately installable
 `Locator.all_inner_texts` route at method `131087` and root tags 29/30. Like
 Playwright it performs one immediate, non-strict `$$eval`-shaped snapshot and
 returns rendered `HTMLElement.innerText` values in selector order. Unlike the
-unchecked upstream TypeScript cast, Pwright rejects SVG or any other
+unchecked upstream TypeScript cast, Playwright Rust rejects SVG or any other
 non-`HTMLElement` match as typed `InvalidTarget`, preserving the declared
 `Vec<String>` result. It shares the reviewed 4096-item, 1 MiB-per-item, and
 4 MiB aggregate limits with raw text collections, but production accounting
@@ -11155,7 +11155,7 @@ encoding or backend work, while 2.1 enables both. The local protocol also keeps
 its outer frame version independent from the Locator capability version.
 
 The Press checkpoint is specified in
-`docs/knowledge/pwright-locator-press.md` and advances both tracks together to
+`docs/knowledge/playwright-rust-locator-press.md` and advances both tracks together to
 1.19 and 2.2 with one Press route, a bounded Playwright key-expression grammar,
 full static US-layout resolution, rich CDP key events, and fixed-capacity
 Page-owned pressed-key cleanup. It reuses the existing navigation barrier and
@@ -11169,7 +11169,7 @@ with reverse key release while preserving the external browser. This closes the
 Press checkpoint's designed live gate.
 
 The SetChecked checkpoint is specified in
-`docs/knowledge/pwright-locator-set-checked.md` and advances the same tracks to
+`docs/knowledge/playwright-rust-locator-set-checked.md` and advances the same tracks to
 1.20 and 2.3. It adds one desired-state primitive with client-composed Check
 and Uncheck, bounded extensible options in both majors, Playwright-compatible
 idempotence and radio behavior, and post-click verification. Generated
@@ -11178,7 +11178,7 @@ production dispatch, shared Page pointer cleanup, and dedicated-profile Chrome
 coverage are implemented without Node.js or browser-distribution ownership.
 
 The SelectOption checkpoint is specified in
-`docs/knowledge/pwright-locator-select-option.md` and advances the tracks to
+`docs/knowledge/playwright-rust-locator-select-option.md` and advances the tracks to
 1.21 and 2.4. One bounded command accepts strings or conjunctive
 value/label/index descriptors, preserves empty-list deselection and DOM-order
 results, retries every pre-commit actionability and option-availability state,
@@ -11188,7 +11188,7 @@ separate future capability-composition decision until Handle adoption across
 execution worlds has a bounded lifecycle contract.
 
 The ScrollIntoViewIfNeeded checkpoint is specified in
-`docs/knowledge/pwright-locator-scroll-into-view.md` and advances the tracks to
+`docs/knowledge/playwright-rust-locator-scroll-into-view.md` and advances the tracks to
 1.22 and 2.5. The command remains Locator-only and strict, waits for stable
 geometry but not visibility, enabled/editable state, or hit-target reception,
 and avoids repositioning at full intersection. Missing, detached, layout-less,
@@ -11215,7 +11215,7 @@ field writes its count immediately before its own items. The new `counted_by`
 relationship is legal only on a repeated field referencing an earlier required
 `u32`; it is validated, fingerprinted, compatibility-checked, documented, and
 used by both owned and borrowed generated codecs without emitting an adjacent
-count. `pwright-codec-handshake` now has a canonical 1.0 YAML source, baseline,
+count. `playwright-rust-codec-handshake` now has a canonical 1.0 YAML source, baseline,
 catalog, generated reference, and production generated codec. Borrowed adapters
 encode canonical capability maps and slices without an intermediate owned wire
 tree. Generated decode is followed only by semantic ID/order, version-policy,
@@ -11238,9 +11238,9 @@ only its temporary context and confirms `Browser.getVersion` still succeeds
 after the typed client is dropped, preserving external browser ownership.
 
 The composable-driver checkpoint adds synchronous `FrameHandler` routing to
-`pwright-client-wire`. Deterministic `or_else` chains identify which optional
+`playwright-rust-client-wire`. Deterministic `or_else` chains identify which optional
 subsystem handled a frame and preserve the original frame if none did. The new
-opt-in `pwright-client-control` handler decodes only control frames, forwards
+opt-in `playwright-rust-client-control` handler decodes only control frames, forwards
 Create/Adopt as typed lifecycle events, applies idempotent Dispose invalidation,
 rejects Cancel/SetSubscription in the wrong direction, and leaves other routes
 untouched. Neither layer starts executor work.
@@ -11250,7 +11250,7 @@ to both dispatchers. Create, changed Adopt, and child-first Dispose mutations
 preflight their required capacity while holding the object-state lock. A full
 outbox therefore rejects before changing the graph or accepting controlled
 parent-close cancellation. Exclusive rollback-on-drop claims keep encoding
-failures from losing the oldest message. The new `pwright-runtime-control`
+failures from losing the oldest message. The new `playwright-rust-runtime-control`
 sidecar sends one validated Control frame per caller-driven `send_once` and
 acknowledges it only after transport success; it brings no executor or socket.
 
@@ -11310,7 +11310,7 @@ typed Page dispatch and verified context cleanup plus external-browser
 survival. Cross-browser adapters and lifecycle-managed Response objects remain
 open parity work.
 
-The navigation-wire checkpoint adds `pwright-codec-navigation` as a separate
+The navigation-wire checkpoint adds `playwright-rust-codec-navigation` as a separate
 optional crate. It canonically encodes both the low-level navigation primitive
 and Playwright-shaped goto commands/results without Serde, validates bounded
 strings and response headers before allocation, rejects malformed tags,
@@ -11321,8 +11321,8 @@ through client wire, stream framing, server wire, and bounded runtime dispatch.
 Its normal dependency tree contains only the navigation capability, core, and
 transport crates.
 
-The first locator-action checkpoint adds core-only `pwright-cap-locator` and
-the independent `pwright-client-locator` extension. A Locator remains a lazy
+The first locator-action checkpoint adds core-only `playwright-rust-cap-locator` and
+the independent `playwright-rust-client-locator` extension. A Locator remains a lazy
 value and sends its selector expression with each typed click; the Chromium adapter
 re-resolves every retry and checks strictness, attachment, visibility,
 two-animation-frame stability, enabled state, viewport intersection, and hit
@@ -11355,8 +11355,8 @@ The following Click-parity audit found a protocol-evolution constraint before
 adding more fields. At Playwright commit
 `de214f440b7e34937fe4886f046b78b757136087`, public Locator click also accepts
 position, modifiers, delay, scroll, and interpolated mouse-move steps, while
-navigation waiting remains part of the action. Pwright's existing
-`pwright.locator.click_options` is a positional record published since locator
+navigation waiting remains part of the action. Playwright Rust's existing
+`playwright.rust.locator.click_options` is a positional record published since locator
 1.0. Such records have no enclosing length or unknown-field representation;
 the compatibility checker therefore correctly rejects even appended optional
 fields within major 1. This checkpoint does not mutate that layout, falsely
@@ -11383,7 +11383,7 @@ tag. This establishes a viable primitive but deliberately does not yet migrate
 the published locator 1.x Click record or choose its new major-version route.
 
 The major-transition decision is now narrowed: locator keeps the single
-logical ID `pwright.locator`, while an installation may offer separate 1.x and
+logical ID `playwright.rust.locator`, while an installation may offer separate 1.x and
 2.x tracks. Each client request and accepted connection selects exactly one
 track. This avoids both replacing old clients and permanently accumulating
 version-suffixed Click RPCs. The transport manifest now keys support by
@@ -11437,7 +11437,7 @@ inspection, idempotent no-op, radio protection, shared Page pointer input,
 trial actionability, and a terminal post-click assertion without replaying an
 acknowledged click. The detailed source evidence, state machine, resource
 boundary, and remaining acceptance gates are recorded in
-`docs/knowledge/pwright-locator-set-checked.md`.
+`docs/knowledge/playwright-rust-locator-set-checked.md`.
 
 The SelectOption checkpoint adds command 21 on both tracks. Its request is
 bounded to 1,024 descriptors, 64 KiB per string, and 1 MiB aggregate string
@@ -11483,7 +11483,7 @@ resource bounds. The dedicated real-Chrome test verifies readonly auto-waiting,
 label retargeting, contenteditable fill, date fill/events, cleanup, and survival
 of the externally owned browser.
 
-The locator-wire checkpoint adds `pwright-codec-locator` without making it a
+The locator-wire checkpoint adds `playwright-rust-codec-locator` without making it a
 dependency of the capability, typed client extension, or in-process backend.
 Its canonical bounded payload preserves click/fill options and values, count
 and visibility results, execution metadata, success, every failure category,
@@ -11502,7 +11502,7 @@ locator server selects no runtime, backend, CDP, browser provider, Node.js, or
 browser download.
 
 The first explicit Chromium production root now lives in
-`pwright-composition-chromium`. Its preparation phase selects navigation,
+`playwright-rust-composition-chromium`. Its preparation phase selects navigation,
 locator, or both; derives one additive concurrent resource plan; filters the backend's
 potential feature set to the capabilities actually installed; constructs the
 wire capability inventory; and provides plan-checked factories for capability
@@ -11592,7 +11592,7 @@ capability whose exact version, inbound limits, or peer frame ceiling diverges
 from the remote handshake contract.
 
 The typed server-event checkpoint adds the missing producer boundary as the
-independent `pwright-server-events` crate. One channel installs one static
+independent `playwright-rust-server-events` crate. One channel installs one static
 `EventSpec`; its cloneable producer retains typed payloads in an explicitly
 bounded queue and its single outbound consumer performs codec validation and
 transport I/O. `RejectNewest` and `DropOldest` remain observable outcomes. A
@@ -11693,7 +11693,7 @@ then creates a fresh ledger and CDP attachment for only that peer. It creates
 no task, runtime, retry policy, accept loop, or default deadline. A rejection
 ordering test proves failed endpoint authentication cannot reach CDP, and a
 dedicated Chrome 152 test proves that the packaged Unix listener derives the
-real kernel UID, completes the Pwright handshake on the same connection, and
+real kernel UID, completes the Playwright Rust handshake on the same connection, and
 leaves externally owned Chrome reachable afterward. Admission concurrency and
 deadlines remain deployment policy.
 
@@ -11746,8 +11746,8 @@ denied, and the full workspace passes rustdoc with warnings denied. A full
 workspace Clippy run on the current toolchain is separately blocked by the
 legacy tonic server's newly reported `result_large_err` lint, including
 generated tonic code; this checkpoint does not change that v1 ABI.
-`pwright-runtime`, `pwright-transport`, and `pwright-browser-backend` retain only
-`pwright-core` as a normal dependency. This is further evidence toward DT-032,
+`playwright-rust-runtime`, `playwright-rust-transport`, and `playwright-rust-browser-backend` retain only
+`playwright-rust-core` as a normal dependency. This is further evidence toward DT-032,
 DT-033, DT-050, DT-051, DT-052, DT-060, and DT-061, not completion: complete
 cleanup retry/drain supervision, complete generated codecs and cross-language types,
 safe concurrency bypass rules,
@@ -11770,7 +11770,7 @@ and exact HTML/SVG inner-HTML serialization.
 
 ### DT-001: Current-system baseline
 
-- Question: What does today's Pwright actually support, depend on, allocate,
+- Question: What does today's Playwright Rust actually support, depend on, allocate,
   and expose?
 - Deliverable: verified capability, dependency, process, memory, and lifecycle
   inventory of the existing workspace.
@@ -11789,15 +11789,15 @@ and exact HTML/SVG inner-HTML serialization.
 
 ### DT-003: Memory investigation plan
 
-- Question: How will we distinguish Pwright runtime memory from browser memory
+- Question: How will we distinguish Playwright Rust runtime memory from browser memory
   and identify retained state?
 - Deliverable: measurement protocol and workloads for idle, navigation,
   repeated page creation, handles, network traffic, tracing, and teardown.
 - Done when: measurements can separately report the client, runtime, browser
   parent, renderer, GPU, and utility processes, plus internal object counts.
-- Checkpoint: the optional, standard-library-only `pwright-process-metrics`
+- Checkpoint: the optional, standard-library-only `playwright-rust-process-metrics`
   crate now reads a bounded process-table snapshot, retains no command lines,
-  validates the PID graph, and separately reports one Pwright runtime plus the
+  validates the PID graph, and separately reports one Playwright Rust runtime plus the
   browser parent, renderer, GPU, utility, other-child, and total RSS-sum groups.
   Its opt-in `ledger` feature adds a bounded caller-driven recorder without an
   executor, timer, browser provider, CDP client, or background task. The plan
@@ -11879,7 +11879,7 @@ and exact HTML/SVG inner-HTML serialization.
   `1,204,158,464..1,208,762,368` bytes. Tracing,
   the remaining non-network benchmark series, Linux
   PSS, and reviewed budgets remain open; see
-  `knowledge/pwright-process-memory-metrics.md`. The first network prerequisite
+  `knowledge/playwright-rust-process-memory-metrics.md`. The first network prerequisite
   now exists: a core-only bounded lifecycle model and optional event contract,
   plus a Chromium normalizer that reserves its complete active-correlation
   `BackendStateBytes` ceiling. A Chrome 152 release proof observed one real
@@ -11924,8 +11924,8 @@ and exact HTML/SVG inner-HTML serialization.
   The upstream comparison now identifies one concrete retention candidate in
   the local Playwright `1.63.0-next` checkout: terminal events reuse but do not
   dispose Request/Response dispatchers, while the generic per-type bucket waits
-  until 10,000 entries before trimming its oldest 10%. Pwright's base
-  `pwright.network-events` capability now removes native correlation, publishes
+  until 10,000 entries before trimming its oldest 10%. Playwright Rust's base
+  `playwright.rust.network-events` capability now removes native correlation, publishes
   a complete terminal Request/optional-Response value snapshot, and then
   disposes the temporary Request root plus Response child. Post-terminal live
   handles are intentionally deferred to a separate capability with hard
@@ -11936,7 +11936,7 @@ and exact HTML/SVG inner-HTML serialization.
 
 ### DT-010: Users and installation profiles
 
-- Question: Who uses Pwright, and what is the smallest install for each user?
+- Question: Who uses Playwright Rust, and what is the smallest install for each user?
 - Deliverable: a short set of profiles such as embedded Rust library, agent
   CLI, remote client, remote runtime, system-Chrome attachment, and optional
   managed browser.
@@ -11945,7 +11945,7 @@ and exact HTML/SVG inner-HTML serialization.
 
 ### DT-011: Compatibility contract
 
-- Question: How closely must Rust Pwright match Playwright?
+- Question: How closely must Rust Playwright Rust match Playwright?
 - Deliverable: compatibility levels for naming, API shape, behavior, errors,
   events, selectors, auto-waiting, protocol, and test reuse.
 - Done when: each level is classified as exact, adapted for Rust, deferred, or
@@ -12055,7 +12055,7 @@ and exact HTML/SVG inner-HTML serialization.
   critical lifecycle events cannot be silently treated like telemetry.
 
 Implementation checkpoint (2026-09-03): the first concrete event slice is
-`pwright.page-events/page.load`. Event capability metadata now has the same
+`playwright.rust.page-events/page.load`. Event capability metadata now has the same
 stable ownership discipline as commands: semantic `EventId`, numeric wire
 `EventTag`, target object kinds, duplicate-owner rejection, and server
 inventory preflight. The event-only capability can be negotiated without
@@ -12128,7 +12128,7 @@ misreported as wire loss. Starting a new connection epoch releases stale queued
 events and resets only the baseline; cumulative gap/error counters remain
 observable. The fixed-size Page-event codec carries the eight-byte sequence and
 source identity; Context-Page and popup variants add one related Page identity.
-`pwright.page-events` is version 1.2 for the additive discovery-event surface.
+`playwright.rust.page-events` is version 1.2 for the additive discovery-event surface.
 The caller-owned topology publisher forwards only installed lanes and treats
 queue reject/eviction as explicit event loss requiring reconstruction.
 
@@ -12233,7 +12233,7 @@ queued command from writing, completes a transport-owned partial Tokio frame
 before EOF, preserves the server's prior terminal reason, drains a result before
 server EOF, and reports dual close failures.
 
-The second-transport checkpoint adds `pwright-transport-memory`, a
+The second-transport checkpoint adds `playwright-rust-transport-memory`, a
 standard-library-only full-duplex `FrameTransport` with an explicit queue bound
 per direction. Send and shutdown mutate state only when their caller-owned
 future is polled; unpolled sends have no side effect. Overflow, local write
@@ -12245,9 +12245,9 @@ created. The same typed client/channel and typed server handler conformance test
 that crosses the transport boundary now passes without a socket or Tokio
 transport dependency.
 
-The graceful-close checkpoint upgrades `pwright.control` to schema 1.1 while
+The graceful-close checkpoint upgrades `playwright.rust.control` to schema 1.1 while
 retaining the checked-in 1.0 baseline. It reuses the unchanged handshake's
-bounded named-version negotiation with a reserved `pwright.control` entry:
+bounded named-version negotiation with a reserved `playwright.rust.control` entry:
 absence selects the legacy 1.0 baseline, while only an explicitly returned 1.1
 entry unlocks Close/Ack. This avoids a bootstrap-format flag day. A
 role-bound `NegotiatedControlCodec` receives that exact selected minor and
@@ -12255,7 +12255,7 @@ independently keeps the outer application version on every WireFrame. It gates
 both encoding and decoding by minor and direction, so a 1.0 peer is never sent
 tag 5/6 and invalid Client-Ack or Server-Close traffic fails locally.
 
-The new core-only `pwright-connection-control` crate contains allocation-free,
+The new core-only `playwright-rust-connection-control` crate contains allocation-free,
 caller-driven client and server machines. Side effects are explicit actions:
 Client Close -> Ack wait -> write shutdown; Server Close -> reasoned cleanup ->
 Ack -> write shutdown. Client wire keeps its machine on the unique driver,
@@ -12294,7 +12294,7 @@ active command work, and does not wait to reinterpret the exchange as EOF.
 - Done when: navigation, DOM, input, network, tracing, and browser launching can
   be classified without circular ownership.
 - Checkpoint: DOM serialization is assigned to a new read-only
-  `pwright.dom_content` capability rather than screenshot or arbitrary
+  `playwright.rust.dom_content` capability rather than screenshot or arbitrary
   evaluation. The granularity decision follows independently useful authority,
   backend machinery, and resource cost—not one capability per method and not a
   broad Page grab bag. Its 1.0 schema, generated manifest/server binding,
@@ -12311,27 +12311,27 @@ active command work, and does not wait to reinterpret the exchange as EOF.
 - Done when: missing dependencies, duplicate ownership, incompatible versions,
   and cycles all fail predictably.
 - Checkpoint: runtime subset selection now has a matching compile-time proof.
-  `pwright-composition-chromium-navigation` depends on the CDP backend with
+  `playwright-rust-composition-chromium-navigation` depends on the CDP backend with
   default features disabled and only its navigation surface selected, while
   preserving the complete aggregate composition. It binds an injected CDP
   client and pre-provisioned Page to production-budgeted generated handlers;
   no task, executor, transport, browser provider, launcher, installer, Node.js,
   or unrelated capability is selected. An isolated consumer plus a CI Cargo-
-  tree allowlist fails closed on any new Pwright dependency. Runtime
+  tree allowlist fails closed on any new Playwright Rust dependency. Runtime
   negotiation and Cargo selection are therefore complementary rather than
   substitutes. Other capability leaves and duplicate/incompatible selection
   diagnostics remain open.
 - Checkpoint: value evaluation is the second independently selectable Chromium
   server slice. Its adapter was extracted into
-  `pwright-backend-cdp-evaluation`; the aggregate backend reexports it without
-  becoming a dependency of `pwright-composition-chromium-evaluation`. The leaf
+  `playwright-rust-backend-cdp-evaluation`; the aggregate backend reexports it without
+  becoming a dependency of `playwright-rust-composition-chromium-evaluation`. The leaf
   binds one Frame, distinguishes default and explicit unique execution
   contexts, retains the bounded context-route lease, and installs only the
   generated evaluation handler. Its exact consumer graph excludes navigation,
   Handles, the aggregate composition/backend, clients, providers, installers,
   runtimes, Node.js, and browser acquisition.
 - Checkpoint: read-only DOM content is the third independently selectable
-  Chromium server slice. `pwright-backend-cdp-dom-content` owns only the fixed
+  Chromium server slice. `playwright-rust-backend-cdp-dom-content` owns only the fixed
   Frame serializer and exact utility-world route; the aggregate backend
   compatibility-reexports it. The one-Frame composition installs only the
   generated `Frame.content` handler and jointly budgets its persistent route,
@@ -12339,10 +12339,10 @@ active command work, and does not wait to reinterpret the exchange as EOF.
   excludes public evaluation, screenshot, navigation, aggregate
   backend/composition, clients, providers, installers, and runtime choice.
   Evaluation and DOM content share only the command-free
-  `pwright-backend-cdp-common` failure classifier, so shared mechanism grants
+  `playwright-rust-backend-cdp-common` failure classifier, so shared mechanism grants
   no command authority.
 - Checkpoint: Page screenshot is the fourth independently selectable Chromium
-  server slice. `pwright-backend-cdp-content` owns the native capture and
+  server slice. `playwright-rust-backend-cdp-content` owns the native capture and
   bounded base64 decode, while the aggregate backend compatibility-reexports
   it and Locator screenshot explicitly reuses its opaque admission
   transaction. The one-Page composition validates the exact Page before CDP,
@@ -12358,20 +12358,20 @@ active command work, and does not wait to reinterpret the exchange as EOF.
   23-package consumer graph excludes public Locator commands and the aggregate
   CDP backend. The generic capture composition still accepts alternate
   resolvers without linking the first-party implementation.
-- Checkpoint: the public `pwright` umbrella now exists with an empty default
+- Checkpoint: the public `playwright-rust` umbrella now exists with an empty default
   feature set. Its explicit axes separate portable evaluation/navigation
   contracts, Playwright-shaped clients, raw CDP, their minimal Chromium server
   leaves, executor-neutral runtime/transport contracts, and Tokio adapters. It
   only reexports selected crates and contributes no hidden policy or
   implementation. Eleven isolated downstream packages prove that the empty
-  profile has no Pwright dependency, content/Locator-screenshot/DOM/evaluation/navigation clients
+  profile has no Playwright Rust dependency, content/Locator-screenshot/DOM/evaluation/navigation clients
   have no CDP/server, Chromium content has no client/DOM/evaluation/Locator/
   navigation/aggregate backend, Chromium DOM content has no client/evaluation/
   screenshot/navigation/aggregate backend, Chromium evaluation has no client/
   navigation/aggregate backend, and Chromium navigation has no client/provider/
   installer/aggregate-backend dependency.
   The Chromium Locator-screenshot profile additionally rejects both
-  `pwright-cap-locator` and the aggregate CDP backend.
+  `playwright-rust-cap-locator` and the aggregate CDP backend.
   A default-build compile-fail doctest also proves an omitted capability has no
   public module. A `full` feature is deliberately postponed until the complete
   supported topology is known.
@@ -12389,26 +12389,26 @@ active command work, and does not wait to reinterpret the exchange as EOF.
   video, filesystem/ZIP, and Artifact contributors. The base recorder owns no
   I/O or executor, and an injected sink must declare bounded admission. The
   state and resource contract is recorded in
-  `knowledge/pwright-tracing.md`. The core-only bounded recorder and its exact
-  production profile are implemented in `pwright-trace-model`; a detached
-  chunk gates any next chunk/session until release. `pwright-cap-tracing`
+  `knowledge/playwright-rust-tracing.md`. The core-only bounded recorder and its exact
+  production profile are implemented in `playwright-rust-trace-model`; a detached
+  chunk gates any next chunk/session until release. `playwright-rust-cap-tracing`
   freezes the six BrowserContext-only 1.0 commands and exposes only discard or
   an injected sink, not Artifact/ZIP or contributor flags. The bounded binary
   codec, Playwright-shaped opt-in client facade, and generated six-service
   server chain are implemented and transfer no trace-body attachment. The
-  task-free `pwright-tracing-service` explicitly composes one pre-registered
+  task-free `playwright-rust-tracing-service` explicitly composes one pre-registered
   bounded recorder per Context with an injected monotonic clock and sink, uses
   the same instance for all six generated services, and requires Context/all
   sink cleanup after releasing base recorder state. All six commands now pass
   a full bounded typed-client/server in-memory duplex proof, and server
-  manifests omit `pwright.tracing` when its handlers are absent. The optional
-  `pwright-plugin-tracing-navigation` leaf wraps `navigation.goto` only and
+  manifests omit `playwright.rust.tracing` when its handlers are absent. The optional
+  `playwright-rust-plugin-tracing-navigation` leaf wraps `navigation.goto` only and
   contributes correlated before/after/error entries through an injected
   Page-to-Context route. A dedicated-Chrome test proves one real CDP `goto`
   and external-browser survival. A DT-003 run repeats one warmup plus three
   measured chunks, returns `TraceBytes.current` to zero after every sink
   handoff, and passes logical/browser-process teardown checks. The optional
-  `pwright-trace-sink-file` leaf now turns one detached chunk into a versioned
+  `playwright-rust-trace-sink-file` leaf now turns one detached chunk into a versioned
   `.pwtrace` file without adding a task, runtime, browser, downloader, archive,
   or network dependency. It requires a fresh caller-granted directory,
   preallocates bounded per-Context accounting, checks exact encoded file and
@@ -12416,7 +12416,7 @@ active command work, and does not wait to reinterpret the exchange as EOF.
   file, syncs, and atomically renames. Six AAA tests cover the exact bytes
   through `TracingService`, rejection before file creation, independent
   Context/chunk/aggregate limits, and refusal to adopt an existing directory.
-  The separate `pwright-trace-sink-pull` leaf is the task-free boundary before
+  The separate `playwright-rust-trace-sink-pull` leaf is the task-free boundary before
   remote streaming. Its fallibly preallocated FIFO rejects on global chunk,
   per-Context chunk, per-chunk byte, or aggregate-byte pressure. A queued chunk
   keeps its original `TraceBytes` leases and recorder gate; `pop` releases queue
@@ -12427,17 +12427,17 @@ active command work, and does not wait to reinterpret the exchange as EOF.
   series, and reviewed budgets remain.
   Source inspection then corrected the remote-transfer direction: Playwright
   returns an Artifact and lets the client pull a child Stream with `read(size)`;
-  it does not push trace chunks unsolicited. Pwright records that contract in
-  `knowledge/pwright-artifacts-and-streams.md`. The first prerequisite is now
+  it does not push trace chunks unsolicited. Playwright Rust records that contract in
+  `knowledge/playwright-rust-artifacts-and-streams.md`. The first prerequisite is now
   implemented without expanding tracing 1.0: `ArtifactBytes` is an independent
   ledger class, Artifact/Stream have stable object vocabulary, and the
-  command-free `pwright-artifact-model` owns one bounded source shared by
+  command-free `playwright-rust-artifact-model` owns one bounded source shared by
   independent Stream cursors, with explicit EOF and a two-phase prepared read.
   Commit advances one cursor, drop rolls back, a second prepared read on that
   Stream fails, and close releases that Stream's source owner. Seven AAA tests
   cover cancellation, overlap accounting, bounds, close, empty EOF, shared
   source accounting, and independent cursors.
-  The next checkpoint freezes `pwright.artifact` 1.0 with generated
+  The next checkpoint freezes `playwright.rust.artifact` 1.0 with generated
   `Artifact.open_stream/failure/delete` and `Stream.read/close` contracts on
   exact object kinds. Its independent codec enforces metadata, request-size,
   attachment-count/index/length, result-byte, and failure-string bounds, copies
@@ -12450,19 +12450,19 @@ active command work, and does not wait to reinterpret the exchange as EOF.
   preallocates bounded Artifact/Stream tables, injects Stream IDs, separately
   limits source/read/failure/retained-result bytes, cleans subtrees child-first,
   invalidates prepared reads on teardown, and completes one client-to-registry
-  binary duplex pull. The separate `pwright-artifact-runtime` layer now couples
+  binary duplex pull. The separate `playwright-rust-artifact-runtime` layer now couples
   registry preparations to controlled-runtime Create/Dispose transactions,
   verifies child-first topology, fences exact lifecycle control before command
   success, and compensates a Stream after failed Create publication. Five AAA
   tests cover normal ordered wire control, runtime-capacity pre-admission,
   transport-close rollback, and failed-fence cleanup. Its memory prerequisite
-  is now implemented separately: `pwright-trace-format` reserves exact
+  is now implemented separately: `playwright-rust-trace-format` reserves exact
   `ArtifactBytes` before allocation and returns that same owned PWRTRACE buffer;
   Artifact model/registry/runtime adopt it without copying or acquiring another
   lease, while the file sink reuses the same format writer. The fifth runtime
   test proves `TraceBytes` reaches zero after handoff while the exact
   `ArtifactBytes` lease survives until delete.
-  The next checkpoint freezes the independent `pwright.tracing_artifact` 1.0
+  The next checkpoint freezes the independent `playwright.rust.tracing_artifact` 1.0
   capability with one BrowserContext command and explicit dependencies on base
   tracing and Artifact transfer. Generated capability, schema, binary codec,
   server handler, and opt-in client facade do not modify either dependency's
@@ -12487,25 +12487,25 @@ active command work, and does not wait to reinterpret the exchange as EOF.
   graph has no cycles. Crate names are deliberately postponed until this task.
 - Checkpoint: the first representative minimal manifest is executable at
   `examples/v2-navigation-only`. Its only direct dependency is
-  `pwright-composition-chromium-navigation`; the leaf selects the dedicated
-  `pwright-backend-cdp-navigation`, the command-free shared failure classifier,
+  `playwright-rust-composition-chromium-navigation`; the leaf selects the dedicated
+  `playwright-rust-backend-cdp-navigation`, the command-free shared failure classifier,
   the navigation capability/codec/generated server, and common CDP/core/wire
   foundations. `scripts/check-v2-navigation-dependencies.sh` allowlists its
-  exact 15-package normal Pwright closure and runs in CI, so Locator,
+  exact 15-package normal Playwright Rust closure and runs in CI, so Locator,
   screenshots, network events, tracing, Artifacts, providers, managed browser
   installation, the aggregate backend/composition, and v1 crates are forbidden.
   Shared-infrastructure granularity and remaining capability leaves remain
   open; see
-  `knowledge/pwright-dependency-topology.md`.
+  `knowledge/playwright-rust-dependency-topology.md`.
 - Checkpoint: the shared Chromium topology is independently installable as
-  `pwright-backend-cdp-topology`. The leaf owns only bounded
+  `playwright-rust-backend-cdp-topology`. The leaf owns only bounded
   Browser/Context/Page/Frame/World state, generated-CDP-event normalization,
   lifecycle effects, reconnect reconciliation, and resource-accounted
   rollback transactions; it issues no command and starts no task. The
   aggregate backend compatibility-reexports its unchanged public surface.
   `examples/v2-topology-only` and
   `scripts/check-v2-topology-dependencies.sh` enforce an exact five-package
-  normal Pwright closure: consumer, topology leaf, browser model, CDP model,
+  normal Playwright Rust closure: consumer, topology leaf, browser model, CDP model,
   and core. Capability, codec, client, server, runtime, provider, launcher,
   installer, full composition, aggregate backend, and v1 crates are forbidden.
   The leaf's 36 AAA tests remain attached to their implementation owner.
@@ -12527,7 +12527,7 @@ active command work, and does not wait to reinterpret the exchange as EOF.
   `Runtime.releaseObject`, with no hidden retry or evaluation dependency.
   Retained Handle creation, Handle-local value/Handle evaluation, `jsonValue`,
   `getProperty`, and bounded `getProperties` form one ten-package
-  `pwright-backend-cdp-handle-evaluation` leaf because they share private
+  `playwright-rust-backend-cdp-handle-evaluation` leaf because they share private
   invocation, parsing, and cleanup transactions. That leaf depends on the
   existing by-value evaluation backend; no reverse edge exists. Two standalone
   consumers and exact CI allowlists exclude navigation, Locator,
@@ -12600,20 +12600,20 @@ active command work, and does not wait to reinterpret the exchange as EOF.
   remain compatibility APIs. Separate `client-network-events` and
   `chromium-network-events` umbrella profiles keep the isolated matrix at 30.
 - Checkpoint: Page input is an independent five-package CDP backend foundation.
-  `pwright-input-model` owns only the shared 16-key chord bound, while
-  `pwright-backend-cdp-input` keeps the necessarily coupled Playwright US-key
+  `playwright-rust-input-model` owns only the shared 16-key chord bound, while
+  `playwright-rust-backend-cdp-input` keeps the necessarily coupled Playwright US-key
   resolver and serialized keyboard/mouse transaction state together. It owns
   no selector, Locator command, capability, runtime, transport, task, browser
   session, or process. The aggregate compatibility-reexports the previous
   coordinator, transaction, and modifier types; the full Locator adapter has a
   one-way dependency on the input leaf and the input leaf has no reverse
   Locator edge. `examples/v2-input-only` plus an exact CI allowlist reject any
-  sixth Pwright package. Fifteen AAA tests cover bounded parsing, key mapping,
+  sixth Playwright Rust package. Fifteen AAA tests cover bounded parsing, key mapping,
   serialization, dispatch, rollback, and reverse-order cleanup, while two
   dedicated Chrome 152 tests exercise typed Locator input and explicit
   cancellation without terminating the external browser.
 - Checkpoint: the complete CDP Locator implementation is now the independent
-  `pwright-backend-cdp-locator` leaf. It composes only the portable Locator
+  `playwright-rust-backend-cdp-locator` leaf. It composes only the portable Locator
   contract, command-free selector runtime/failure classifier, Page-input foundation, CDP, core,
   and their value models; it owns no screenshot capability, aggregate backend,
   runtime, transport, server, provider, browser launcher, or process. The
@@ -12622,7 +12622,7 @@ active command work, and does not wait to reinterpret the exchange as EOF.
   `examples/v2-locator-only` consumer and exact ten-package CI allowlist make
   that boundary executable, while all 98 Locator AAA tests remain beside the
   implementation owner.
-- Checkpoint: `pwright-composition-chromium-locator` now binds one explicit
+- Checkpoint: `playwright-rust-composition-chromium-locator` now binds one explicit
   Page or Frame identity to the independent backend and one generated Locator
   protocol table. Its typed profile selects exactly Locator 1.22 or 2.5, shares
   a caller-supplied Page input coordinator, and reserves unique execution-world
@@ -12633,7 +12633,7 @@ active command work, and does not wait to reinterpret the exchange as EOF.
   shared input, resource release, complete handler construction, and rejection
   before CDP for an unbound object. A dedicated Chrome 152 integration test
   covers the new v2 composition directly.
-- Checkpoint: `pwright-composition-chromium-context-lifecycle` is the first
+- Checkpoint: `playwright-rust-composition-chromium-context-lifecycle` is the first
   independently selectable ownership-changing server leaf. It stages an exact
   topology close, child-first runtime disposal, and bounded caller-owned
   continuation before native `Target.disposeBrowserContext`. One injected
@@ -12645,7 +12645,7 @@ active command work, and does not wait to reinterpret the exchange as EOF.
   rollback, unowned rejection, plugin ordering, handler construction, and
   cancellation-safe continuation; a dedicated Chrome 152 test closes one
   temporary owned Context and preserves the external browser.
-- Checkpoint: `pwright-composition-chromium-context-creation` independently
+- Checkpoint: `playwright-rust-composition-chromium-context-creation` independently
   installs the Playwright-shaped creation/lifecycle pair instead of exposing a
   creation-only half. One pre-CDP publication plugin reserves optional state;
   runtime and topology publication follow native creation, and any later
@@ -12656,7 +12656,7 @@ active command work, and does not wait to reinterpret the exchange as EOF.
   continuation rejection. Its standalone exact 22-package graph excludes the
   aggregate backend/composition, clients, providers, launchers, installers,
   Tokio, Node.js, and browser acquisition.
-- Checkpoint: `pwright-composition-chromium-page-lifecycle` independently
+- Checkpoint: `playwright-rust-composition-chromium-page-lifecycle` independently
   installs ordinary Page close plus before-unload initiation. Ordinary close
   pre-admits topology, child-first runtime disposal, an injected retirement
   plugin, and caller-owned continuation capacity before native I/O, then waits
@@ -12667,7 +12667,7 @@ active command work, and does not wait to reinterpret the exchange as EOF.
   closure while preserving its Context and the external browser. Its exact
   17-package closure rejects aggregates, clients, providers, launchers,
   installers, Tokio, Node.js, and browser acquisition.
-- Checkpoint: `pwright-composition-chromium-page-creation` pairs
+- Checkpoint: `playwright-rust-composition-chromium-page-creation` pairs
   `BrowserContext.newPage` with the required Page-lifecycle leaf. It reserves
   optional publication state before CDP, binds the exact native route
   provisionally, publishes Page and main Frame as one topology/runtime unit,
@@ -12678,7 +12678,7 @@ active command work, and does not wait to reinterpret the exchange as EOF.
   Its exact 22-package graph excludes aggregates, clients, providers,
   launchers, installers, Tokio, Node.js, and browser acquisition.
 - Checkpoint: `examples/v2-umbrella-profiles` adds twenty-one representative
-  downstream profiles over the new `pwright` package: no features,
+  downstream profiles over the new `playwright-rust` package: no features,
   `client-context-creation`, `client-context-lifecycle`, `client-page-lifecycle`,
   `client-page-creation`,
   `client-locator`, `client-content`,
@@ -12697,22 +12697,22 @@ active command work, and does not wait to reinterpret the exchange as EOF.
   equivalent leaf and consumer proofs before being added.
 - Checkpoint: `examples/v2-evaluation-only` is the second standalone minimal
   manifest. Its sole direct dependency is
-  `pwright-composition-chromium-evaluation`, whose normal 15-package Pwright
+  `playwright-rust-composition-chromium-evaluation`, whose normal 15-package Playwright Rust
   closure uses the extracted evaluation backend rather than the aggregate CDP
   backend. `scripts/check-v2-evaluation-dependencies.sh` allowlists that whole
   graph in CI, making absence of navigation, Handle, provider, installer,
   runtime, full composition, and v1 crates executable evidence.
 - Checkpoint: `examples/v2-dom-content-only` is the third standalone minimal
   manifest. Its sole direct dependency is
-  `pwright-composition-chromium-dom-content`; its exact normal 15-package
-  Pwright closure includes only the command-free shared CDP classifier plus
+  `playwright-rust-composition-chromium-dom-content`; its exact normal 15-package
+  Playwright Rust closure includes only the command-free shared CDP classifier plus
   DOM-content capability, codec, generated server, adapter, composition, and
   common CDP/core/wire foundations. Its CI allowlist rejects public evaluation,
   screenshot, navigation, aggregate backend/composition, clients, provider,
   installer, runtime, and every v1 crate.
 - Checkpoint: `examples/v2-content-only` is the fourth standalone minimal
   manifest. Its sole direct dependency is
-  `pwright-composition-chromium-content`; its exact normal 17-package Pwright
+  `playwright-rust-composition-chromium-content`; its exact normal 17-package Playwright Rust
   closure includes separately reusable screenshot value and attachment-codec
   leaves but excludes DOM content, public evaluation, Locator screenshot,
   navigation, aggregate backend/composition, clients, providers, installers,
@@ -12721,7 +12721,7 @@ active command work, and does not wait to reinterpret the exchange as EOF.
   minimal manifest. Its exact 23-package closure combines the independent
   capture backend with the command-free selector runtime and first-party
   selector-geometry plugin, selector/screenshot models, reusable codecs, and
-  the generated one-command server. CI still forbids `pwright-cap-locator`,
+  the generated one-command server. CI still forbids `playwright-rust-cap-locator`,
   the aggregate CDP backend/composition, clients, providers, installers,
   runtimes, Node.js, and browser acquisition.
 
@@ -12732,9 +12732,9 @@ active command work, and does not wait to reinterpret the exchange as EOF.
 - Question: How are system browsers, explicit executables, remote endpoints,
   and optional managed downloads discovered and owned?
 - Deliverable: provider contract and process-lease lifecycle.
-- Done when: Pwright can never terminate a browser it does not own, and browser
+- Done when: Playwright Rust can never terminate a browser it does not own, and browser
   download is impossible without explicit installation and invocation.
-- Checkpoint: `pwright-composition-chromium-launch` is an optional leaf above
+- Checkpoint: `playwright-rust-composition-chromium-launch` is an optional leaf above
   the attach-only root. It accepts only an explicit launch request, uses a
   production connector whose connection retains plan and ledger identity, and
   returns a composition paired with one consuming process lease. Binding
@@ -12743,7 +12743,7 @@ active command work, and does not wait to reinterpret the exchange as EOF.
   unpolled shutdown remains lazy, a polled shutdown reaps the exact launched
   process/profile, and the unrelated external Chrome remains live. The leaf has
   no installer/downloader dependency and leaves managed installation explicit.
-- Checkpoint: an additionally selected `pwright.browser_lifecycle` leaf reserves
+- Checkpoint: an additionally selected `playwright.rust.browser_lifecycle` leaf reserves
   its own codec/wire resources and augments only the owned launch handshake;
   the attach-only manifest remains unchanged. Missing handshake configuration
   fails before process spawn. Only a real accepted session that negotiated the
@@ -12790,7 +12790,7 @@ active command work, and does not wait to reinterpret the exchange as EOF.
   metrics schema.
 - Done when: object tables, event queues, bodies, logs, traces, screenshots,
   selectors, handles, and pending calls all have explicit bounds.
-- Checkpoint: `pwright.content` 1.0 now proves screenshot admission without an
+- Checkpoint: `playwright.rust.content` 1.0 now proves screenshot admission without an
   unbounded queue. The Chromium adapter reserves its configured maximum before
   base64 decode, rejects an oversized encoded response before allocation,
   shrinks the lease to exact retained bytes, and releases Page/global admission
@@ -12854,25 +12854,25 @@ active command work, and does not wait to reinterpret the exchange as EOF.
   full-page PNG dimensions, lease release, isolated Context cleanup, and
   preservation of the externally owned browser. JPEG/WebP and pixel-fidelity
   conformance remain open.
-- Checkpoint: the command-free `pwright-screenshot-model` now owns format,
+- Checkpoint: the command-free `playwright-rust-screenshot-model` now owns format,
   scale, clip, options, and retained screenshot bytes while
-  `pwright-cap-content` reexports those exact types. The first Locator
+  `playwright-rust-cap-content` reexports those exact types. The first Locator
   screenshot design is a separate capability and one cancellation-bounded
   server command, not an addition to Locator/Page capture or a droppable
   two-command temporary-handle sequence. The semantic selector model has now
-  moved into zero-dependency `pwright-selector-model`, and its recursive wire
-  closure is published as `pwright.selector` 1.0. The independent
-  `pwright.locator_screenshot` 1.0 schema, frozen baseline, portable contract,
+  moved into zero-dependency `playwright-rust-selector-model`, and its recursive wire
+  closure is published as `playwright.rust.selector` 1.0. The independent
+  `playwright.rust.locator_screenshot` 1.0 schema, frozen baseline, portable contract,
   bounded codec, typed client extension, and generated server binding are now
   implemented. The codec rejects Page-only clip/full-page options before
   encoding and retains decoded bytes under `ScreenshotBytes`. The command-free
-  `pwright-codec-screenshot` helper now gives Page and Locator capture the same
+  `playwright-rust-codec-screenshot` helper now gives Page and Locator capture the same
   attachment index/count/length/limit checks and exact result-copy accounting.
   The complete Chromium profile owns its full-Locator resolver's selector and
   Frame-route budgets plus capture, codec, and wire budgets without advertising
   ordinary Locator or Page screenshot. The independently installable capture
   leaf instead accepts a command-free geometry resolver plugin and excludes
-  `pwright-cap-locator`; applications combine that plugin's declared resources
+  `playwright-rust-cap-locator`; applications combine that plugin's declared resources
   with the capture profile. Backend and composition tests cover strictness,
   post-scroll geometry, future-drop cleanup, local routing, and negotiated
   binary transfer. A dedicated-Chrome proof verifies exact visible and
@@ -12885,7 +12885,7 @@ active command work, and does not wait to reinterpret the exchange as EOF.
   parent, and Page session ownership; a dedicated-Chrome same-process iframe
   proof verifies an exact 70x50 PNG and cleanup. Cross-site OOPIF live and
   decoded pixel fidelity remain open; see
-  `docs/knowledge/pwright-locator-screenshot.md`.
+  `docs/knowledge/playwright-rust-locator-screenshot.md`.
 
 ### DT-071: Versioning and compatibility
 
@@ -12908,11 +12908,11 @@ active command work, and does not wait to reinterpret the exchange as EOF.
 
 ### DT-072: Migration and release strategy
 
-- Question: How can v2 be validated without destabilizing current Pwright?
+- Question: How can v2 be validated without destabilizing current Playwright Rust?
 - Deliverable: isolation, comparison, adoption, rollback, and release plan.
 - Done when: implementation can begin with a bounded vertical slice, current
   users retain a supported path, and no legacy code must be rewritten in place.
-- Checkpoint: the new `pwright` umbrella is additive beside every v1 package and
+- Checkpoint: the new `playwright-rust` umbrella is additive beside every v1 package and
   changes no legacy default. All optional dependencies carry matching path and
   `0.1.0` version requirements, and Cargo successfully normalizes/lists the
   package. Registry upload verification correctly remains unavailable until
@@ -12936,7 +12936,7 @@ active command work, and does not wait to reinterpret the exchange as EOF.
   isolated consumer can select the smaller backend and composition. No v1
   default, API, or package was replaced.
 - Checkpoint: navigation now follows the same extraction rule. The dedicated
-  `pwright-backend-cdp-navigation` owns its two-feature descriptor, bounded
+  `playwright-rust-backend-cdp-navigation` owns its two-feature descriptor, bounded
   resource profile, event wait state, and injected-CDP services. The aggregate
   backend preserves its public constructors, cancellation, and native-access
   behavior through a thin compatibility wrapper, while minimal consumers never
@@ -12959,7 +12959,7 @@ active command work, and does not wait to reinterpret the exchange as EOF.
   call-site stack capture, and artifact loading. A thin Node-API crate converts
   values; a separately testable safe Rust host owns every browser operation.
 - Gate: no browser/CDP implementation may enter the JS package or N-API crate.
-- Checkpoint: `pwright-node-host`, `pwright-node-addon`, and `packages/pwright`
+- Checkpoint: `playwright-rust-node-host`, `playwright-rust-node-addon`, and `packages/playwright-rust`
   now implement the first attach/topology slice. A dependency check rejects
   N-API and legacy bridge/gRPC server dependencies in the safe host. The addon
   contains conversion/delegation only. Node/browser behavior is tested against
@@ -13000,7 +13000,7 @@ active command work, and does not wait to reinterpret the exchange as EOF.
   Leases survive Rust completion until JS conversion or environment reclamation;
   success and error outcomes follow the same rule. Environment teardown joins
   Rust execution and clears queued payloads without JS callback delivery.
-  `pwrightFfiMetrics()` reports this separately from per-host runtime and
+  `playwright-rustFfiMetrics()` reports this separately from per-host runtime and
   metadata counters. General event/binary budgets and RSS remain open.
 
 ### DT-076: Event delivery and backpressure
@@ -13425,7 +13425,7 @@ replacement, timeout/close, detached-node identity and physical release.
 This is not yet the Node method: pinned 1.58.2 resolves first, then
 serializes source/arguments and evaluates in main world, with timeout applying
 only to resolution. Production route integration, delayed conversion and paired evaluation
-gates remain in [the focused design](knowledge/pwright-locator-evaluation.md).
+gates remain in [the focused design](knowledge/playwright-rust-locator-evaluation.md).
 
 Rebuilt Node addon `db8f7337...b7ea84`, after the CDP primitive extension, retains
 32/32 Locator, 38/38 evaluation, 45/45 lifecycle, 25/26 actions and shared

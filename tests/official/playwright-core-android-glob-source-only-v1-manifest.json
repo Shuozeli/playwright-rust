@@ -10,7 +10,7 @@
       "runner": "packages/playwright/cli.js",
       "config": "tests/android/playwright.config.ts",
       "args": ["tests/page/interception.spec.ts:73"],
-      "sourceOnlyAdapter": "upstream-private-source-only-no-pwright-runtime",
+      "sourceOnlyAdapter": "upstream-private-source-only-no-playwright-rust-runtime",
       "requiresBrowser": false,
       "fixtureMode": "pinned-private-source-only-no-io",
       "sourceOnlyCase": "private-android-glob-v1",

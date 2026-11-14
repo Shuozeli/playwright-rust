@@ -1,5 +1,5 @@
-use pwright::client_evaluation::FrameEvaluationExt;
-use pwright::evaluation::EvaluateParams;
+use playwright_rust::client_evaluation::FrameEvaluationExt;
+use playwright_rust::evaluation::EvaluateParams;
 
 fn main() {
     let request = EvaluateParams::expression("document.title");

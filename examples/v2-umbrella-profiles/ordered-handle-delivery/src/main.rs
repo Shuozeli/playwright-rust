@@ -1,8 +1,8 @@
-use pwright::ordered_handle_delivery::HandleCreationCommand;
+use playwright_rust::ordered_handle_delivery::HandleCreationCommand;
 
 fn main() {
     println!(
         "{}",
-        <pwright::handle_evaluation::EvaluateHandle as HandleCreationCommand>::operation_name()
+        <playwright_rust::handle_evaluation::EvaluateHandle as HandleCreationCommand>::operation_name()
     );
 }

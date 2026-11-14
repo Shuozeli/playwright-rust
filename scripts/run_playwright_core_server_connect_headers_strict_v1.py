@@ -52,7 +52,7 @@ SUITE = "library-chromium-server-connect-headers-strict-v1"
 RESULT_PARENT = (
     ROOT / ".work/official-conformance/results/core-server-connect-headers-strict-v1"
 )
-SOURCE_PACKAGE = ROOT / "packages/pwright"
+SOURCE_PACKAGE = ROOT / "packages/playwright-rust"
 SCOPE = "official-derived-core-server-connect-headers-fixture-host-adapted-internal-v1"
 CLASSIFICATION = "official-derived-fixture-host-adapted-internal"
 FIXTURE_ADAPTATION = (
@@ -69,10 +69,10 @@ SOURCE_DEFAULT_BEFORE = (
     "            'foo': 'bar',"
 )
 SOURCE_EXTRA_AFTER = SOURCE_EXTRA_BEFORE.replace(
-    "localhost", "${process.env.PWRIGHT_OFFICIAL_SERVER_HOST}"
+    "localhost", "${process.env.PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST}"
 )
 SOURCE_DEFAULT_AFTER = SOURCE_DEFAULT_BEFORE.replace(
-    "localhost", "${process.env.PWRIGHT_OFFICIAL_SERVER_HOST}"
+    "localhost", "${process.env.PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST}"
 )
 EXPECTED_SPEC_IDS = {
     "ee6df4b3a2217bd356a7-9382fbb61fa92ab98ca5": (
@@ -332,22 +332,22 @@ def run(mode: str, result_parent: Path = RESULT_PARENT) -> dict[str, Any]:
         "PWTEST_MODE",
         "PWPAGE_IMPL",
         "PWTEST_USE_BIDI_EXPECTATIONS",
-        "PWRIGHT_CANDIDATE_CDP_ENDPOINT",
-        "PWRIGHT_ORACLE_CDP_ENDPOINT",
-        "PWRIGHT_CDP_ENDPOINT",
-        "PWRIGHT_CDP_WS_URL",
-        "PWRIGHT_NATIVE_PROFILE",
-        "PWRIGHT_NODE_CANDIDATE",
-        "PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM",
-        "PWRIGHT_OFFICIAL_SERVER_IP",
-        "PWRIGHT_OFFICIAL_SERVER_HOST",
+        "PLAYWRIGHT_RUST_CANDIDATE_CDP_ENDPOINT",
+        "PLAYWRIGHT_RUST_ORACLE_CDP_ENDPOINT",
+        "PLAYWRIGHT_RUST_CDP_ENDPOINT",
+        "PLAYWRIGHT_RUST_CDP_WS_URL",
+        "PLAYWRIGHT_RUST_NATIVE_PROFILE",
+        "PLAYWRIGHT_RUST_NODE_CANDIDATE",
+        "PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM",
+        "PLAYWRIGHT_RUST_OFFICIAL_SERVER_IP",
+        "PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST",
     )
     if any(os.environ.get(key) for key in forbidden):
         raise ValueError(
             "strict connect headers diagnostic rejects inherited runtime overrides"
         )
     check_source_and_manifest()
-    artifact = SOURCE_PACKAGE / "native" / PROFILE / "pwright.node"
+    artifact = SOURCE_PACKAGE / "native" / PROFILE / "playwright_rust.node"
     if mode == "candidate" and (
         not artifact.is_file() or sha256(artifact) != ARTIFACT_SHA256
     ):
@@ -384,8 +384,8 @@ def run(mode: str, result_parent: Path = RESULT_PARENT) -> dict[str, Any]:
     receipt.open("x").close()
     env = os.environ.copy()
     env["NODE_OPTIONS"] = f"--require={PRELOAD}"
-    env["PWRIGHT_CORE_SERVER_CONNECT_HEADERS_V1_MODE"] = mode
-    env["PWRIGHT_CORE_SERVER_CONNECT_HEADERS_V1_RECEIPT"] = str(receipt)
+    env["PLAYWRIGHT_RUST_CORE_SERVER_CONNECT_HEADERS_V1_MODE"] = mode
+    env["PLAYWRIGHT_RUST_CORE_SERVER_CONNECT_HEADERS_V1_RECEIPT"] = str(receipt)
     command = [
         "uv",
         "run",
@@ -439,7 +439,7 @@ def run(mode: str, result_parent: Path = RESULT_PARENT) -> dict[str, Any]:
     )
     if mode == "oracle":
         assert all(item["status"] == "expected" for item in selected)
-    assert ("[pwright-candidate]" in log_path.read_text()) == (mode == "candidate")
+    assert ("[playwright-rust-candidate]" in log_path.read_text()) == (mode == "candidate")
     records = [json.loads(line) for line in receipt.read_text().splitlines() if line]
     assert records and any(record.get("workerIndex") is not None for record in records)
     strict = {

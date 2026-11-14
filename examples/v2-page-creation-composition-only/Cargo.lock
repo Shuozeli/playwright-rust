@@ -577,73 +577,73 @@ dependencies = [
 ]
 
 [[package]]
-name = "pwright-backend-cdp-common"
+name = "playwright-rust-backend-cdp-common"
 version = "0.1.0"
 dependencies = [
- "pwright-cdp",
- "pwright-core",
+ "playwright-rust-cdp",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-backend-cdp-page-creation"
+name = "playwright-rust-backend-cdp-page-creation"
 version = "0.1.0"
 dependencies = [
- "pwright-backend-cdp-common",
- "pwright-backend-cdp-page-lifecycle",
- "pwright-cap-page-creation",
- "pwright-cdp",
- "pwright-core",
+ "playwright-rust-backend-cdp-common",
+ "playwright-rust-backend-cdp-page-lifecycle",
+ "playwright-rust-cap-page-creation",
+ "playwright-rust-cdp",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-backend-cdp-page-lifecycle"
+name = "playwright-rust-backend-cdp-page-lifecycle"
 version = "0.1.0"
 dependencies = [
- "pwright-backend-cdp-common",
- "pwright-cap-page-lifecycle",
- "pwright-cdp",
- "pwright-core",
+ "playwright-rust-backend-cdp-common",
+ "playwright-rust-cap-page-lifecycle",
+ "playwright-rust-cdp",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-backend-cdp-topology"
+name = "playwright-rust-backend-cdp-topology"
 version = "0.1.0"
 dependencies = [
- "pwright-browser-model",
- "pwright-cdp",
- "pwright-core",
+ "playwright-rust-browser-model",
+ "playwright-rust-cdp",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-browser-model"
+name = "playwright-rust-browser-model"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-cap-page-creation"
+name = "playwright-rust-cap-page-creation"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-cap-page-lifecycle"
+name = "playwright-rust-cap-page-lifecycle"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-cdp"
+name = "playwright-rust-cdp"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
  "dashmap",
  "futures-util",
- "pwright-core",
+ "playwright-rust-core",
  "serde",
  "serde_json",
  "thiserror",
@@ -655,133 +655,133 @@ dependencies = [
 ]
 
 [[package]]
-name = "pwright-codec-binary"
+name = "playwright-rust-codec-binary"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-codec-common"
+name = "playwright-rust-codec-common"
 version = "0.1.0"
 dependencies = [
- "pwright-codec-binary",
- "pwright-core",
+ "playwright-rust-codec-binary",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-codec-page-creation"
+name = "playwright-rust-codec-page-creation"
 version = "0.1.0"
 dependencies = [
- "pwright-cap-page-creation",
- "pwright-codec-binary",
- "pwright-codec-common",
- "pwright-core",
- "pwright-transport",
+ "playwright-rust-cap-page-creation",
+ "playwright-rust-codec-binary",
+ "playwright-rust-codec-common",
+ "playwright-rust-core",
+ "playwright-rust-transport",
 ]
 
 [[package]]
-name = "pwright-codec-page-lifecycle"
+name = "playwright-rust-codec-page-lifecycle"
 version = "0.1.0"
 dependencies = [
- "pwright-cap-page-lifecycle",
- "pwright-codec-binary",
- "pwright-codec-common",
- "pwright-core",
- "pwright-transport",
+ "playwright-rust-cap-page-lifecycle",
+ "playwright-rust-codec-binary",
+ "playwright-rust-codec-common",
+ "playwright-rust-core",
+ "playwright-rust-transport",
 ]
 
 [[package]]
-name = "pwright-composition-chromium-page-creation"
+name = "playwright-rust-composition-chromium-page-creation"
 version = "0.1.0"
 dependencies = [
- "pwright-backend-cdp-page-creation",
- "pwright-backend-cdp-topology",
- "pwright-browser-model",
- "pwright-cap-page-creation",
- "pwright-cdp",
- "pwright-codec-page-creation",
- "pwright-composition-chromium-page-lifecycle",
- "pwright-core",
- "pwright-runtime",
- "pwright-server-page-creation",
- "pwright-transport",
+ "playwright-rust-backend-cdp-page-creation",
+ "playwright-rust-backend-cdp-topology",
+ "playwright-rust-browser-model",
+ "playwright-rust-cap-page-creation",
+ "playwright-rust-cdp",
+ "playwright-rust-codec-page-creation",
+ "playwright-rust-composition-chromium-page-lifecycle",
+ "playwright-rust-core",
+ "playwright-rust-runtime",
+ "playwright-rust-server-page-creation",
+ "playwright-rust-transport",
 ]
 
 [[package]]
-name = "pwright-composition-chromium-page-lifecycle"
+name = "playwright-rust-composition-chromium-page-lifecycle"
 version = "0.1.0"
 dependencies = [
- "pwright-backend-cdp-page-lifecycle",
- "pwright-backend-cdp-topology",
- "pwright-cap-page-lifecycle",
- "pwright-cdp",
- "pwright-codec-page-lifecycle",
- "pwright-core",
- "pwright-runtime",
- "pwright-server-page-lifecycle",
- "pwright-transport",
+ "playwright-rust-backend-cdp-page-lifecycle",
+ "playwright-rust-backend-cdp-topology",
+ "playwright-rust-cap-page-lifecycle",
+ "playwright-rust-cdp",
+ "playwright-rust-codec-page-lifecycle",
+ "playwright-rust-core",
+ "playwright-rust-runtime",
+ "playwright-rust-server-page-lifecycle",
+ "playwright-rust-transport",
 ]
 
 [[package]]
-name = "pwright-connection-control"
+name = "playwright-rust-connection-control"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-core"
+name = "playwright-rust-core"
 version = "0.1.0"
 
 [[package]]
-name = "pwright-runtime"
+name = "playwright-rust-runtime"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-server-page-creation"
+name = "playwright-rust-server-page-creation"
 version = "0.1.0"
 dependencies = [
- "pwright-cap-page-creation",
- "pwright-codec-page-creation",
- "pwright-server-wire",
- "pwright-transport",
+ "playwright-rust-cap-page-creation",
+ "playwright-rust-codec-page-creation",
+ "playwright-rust-server-wire",
+ "playwright-rust-transport",
 ]
 
 [[package]]
-name = "pwright-server-page-lifecycle"
+name = "playwright-rust-server-page-lifecycle"
 version = "0.1.0"
 dependencies = [
- "pwright-cap-page-lifecycle",
- "pwright-codec-page-lifecycle",
- "pwright-server-wire",
- "pwright-transport",
+ "playwright-rust-cap-page-lifecycle",
+ "playwright-rust-codec-page-lifecycle",
+ "playwright-rust-server-wire",
+ "playwright-rust-transport",
 ]
 
 [[package]]
-name = "pwright-server-wire"
+name = "playwright-rust-server-wire"
 version = "0.1.0"
 dependencies = [
- "pwright-connection-control",
- "pwright-core",
- "pwright-transport",
+ "playwright-rust-connection-control",
+ "playwright-rust-core",
+ "playwright-rust-transport",
 ]
 
 [[package]]
-name = "pwright-transport"
+name = "playwright-rust-transport"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-v2-page-creation-composition-only-example"
+name = "playwright-rust-v2-page-creation-composition-only-example"
 version = "0.1.0"
 dependencies = [
- "pwright-composition-chromium-page-creation",
+ "playwright-rust-composition-chromium-page-creation",
 ]
 
 [[package]]

@@ -202,7 +202,7 @@ def verify_directory(
                 str(lane_dns["fixtureBind"]),
             )
             log = log_path.read_text()
-            assert ("[pwright-candidate]" in log) == (mode == "candidate")
+            assert ("[playwright-rust-candidate]" in log) == (mode == "candidate")
             suite_lanes[suite_id] = {
                 "result": str(result),
                 "resultSha256": sha256(result),

@@ -1,13 +1,12 @@
-<!-- agent-updated: 2026-11-14T02:35:39Z -->
+<!-- agent-updated: 2026-11-14T05:29:40Z -->
 
 # Open tasks
 
-- [ ] Verify a clean standalone `--locked` release check, focused Rust tests,
-  Node build/tests, Python wheel/tests, and relevant dependency proofs here.
-- [ ] Resolve the known `cargo fmt --all -- --check` failures in three own
-  source files; assess vendored WebSocket formatting separately without
-  obscuring upstream provenance.
-- [ ] Replace transitional `pwright-fake`/`pwright-js` test support with a
+- [x] Verify standalone locked release checks, the Rust workspace tests, Node
+  build/tests, Python wheel/tests, and relevant dependency proofs.
+- [x] Resolve Rust and vendored WebSocket formatting failures without removing
+  upstream provenance.
+- [ ] Replace transitional `playwright-rust-fake`/`playwright-rust-js` test support with a
   v2-only CDP fake and prove the production and test dependency graphs.
 - [ ] Review the copied scripts and create CI scoped to this repository;
   remove old-repo checks and path assumptions before enabling broad gates.
@@ -20,7 +19,9 @@
   representative workloads; enforce retained-object and queue budgets.
 - [ ] Audit copied detailed docs for source-era URLs and unresolved `.work/`
   links, preserving provenance without implying fresh verification.
-- [ ] Decide final Rust crate, Node package, and Python distribution names and
-  publishability. Current names are provisional compatibility names.
-- [ ] Design any new v2 CLI as a separate opt-in surface; the original v1 CLI
-  remains in `Shuozeli/pwright`.
+- [x] Rename the repository, Rust crates, Node package, Python distribution,
+  import namespace, environment variables, protocol namespace, documentation,
+  and generated artifacts consistently as Playwright Rust.
+- [ ] Decide publication policy for the Rust crates, Node package, and Python
+  distribution.
+- [ ] Design any future CLI as a separate opt-in surface.

@@ -1,0 +1,26 @@
+[package]
+name = "playwright-rust-composition-chromium-tokio"
+description = "Optional authenticated Tokio endpoint adapter for Playwright Rust Chromium composition"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+playwright-rust-composition-chromium = { workspace = true }
+playwright-rust-core = { workspace = true }
+playwright-rust-endpoint-tokio = { workspace = true }
+playwright-rust-provider-cdp = { workspace = true }
+playwright-rust-server-wire = { workspace = true }
+playwright-rust-transport = { workspace = true }
+playwright-rust-transport-tokio = { workspace = true }
+tokio = { workspace = true, features = ["io-util", "net"] }
+
+[dev-dependencies]
+playwright-rust-backend-cdp = { workspace = true }
+playwright-rust-cdp = { workspace = true }
+playwright-rust-codec-handshake = { workspace = true }
+playwright-rust-codec-navigation = { workspace = true }
+playwright-rust-runtime = { workspace = true }
+playwright-rust-transport-stream = { workspace = true }

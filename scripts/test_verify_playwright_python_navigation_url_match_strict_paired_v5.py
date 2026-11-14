@@ -287,14 +287,14 @@ def _report_metadata() -> dict[str, object]:
         "secureHttpFixture": False,
         "exitCode": 0,
         "pythonExecutable": str(verify.PYTHON_EXECUTABLE),
-        "pwrightPackage": str(verify.CANDIDATE_PACKAGE),
-        "pwrightArtifact": str(verify.CANDIDATE_ARTIFACT),
-        "pwrightArtifactSha256": verify.PWRIGHT_ARTIFACT_SHA256,
-        "pwrightPackageSha256": verify.PWRIGHT_PACKAGE_SHA256,
+        "playwright_rustPackage": str(verify.CANDIDATE_PACKAGE),
+        "playwright_rustArtifact": str(verify.CANDIDATE_ARTIFACT),
+        "playwright_rustArtifactSha256": verify.PLAYWRIGHT_RUST_ARTIFACT_SHA256,
+        "playwright_rustPackageSha256": verify.PLAYWRIGHT_RUST_PACKAGE_SHA256,
         "playwrightPackageSha256": verify.PLAYWRIGHT_PACKAGE_SHA256,
         "harnessInputs": [{"path": "/evidence/harness", "sha256": "2" * 64}],
         "toolingSources": [{"path": "/evidence/tool.py", "sha256": "3" * 64}],
-        "pwrightRuntimeLibraries": [
+        "playwright_rustRuntimeLibraries": [
             {"path": "/evidence/lib.dylib", "sha256": "4" * 64}
         ],
     }
@@ -329,9 +329,9 @@ def test_focused_report_metadata_is_accepted() -> None:
         ("isolateCases", True),
         ("resumeIsolated", True),
         ("exitCode", 1),
-        ("pwrightPackage", "/mutable/venv/pwright"),
-        ("pwrightArtifactSha256", "0" * 64),
-        ("pwrightPackageSha256", "0" * 64),
+        ("playwright_rustPackage", "/mutable/venv/playwright_rust"),
+        ("playwright_rustArtifactSha256", "0" * 64),
+        ("playwright_rustPackageSha256", "0" * 64),
         ("playwrightPackageSha256", "0" * 64),
     ),
 )
@@ -362,12 +362,12 @@ def _source_pins(provenance: dict[str, object]) -> dict[str, object]:
         "abi130Identity": str(verify.IDENTITY),
         "abi130IdentitySha256": verify.IDENTITY_SHA256,
         "installedNativeAbi": 130,
-        "pwrightArtifactSha256": verify.PWRIGHT_ARTIFACT_SHA256,
-        "pwrightPackageSha256": verify.PWRIGHT_PACKAGE_SHA256,
+        "playwright_rustArtifactSha256": verify.PLAYWRIGHT_RUST_ARTIFACT_SHA256,
+        "playwright_rustPackageSha256": verify.PLAYWRIGHT_RUST_PACKAGE_SHA256,
         "playwrightPackageSha256": provenance["playwrightPackageSha256"],
         "harnessInputs": provenance["harnessInputs"],
         "toolingSources": provenance["toolingSources"],
-        "pwrightRuntimeLibraries": provenance["pwrightRuntimeLibraries"],
+        "playwright_rustRuntimeLibraries": provenance["playwright_rustRuntimeLibraries"],
     }
 
 
@@ -395,12 +395,12 @@ def test_source_pins_bind_three_targets_and_abi130() -> None:
         ("abi130Identity", "/wrong/identity.json"),
         ("abi130IdentitySha256", "0" * 64),
         ("installedNativeAbi", 129),
-        ("pwrightPackageSha256", "0" * 64),
-        ("pwrightArtifactSha256", "0" * 64),
+        ("playwright_rustPackageSha256", "0" * 64),
+        ("playwright_rustArtifactSha256", "0" * 64),
         ("playwrightPackageSha256", "0" * 64),
         ("harnessInputs", []),
         ("toolingSources", []),
-        ("pwrightRuntimeLibraries", []),
+        ("playwright_rustRuntimeLibraries", []),
     ),
 )
 def test_source_pin_mutation_is_rejected(field: str, value: object) -> None:
@@ -426,7 +426,7 @@ def test_extra_source_pin_claim_is_rejected() -> None:
 def _identity() -> dict[str, object]:
     return {
         "schema": 1,
-        "kind": "pwright-python-navigation-url-match-abi130-v2-source-bound-identity",
+        "kind": "playwright-rust-python-navigation-url-match-abi130-v2-source-bound-identity",
         "wheelPath": str(verify.WHEEL),
         "wheelSha256": verify.WHEEL_SHA256,
         "installedIdentity": {
@@ -435,8 +435,8 @@ def _identity() -> dict[str, object]:
             "packageVersion": "0.1.0",
             "selectedFeatures": ["frame-navigation", "navigation-url-match"],
         },
-        "nativeArtifactSha256": verify.PWRIGHT_ARTIFACT_SHA256,
-        "installedPackageSha256": verify.PWRIGHT_PACKAGE_SHA256,
+        "nativeArtifactSha256": verify.PLAYWRIGHT_RUST_ARTIFACT_SHA256,
+        "installedPackageSha256": verify.PLAYWRIGHT_RUST_PACKAGE_SHA256,
         "officialRun": {
             "resultPath": str(verify.RESULT),
             "resultSha256": verify.RESULT_SHA256,
@@ -610,7 +610,7 @@ def test_sealed_source_pin_mutation_is_rejected(tmp_path: Path, mutation: str) -
 def _wheel_fixture(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> dict[str, object]:
-    package = tmp_path / "installed" / "pwright"
+    package = tmp_path / "installed" / "playwright_rust"
     package.mkdir(parents=True)
     members = {
         "_native.abi3.so": b"frozen native artifact",
@@ -620,7 +620,7 @@ def _wheel_fixture(
     wheel = tmp_path / "candidate.whl"
     with zipfile.ZipFile(wheel, "w") as archive:
         for name, raw in members.items():
-            archive.writestr(f"pwright/{name}", raw)
+            archive.writestr(f"playwright_rust/{name}", raw)
             (package / name).write_bytes(raw)
     digest = hashlib.sha256()
     for name, raw in sorted(members.items()):
@@ -633,15 +633,15 @@ def _wheel_fixture(
     monkeypatch.setattr(
         verify, "WHEEL_SHA256", hashlib.sha256(wheel.read_bytes()).hexdigest()
     )
-    monkeypatch.setattr(verify, "PWRIGHT_PACKAGE_SHA256", digest.hexdigest())
+    monkeypatch.setattr(verify, "PLAYWRIGHT_RUST_PACKAGE_SHA256", digest.hexdigest())
     monkeypatch.setattr(
         verify,
-        "PWRIGHT_ARTIFACT_SHA256",
+        "PLAYWRIGHT_RUST_ARTIFACT_SHA256",
         hashlib.sha256(members["_native.abi3.so"]).hexdigest(),
     )
     return {
-        "pwrightPackage": str(package),
-        "pwrightArtifactSha256": hashlib.sha256(members["_native.abi3.so"]).hexdigest(),
+        "playwright_rustPackage": str(package),
+        "playwright_rustArtifactSha256": hashlib.sha256(members["_native.abi3.so"]).hexdigest(),
     }
 
 
@@ -667,16 +667,16 @@ def test_wheel_or_package_mutation_is_rejected(
     # Arrange
     provenance = _wheel_fixture(tmp_path, monkeypatch)
     if mutation == "installed-facade":
-        (Path(str(provenance["pwrightPackage"])) / "async_api.py").write_bytes(
+        (Path(str(provenance["playwright_rustPackage"])) / "async_api.py").write_bytes(
             b"changed\n"
         )
     elif mutation == "reported-native":
-        provenance["pwrightArtifactSha256"] = "0" * 64
+        provenance["playwright_rustArtifactSha256"] = "0" * 64
     elif mutation == "wheel-byte":
         with zipfile.ZipFile(verify.WHEEL, "a") as archive:
             archive.writestr("tampered.txt", b"changed")
     elif mutation == "package-pin":
-        monkeypatch.setattr(verify, "PWRIGHT_PACKAGE_SHA256", "0" * 64)
+        monkeypatch.setattr(verify, "PLAYWRIGHT_RUST_PACKAGE_SHA256", "0" * 64)
 
     # Act / Assert
     with pytest.raises(verify.UrlMatchValidationError):

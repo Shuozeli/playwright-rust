@@ -116,18 +116,18 @@ def run(mode: str, result: Path) -> dict[str, Any]:
         "PWTEST_MODE",
         "PWPAGE_IMPL",
         "PWTEST_USE_BIDI_EXPECTATIONS",
-        "PWRIGHT_CANDIDATE_CDP_ENDPOINT",
-        "PWRIGHT_ORACLE_CDP_ENDPOINT",
-        "PWRIGHT_NATIVE_PROFILE",
-        "PWRIGHT_NODE_CANDIDATE",
-        "PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM",
-        "PWRIGHT_OFFICIAL_SERVER_HOST",
-        "PWRIGHT_CORE_CDP_ERROR_SLICE_GUARD_RECEIPT",
+        "PLAYWRIGHT_RUST_CANDIDATE_CDP_ENDPOINT",
+        "PLAYWRIGHT_RUST_ORACLE_CDP_ENDPOINT",
+        "PLAYWRIGHT_RUST_NATIVE_PROFILE",
+        "PLAYWRIGHT_RUST_NODE_CANDIDATE",
+        "PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM",
+        "PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST",
+        "PLAYWRIGHT_RUST_CORE_CDP_ERROR_SLICE_GUARD_RECEIPT",
     )
     if any(os.environ.get(key) for key in forbidden):
         raise ValueError("strict CDP error slice rejects inherited runtime overrides")
     base.check_manifest()
-    artifact = ROOT / "packages/pwright/native" / base.PROFILE / "pwright.node"
+    artifact = ROOT / "packages/playwright-rust/native" / base.PROFILE / "playwright_rust.node"
     if mode == "candidate" and (
         not artifact.is_file() or base.sha256(artifact) != base.ARTIFACT_SHA256
     ):
@@ -159,7 +159,7 @@ def run(mode: str, result: Path) -> dict[str, Any]:
     }
     env = os.environ.copy()
     env["NODE_OPTIONS"] = f"--require={base.PRELOAD}"
-    env["PWRIGHT_CORE_CDP_ERROR_SLICE_GUARD_RECEIPT"] = str(receipt)
+    env["PLAYWRIGHT_RUST_CORE_CDP_ERROR_SLICE_GUARD_RECEIPT"] = str(receipt)
     command = [
         "uv",
         "run",
@@ -197,7 +197,7 @@ def run(mode: str, result: Path) -> dict[str, Any]:
     assert completed.returncode == (
         0 if all(item["status"] == "expected" for item in selected) else 1
     )
-    assert "[pwright-candidate]" in log if mode == "candidate" else "[pwright-candidate]" not in log
+    assert "[playwright-rust-candidate]" in log if mode == "candidate" else "[playwright-rust-candidate]" not in log
     provenance_data = json.loads(provenance.read_text())
     checked_receipts(receipt, selected, provenance_data["fixtureHost"])
     strict = {

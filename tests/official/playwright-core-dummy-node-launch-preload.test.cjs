@@ -19,7 +19,7 @@ const preload = fs.readFileSync(path.join(__dirname, 'playwright-core-dummy-node
 const sha256 = file => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 
 function fixture(t, overrides = {}, fakeFs = fs) {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'pwright-dummy-guard-'));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'playwright-rust-dummy-guard-'));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   const receipt = path.join(directory, 'receipt.jsonl');
   fs.writeFileSync(receipt, '');
@@ -40,11 +40,11 @@ function fixture(t, overrides = {}, fakeFs = fs) {
   };
   const process = {
     env: {
-      PWRIGHT_DUMMY_LAUNCH_MODE: 'candidate',
-      PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM: upstream,
-      PWRIGHT_DUMMY_LAUNCH_MANIFEST: manifest,
-      PWRIGHT_DUMMY_LAUNCH_MANIFEST_SHA256: sha256(manifest),
-      PWRIGHT_DUMMY_LAUNCH_RECEIPT: receipt,
+      PLAYWRIGHT_RUST_DUMMY_LAUNCH_MODE: 'candidate',
+      PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM: upstream,
+      PLAYWRIGHT_RUST_DUMMY_LAUNCH_MANIFEST: manifest,
+      PLAYWRIGHT_RUST_DUMMY_LAUNCH_MANIFEST_SHA256: sha256(manifest),
+      PLAYWRIGHT_RUST_DUMMY_LAUNCH_RECEIPT: receipt,
       PWTEST_MODE: 'default',
       ...overrides,
     },
@@ -64,10 +64,10 @@ function fixture(t, overrides = {}, fakeFs = fs) {
 
 test('guard rejects inherited CDP before installing a launch hook', t => {
   // Arrange
-  const guarded = fixture(t, { PWRIGHT_CANDIDATE_CDP_ENDPOINT: 'http://127.0.0.1:9222' });
+  const guarded = fixture(t, { PLAYWRIGHT_RUST_CANDIDATE_CDP_ENDPOINT: 'http://127.0.0.1:9222' });
 
   // Act and Assert
-  assert.throws(() => guarded.install(), /forbids PWRIGHT_CANDIDATE_CDP_ENDPOINT/);
+  assert.throws(() => guarded.install(), /forbids PLAYWRIGHT_RUST_CANDIDATE_CDP_ENDPOINT/);
   assert.equal(fs.readFileSync(guarded.receipt, 'utf8'), '');
 });
 

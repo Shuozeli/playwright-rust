@@ -186,18 +186,18 @@ def run(mode: str, result: Path) -> dict[str, Any]:
         "PWTEST_MODE",
         "PWPAGE_IMPL",
         "PWTEST_USE_BIDI_EXPECTATIONS",
-        "PWRIGHT_CANDIDATE_CDP_ENDPOINT",
-        "PWRIGHT_ORACLE_CDP_ENDPOINT",
-        "PWRIGHT_NATIVE_PROFILE",
-        "PWRIGHT_NODE_CANDIDATE",
-        "PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM",
-        "PWRIGHT_OFFICIAL_SERVER_HOST",
-        "PWRIGHT_CORE_CDP_ERROR_SLICE_GUARD_RECEIPT",
+        "PLAYWRIGHT_RUST_CANDIDATE_CDP_ENDPOINT",
+        "PLAYWRIGHT_RUST_ORACLE_CDP_ENDPOINT",
+        "PLAYWRIGHT_RUST_NATIVE_PROFILE",
+        "PLAYWRIGHT_RUST_NODE_CANDIDATE",
+        "PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM",
+        "PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST",
+        "PLAYWRIGHT_RUST_CORE_CDP_ERROR_SLICE_GUARD_RECEIPT",
     )
     if any(os.environ.get(key) for key in forbidden):
         raise ValueError("strict CDP error slice rejects inherited runtime overrides")
     check_manifest()
-    artifact = ROOT / "packages/pwright/native" / PROFILE / "pwright.node"
+    artifact = ROOT / "packages/playwright-rust/native" / PROFILE / "playwright_rust.node"
     if mode == "candidate" and (not artifact.is_file() or sha256(artifact) != ARTIFACT_SHA256):
         raise ValueError("pinned candidate UA-profile artifact is missing or changed")
     result = result.absolute()
@@ -221,7 +221,7 @@ def run(mode: str, result: Path) -> dict[str, Any]:
     }
     env = os.environ.copy()
     env["NODE_OPTIONS"] = f"--require={PRELOAD}"
-    env["PWRIGHT_CORE_CDP_ERROR_SLICE_GUARD_RECEIPT"] = str(receipt)
+    env["PLAYWRIGHT_RUST_CORE_CDP_ERROR_SLICE_GUARD_RECEIPT"] = str(receipt)
     command = [
         "uv",
         "run",
@@ -262,9 +262,9 @@ def run(mode: str, result: Path) -> dict[str, Any]:
     records = [json.loads(line) for line in receipt.read_text().splitlines() if line]
     assert records and any(record.get("workerIndex") == "0" for record in records)
     if mode == "candidate":
-        assert "[pwright-candidate]" in log
+        assert "[playwright-rust-candidate]" in log
     else:
-        assert "[pwright-candidate]" not in log
+        assert "[playwright-rust-candidate]" not in log
     strict = {
         "schema": 2,
         "scope": SCOPE,

@@ -4,19 +4,19 @@ const fs = require('node:fs');
 const net = require('node:net');
 const path = require('node:path');
 
-const bind = process.env.PWRIGHT_OFFICIAL_SERVER_IP;
-const host = process.env.PWRIGHT_OFFICIAL_SERVER_HOST;
-const upstream = process.env.PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM;
-const crossOriginForwardEnabled = process.env.PWRIGHT_OFFICIAL_CROSS_ORIGIN_FORWARD === '1';
-if (!bind) throw new Error('PWRIGHT_OFFICIAL_SERVER_IP is required');
-if (!host) throw new Error('PWRIGHT_OFFICIAL_SERVER_HOST is required');
-if (!upstream) throw new Error('PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM is required');
-if (process.env.PWRIGHT_OFFICIAL_CROSS_ORIGIN_FORWARD &&
-    !['0', '1'].includes(process.env.PWRIGHT_OFFICIAL_CROSS_ORIGIN_FORWARD))
-  throw new Error('PWRIGHT_OFFICIAL_CROSS_ORIGIN_FORWARD must be 0 or 1');
+const bind = process.env.PLAYWRIGHT_RUST_OFFICIAL_SERVER_IP;
+const host = process.env.PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST;
+const upstream = process.env.PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM;
+const crossOriginForwardEnabled = process.env.PLAYWRIGHT_RUST_OFFICIAL_CROSS_ORIGIN_FORWARD === '1';
+if (!bind) throw new Error('PLAYWRIGHT_RUST_OFFICIAL_SERVER_IP is required');
+if (!host) throw new Error('PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST is required');
+if (!upstream) throw new Error('PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM is required');
+if (process.env.PLAYWRIGHT_RUST_OFFICIAL_CROSS_ORIGIN_FORWARD &&
+    !['0', '1'].includes(process.env.PLAYWRIGHT_RUST_OFFICIAL_CROSS_ORIGIN_FORWARD))
+  throw new Error('PLAYWRIGHT_RUST_OFFICIAL_CROSS_ORIGIN_FORWARD must be 0 or 1');
 
 const originalListen = net.Server.prototype.listen;
-net.Server.prototype.listen = function pwrightOfficialTailscaleListen(...args) {
+net.Server.prototype.listen = function playwrightRustOfficialTailscaleListen(...args) {
   if (typeof args[0] === 'number') {
     if (typeof args[1] === 'string') args[1] = bind;
     else args.splice(1, 0, bind);
@@ -53,7 +53,7 @@ function sourcePath(value) {
 
 function rewriteServerFixtures(source, enableCrossOriginForward) {
   const loopbackBefore = "loopback: [undefined, { scope: 'worker', option: true }],";
-  const loopbackAfter = "loopback: [process.env.PWRIGHT_OFFICIAL_SERVER_HOST, { scope: 'worker', option: true }],";
+  const loopbackAfter = "loopback: [process.env.PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST, { scope: 'worker', option: true }],";
   if (!source.includes(loopbackBefore)) throw new Error('official server fixture loopback source drifted');
   source = source.replace(loopbackBefore, loopbackAfter);
   if (!enableCrossOriginForward) return source;
@@ -80,7 +80,7 @@ function rewriteServerFixtures(source, enableCrossOriginForward) {
     try {
       crossOriginForward = await require(${JSON.stringify(__filename)}).startCrossOriginForward(server.PORT);
       Object.defineProperty(server, 'CROSS_PROCESS_PREFIX', {
-        value: \`http://\${process.env.PWRIGHT_OFFICIAL_SERVER_HOST!}:\${crossOriginForward.port}\`,
+        value: \`http://\${process.env.PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST!}:\${crossOriginForward.port}\`,
       });
 
       if (new URL(server.CROSS_PROCESS_PREFIX).origin === new URL(server.PREFIX).origin)
@@ -167,19 +167,19 @@ function rewrite(pathname, value) {
     source = rewriteServerFixtures(source, crossOriginForwardEnabled);
   } else if (pathname === clientCertificates) {
     const before = "const host = options?.useFakeLocalhost ? 'local.playwright' : '127.0.0.1';";
-    const after = 'const host = process.env.PWRIGHT_OFFICIAL_SERVER_HOST!;';
+    const after = 'const host = process.env.PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST!;';
     const proxyBefore = '`localhost:${proxyServer.PORT}`';
-    const proxyAfter = '`${process.env.PWRIGHT_OFFICIAL_SERVER_HOST!}:${proxyServer.PORT}`';
+    const proxyAfter = '`${process.env.PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST!}:${proxyServer.PORT}`';
     if (!source.includes(before) || !source.includes(proxyBefore))
       throw new Error('official client-certificate server source drifted');
     source = source.replace(before, after).replaceAll(proxyBefore, proxyAfter);
   } else if (pathname === fetchProxy) {
     const httpBefore = '`localhost:${proxyServer.PORT}`';
-    const httpAfter = '`${process.env.PWRIGHT_OFFICIAL_SERVER_HOST!}:${proxyServer.PORT}`';
+    const httpAfter = '`${process.env.PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST!}:${proxyServer.PORT}`';
     const httpsBefore = '`https://localhost:${port}`';
-    const httpsAfter = '`https://${process.env.PWRIGHT_OFFICIAL_SERVER_HOST!}:${port}`';
+    const httpsAfter = '`https://${process.env.PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST!}:${port}`';
     const socksBefore = '`socks5://localhost:${socksPort}`';
-    const socksAfter = '`socks5://${process.env.PWRIGHT_OFFICIAL_SERVER_HOST!}:${socksPort}`';
+    const socksAfter = '`socks5://${process.env.PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST!}:${socksPort}`';
     if (!source.includes(httpBefore) || !source.includes(httpsBefore) || !source.includes(socksBefore))
       throw new Error('official proxy server source drifted');
     source = source
@@ -188,13 +188,13 @@ function rewrite(pathname, value) {
       .replace(socksBefore, socksAfter);
   } else {
     const forwardHost = '`127.0.0.1:${port}`';
-    const tailscaleHost = '`${process.env.PWRIGHT_OFFICIAL_SERVER_HOST!}:${port}`';
+    const tailscaleHost = '`${process.env.PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST!}:${port}`';
     const allowedSocksHosts = "['127.0.0.1', 'fake-localhost-127-0-0-1.nip.io', 'localhost']";
-    const tailscaleSocksHosts = "['127.0.0.1', 'fake-localhost-127-0-0-1.nip.io', 'localhost', process.env.PWRIGHT_OFFICIAL_SERVER_HOST!]";
+    const tailscaleSocksHosts = "['127.0.0.1', 'fake-localhost-127-0-0-1.nip.io', 'localhost', process.env.PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST!]";
     const socksTarget = "target.connect(forwardPort, '127.0.0.1');";
-    const tailscaleSocksTarget = 'target.connect(forwardPort, process.env.PWRIGHT_OFFICIAL_SERVER_HOST!);';
+    const tailscaleSocksTarget = 'target.connect(forwardPort, process.env.PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST!);';
     const socksAddress = '`socks5://127.0.0.1:${port}`';
-    const tailscaleSocksAddress = '`socks5://${process.env.PWRIGHT_OFFICIAL_SERVER_HOST!}:${port}`';
+    const tailscaleSocksAddress = '`socks5://${process.env.PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST!}:${port}`';
     if (!source.includes(forwardHost) || !source.includes(allowedSocksHosts) ||
         !source.includes(socksTarget) || !source.includes(socksAddress))
       throw new Error('official proxy forwarding source drifted');
@@ -208,12 +208,12 @@ function rewrite(pathname, value) {
 }
 
 const originalReadFileSync = fs.readFileSync;
-fs.readFileSync = function pwrightOfficialReadFileSync(file, ...args) {
+fs.readFileSync = function playwrightRustOfficialReadFileSync(file, ...args) {
   return rewrite(sourcePath(file), originalReadFileSync.call(this, file, ...args));
 };
 
 const originalReadFile = fs.readFile;
-fs.readFile = function pwrightOfficialReadFile(file, ...args) {
+fs.readFile = function playwrightRustOfficialReadFile(file, ...args) {
   const callback = args.at(-1);
   if (typeof callback !== 'function') return originalReadFile.call(this, file, ...args);
   args[args.length - 1] = (error, value) => {
@@ -224,7 +224,7 @@ fs.readFile = function pwrightOfficialReadFile(file, ...args) {
 };
 
 const originalPromiseReadFile = fs.promises.readFile.bind(fs.promises);
-fs.promises.readFile = async function pwrightOfficialPromiseReadFile(file, ...args) {
+fs.promises.readFile = async function playwrightRustOfficialPromiseReadFile(file, ...args) {
   return rewrite(sourcePath(file), await originalPromiseReadFile(file, ...args));
 };
 

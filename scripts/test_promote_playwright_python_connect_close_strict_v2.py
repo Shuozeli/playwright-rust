@@ -241,7 +241,7 @@ class SyntheticSidecarTests(unittest.TestCase):
                 "pythonExecutable": f"/synthetic/{mode}/python",
                 "playwrightPackage": f"/synthetic/{mode}/playwright",
                 "driverNode": f"/synthetic/{mode}/node",
-                "pwrightPackageSha256": "3" * 64 if mode == "candidate" else None,
+                "playwright_rustPackageSha256": "3" * 64 if mode == "candidate" else None,
                 "nativeSha256": "4" * 64 if mode == "candidate" else None,
                 "runtimeLibraries": {"synthetic.dylib": "5" * 64} if mode == "candidate" else {},
             }

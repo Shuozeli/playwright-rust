@@ -66,7 +66,7 @@ def _fixture(
     (candidate / "src").mkdir(parents=True)
     (candidate / "package.json").write_text('{"main":"src/index.cjs"}\n')
     (candidate / "src/index.cjs").write_text("module.exports = {};\n")
-    artifact = candidate / "native/official/pwright.node"
+    artifact = candidate / "native/official/playwright_rust.node"
     artifact.parent.mkdir(parents=True)
     artifact.write_bytes(b"native-test-artifact")
 
@@ -478,7 +478,7 @@ def _source_only_fixture(
         (candidate / "src").mkdir(parents=True)
         (candidate / "package.json").write_text('{"main":"src/index.cjs"}\n')
         (candidate / "src/index.cjs").write_text("module.exports = {};\n")
-        artifact = candidate / "native/official/pwright.node"
+        artifact = candidate / "native/official/playwright_rust.node"
         artifact.parent.mkdir(parents=True)
         artifact.write_bytes(b"native-test-artifact")
         harness_inputs.append(

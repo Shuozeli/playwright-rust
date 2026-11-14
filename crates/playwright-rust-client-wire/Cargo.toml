@@ -1,0 +1,17 @@
+[package]
+name = "playwright-rust-client-wire"
+description = "Executor-neutral encoded channel adapter for playwright-rust-client"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+playwright-rust-connection-control = { workspace = true }
+playwright-rust-core = { workspace = true }
+playwright-rust-transport = { workspace = true }
+
+[dev-dependencies]
+playwright-rust-client = { workspace = true }
+playwright-rust-codec-handshake = { workspace = true }

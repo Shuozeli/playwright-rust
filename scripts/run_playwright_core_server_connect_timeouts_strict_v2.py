@@ -22,7 +22,7 @@ ARTIFACT_ROOT = (
     ROOT
     / ".work/official-conformance/artifacts/playwright-server-connect-session-timeout-map-v2-20261012"
 )
-ARTIFACT = ARTIFACT_ROOT / "pwright.node"
+ARTIFACT = ARTIFACT_ROOT / "playwright_rust.node"
 ARTIFACT_SHA256 = "a2e668d626749e6799f4888ee089bf318925c6929d5bc032adc4e3577f85448c"
 SOURCE_PACKAGE = ARTIFACT_ROOT / "candidate-package"
 RESULT_PARENT = (
@@ -53,7 +53,7 @@ def stage_source_package() -> None:
     """Publish one source snapshot without touching the prior profile addon."""
     if SOURCE_PACKAGE.exists() or SOURCE_PACKAGE.is_symlink():
         raise ValueError("isolated source-package destination already exists")
-    source = ROOT / "packages/pwright"
+    source = ROOT / "packages/playwright-rust"
     before = _candidate_source_sha256(source)
     ARTIFACT_ROOT.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(
@@ -63,7 +63,7 @@ def stage_source_package() -> None:
         staged.mkdir()
         shutil.copyfile(source / "package.json", staged / "package.json")
         shutil.copytree(source / "src", staged / "src")
-        addon_destination = staged / "native" / v1.PROFILE / "pwright.node"
+        addon_destination = staged / "native" / v1.PROFILE / "playwright_rust.node"
         addon_destination.parent.mkdir(parents=True)
         shutil.copyfile(ARTIFACT, addon_destination)
         after = _candidate_source_sha256(source)

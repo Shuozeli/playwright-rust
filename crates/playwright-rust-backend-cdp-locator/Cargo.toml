@@ -1,0 +1,34 @@
+[package]
+name = "playwright-rust-backend-cdp-locator"
+description = "Complete Chromium CDP Locator capability backend for Playwright Rust"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[features]
+default = []
+touchscreen-input = ["dep:playwright-rust-cap-touchscreen"]
+retained-element-click = []
+fill-navigation-commit = ["playwright-rust-cdp/fill-navigation-commit"]
+select-option-navigation-commit = ["playwright-rust-cdp/runtime-binding"]
+select-option-timeout-progress = ["playwright-rust-cap-locator/select-option-timeout-progress"]
+
+[dependencies]
+playwright-rust-backend-cdp-common = { workspace = true }
+playwright-rust-backend-cdp-input = { workspace = true }
+playwright-rust-backend-cdp-selector-runtime = { workspace = true }
+playwright-rust-cap-locator = { workspace = true }
+playwright-rust-cap-touchscreen = { workspace = true, optional = true }
+playwright-rust-cdp = { workspace = true }
+playwright-rust-core = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["sync", "time"] }
+
+[dev-dependencies]
+playwright-rust-browser-model = { workspace = true }
+playwright-rust-fake = { workspace = true }
+playwright-rust-runtime = { workspace = true }
+playwright-rust-runtime-tokio = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt", "test-util"] }

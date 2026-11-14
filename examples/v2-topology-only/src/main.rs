@@ -1,4 +1,4 @@
-use pwright_backend_cdp_topology::CdpTopologyLimits;
+use playwright_rust_backend_cdp_topology::CdpTopologyLimits;
 
 fn main() {
     let limits = CdpTopologyLimits::new(64, 8, 16, 64, 64, 256);

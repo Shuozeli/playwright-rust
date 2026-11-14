@@ -1,4 +1,4 @@
-use pwright::client_page_lifecycle::{PageCloseExt, PageRunBeforeUnloadExt};
+use playwright_rust::client_page_lifecycle::{PageCloseExt, PageRunBeforeUnloadExt};
 
 fn main() {
     let _ = (

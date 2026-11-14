@@ -1,0 +1,20 @@
+[package]
+name = "playwright-rust-codec-locator-screenshot"
+description = "Bounded binary codec for the optional Playwright Rust Locator screenshot capability"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+playwright-rust-cap-locator-screenshot = { workspace = true }
+playwright-rust-codec-binary = { workspace = true }
+playwright-rust-codec-common = { workspace = true }
+playwright-rust-codec-selector = { workspace = true }
+playwright-rust-codec-screenshot = { workspace = true }
+playwright-rust-core = { workspace = true }
+playwright-rust-transport = { workspace = true }
+
+[dev-dependencies]
+playwright-rust-selector-model = { workspace = true }

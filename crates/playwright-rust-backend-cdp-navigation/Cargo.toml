@@ -1,0 +1,35 @@
+[package]
+name = "playwright-rust-backend-cdp-navigation"
+description = "Isolated bounded Chromium CDP adapter for Playwright Rust navigation"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[features]
+default = []
+frame-lifecycle = []
+history-navigation = ["dep:playwright-rust-cap-history-navigation"]
+
+[[example]]
+name = "frame_lifecycle_trace"
+required-features = ["frame-lifecycle"]
+
+[[example]]
+name = "frame_navigation_trace"
+required-features = ["frame-lifecycle"]
+
+[dependencies]
+playwright-rust-backend-cdp-common = { workspace = true }
+playwright-rust-browser-backend = { workspace = true }
+playwright-rust-cap-navigation = { workspace = true }
+playwright-rust-cap-history-navigation = { workspace = true, optional = true }
+playwright-rust-cdp = { workspace = true }
+playwright-rust-core = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["sync", "time"] }
+
+[dev-dependencies]
+playwright-rust-fake = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt", "test-util"] }

@@ -1,0 +1,18 @@
+[package]
+name = "playwright-rust-server-handle-lifecycle"
+description = "Generated opt-in typed server handlers for handle lifecycle"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+playwright-rust-cap-handle-lifecycle = { workspace = true }
+playwright-rust-codec-handle-lifecycle = { workspace = true }
+playwright-rust-server-wire = { workspace = true }
+playwright-rust-transport = { workspace = true }
+
+[dev-dependencies]
+playwright-rust-browser-model = { workspace = true }
+playwright-rust-core = { workspace = true }

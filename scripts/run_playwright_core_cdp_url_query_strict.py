@@ -110,13 +110,13 @@ def main() -> None:
         "PWTEST_MODE",
         "PWPAGE_IMPL",
         "PWTEST_USE_BIDI_EXPECTATIONS",
-        "PWRIGHT_CANDIDATE_CDP_ENDPOINT",
-        "PWRIGHT_ORACLE_CDP_ENDPOINT",
+        "PLAYWRIGHT_RUST_CANDIDATE_CDP_ENDPOINT",
+        "PLAYWRIGHT_RUST_ORACLE_CDP_ENDPOINT",
     )
     if any(os.environ.get(key) for key in forbidden):
         parser.error("strict CDP URL run rejects inherited runtime overrides")
     check_manifest()
-    artifact = ROOT / "packages/pwright/native" / PROFILE / "pwright.node"
+    artifact = ROOT / "packages/playwright-rust/native" / PROFILE / "playwright_rust.node"
     if args.mode == "candidate":
         assert sha256(artifact) == ARTIFACT_SHA256
     result = args.result.resolve()
@@ -138,7 +138,7 @@ def main() -> None:
     }
     env = os.environ.copy()
     env["NODE_OPTIONS"] = f"--require={PRELOAD}"
-    env["PWRIGHT_CORE_CDP_URL_GUARD_RECEIPT"] = str(receipt)
+    env["PLAYWRIGHT_RUST_CORE_CDP_URL_GUARD_RECEIPT"] = str(receipt)
     command = [
         "uv",
         "run",
@@ -180,7 +180,7 @@ def main() -> None:
         for item in records
     )
     if args.mode == "candidate":
-        assert "[pwright-candidate]" in log
+        assert "[playwright-rust-candidate]" in log
     strict = {
         "schema": 1,
         "scope": "unchanged-upstream-assertions-browser-free-fixture-host-adaptation",

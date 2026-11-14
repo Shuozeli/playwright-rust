@@ -75,8 +75,8 @@ TOOL_SHA256 = {
         "95a49c1d391a55b792828ecd9bbae38a41b741c94d34e4209502c69dcfbc4526"
     ),
     (
-        "packages/pwright-python/tests/official/upstream_skip_guard_strict_v1/"
-        "pwright_official_upstream_skip_guard_v1.py"
+        "packages/playwright-rust-python/tests/official/upstream_skip_guard_strict_v1/"
+        "playwright_rust_official_upstream_skip_guard_v1.py"
     ): "9e4b8cbddd267db02bba68b3c139abf2422c55b062deef284f98d103f63ee448",
 }
 SIDECARS = {key: RESULT_DIR / f"{key[0]}-{key[1]:03d}.provenance.json" for key in KEYS}
@@ -251,7 +251,7 @@ def tools_ready() -> None:
     require(
         strict.POLICY
         == ROOT
-        / "packages/pwright-python/tests/official/upstream-skip-callable-fixtures-strict-v2-manifest.json",
+        / "packages/playwright-rust-python/tests/official/upstream-skip-callable-fixtures-strict-v2-manifest.json",
         "policy path differs",
     )
     sealed(strict.POLICY, POLICY_SHA256, "skip policy")
@@ -261,7 +261,7 @@ def tools_ready() -> None:
         str(strict.RUNNER.relative_to(ROOT)),
         str(Path(strict.__file__).relative_to(ROOT)),
         str(
-            (strict.GUARD / "pwright_official_upstream_skip_guard_v1.py").relative_to(
+            (strict.GUARD / "playwright_rust_official_upstream_skip_guard_v1.py").relative_to(
                 ROOT
             )
         ),
@@ -356,7 +356,7 @@ def reports() -> dict[tuple[str, int], dict[str, Any]]:
                 == TOOL_SHA256[
                     str(
                         (
-                            strict.GUARD / "pwright_official_upstream_skip_guard_v1.py"
+                            strict.GUARD / "playwright_rust_official_upstream_skip_guard_v1.py"
                         ).relative_to(ROOT)
                     )
                 ]

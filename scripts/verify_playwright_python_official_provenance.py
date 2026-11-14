@@ -53,10 +53,10 @@ _EXPECTED_KEYS = frozenset(
         "pythonVersion",
         "playwrightPackage",
         "playwrightPackageSha256",
-        "pwrightPackage",
-        "pwrightPackageSha256",
-        "pwrightArtifact",
-        "pwrightArtifactSha256",
+        "playwright_rustPackage",
+        "playwright_rustPackageSha256",
+        "playwright_rustArtifact",
+        "playwright_rustArtifactSha256",
         "harnessInputs",
         "command",
         "exitCode",
@@ -72,8 +72,8 @@ _PERSISTENT_PREFLIGHT_KEYS = frozenset({"executionMode"})
 _TOOLING_KEY = "toolingSources"
 _BROWSER_REGISTRY_KEY = "browserRegistry"
 _LAUNCH_MODE_KEY = "launchMode"
-_RUNTIME_LIBRARIES_KEY = "pwrightRuntimeLibraries"
-_JUNIT_LAUNCH_MODE_PROPERTY = "pwright.official.launchMode"
+_RUNTIME_LIBRARIES_KEY = "playwright_rustRuntimeLibraries"
+_JUNIT_LAUNCH_MODE_PROPERTY = "playwright_rust.official.launchMode"
 _TOOLING_SOURCE_PATHS = (
     "scripts/check_playwright_python_official_source.py",
     "scripts/official_result_destination.py",
@@ -139,40 +139,40 @@ def _verify_tree(path: Path, expected: str, label: str) -> None:
 
 def _verify_archived_package_root(path: Path) -> None:
     if path.is_symlink() or not path.is_dir():
-        _fail(f"archived Pwright package is missing or a symlink: {path}")
+        _fail(f"archived Playwright Rust package is missing or a symlink: {path}")
     resolved_root = path.resolve()
     for entry in path.rglob("*"):
         if entry.is_symlink() or not entry.resolve().is_relative_to(resolved_root):
-            _fail(f"archived Pwright package contains a symlink or escape: {entry}")
+            _fail(f"archived Playwright Rust package contains a symlink or escape: {entry}")
 
 
 def _verify_runtime_libraries(raw: object, recorded_package: Path, verified_package: Path) -> None:
-    from playwright_python_official_provenance import pwright_runtime_library_paths
+    from playwright_python_official_provenance import playwright_rust_runtime_library_paths
 
     if not isinstance(raw, list):
-        _fail("pwrightRuntimeLibraries must be a list")
+        _fail("playwright_rustRuntimeLibraries must be a list")
     records = cast(list[object], raw)
     if not recorded_package.is_absolute():
-        _fail("recorded Pwright package must be absolute for runtime libraries")
-    recorded_directory = recorded_package.parent / "shuozeli_pwright.dylibs"
+        _fail("recorded Playwright Rust package must be absolute for runtime libraries")
+    recorded_directory = recorded_package.parent / "shuozeli_playwright_rust.dylibs"
     try:
-        verified_paths = pwright_runtime_library_paths(verified_package)
+        verified_paths = playwright_rust_runtime_library_paths(verified_package)
     except ValueError as error:
         raise ProvenanceValidationError(str(error)) from error
     if len(records) != len(verified_paths):
-        _fail("Pwright runtime library set differs from provenance")
+        _fail("Playwright Rust runtime library set differs from provenance")
     for index, (record, actual_path) in enumerate(zip(records, verified_paths)):
         if not isinstance(record, dict):
-            _fail(f"pwrightRuntimeLibraries[{index}] must contain only path and sha256")
+            _fail(f"playwright_rustRuntimeLibraries[{index}] must contain only path and sha256")
         record_fields = cast(dict[object, object], record)
         if set(record_fields) != {"path", "sha256"}:
-            _fail(f"pwrightRuntimeLibraries[{index}] must contain only path and sha256")
+            _fail(f"playwright_rustRuntimeLibraries[{index}] must contain only path and sha256")
         if record_fields["path"] != str(recorded_directory / actual_path.name):
-            _fail(f"pwrightRuntimeLibraries[{index}] has the wrong adjacent path")
+            _fail(f"playwright_rustRuntimeLibraries[{index}] has the wrong adjacent path")
         digest = record_fields["sha256"]
         if not isinstance(digest, str) or not _SHA256_PATTERN.fullmatch(digest):
-            _fail(f"pwrightRuntimeLibraries[{index}].sha256 is invalid")
-        _verify_file(actual_path, digest, f"pwrightRuntimeLibraries[{index}]")
+            _fail(f"playwright_rustRuntimeLibraries[{index}].sha256 is invalid")
+        _verify_file(actual_path, digest, f"playwright_rustRuntimeLibraries[{index}]")
 
 
 def _verify_junit_launch_mode(
@@ -272,7 +272,7 @@ def _expected_command(
     mode = _string(payload, "mode")
     manifest_path = Path(_string(payload, "manifest"))
     root = manifest_path.parents[4]
-    official = root / "packages/pwright-python/tests/official"
+    official = root / "packages/playwright-rust-python/tests/official"
     if bootstrap_only:
         command.extend(
             [
@@ -281,7 +281,7 @@ def _expected_command(
                 "-c",
                 str(official / "pytest.ini"),
                 "-p",
-                "pwright_official_harness.plugin",
+                "playwright_rust_official_harness.plugin",
             ]
         )
     else:
@@ -290,12 +290,12 @@ def _expected_command(
             command.extend(["-p", "pytest_asyncio.plugin", "-p", "pytest_timeout"])
         if not collect_only:
             if requires_fixture_servers:
-                command.extend(["-p", "pwright_official_server_runtime"])
+                command.extend(["-p", "playwright_rust_official_server_runtime"])
             if mode == "candidate":
                 if requires_fixture_servers:
-                    command.extend(["-p", "pwright_candidate_runtime"])
+                    command.extend(["-p", "playwright_rust_candidate_runtime"])
             else:
-                command.extend(["-p", "pwright_official_oracle_runtime"])
+                command.extend(["-p", "playwright_rust_official_oracle_runtime"])
     for browser in cast(list[str], payload["browsers"]):
         command.append(f"--browser={browser}")
     browser_channel = payload["browserChannel"]
@@ -423,7 +423,7 @@ def verify_provenance(
     if mode not in {"candidate", "oracle"}:
         _fail("mode must be candidate or oracle")
     if package_root is not None and mode != "candidate":
-        _fail("archived Pwright package is only valid for candidate provenance")
+        _fail("archived Playwright Rust package is only valid for candidate provenance")
     launch_mode = _string(payload, _LAUNCH_MODE_KEY) if schema in {4, 5} else "cdp-adapter"
     if launch_mode not in {"cdp-adapter", "owned"}:
         _fail("launchMode must be cdp-adapter or owned")
@@ -755,7 +755,7 @@ def verify_provenance(
     verified_playwright_package = playwright_package
     if harness_root is not None and mode == "candidate":
         recorded_shim = recorded_manifest.parents[4] / (
-            "packages/pwright-python/tests/official/shim/playwright"
+            "packages/playwright-rust-python/tests/official/shim/playwright"
         )
         if playwright_package.resolve() == recorded_shim.resolve():
             verified_playwright_package = harness_root / "shim/playwright"
@@ -766,23 +766,23 @@ def verify_provenance(
             ):
                 _fail("archived playwright package is a symlink or escapes its root")
     _verify_tree(verified_playwright_package, playwright_digest, "playwright package")
-    pwright_package = _nullable_string(payload, "pwrightPackage")
-    pwright_digest = _sha(payload, "pwrightPackageSha256", nullable=True)
-    pwright_artifact = _nullable_string(payload, "pwrightArtifact")
-    artifact_digest = _sha(payload, "pwrightArtifactSha256", nullable=True)
+    playwright_rust_package = _nullable_string(payload, "playwright_rustPackage")
+    playwright_rust_digest = _sha(payload, "playwright_rustPackageSha256", nullable=True)
+    playwright_rust_artifact = _nullable_string(payload, "playwright_rustArtifact")
+    artifact_digest = _sha(payload, "playwright_rustArtifactSha256", nullable=True)
     if mode == "oracle":
         if schema == 5 and payload[_RUNTIME_LIBRARIES_KEY] != []:
-            _fail("oracle provenance must not contain Pwright runtime libraries")
+            _fail("oracle provenance must not contain Playwright Rust runtime libraries")
         if any(
             value is not None
             for value in (
-                pwright_package,
-                pwright_digest,
-                pwright_artifact,
+                playwright_rust_package,
+                playwright_rust_digest,
+                playwright_rust_artifact,
                 artifact_digest,
             )
         ):
-            _fail("oracle provenance must not contain Pwright package inputs")
+            _fail("oracle provenance must not contain Playwright Rust package inputs")
         if exact_browserless_preflight:
             try:
                 if persistent_page_argument_browserless:
@@ -793,27 +793,27 @@ def verify_provenance(
                 raise ProvenanceValidationError(str(error)) from error
     else:
         if (
-            pwright_package is None
-            or pwright_digest is None
-            or pwright_artifact is None
+            playwright_rust_package is None
+            or playwright_rust_digest is None
+            or playwright_rust_artifact is None
             or artifact_digest is None
         ):
-            _fail("candidate provenance must contain Pwright package inputs")
-        verified_package = Path(pwright_package)
-        verified_artifact = Path(pwright_artifact)
+            _fail("candidate provenance must contain Playwright Rust package inputs")
+        verified_package = Path(playwright_rust_package)
+        verified_artifact = Path(playwright_rust_artifact)
         if package_root is not None:
             recorded_source_package = recorded_manifest.parents[4] / (
-                "packages/pwright-python/python/pwright"
+                "packages/playwright-rust-python/python/playwright_rust"
             )
             if verified_package != recorded_source_package:
-                _fail("archived Pwright package requires the exact recorded source package")
+                _fail("archived Playwright Rust package requires the exact recorded source package")
             if verified_artifact.parent != verified_package:
-                _fail("recorded Pwright artifact must be inside the recorded package")
+                _fail("recorded Playwright Rust artifact must be inside the recorded package")
             _verify_archived_package_root(package_root)
             verified_package = package_root
             verified_artifact = package_root / verified_artifact.name
-        _verify_tree(verified_package, pwright_digest, "pwright package")
-        _verify_file(verified_artifact, artifact_digest, "pwright artifact")
+        _verify_tree(verified_package, playwright_rust_digest, "playwright_rust package")
+        _verify_file(verified_artifact, artifact_digest, "playwright_rust artifact")
         if exact_browserless_preflight:
             try:
                 if persistent_page_argument_browserless:
@@ -824,7 +824,7 @@ def verify_provenance(
                 raise ProvenanceValidationError(str(error)) from error
         if schema == 5:
             _verify_runtime_libraries(
-                payload[_RUNTIME_LIBRARIES_KEY], Path(pwright_package), verified_package
+                payload[_RUNTIME_LIBRARIES_KEY], Path(playwright_rust_package), verified_package
             )
 
     if registry_key:
@@ -858,8 +858,8 @@ def verify_provenance(
                     "pythonExecutable": str(python_executable),
                     "pythonVersion": python_version,
                     "playwrightPackage": str(playwright_package),
-                    "pwrightPackage": pwright_package,
-                    "pwrightArtifact": pwright_artifact,
+                    "playwright_rustPackage": playwright_rust_package,
+                    "playwright_rustArtifact": playwright_rust_artifact,
                 },
                 cwd=run_cwd,
                 env=os.environ.copy(),

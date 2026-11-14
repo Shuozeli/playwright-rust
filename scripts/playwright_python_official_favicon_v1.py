@@ -18,9 +18,9 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 VARIANT_DIR = (
-    ROOT / "packages/pwright-python/tests/official/fixture_variants/offscreen_favicon_v1"
+    ROOT / "packages/playwright-rust-python/tests/official/fixture_variants/offscreen_favicon_v1"
 )
-PLUGIN = VARIANT_DIR / "pwright_official_favicon_v1.py"
+PLUGIN = VARIANT_DIR / "playwright_rust_official_favicon_v1.py"
 ICON = VARIANT_DIR / "favicon.ico.b64"
 RUNNER = ROOT / "scripts/run_playwright_python_official_conformance.py"
 BASE_VERIFIER = ROOT / "scripts/verify_playwright_python_official_provenance.py"
@@ -30,10 +30,10 @@ CASE_SELECTION = "tests/async/test_click.py::test_click_offscreen_buttons"
 CASE_NAME = "test_click_offscreen_buttons[chromium]"
 CASE_ID = f"tests/async/test_click.py::{CASE_NAME}"
 ICON_ROUTE = "/favicon.ico"
-PLUGIN_ADDOPTS = "-p pwright_official_favicon_v1"
-PROPERTY_VARIANT = "pwright.fixtureVariant"
-PROPERTY_ICON_SHA256 = "pwright.fixtureVariantIconSha256"
-PROPERTY_SERVED = "pwright.fixtureVariantServed"
+PLUGIN_ADDOPTS = "-p playwright_rust_official_favicon_v1"
+PROPERTY_VARIANT = "playwright_rust.fixtureVariant"
+PROPERTY_ICON_SHA256 = "playwright_rust.fixtureVariantIconSha256"
+PROPERTY_SERVED = "playwright_rust.fixtureVariantServed"
 SCHEMA = 1
 RECEIPT_KEYS = frozenset(
     {

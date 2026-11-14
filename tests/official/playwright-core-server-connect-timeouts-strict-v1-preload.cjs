@@ -7,19 +7,19 @@ const http = require('node:http');
 const path = require('node:path');
 const { fileURLToPath } = require('node:url');
 
-const mode = process.env.PWRIGHT_CORE_SERVER_CONNECT_TIMEOUTS_V1_MODE;
-const upstream = process.env.PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM;
-const receipt = process.env.PWRIGHT_CORE_SERVER_CONNECT_TIMEOUTS_V1_RECEIPT;
-const host = process.env.PWRIGHT_OFFICIAL_SERVER_HOST;
-const bind = process.env.PWRIGHT_OFFICIAL_SERVER_IP;
+const mode = process.env.PLAYWRIGHT_RUST_CORE_SERVER_CONNECT_TIMEOUTS_V1_MODE;
+const upstream = process.env.PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM;
+const receipt = process.env.PLAYWRIGHT_RUST_CORE_SERVER_CONNECT_TIMEOUTS_V1_RECEIPT;
+const host = process.env.PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST;
+const bind = process.env.PLAYWRIGHT_RUST_OFFICIAL_SERVER_IP;
 if (!['candidate', 'oracle'].includes(mode) || !upstream || !receipt)
   throw new Error('strict timeout guard requires mode, upstream and receipt');
 if (!/^[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*\.ts\.net$/.test(host || ''))
   throw new Error('strict timeout guard requires full Tailscale MagicDNS');
 if (!/^100\.(?:6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\.(?:[0-9]{1,3})\.(?:[0-9]{1,3})$/.test(bind || ''))
   throw new Error('strict timeout guard requires Tailscale IPv4 bind');
-for (const key of ['PWRIGHT_CANDIDATE_CDP_ENDPOINT', 'PWRIGHT_ORACLE_CDP_ENDPOINT',
-  'PWRIGHT_CDP_ENDPOINT', 'PWRIGHT_CDP_WS_URL']) {
+for (const key of ['PLAYWRIGHT_RUST_CANDIDATE_CDP_ENDPOINT', 'PLAYWRIGHT_RUST_ORACLE_CDP_ENDPOINT',
+  'PLAYWRIGHT_RUST_CDP_ENDPOINT', 'PLAYWRIGHT_RUST_CDP_WS_URL']) {
   if (process.env[key]) throw new Error(`strict timeout guard forbids ${key}`);
 }
 
@@ -35,7 +35,7 @@ const before = [
   'const e = await connect(`ws://localhost:${server.PORT}/ws`, {',
 ];
 const after = before.map(value => value.replace('ws://localhost',
-  'ws://${process.env.PWRIGHT_OFFICIAL_SERVER_HOST}'));
+  'ws://${process.env.PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST}'));
 let adaptedSource = source;
 for (let index = 0; index < before.length; ++index) {
   if (adaptedSource.split(before[index]).length !== 2)
@@ -62,13 +62,13 @@ for (const snippet of [
 
 let ownerBound = null;
 if (mode === 'candidate') {
-  if (process.env.PWRIGHT_NATIVE_PROFILE !== 'playwright-server-connect-session')
+  if (process.env.PLAYWRIGHT_RUST_NATIVE_PROFILE !== 'playwright-server-connect-session')
     throw new Error('candidate timeout diagnostic requires session profile');
   require('./playwright-core-browser-type-owner-v2-preload.cjs');
-  const candidate = require(path.resolve(process.env.PWRIGHT_NODE_CANDIDATE || ''));
+  const candidate = require(path.resolve(process.env.PLAYWRIGHT_RUST_NODE_CANDIDATE || ''));
   ownerBound = ['chromium', 'firefox', 'webkit'].every(name => candidate[name]._playwright === candidate);
   if (!ownerBound) throw new Error('candidate private fixture owner is absent');
-} else if (process.env.PWRIGHT_NODE_CANDIDATE || process.env.PWRIGHT_NATIVE_PROFILE) {
+} else if (process.env.PLAYWRIGHT_RUST_NODE_CANDIDATE || process.env.PLAYWRIGHT_RUST_NATIVE_PROFILE) {
   throw new Error('oracle timeout diagnostic forbids candidate selection');
 }
 

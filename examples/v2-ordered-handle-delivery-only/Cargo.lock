@@ -3,127 +3,127 @@
 version = 4
 
 [[package]]
-name = "pwright-cap-evaluation"
+name = "playwright-rust-cap-evaluation"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-cap-handle-evaluation"
+name = "playwright-rust-cap-handle-evaluation"
 version = "0.1.0"
 dependencies = [
- "pwright-cap-evaluation",
- "pwright-core",
+ "playwright-rust-cap-evaluation",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-cap-handle-lifecycle"
+name = "playwright-rust-cap-handle-lifecycle"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-codec-binary"
+name = "playwright-rust-codec-binary"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-codec-common"
+name = "playwright-rust-codec-common"
 version = "0.1.0"
 dependencies = [
- "pwright-codec-binary",
- "pwright-core",
+ "playwright-rust-codec-binary",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-codec-handle-evaluation"
+name = "playwright-rust-codec-handle-evaluation"
 version = "0.1.0"
 dependencies = [
- "pwright-cap-evaluation",
- "pwright-cap-handle-evaluation",
- "pwright-codec-binary",
- "pwright-codec-common",
- "pwright-core",
- "pwright-transport",
+ "playwright-rust-cap-evaluation",
+ "playwright-rust-cap-handle-evaluation",
+ "playwright-rust-codec-binary",
+ "playwright-rust-codec-common",
+ "playwright-rust-core",
+ "playwright-rust-transport",
 ]
 
 [[package]]
-name = "pwright-connection-control"
+name = "playwright-rust-connection-control"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-core"
+name = "playwright-rust-core"
 version = "0.1.0"
 
 [[package]]
-name = "pwright-plugin-ordered-handle-delivery"
+name = "playwright-rust-plugin-ordered-handle-delivery"
 version = "0.1.0"
 dependencies = [
- "pwright-cap-handle-evaluation",
- "pwright-cap-handle-lifecycle",
- "pwright-codec-handle-evaluation",
- "pwright-core",
- "pwright-runtime",
- "pwright-runtime-control",
- "pwright-server-handle-evaluation",
- "pwright-server-wire",
- "pwright-transport",
+ "playwright-rust-cap-handle-evaluation",
+ "playwright-rust-cap-handle-lifecycle",
+ "playwright-rust-codec-handle-evaluation",
+ "playwright-rust-core",
+ "playwright-rust-runtime",
+ "playwright-rust-runtime-control",
+ "playwright-rust-server-handle-evaluation",
+ "playwright-rust-server-wire",
+ "playwright-rust-transport",
 ]
 
 [[package]]
-name = "pwright-runtime"
+name = "playwright-rust-runtime"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-runtime-control"
+name = "playwright-rust-runtime-control"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
- "pwright-runtime",
- "pwright-server-wire",
- "pwright-transport",
+ "playwright-rust-core",
+ "playwright-rust-runtime",
+ "playwright-rust-server-wire",
+ "playwright-rust-transport",
 ]
 
 [[package]]
-name = "pwright-server-handle-evaluation"
+name = "playwright-rust-server-handle-evaluation"
 version = "0.1.0"
 dependencies = [
- "pwright-cap-handle-evaluation",
- "pwright-codec-handle-evaluation",
- "pwright-server-wire",
- "pwright-transport",
+ "playwright-rust-cap-handle-evaluation",
+ "playwright-rust-codec-handle-evaluation",
+ "playwright-rust-server-wire",
+ "playwright-rust-transport",
 ]
 
 [[package]]
-name = "pwright-server-wire"
+name = "playwright-rust-server-wire"
 version = "0.1.0"
 dependencies = [
- "pwright-connection-control",
- "pwright-core",
- "pwright-transport",
+ "playwright-rust-connection-control",
+ "playwright-rust-core",
+ "playwright-rust-transport",
 ]
 
 [[package]]
-name = "pwright-transport"
+name = "playwright-rust-transport"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-v2-ordered-handle-delivery-only-example"
+name = "playwright-rust-v2-ordered-handle-delivery-only-example"
 version = "0.1.0"
 dependencies = [
- "pwright-cap-handle-evaluation",
- "pwright-plugin-ordered-handle-delivery",
+ "playwright-rust-cap-handle-evaluation",
+ "playwright-rust-plugin-ordered-handle-delivery",
 ]

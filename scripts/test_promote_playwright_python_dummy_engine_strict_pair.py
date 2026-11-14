@@ -65,12 +65,12 @@ def sample(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
                     "driverNodeSha256": "d" * 64,
                     "systemNode": "/pinned/node",
                     "systemNodeSha256": "e" * 64,
-                    "pwrightPackage": (
-                        f"/pinned/{mode}/site/pwright" if mode == "candidate" else None
+                    "playwright_rustPackage": (
+                        f"/pinned/{mode}/site/playwright_rust" if mode == "candidate" else None
                     ),
-                    "pwrightPackageSha256": "f" * 64 if mode == "candidate" else None,
+                    "playwright_rustPackageSha256": "f" * 64 if mode == "candidate" else None,
                     "nativePath": (
-                        f"/pinned/{mode}/site/pwright/_native.abi3.so"
+                        f"/pinned/{mode}/site/playwright_rust/_native.abi3.so"
                         if mode == "candidate"
                         else None
                     ),

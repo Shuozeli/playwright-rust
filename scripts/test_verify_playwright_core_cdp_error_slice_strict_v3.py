@@ -110,7 +110,7 @@ def _lane(tmp_path: Path, mode: str) -> Path:
     )
     log_path = result.with_suffix(".log")
     log_path.write_text(
-        "[pwright-candidate] selected" if mode == "candidate" else "oracle selected"
+        "[playwright-rust-candidate] selected" if mode == "candidate" else "oracle selected"
     )
     selected = worker_aware.selected_tests(report)
     strict = {
@@ -152,7 +152,7 @@ def _pair(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path]:
     (package / "src").mkdir(parents=True)
     (package / "src/index.cjs").write_text("module.exports = {};\n")
     (package / "package.json").write_text('{"name":"fixture"}\n')
-    artifact = package / "native" / capture.PROFILE / "pwright.node"
+    artifact = package / "native" / capture.PROFILE / "playwright_rust.node"
     artifact.parent.mkdir(parents=True)
     artifact.write_bytes(TEST_ARTIFACT)
     monkeypatch.setattr(capture, "RESULT_PARENT", tmp_path)
@@ -200,7 +200,7 @@ def test_refuses_capture_without_final_artifact_sha(monkeypatch: pytest.MonkeyPa
 
 def test_refuses_artifact_digest_drift(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     # Arrange
-    artifact = tmp_path / "pwright.node"
+    artifact = tmp_path / "playwright_rust.node"
     artifact.write_bytes(b"test artifact")
     monkeypatch.setattr(capture, "ARTIFACT_SHA256", TEST_SHA256)
 

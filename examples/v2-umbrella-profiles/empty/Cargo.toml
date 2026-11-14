@@ -1,8 +1,8 @@
 [package]
-name = "pwright-v2-umbrella-empty"
+name = "playwright-rust-v2-umbrella-empty"
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
 
 [dependencies]
-pwright = { workspace = true }
+playwright-rust = { workspace = true }

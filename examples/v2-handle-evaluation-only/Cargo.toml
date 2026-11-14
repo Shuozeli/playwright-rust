@@ -1,5 +1,5 @@
 [package]
-name = "pwright-v2-handle-evaluation-only-example"
+name = "playwright-rust-v2-handle-evaluation-only-example"
 version = "0.1.0"
 edition = "2024"
 publish = false
@@ -7,4 +7,4 @@ publish = false
 [workspace]
 
 [dependencies]
-pwright-backend-cdp-handle-evaluation = { path = "../../crates/pwright-backend-cdp-handle-evaluation" }
+playwright-rust-backend-cdp-handle-evaluation = { path = "../../crates/playwright-rust-backend-cdp-handle-evaluation" }

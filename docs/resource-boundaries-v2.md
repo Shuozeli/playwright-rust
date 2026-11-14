@@ -1,4 +1,4 @@
-<!-- agent-updated: 2026-10-21T03:17:38Z -->
+<!-- agent-updated: 2026-11-14T05:28:56Z -->
 
 The default-off Python `response-security-details` leaf retains only CDP
 issuer, protocol, subjectName, validFrom, and validTo; each of the three
@@ -92,14 +92,14 @@ non-negative delay no larger than `u32::MAX` milliseconds.
 Frame query/evaluation facades reuse existing Locator, evaluation and temporary
 collection owners. Strict selection performs one existing bounded count before
 evaluation. No selector, Handle, temporary collection or evaluation ceiling is
-raised, and the selected dependency closure remains 108 Pwright packages.
+raised, and the selected dependency closure remains 108 Playwright Rust packages.
 
 Python ABI 102 reuses the existing Rust Keyboard installation and its retained
 invocation, execution and resource-ledger ceilings. The native boundary caps a
 key at 128 UTF-8 bytes and text at 1 MiB, validates delay as a finite
 non-negative value no larger than `u32::MAX` milliseconds, and charges the
 existing 1 MiB-plus-4 KiB FFI command allowance. The selected `keyboard`
-feature adds no Pwright package, queue, task, timer, browser process or native
+feature adds no Playwright Rust package, queue, task, timer, browser process or native
 owner.
 
 Python ABI 101 keeps the existing request and response FIFO maxima at 256
@@ -130,7 +130,7 @@ the 256 KiB input string budget and the existing 8 MiB FFI allowance.
 Handle slots cannot exceed the bounded node count and all owners consume the
 existing 64-Handle capacity. `get_properties()` reuses atomic bounded batch
 admission and independent cleanup tickets. Date/preview conversion retains no
-browser object or history. The dependency closure remains the same 108 Pwright
+browser object or history. The dependency closure remains the same 108 Playwright Rust
 packages.
 
 Python ABI 99's `file-input-native-paths` leaf raises no file-input count,
@@ -243,7 +243,7 @@ bounded string-pattern storage. A registration holds one Context identity and
 one handler tag regardless of Page/OOPIF count. Python holds one callback per
 returned registration ID and clears those identities on Context close. No new
 queue, event cursor, topology mirror, timer, browser process, transport or
-Pwright package is added; selecting `page-routes` still has the same closure.
+Playwright Rust package is added; selecting `page-routes` still has the same closure.
 
 NODE-327's missing-entries archive retains zero entry/header/body bytes and
 reports `retained_bytes() == 0`. Its registration still consumes one of the
@@ -306,10 +306,10 @@ the existing topology initialization fence and native command admission.
 
 Persistent launch arguments are transient provider input bounded to 256
 switches, 65,536 UTF-8 bytes per switch and 1,048,576 UTF-8 bytes in aggregate.
-NULs, page-opening arguments and Pwright-owned profile/remote-debugging
+NULs, page-opening arguments and Playwright Rust-owned profile/remote-debugging
 switches are rejected. The strings are moved into the existing launch request;
 the leaf adds no queue, task, timer, browser allowance, transport, recovery
-owner or Pwright package closure.
+owner or Playwright Rust package closure.
 
 Python ABI 75 `context-offline` retains at most 16 selected Context policies.
 The persistent default, when offline, consumes one slot and leaves at most 15
@@ -323,7 +323,7 @@ the existing topology initialization fence, native command admission and
 shutdown drainage. Creation compensation and close release the exact slot
 idempotently. The leaf adds a fixed 193-byte resource-profile allowance and no
 queue, task, timer, Page table, session registry, browser-process allowance,
-transport, recovery owner, Python mirror or additional Pwright package closure.
+transport, recovery owner, Python mirror or additional Playwright Rust package closure.
 
 Python ABI 74 `context-timezone` retains at most 16 selected Context policies.
 The persistent default, when selected, consumes one slot and leaves at most 15
@@ -339,7 +339,7 @@ topology initialization fence, native command admission and shutdown drainage.
 Creation compensation and close release the exact slot idempotently. The leaf
 adds a fixed 192-byte resource-profile allowance and no queue, task, timer,
 Page table, session registry, browser-process allowance, transport, recovery
-owner, Python mirror or additional Pwright package closure.
+owner, Python mirror or additional Playwright Rust package closure.
 
 Python ABI 73 `javascript-disabled` retains at most 16 selected Context
 policies. The persistent default, when disabled, consumes one slot and leaves
@@ -371,7 +371,7 @@ topology initialization, native command admission and shutdown drainage.
 Context-creation compensation and close release the exact slot idempotently.
 No queue, task, timer, Page table, session registry, browser-process allowance,
 transport, recovery owner, Python mirror, FFI byte allowance or additional
-Pwright package is introduced.
+Playwright Rust package is introduced.
 
 Python ABI 71 `persistent-context-extra-headers` admits at most 256 header
 pairs and 64 KiB of combined UTF-8 name/value bytes. Python preflights those
@@ -384,7 +384,7 @@ leaving at most 15 later explicitly selected Context owners. It uses the
 existing 16 Page settings slots, 419-owner header pool, nine request owners,
 16-Page / 80-route dispatch bound and 80-permit native semaphore. Initial
 replay and later public mutation share those owners. Retirement and shutdown
-release the same leases. The feature adds no Pwright package beyond the
+release the same leases. The feature adds no Playwright Rust package beyond the
 persistent-context closure and no session, browser-process, timer, transport
 or recovery allowance.
 
@@ -400,7 +400,7 @@ Page/OOPIF session and retains no response body. The default is immutable,
 owned/external Contexts consume no inherited entry, retirement uses the
 existing table pruning, and shutdown waits through the existing installation
 owner. No queue, task, timer, session registry, browser process, transport,
-Python state, FFI byte allowance or additional Pwright package is introduced.
+Python state, FFI byte allowance or additional Playwright Rust package is introduced.
 
 Python ABI 69 persistent launch-argument preflight inspects at most 256
 arguments, 64 KiB UTF-8 each and 1 MiB total. The temporary Python list stores
@@ -425,7 +425,7 @@ bounded Storage result and one bounded expiry batch under the same operation;
 all temporary values are released before return. Partitioned expiry preserves
 the source cookie's `hasCrossSiteAncestor` bit without exposing or duplicating
 that internal identity in Python. The dependency proof remains the existing
-108 Pwright packages.
+108 Playwright Rust packages.
 
 Python ABI 68 BrowserContext event facades add no native allowance. `page` and
 `close` callbacks consume only language callback references and reuse the
@@ -434,7 +434,7 @@ Optional `console` callbacks hold exactly one existing Context-console
 subscription token while at least one listener is installed; the final removal
 releases it through the existing native owner. No queue slot, payload byte,
 Context, Page, session, command, task, timer, transport, browser process,
-recovery owner, Pwright package or ABI entry is added.
+recovery owner, Playwright Rust package or ABI entry is added.
 
 Python ABI 68 `persistent-context-device-emulation` adds no new allowance. A
 selected persistent default Context consumes one entry and its actual bytes
@@ -447,7 +447,7 @@ registry of 64 entries / 8 KiB, stateless user-agent composition and unique
 persistent browser-process lease. `Page.viewport_size` retains only two Python
 integers per live facade and returns a fresh mapping; it creates no native
 registry, browser query, callback, timer or cleanup task. The leaf adds no
-Pwright package, session ID, queue, task, timer, transport, browser-process
+Playwright Rust package, session ID, queue, task, timer, transport, browser-process
 allowance or recovery owner beyond the existing persistent launch and device
 closures.
 
@@ -457,7 +457,7 @@ existing fixed capacity of 16 live HTTPS-error policies, so at most 15 later
 owned Contexts in the same host can select the policy. The default selection
 is immutable after construction and is released with the host. The leaf adds
 no session ID, queue, task, timer, transport, browser-process allowance,
-recovery owner or Pwright package beyond the existing persistent launch and
+recovery owner or Playwright Rust package beyond the existing persistent launch and
 HTTPS policy closures.
 
 Python ABI 66 persistent-session release does not raise the existing limit of
@@ -487,7 +487,7 @@ default-Context locale consumes one entry and its actual UTF-8 bytes from ABI
 Consequently a selected persistent default locale leaves capacity for at most
 15 additional owned Context locales in the same host. The policy is admitted
 before browser publication and released with host shutdown. The leaf adds no
-Pwright package, session table, Worker copy, queue, task, timer, transport or
+Playwright Rust package, session table, Worker copy, queue, task, timer, transport or
 second browser process beyond `persistent-context`'s existing unique process
 lease. The shared user-agent override boundary is stateless: it borrows the
 already admitted device and locale policy owners during session initialization
@@ -513,7 +513,7 @@ aggregate native ID bytes until atomic transfer. Capacity or validation failure
 releases the untransferred object IDs through the existing 128-slot console
 cleanup allowance. After transfer, queue eviction or close drops Handle owners
 before the notice's strong Worker owner, ensuring exact native release without
-extending Worker lifetime. The feature adds no Pwright package beyond the
+extending Worker lifetime. The feature adds no Playwright Rust package beyond the
 existing Worker Handle closure.
 
 Python ABI 63 `worker-handle-evaluation` shares the host's existing global
@@ -524,7 +524,7 @@ Shutdown admits at most 64 cleanup reservations and releases each exact native
 object. A Handle core holds only a weak Worker backreference, so disposed
 descriptors add no hidden session or connection retention. Python retains no
 remote object id, execution-context registry, polling loop or cleanup queue.
-The optional leaf adds no Pwright package beyond the existing Page-events plus
+The optional leaf adds no Playwright Rust package beyond the existing Page-events plus
 Handles closure.
 
 Python ABI 62 `worker-network-events` admits at most 64 related Worker or
@@ -544,7 +544,7 @@ event limit; all coordinates must be finite. The operation validates same
 Page/same Frame ownership before input, performs at most one source move, one
 button down, the bounded target move and one release, and attempts release
 after a started drag even when target movement fails. The optional profile
-adds exactly one Pwright package, `pwright-backend-cdp-drag`.
+adds exactly one Playwright Rust package, `playwright-rust-backend-cdp-drag`.
 
 Python ABI 18 admits at most 64 Rust `Request.sizes()` owners across the host.
 Each owner stores fixed scalar state plus one semaphore permit; Request/Response
@@ -589,7 +589,7 @@ Python ABI 13 additionally selects the existing Rust Handle and
 wait-for-function budgets: at most 64 retained owners, eight concurrent Handle
 calls and eight wait operations. Each falsy polling result is disposed before
 the next attempt; no Python task, remote ID or duplicate registry survives the
-Rust operation. The dependency proof adds no Pwright package to the existing
+Rust operation. The dependency proof adds no Playwright Rust package to the existing
 108-package closure.
 
 Python ABI 12 selects the same bounded Rust API-request owner as Node plus the
@@ -913,7 +913,7 @@ zero. Protocol validation caps the narrow graph at 64 files, 4 KiB per name,
 1 KiB per MIME string, 64 KiB aggregate metadata and 70 MiB aggregate base64;
 the administrative allowances are not measured RSS and do not bound Chrome's
 `File`/`DataTransfer` allocations. [Canonical NODE-191 resource
-proof](knowledge/pwright-node-handles.md#node-191-terminal-rust-owned-serialized-payload-mutation).
+proof](knowledge/playwright-rust-node-handles.md#node-191-terminal-rust-owned-serialized-payload-mutation).
 
 The explicit maximum gate uses a 52,428,799-byte source Buffer, whose padded
 base64 remains below the 70 MiB protocol cap. Standalone sampled Node RSS at
@@ -937,7 +937,7 @@ synchronous traversal until the phase commit drops the old root container.
 The 96 MiB lease is an administrative worst-case allowance, not measured RSS,
 allocator footprint or browser memory. The existing 1 MiB FFI permit, validated
 target/marker/preflight leases and Node timer remain independently owned. No
-CDP command allowance is acquired. [Canonical NODE-190 resource proof](knowledge/pwright-node-handles.md#node-190-bounded-rust-ownership-for-the-serialized-payload-graph).
+CDP command allowance is acquired. [Canonical NODE-190 resource proof](knowledge/playwright-rust-node-handles.md#node-190-bounded-rust-ownership-for-the-serialized-payload-graph).
 
 NODE-189: Late call-argument serialization keeps the same one-command, 1 MiB
 FFI admission and validated Rust owner. It adds one logical persistent Node root
@@ -948,7 +948,7 @@ ticket is rechecked before the new root is installed. Reachable V8 graph bytes
 are not claimed by the fixed Rust allowance, just as the preceding raw carrier
 graph was not; the compatibility leaf records that limit honestly rather than
 claiming a root count is a byte bound. [Canonical NODE-189 resource
-proof](knowledge/pwright-node-handles.md#node-189-late-call-argument-serialization-on-the-retained-owner).
+proof](knowledge/playwright-rust-node-handles.md#node-189-late-call-argument-serialization-on-the-retained-owner).
 
 NODE-188: Awaited input instrumentation adds no Rust resource allowance. The
 selected call keeps the same 32-preparation registry, ten logical roots, 16 KiB
@@ -960,7 +960,7 @@ lease.
 The restricted progress view, hook Promise and listener-owned values are V8
 allocations. They have no Rust byte bound and are not added to native lease or
 RSS totals. The one existing Node timer still owns timeout delivery and aborts
-the exact ticket. [Canonical NODE-188 resource proof](knowledge/pwright-node-handles.md#node-188-awaited-input-action-instrumentation-boundary).
+the exact ticket. [Canonical NODE-188 resource proof](knowledge/playwright-rust-node-handles.md#node-188-awaited-input-action-instrumentation-boundary).
 
 NODE-187: Selected target prevalidation keeps the existing one-command/1 MiB
 FFI permit, 32 preparation slots and ten Node roots. The retargeted native object
@@ -976,7 +976,7 @@ separate executor reserves eight cleanup continuations. The fixed service state
 adds one selected installation lease, making the idle retained-upload/marker/
 prevalidation test baseline exactly seven rather than the old marker baseline
 of six. These are Rust administrative bounds, not V8/DOM/browser RSS claims.
-[Canonical NODE-187 resource proof](knowledge/pwright-node-handles.md#node-187-same-owner-retained-dom-prevalidation).
+[Canonical NODE-187 resource proof](knowledge/playwright-rust-node-handles.md#node-187-same-owner-retained-dom-prevalidation).
 
 NODE-186: Selected successful marking now parks one concrete
 `RetainedMarkedFileInput` inside the existing typed FFI result. Its fixed
@@ -991,7 +991,7 @@ Older profiles retain the six-root maximum. Ten is a logical-reference bound,
 not a V8 or Buffer byte bound. Two truth flags live in each selected Rust record
 and remain covered by the unchanged 32-entry/16 KiB registry and synchronous
 phase checks. Abort/drop uses the owner's pre-admitted cleanup continuation.
-[Canonical NODE-186 resource proof](knowledge/pwright-node-handles.md#node-186-retained-marked-owner-and-same-ticket-carrier-projection).
+[Canonical NODE-186 resource proof](knowledge/playwright-rust-node-handles.md#node-186-retained-marked-owner-and-same-ticket-carrier-projection).
 
 NODE-185: The selected call/deadline envelope adds no FFI command, native lane,
 root or preparation slot. A per-scope `Cell<u64>` supplies protocol identity and
@@ -1005,7 +1005,7 @@ its coordinator settles; zero/NaN schedules none. Those V8 allocations are not
 byte-bounded by Rust and must not be added to native lease totals or presented as
 an RSS bound. `abortDeadline` revokes the exact existing ticket rather than
 allocating another cancellation owner. Exact verification and cleanup metrics
-belong to the [canonical NODE-185 checkpoint](knowledge/pwright-node-handles.md#node-185-session-call-identity-and-one-node-deadline).
+belong to the [canonical NODE-185 checkpoint](knowledge/playwright-rust-node-handles.md#node-185-session-call-identity-and-one-node-deadline).
 
 NODE-184: The selected addon reuses each preparation's existing one-command,
 1 MiB FFI admission for native target marking. It does not admit a second slot
@@ -1021,7 +1021,7 @@ registration is owned by typed progress until commit or abort. These values do
 not add a native Handle pin, Node root or browser-memory bound. Existing marker
 cache and registration ledgers remain separately admitted. Same-permit live
 metrics and final zero-resource cleanup are recorded in the
-[canonical NODE-184 checkpoint](knowledge/pwright-node-handles.md#node-184-same-admission-node-target-marking-handoff).
+[canonical NODE-184 checkpoint](knowledge/playwright-rust-node-handles.md#node-184-same-admission-node-target-marking-handoff).
 
 NODE-183: The default-off host `retained-target-marking` cache admits 64
 current/creating worlds plus eight retiring predecessors, and independently
@@ -1046,7 +1046,7 @@ allowances but still poisons the cache; counters are not a fabricated native
 ACK. Bounded generation receipts prevent stale completion from clearing reused
 slots, and wakeups/drops run outside locks. No addon selection, Node root/budget
 change, typed preparation promotion or public upload is implied. Exact evidence
-and remaining gates are tracked in the [canonical NODE-183 checkpoint](knowledge/pwright-node-handles.md#node-183-host-owned-utility-world-marker-cache),
+and remaining gates are tracked in the [canonical NODE-183 checkpoint](knowledge/playwright-rust-node-handles.md#node-183-host-owned-utility-world-marker-cache),
 not a new live-pass claim here. Earlier resource checkpoints retain their scope.
 
 NODE-182: Default-off `retained-target-marking` now implements an independently
@@ -1083,7 +1083,7 @@ This is an owned-world primitive, not a production world registry or host/addon
 selection. Connection-wide call IDs, the original action deadline,
 instrumentation, same-ticket native handoff and public retained upload remain
 open. Exact offline and isolated-browser evidence belongs in the
-[canonical NODE-182 checkpoint](knowledge/pwright-node-handles.md#node-182-persistent-native-target-marking);
+[canonical NODE-182 checkpoint](knowledge/playwright-rust-node-handles.md#node-182-persistent-native-target-marking);
 none proves the missing Node integration. Earlier checkpoint notes below retain
 their historical scope.
 
@@ -1110,7 +1110,7 @@ state, snapshot/native ownership and cleanup capacity; the existing eight
 in-flight retained-upload snapshot slots do not pay for persistent marker
 worlds. No such service or resource profile is implemented by this checkpoint.
 Same-entry native progress and its original call identity/deadline remain open.
-[Canonical contract and verification](knowledge/pwright-node-handles.md#node-181-original-native-wrapper-binding).
+[Canonical contract and verification](knowledge/playwright-rust-node-handles.md#node-181-original-native-wrapper-binding).
 
 NODE-180: The existing retained-file-input selection adds eight weak invocation
 slots under a 4 KiB BackendStateBytes admission, one scope and one lease. The
@@ -1133,7 +1133,7 @@ before both operation and Handle drains. Owners seal before waking outside
 their own lock. These ordering guarantees do not implement actual Node handoff,
 marking, deadline/DOM/utility serialization or browser cleanup. Final evidence
 belongs in the canonical checkpoint; no new browser pass is asserted.
-[Canonical contract and verification](knowledge/pwright-node-handles.md#node-180-session-bound-revocation-before-native-drains).
+[Canonical contract and verification](knowledge/playwright-rust-node-handles.md#node-180-session-bound-revocation-before-native-drains).
 
 NODE-179: Selected same-admission FFI parking retains the typed successful
 result, lane and base-byte permit in the original entry. It returns only the
@@ -1162,7 +1162,7 @@ needs explicit root admission, not hidden objects under the old six-root count.
 Exact-session revoker registration and invocation before `Owners::wait`, native
 marking/progress ownership, NODE-178 selection, utility serialization and public
 upload remain open. FFI budget identity is not session/native-use authority.
-[Canonical contract and verification](knowledge/pwright-node-handles.md#node-179-same-admission-ffi-handoff-and-raw-carrier-projection).
+[Canonical contract and verification](knowledge/playwright-rust-node-handles.md#node-179-same-admission-ffi-handoff-and-raw-carrier-projection).
 
 NODE-178: Retained DOM prevalidation separately admits two extra RemoteHandle
 units plus 19,546 BackendStateBytes per backend admission, without altering
@@ -1174,7 +1174,7 @@ release through settlement. Known cleanup failure/abandonment poisons admission
 before extra backing is returned. An executor discarding jobs cannot establish
 native reclamation. Transport/V8/browser memory remains outside these Rust
 administrative bounds. No host/addon or implicit runtime selection is added.
-[Canonical contract and verification](knowledge/pwright-node-handles.md#node-178-owned-native-file-input-prevalidation).
+[Canonical contract and verification](knowledge/playwright-rust-node-handles.md#node-178-owned-native-file-input-prevalidation).
 
 NODE-177: Two synchronous registration gates reuse exact owner-ticket and
 creation-Page metadata; they do not acquire native pins, task tokens, roots or
@@ -1187,14 +1187,14 @@ A foreign direct gate does not abort someone else's preparation; the orchestrati
 driver owns abort on its failures. Arbitrary callback/V8 memory remains outside
 administrative bounds. Native ownership must be admitted at the correct later
 phase, not by eagerly projecting PreparedFileInput before target/DOM/utility
-serialization boundaries. [Canonical contract and verification](knowledge/pwright-node-handles.md#node-177-deferred-registration-gates-before-materialization).
+serialization boundaries. [Canonical contract and verification](knowledge/playwright-rust-node-handles.md#node-177-deferred-registration-gates-before-materialization).
 
 NODE-176: Server validation/materialization retain the same six-root ticket,
 32-entry and 512 KiB phase limits. Begin/finish do not retain phase guards or
 execution tokens across JS awaits. MIME lookup copies only a table-bounded
 extension into Rust stack scratch; serialized data/strings and user callback
 V8 graphs remain outside administrative byte claims. No native byte owner yet.
-[Canonical contract and current evidence](knowledge/pwright-node-handles.md#node-176-server-direction-validation-and-raw-payload-materialization).
+[Canonical contract and current evidence](knowledge/playwright-rust-node-handles.md#node-176-server-direction-validation-and-raw-payload-materialization).
 
 NODE-175 (2026-09-17): Raw-buffer channel validation reuses existing
 synchronous phase admission. ArgumentsReady becomes ChannelReady by replacing
@@ -1221,7 +1221,7 @@ Normal non-isUnderTest mode only is selected. Offline verification is recorded
 in the canonical checkpoint; actual-ticket/browser/public gates remain open,
 with no new browser pass. Deferred server bytes/path storage, float
 deadlines and typed move-only FfiPreparation promotion/native submission need
-separate proofs. [Canonical scope and exact evidence](knowledge/pwright-node-handles.md)
+separate proofs. [Canonical scope and exact evidence](knowledge/playwright-rust-node-handles.md)
 own those gates; prior accounting below is historical.
 
 NODE-174 (2026-09-17): Selected timeout metadata now admits sixteen canonical
@@ -1255,7 +1255,7 @@ and inspector exclusions. Existing preparation/root/synchronous-phase limits
 remain unchanged. No new feature/profile/dependency/class is introduced.
 Public setters and arbitrary JS defaults, channel/native upload integration,
 deferred materialization, deadline mapping and browser gates remain open.
-[Canonical accounting and exact verification](knowledge/pwright-node-handles.md#node-174-canonical-creation-page-timeout-binding)
+[Canonical accounting and exact verification](knowledge/playwright-rust-node-handles.md#node-174-canonical-creation-page-timeout-binding)
 are authoritative; earlier accounting below is historical.
 
 NODE-173 (2026-09-17): Selected `retained-file-input` adds an independent
@@ -1283,7 +1283,7 @@ Creation-Frame/settings association remains caller-selected and unvalidated.
 Public binding/setter/debug integration, channel/error conversion, Buffer/path
 materialization, native timeout-domain mapping, promotion/submission and browser
 evidence remain separate gates. No new feature/profile/dependency is implied.
-[Canonical accounting and verification](knowledge/pwright-node-handles.md#node-173-rust-owned-argument-assembly-and-live-timeout-settings)
+[Canonical accounting and verification](knowledge/playwright-rust-node-handles.md#node-173-rust-owned-argument-assembly-and-live-timeout-settings)
 are authoritative. Earlier checkpoints below retain their historical scope.
 
 NODE-172 (2026-09-17): The selected registry adds a separate scratch allowance
@@ -1317,7 +1317,7 @@ byte copy or native submission is introduced. User JavaScript allocations and
 synchronous execution are not bounded by the Rust size-policy check. Stateless
 kernel diagnostics retain no persistent roots and do not verify real ticket
 N-API behavior or browser cleanup. Raw closed/cancelled phase ordering remains
-a public-alignment task. [Canonical accounting, contract and evidence](knowledge/pwright-node-handles.md#node-172-rust-owned-preflight-and-reentrant-language-phases).
+a public-alignment task. [Canonical accounting, contract and evidence](knowledge/playwright-rust-node-handles.md#node-172-rust-owned-preflight-and-reentrant-language-phases).
 Earlier checkpoints below retain their historical scope.
 
 NODE-171 (2026-09-17): Selected Node preparation has 32 environment-wide
@@ -1336,14 +1336,14 @@ outside RefCell borrows before FFI draining. Terminal publication revokes when
 delivered; raw sessions without a watcher can retain staging until later
 publication, explicit close, wrapper Drop or environment shutdown. No immediate
 peer-close reclamation is promised. Public conversion/promotion/submission and
-browser validation remain open. [Canonical limits and evidence](knowledge/pwright-node-handles.md#node-171-session-bound-node-preparation-registry).
+browser validation remain open. [Canonical limits and evidence](knowledge/playwright-rust-node-handles.md#node-171-session-bound-node-preparation-registry).
 Earlier checkpoints below retain their historical scope.
 
 NODE-170 (2026-09-17): FfiPreparation shares the existing FFI lane and byte ceilings, with no work token until atomic promotion and no second permit at promotion. Shutdown revokes held preparation cells; a surviving receipt keeps only weak budget identity. Future Node roots require separate admission, thread-affine cleanup and session revocation. No new resource ceiling or Node-reference cleanup proof is claimed.
-[Canonical preparation contract](knowledge/pwright-node-handles.md#node-170-revocable-ffi-preparation-before-execution).
+[Canonical preparation contract](knowledge/playwright-rust-node-handles.md#node-170-revocable-ffi-preparation-before-execution).
 
 NODE-169 (2026-09-17): Retained uploads share the existing eight Handle calls and explicitly track native work through shutdown without reserving another persistent result. A separately selected resolver admits sixteen native units and eight temporary attempts; its eight-slot untimed cleanup queue is independent of the single upload queue. Only the new selection adds eight paired-world snapshots and retirement-registry slots for acquisitions that outlive runtime lanes (81 total, or 1105 with drag runtime). Descriptor Arcs are not native-use pins. The generic resolver profile declares selector capacity, but this path never reserves SelectorBytes.
-[Canonical contract and evidence](knowledge/pwright-node-handles.md#node-169-safe-host-retained-upload-and-pinned-ingress-oracle).
+[Canonical contract and evidence](knowledge/playwright-rust-node-handles.md#node-169-safe-host-retained-upload-and-pinned-ingress-oracle).
 
 NODE-168 (2026-09-17): Compiling retained-reference alone does not install its
 resource allowance. ResolutionProfile::with_retained_reference explicitly adds
@@ -1361,7 +1361,7 @@ The snapshot's existing allowance covers its additional inline numeric field.
 Old-world destruction cannot discharge unverified numeric-context adoption;
 only after native unique-world validation may that proof cover the new group.
 Local lease return after cleanup failure is not proof of native release.
-[Canonical contract and evidence](knowledge/pwright-node-handles.md#node-168-group-owned-retained-adoption-and-deferred-upload-ingress).
+[Canonical contract and evidence](knowledge/playwright-rust-node-handles.md#node-168-group-owned-retained-adoption-and-deferred-upload-ingress).
 
 NODE-167 (2026-09-17): ownerFrame shares the existing eight Handle calls and
 8 MiB call allowance but consumes no additional persistent result slot.
@@ -1375,7 +1375,7 @@ by an unrelated or stale retirement snapshot. Scalar and batch descriptors
 retain only the bounded creation-world fingerprint (Page, numeric context,
 unique context); its identity bytes fit the existing 16 KiB owner allowance.
 It retains no native client, receipt, snapshot permit or route lease and is
-used only to classify an observed world replacement. [Canonical contract and evidence](knowledge/pwright-node-handles.md).
+used only to classify an observed world replacement. [Canonical contract and evidence](knowledge/playwright-rust-node-handles.md).
 
 NODE-166 (2026-09-17): The selected host now admits a property batch's available
 result owners, one shared call allowance, N child cleanup tickets, one aggregate
@@ -1388,7 +1388,7 @@ evaluation lease across carrier acquisition, raw property read and all release
 settlement. N+2 temporary-wrapper admission and bounded-depth structural
 staging checks precede parser copies. These are not browser Object.keys/RSS
 bounds or a pre-read bound on malformed decoded CDP allocations. Ordinary
-profiles remain unchanged. [Canonical contract and evidence](knowledge/pwright-node-handles.md).
+profiles remain unchanged. [Canonical contract and evidence](knowledge/playwright-rust-node-handles.md).
 
 NODE-165 (2026-09-17): Raw retained-result acquisition keeps its existing
 evaluation lease through native settlement and failure compensation. At most
@@ -1404,7 +1404,7 @@ continuation; persistent route admission remains held until cleanup settles.
 This does not establish evaluation admission across a successful carrier's
 later Runtime.getProperties/read/release pipeline. That pipeline, late
 property-read settlement and a pre-owned object-group budget for unaddressable
-IDs remain separate design work. See [canonical evidence and scope](knowledge/pwright-node-handles.md);
+IDs remain separate design work. See [canonical evidence and scope](knowledge/playwright-rust-node-handles.md);
 these accounting guarantees are not browser-RSS measurements.
 
 NODE-165 shutdown ownership: untimed acquisition cannot return its existing
@@ -1418,10 +1418,10 @@ native retirement. Compensation racing detach can conservatively report
 Cleanup even after acknowledgement: the host's pre-call snapshot is not the
 actual acquisition identity. Matching a typed frozen route/client failure to
 an exact retirement receipt remains future work, not permission to discard
-cleanup failures. [Canonical resource and shutdown evidence](knowledge/pwright-node-handles.md#node-165-retained-acquisition-owns-failure-cleanup-and-shutdown-settlement)
+cleanup failures. [Canonical resource and shutdown evidence](knowledge/playwright-rust-node-handles.md#node-165-retained-acquisition-owns-failure-cleanup-and-shutdown-settlement)
 records that residual without treating local lease release as native proof.
 
-NODE-164 (2026-09-17): All raw native classes now derive module-local identity through the crate-wide N-API facade; these tags must reject foreign Rust layouts before any typed cast. Portable property reads reserve their persistent result route before snapshot I/O and reuse the single-result publication/compensation path. Abandoned operations reporting Cleanup are no longer treated as successful cleanup. These implementations address the prior priority audit gap; [exact verification, remaining resource/isolation gates and batch budgets](knowledge/pwright-node-handles.md) are recorded canonically; Node getProperties is not implemented.
+NODE-164 (2026-09-17): All raw native classes now derive module-local identity through the crate-wide N-API facade; these tags must reject foreign Rust layouts before any typed cast. Portable property reads reserve their persistent result route before snapshot I/O and reuse the single-result publication/compensation path. Abandoned operations reporting Cleanup are no longer treated as successful cleanup. These implementations address the prior priority audit gap; [exact verification, remaining resource/isolation gates and batch budgets](knowledge/playwright-rust-node-handles.md) are recorded canonically; Node getProperties is not implemented.
 
 NODE-163: The largest single-result creation future now has an 8 KiB compile-time ceiling explicitly included in the existing eight 8 MiB call allowances; the former 4 KiB runtime guard rejected all creation after producer composition grew. Native-class publication keeps its Box until construction/tagging succeed and reclaims failed wrapping. Failed JS wrapper construction requests native disposal immediately and awaits its acknowledgement. Batch result admission and sibling-specific cleanup identities are still required before getProperties can be exposed.
 
@@ -1452,146 +1452,146 @@ NODE-152: Optional native Handle installation admits 64 shared routes, 1024-byte
 NODE-151: PayloadTarget borrows bounded IDs/client without copying or adding a pool; existing payload admission is shared. Its caller must retain separately admitted native object/world/group owners. The future Node Handle path still needs explicit persistent-result, publication, adopted-wrapper and cleanup admission; these are not paid for by the upload source budget.
 
 NODE-150: Selector-taking uploads reuse existing query admission and scoped Rust temporaries, avoiding JS-finalized intermediate Locators. Source, FFI, operation and native cleanup budgets are unchanged.
-[Page/Frame upload contract and verification](knowledge/pwright-file-input.md#node-150-page-and-frame-selector-taking-upload-apis).
+[Page/Frame upload contract and verification](knowledge/playwright-rust-file-input.md#node-150-page-and-frame-selector-taking-upload-apis).
 
 NODE-149: Upload ingress admits 1 MiB metadata/future storage before getters, then independently admits actual bytes. No borrowed pointer crosses JS reentry or async work; source/transport/FFI ownership remains separate.
-[Selected Node upload boundary and verification](knowledge/pwright-file-input.md#node-149-selected-node-buffer-ingress-and-public-locator-uploads).
+[Selected Node upload boundary and verification](knowledge/playwright-rust-file-input.md#node-149-selected-node-buffer-ingress-and-public-locator-uploads).
 
 NODE-148: Selected host uploads have independent two-source/eight-call counters, one filesystem job and one native upload. The source counter survives submitted-waiter cancellation via prepare_retaining; ordinary connection and FFI limits remain unchanged. Caller Node backing still needs explicit ingress admission.
 Explicit transport disconnection fails pending/new commands, but queued writer bytes keep their leases until I/O retirement. It is a terminal teardown fallback after failed native retirement, not proof of successful group cleanup.
-[Selected safe-host upload contract](knowledge/pwright-file-input.md#node-148-selected-safe-host-upload-integration).
+[Selected safe-host upload contract](knowledge/playwright-rust-file-input.md#node-148-selected-safe-host-upload-integration).
 
 NODE-147: LargeCommandProfile adds independent count/wire and retained framing storage, held through queued writes, pending settlement and unconsumed replies. Source, encoded input, FFI and browser allocations remain separate owners; declared accounting is not an exact physical-memory measurement.
-[Large outbound admission and remaining gates](knowledge/pwright-file-input.md#node-147-independently-admitted-large-outbound-commands).
+[Large outbound admission and remaining gates](knowledge/playwright-rust-file-input.md#node-147-independently-admitted-large-outbound-commands).
 
 NODE-146: UploadProfile admits independent operation count/control storage before boxing the continuation, and keeps source, route and resolution owners through cleanup. The caller separately budgets backend, source and executor storage. Lost cleanup poisons future admission; transport closure is not browser destruction proof, and a dropped public wait cannot reclaim pending native command admission.
-[Upload continuation and remaining gates](knowledge/pwright-file-input.md#node-146-single-use-upload-continuations).
+[Upload continuation and remaining gates](knowledge/playwright-rust-file-input.md#node-146-single-use-upload-continuations).
 
 NODE-145: PayloadProfile admits ActiveCommand and BackendStateBytes before base64/value construction, bounding call count, item count, base64 and metadata. Native object/world/group names are bounded to 1,024 bytes each and included in scratch allowance; by-value dispatch assigns exception wrappers to the borrowed resolution group. Original payload bytes, resolution groups, serialized wire envelopes and browser File/DOM allocations remain independently owned. Whole large-message/FFI peak accounting and started-call cancellation composition are still open.
-[Payload ownership and capacity limits](knowledge/pwright-file-input.md#node-145-chromium-payload-mutation).
+[Payload ownership and capacity limits](knowledge/playwright-rust-file-input.md#node-145-chromium-payload-mutation).
 
 NODE-144: Executor WorkProfile declares queue ActiveCommand and BackendStateBytes requirements separately from file-source admission. One shared task owner spans queueing, reads and unconsumed completion; cancellation never releases its slot before the worker exits. Runtime/channel overhead is explicitly provisioned, while runtime thread stacks and allocator internals are not claimed as exact byte accounting.
-[Queue/source ownership and limits](knowledge/pwright-file-input.md#node-144-admitted-blocking-executor).
+[Queue/source ownership and limits](knowledge/playwright-rust-file-input.md#node-144-admitted-blocking-executor).
 
 NODE-143: PreparedPaths admits one batch plus per-path potential descriptor slots before stat, and storage for retained/temporary paths, MIME, reader values and source views. Payload source leases overlap explicitly during materialization; partial open/read errors drop readers before path admission. Provider-private heaps, OS descriptor memory, static MIME data and executor queues are distinct accounting boundaries.
-[Filesystem ownership and limitations](knowledge/pwright-file-input.md#node-143-filesystem-preparation-and-pinned-mime).
+[Filesystem ownership and limitations](knowledge/playwright-rust-file-input.md#node-143-filesystem-preparation-and-pinned-mime).
 
 NODE-142: File-input content admits one LiveObject, planned ArtifactBytes and BackendStateBytes for entries, strings and owner bookkeeping before copying or reading. Length drift rejects after at most one extra stack byte; partial batches release their lease. Source handles, input backing stores, executor queues, transport/base64 and browser allocations are explicitly outside this leaf's claim.
-[Accounting and cancellation evidence](knowledge/pwright-file-input.md#node-142-ledger-admitted-content-ownership).
+[Accounting and cancellation evidence](knowledge/playwright-rust-file-input.md#node-142-ledger-admitted-content-ownership).
 
 NODE-141: File-input preflight computes exclusive 50 MiB transfer and per-file base64 sizes under explicit metadata/count bounds without allocation. These counters are not leases or whole-operation peak admission. Future selected owners must account for Buffer/file/encoding/transport overlap; ordinary limits are unchanged.
-[File-input policy, evidence and remaining work](knowledge/pwright-file-input.md).
+[File-input policy, evidence and remaining work](knowledge/playwright-rust-file-input.md).
 
 NODE-140: The shared corpus records native lifecycle RequestCapacity during candidate newPage initialization. Current selection admits 256 request slots per Page, but the report does not identify the exhausted owner or prove missing reclamation. Do not increase capacity or drop events as a presumed fix. Production profiles and artifact hashes are unchanged.
 [Expanded verification and retained failures](knowledge/testing-strategy.md#node-140-broadened-node-ffi-verification-remains-non-green).
 
 NODE-139: Page lifecycle and registry terminal owners add inline Notify bodies, automatically included by their existing size_of-based profile admission. The borrowed close future adds no transport, cursor, task, registry retention or navigation slot. Its inline waiter storage is caller-admitted within the existing bounded Frame navigation operation allowance; this is not complete allocator/RSS accounting.
-[Page lifetime publication contract and verification](knowledge/pwright-frame-navigation.md#node-139-page-lifetime-through-navigation-publication).
+[Page lifetime publication contract and verification](knowledge/playwright-rust-frame-navigation.md#node-139-page-lifetime-through-navigation-publication).
 
 NODE-138: Concurrent-close selection declares eight native slots, eight original topology/runtime/publication reservations, fixed 256-ID scratch per payload, a fixed completion ring and an explicitly preallocated 2304-message embedded outbox. Ordinary runtime selection keeps its outbox disabled. This is bounded admission, not complete allocator/RSS accounting.
-[Node close-driver integration and final verification](knowledge/pwright-close-cascade.md#node-138-opt-in-node-close-driver-integration).
+[Node close-driver integration and final verification](knowledge/playwright-rust-close-cascade.md#node-138-opt-in-node-close-driver-integration).
 
 NODE-137: Close retirement borrows caller-admitted fixed disposal-ID scratch and Handle selections rather than allocating additional ID Vecs. It retains existing capacity through the returned notification owner. No default pool/feature is selected; complete graph/container peaks remain a separate outstanding requirement.
-[Native local retirement and post-lock notification contract](knowledge/pwright-close-cascade.md#node-137-native-proven-local-retirement-and-post-session-lock-notification).
+[Native local retirement and post-lock notification contract](knowledge/playwright-rust-close-cascade.md#node-137-native-proven-local-retirement-and-post-session-lock-notification).
 
 NODE-136: The close-capacity bundle owns existing reservations, not a new heap/pool or a complete budget. Scheduler profiles account for its inline payload; component and callback heaps remain separately admitted. Completion consumption retains native evidence/slot during the callback, with ancestor admission retained through joined children.
-[Joined close capacity and native completion contract](knowledge/pwright-close-cascade.md#node-136-joined-close-capacity-and-consuming-native-completions).
+[Joined close capacity and native completion contract](knowledge/playwright-rust-close-cascade.md#node-136-joined-close-capacity-and-consuming-native-completions).
 
 NODE-135: The guarded publication callback uses existing deferred-disposal admission; its successful result retains that slot/lease, and failure explicitly drops bytes before returning the slot. Callback/output/error heaps and stable disposal-ID scratch remain separately caller-admitted. No new pool, worker or default resource selection.
-[Runtime-locked publication/disposal contract and evidence](knowledge/pwright-close-cascade.md#node-135-runtime-locked-local-publication-and-disposal).
+[Runtime-locked publication/disposal contract and evidence](knowledge/playwright-rust-close-cascade.md#node-135-runtime-locked-local-publication-and-disposal).
 
 NODE-134: ControlOutboxStorageProfile explicitly admits old/new message and lease buffer payloads, preallocates to the exact logical queue limit and retains its peak allowance for the RuntimeStore lifetime. Count/EventItem limits remain separate. Queue clear and transport close do not release backing storage; graph/table nodes and other commit scratch remain outstanding.
-[Preallocated runtime outbox contract and evidence](knowledge/pwright-close-cascade.md#node-134-preallocated-runtime-control-outbox-storage).
+[Preallocated runtime outbox contract and evidence](knowledge/playwright-rust-close-cascade.md#node-134-preallocated-runtime-control-outbox-storage).
 
 NODE-133: Selected world receipts add one owning-Page target bounded to 1024 bytes. The existing 8192-byte snapshot permit covers six bounded IDs plus headers; installed registry admission automatically includes the larger inline receipt. Native-retirement-off budgets are unchanged; no RSS bound is claimed.
-[Native Page world-retirement contract and evidence](knowledge/pwright-close-cascade.md#node-133-retained-worlds-follow-exact-native-page-destruction).
+[Native Page world-retirement contract and evidence](knowledge/playwright-rust-close-cascade.md#node-133-retained-worlds-follow-exact-native-page-destruction).
 
 NODE-132: Native close commit scope borrows sealed evidence and native IDs while retaining the completion's existing admission. It adds no success-path collection, ID clone, subscription or lease pool. Callback captures/output/scratch and deferred notification owners require their existing independent admission; this scope is not a total commit-memory guarantee.
-[Native close commit-scope contract and evidence](knowledge/pwright-close-cascade.md#node-132-attachment-bound-native-close-commit-scope).
+[Native close commit-scope contract and evidence](knowledge/playwright-rust-close-cascade.md#node-132-attachment-bound-native-close-commit-scope).
 
 NODE-131: with_deferred_commit validates the whole runtime pending-call limit and adds collection-payload peak admission for traversal, removed records, affected calls, signal references and saved wakers. Returned records/wakers retain the original slot and bytes after notify, until drop. Allocator metadata, user-waker heaps and caller diagnostic heaps remain separate; this is not a total RSS bound.
-[Deferred runtime close commit contract and evidence](knowledge/pwright-close-cascade.md#node-131-deferred-runtime-disposal-notifications).
+[Deferred runtime close commit contract and evidence](knowledge/playwright-rust-close-cascade.md#node-131-deferred-runtime-disposal-notifications).
 
 NODE-130: Deletion-only route retirement owns borrowed route/network guards and a borrowed disposal slice, without new route collections, IDs, provider allocations or subscriptions. Its inline guard/wake layouts still belong in the eventual coordinator envelope; caller-owned disposal/topology/runtime scratch remains separately admitted. No new standalone lease pool or default budget increase.
-[Deletion-only close route contract and evidence](knowledge/pwright-close-cascade.md#node-130-deletion-only-close-route-retirement).
+[Deletion-only close route contract and evidence](knowledge/playwright-rust-close-cascade.md#node-130-deletion-only-close-route-retirement).
 
 NODE-129: Native scheduling declares a measured fixed vector/state envelope plus N retained completion/Arc/error envelopes, in addition to independent Page-command, authority and CDP fanout budgets. Retained ancestor joins and returned completions keep their original permits; payload-owned heaps require separate admission. Full retirement/publication scratch peak remains outstanding.
-[Bounded native scheduler contract and evidence](knowledge/pwright-close-cascade.md#node-129-bounded-native-close-scheduler).
+[Bounded native scheduler contract and evidence](knowledge/playwright-rust-close-cascade.md#node-129-bounded-native-close-scheduler).
 
 NODE-128: Native ancestor authority declares one scope, N+1 leases and 2048 + N*16384 BackendStateBytes. The shared nonzero N limit includes retained Page bindings and Context receipts, not only running commands. IDs are bounded at 1024 bytes; byte/slot rollback and all-resource teardown are tested. Other native/runtime/topology/publication budgets remain separate.
-[Native ancestor authority contract and evidence](knowledge/pwright-close-cascade.md#node-128-exact-native-context-ancestor-authority).
+[Native ancestor authority contract and evidence](knowledge/playwright-rust-close-cascade.md#node-128-exact-native-context-ancestor-authority).
 
 NODE-127: Split native close preparation checks both future bodies, two bounded native-ID copies, wrapper/owner storage and bounded interruption/error allowances against the existing 16 KiB call envelope before native mutation. Pending/cursor limits and source budget are unchanged. Phase/drop/transport tests prove exact lease reclamation; full coordinator peak budgeting remains separate.
-[Native close phase contract and evidence](knowledge/pwright-close-cascade.md#node-127-native-command-and-destruction-wait-phases).
+[Native close phase contract and evidence](knowledge/playwright-rust-close-cascade.md#node-127-native-command-and-destruction-wait-phases).
 
 NODE-126: Deferred Page/Context publication reserves 1/17 lifecycle groups plus an envelope covering both owner boxes and vector buffers. Existing metadata/factory ledgers cap concurrent admission; no extra queue or task is installed. Full native coordinator peak accounting remains outstanding.
-[Deferred publication contract and evidence](knowledge/pwright-close-cascade.md#node-126-deferred-close-publication-capacity).
+[Deferred publication contract and evidence](knowledge/playwright-rust-close-cascade.md#node-126-deferred-close-publication-capacity).
 
 NODE-125: Runtime disposal reservations add retained pool/owner/vector byte admission, an explicit shared pending limit and logical outbox slots. EventItem leases remain within the existing runtime queue budget and use the selected extension scope through FIFO drain. Ordinary mutation admission subtracts reserved slots; failure releases leases before capacity. Weak waiting owners do not retain the runtime. Feature-off layouts remain unchanged; commit scratch/native/publication peak ownership still needs composition-level derivation.
-[Runtime reservation contract and evidence](knowledge/pwright-close-cascade.md#node-125-opt-in-runtime-disposal-and-outbox-reservations).
+[Runtime reservation contract and evidence](knowledge/playwright-rust-close-cascade.md#node-125-opt-in-runtime-disposal-and-outbox-reservations).
 
 NODE-124: Opt-in topology reservations declare a separate extension scope, N pending slots and an additional committed-shadow allowance: 512 + (N + 1) * (M + 128) BackendStateBytes and N + 2 leases, where M is the existing native-string shadow maximum. Pool clones share the same atomic limit. Layout, exact-capacity, overlap, failure rollback and complete-drain tests pass. This does not account for future runtime/publication storage or represent RSS; ordinary/Node profiles are unchanged.
-[Topology reservation contract and evidence](knowledge/pwright-close-cascade.md#node-124-opt-in-topology-transition-reservations).
+[Topology reservation contract and evidence](knowledge/playwright-rust-close-cascade.md#node-124-opt-in-topology-transition-reservations).
 
 NODE-123: Context terminal settlement and reply-producer/request-queue-loss sealing reuse existing operation/FFI/publication owners and stop tokens without a new production allowance, task or dependency. Queue-full backpressure remains unchanged. Diagnostic traces filter unrelated commands before consuming 32 pending slots, record eight Context identities and can hold eight retirement packets of at most 4096 bytes each. Future concurrent close intents require a separately derived reservation plan; the current one-close confirmation allowance does not permit unbounded parallel waits.
-[Close cascade contracts and evidence](knowledge/pwright-close-cascade.md).
+[Close cascade contracts and evidence](knowledge/playwright-rust-close-cascade.md).
 
 NODE-122: Selected close confirmation pre-admits one exact-target cursor, a 4 KiB source allowance plus measured wrapper/Arc ownership, and a 16 KiB call owner with a 1 KiB injected interruption-future allowance. The measured declaration totals 24,840 bytes, excluding separately derived connection fanout storage. Error formatting itself is bounded to 1024 bytes per field, without an unbounded intermediate allocation. Target IDs cap at 128 bytes. A separate atomic pending-slot limit prevents borrowing unused shared-ledger capacity. Failed preparations and abandoned continuations release RAII leases; owner loss is not a native-success receipt. Both final held-close and Worker gates pass with zero live host/FFI ownership after cleanup. Admission bytes are not RSS measurements.
-[Confirmation resource and verification contract](knowledge/pwright-page-close.md#node-122-selected-native-destruction-confirmation).
+[Confirmation resource and verification contract](knowledge/playwright-rust-page-close.md#node-122-selected-native-destruction-confirmation).
 
 NODE-121: Test-only close tracing explicitly caps pending commands/session mappings at 32, created targets at eight, close receipts/recent completions at 128 and native retirement receipts at 64. Original-scenario reports cap child streams at 64 KiB and total output at 4 MiB. Production resource owners are unchanged; the next native confirmation owner requires independent pre-admission and teardown proofs.
-[Transparent trace and next confirmation contract](knowledge/pwright-browser-close.md#node-121-transparent-original-scenario-tracing).
+[Transparent trace and next confirmation contract](knowledge/playwright-rust-browser-close.md#node-121-transparent-original-scenario-tracing).
 
 NODE-120: Native driver attribution adds failure-only bounded backend text, not a runtime journal or resource owner. Prefixes share the existing 4096-byte UTF-8 diagnostic cap. Test-only relay reports cap pending identities, receipts, targets and output; immediate queued FFI watches are measured separately from bounded environment-turn drain.
-[Close attribution contract and evidence](knowledge/pwright-browser-close.md#node-120-attribute-retained-native-driver-failures).
+[Close attribution contract and evidence](knowledge/playwright-rust-browser-close.md#node-120-attribute-retained-native-driver-failures).
 
 NODE-119: The selected ready source pre-admits 32 groups and fixed vector storage before initialization, replenishes before creation/discovery publication and rolls back abandoned creation. A separately charged per-Page acknowledgement Arc is admitted before local activation; staging only clones it. Ready, external-close, explicit-close and terminal capacity remain distinct. Cold fixed layouts include new optional fields; no zero-byte opt-out claim is made.
-[Native ready-source contract and evidence](knowledge/pwright-node-lifecycle-events.md#node-119-native-ready-and-popup-source).
+[Native ready-source contract and evidence](knowledge/playwright-rust-node-lifecycle-events.md#node-119-native-ready-and-popup-source).
 
 NODE-118: Creation conversion reuses the existing fixed 32-KiB port allowance; its compile-time bound now includes creation DTOs and six possible ID copies. Missing Context/root/tree bindings have independent last-reference metadata leases. Reused wrappers acquire no new lasting binding; no runtime owner, queue or registry slot was added.
-[Creation-conversion contract and evidence](knowledge/pwright-node-lifecycle-events.md#node-118-precommit-creation-wrapper-conversion).
+[Creation-conversion contract and evidence](knowledge/playwright-rust-node-lifecycle-events.md#node-118-precommit-creation-wrapper-conversion).
 
 NODE-117: The selected external-close source pre-admits 32 lifecycle reservations plus its fixed pool storage before initialization. Replenishment precedes creation/discovery publication and rolls back on abandoned creation or partial admission failure. The pool is independent of explicit and terminal close capacity; the new optional pointer increases fixed cold-owner layout by 8 logical bytes on this artifact.
-[External-close source contract and evidence](knowledge/pwright-node-lifecycle-events.md#node-117-pre-admitted-external-close-source).
+[External-close source contract and evidence](knowledge/playwright-rust-node-lifecycle-events.md#node-117-pre-admitted-external-close-source).
 
 NODE-116: The close source admits its observer Arc, boxed native transaction receipt and fixed 32-notice vector through the metadata factory before allocation; each notice also owns an existing-queue lifecycle reservation. Failure rolls back admission before native close. Partial postcommit publication failure forces native reconciliation to retire the Session, retaining the last staged mask.
-[Explicit-close source contract and evidence](knowledge/pwright-node-lifecycle-events.md#node-116-explicit-close-source-integration).
+[Explicit-close source contract and evidence](knowledge/playwright-rust-node-lifecycle-events.md#node-116-explicit-close-source-integration).
 
 NODE-115: The selected Node port reserves 32 KiB plus FrameConversion bookkeeping from the Session metadata factory, lasting until its final strong owner. Closed retained Browsers/Locators therefore retain one port revision lease, not a native runtime. The separately admitted fixed 16-slot weak cleanup registry also covers empty Rc allocations retained by weak slots, and has no FFI task token.
-[Terminal dispatcher contract and evidence](knowledge/pwright-node-lifecycle-events.md#node-115-environment-thread-terminal-dispatch).
+[Terminal dispatcher contract and evidence](knowledge/playwright-rust-node-lifecycle-events.md#node-115-environment-thread-terminal-dispatch).
 
-# Pwright v2 resource ownership and limits
+# Playwright Rust v2 resource ownership and limits
 
 NODE-114: Selecting the terminal source admits 32 group slots, 33 factory revision leases and 13,448 logical bytes on this aarch64 build before native initialization. The collection owner adds one optional box field, automatically included in the fixed index size allowance. No teardown allocation or new queue/task is added.
-[Terminal source contract and evidence](knowledge/pwright-node-lifecycle-events.md#node-114-pre-admitted-native-terminal-source).
+[Terminal source contract and evidence](knowledge/playwright-rust-node-lifecycle-events.md#node-114-pre-admitted-native-terminal-source).
 
 NODE-113: Each selected lifecycle group reserves an EventItem and its boxed body before native work, using existing ledgers. The box remains in the fixed queue until acknowledgement, so discard releases it even with a retained drain. No extra queue/task or runtime owner is introduced.
-[Group contract and evidence](knowledge/pwright-node-lifecycle-events.md#node-113-bounded-dependent-publication-groups).
+[Group contract and evidence](knowledge/playwright-rust-node-lifecycle-events.md#node-113-bounded-dependent-publication-groups).
 
 NODE-112: Only the selected close decorator owns an observer Arc. Its implementation must
 admit the reservation box and every retained payload before native close; drop
 returns unused capacity, including failure and continued cancellation paths.
 Ordinary service layout is unchanged; existing async allocations are not zero.
-[NODE-112 close receipt contract and verification](knowledge/pwright-node-lifecycle-events.md#node-112-pre-admitted-explicit-close-receipts).
+[NODE-112 close receipt contract and verification](knowledge/playwright-rust-node-lifecycle-events.md#node-112-pre-admitted-explicit-close-receipts).
 
 NODE-111: The new committed driver view borrows topology and an existing effect slice;
 it adds no retained storage, ledger allowance or subscriber. Future retained
 cause groups require admission before native mutation, not allocation in the
 under-lock observer. Test-only receipts are capped at 32 effects / 32 records.
-[NODE-111 source contract and verification](knowledge/pwright-node-lifecycle-events.md#node-111-borrowed-committed-driver-effects).
+[NODE-111 source contract and verification](knowledge/playwright-rust-node-lifecycle-events.md#node-111-borrowed-committed-driver-effects).
 
 NODE-110 adds a scoped exception port with no retained storage, reference, queue
 or new ledger allowance. It forwards a borrowed JS value without serialization;
 Node owns its error-processing allocations. Diagnostic children separately cap
 32 trace records, four errors, 64 KiB output streams and 14/15-second lifetimes.
-[NODE-110 contracts, fix and verification](knowledge/pwright-node-lifecycle-events.md#node-110-listener-failure-boundaries-and-scoped-exception-reporting).
+[NODE-110 contracts, fix and verification](knowledge/playwright-rust-node-lifecycle-events.md#node-110-listener-failure-boundaries-and-scoped-exception-reporting).
 
 NODE-109 adds size_of(DrainOwnership) plus one size_of(FramePublicationDrain)
 to the selected fixed queue allowance before queue allocation. Successful claims
 and advances allocate no queue/container and admit no extra lease. Only one
 active guard retains the metadata endpoint; completed guards retain none.
 Foreign wrappers and notice journals still require separate future admission.
-[NODE-109 contract and verification](knowledge/pwright-node-lifecycle-events.md#node-109-exclusive-fixed-watermark-publication-owner).
+[NODE-109 contract and verification](knowledge/playwright-rust-node-lifecycle-events.md#node-109-exclusive-fixed-watermark-publication-owner).
 
 NODE-108 adds TRACE-only borrowed detach/destruction identities after event
 admission. Native IDs are checked against 256 bytes before logging, malformed
@@ -1600,7 +1600,7 @@ added. Logging sinks own any formatting storage. The test-only recorder separate
 caps 64 receipts, 128-byte fields and 32 unanswered IDs each, failing on overflow.
 These diagnostic bounds do not change production resource admissions or measure
 browser/process RAM.
-[NODE-108 receipts and verification](knowledge/pwright-chromium-topology-events.md#node-108-bounded-native-lifecycle-identity-receipts).
+[NODE-108 receipts and verification](knowledge/playwright-rust-chromium-topology-events.md#node-108-bounded-native-lifecycle-identity-receipts).
 
 NODE-107 retains the existing metadata ledger handle as a revision domain proof.
 Measured revision allowance is now 1256 bytes (+8); the 32-retirement pool plus
@@ -1608,7 +1608,7 @@ vector storage is 42496 bytes (+256), still 33 revision items. Fixed publication
 storage remains 31504 bytes. Rebasing makes bounded scans and clones an admitted
 revision without new heap storage/admission; it does not allocate a union of old
 and new members. Event cursor/delivery budgets remain separate and unimplemented.
-[NODE-107 contracts and evidence](knowledge/pwright-node-lifecycle-events.md#node-107-validated-cross-revision-visibility-rebasing).
+[NODE-107 contracts and evidence](knowledge/playwright-rust-node-lifecycle-events.md#node-107-validated-cross-revision-visibility-rebasing).
 
 NODE-106 measures the immutable view body at 16 bytes, borrowed collection and
 iterator bodies at 24 bytes each. Mask transitions allocate nothing and retain the
@@ -1617,7 +1617,7 @@ fixed publication storage 31504 bytes; the 32-retirement pool plus vector storag
 42240 bytes / 33 revision items. These supersede the NODE-103 layout numbers,
 not its capacities. Hidden descriptors remain charged until final release.
 Future event cursors/delivery captures need separate admission; this is not RSS.
-[Layout evidence and ownership](knowledge/pwright-node-lifecycle-events.md#node-106-immutable-single-revision-visibility-foundation).
+[Layout evidence and ownership](knowledge/playwright-rust-node-lifecycle-events.md#node-106-immutable-single-revision-visibility-foundation).
 
 NODE-105 adds no production allocation or budget. Its proposed event publication
 owner must separately admit typed notices, per-step retained metadata, cursor
@@ -1625,7 +1625,7 @@ storage and foreign callback/conversion ownership before activation. Existing
 32-retirement capacity alone is not proof for a new per-event representation.
 Terminal publication must remain allocation-free and Worker discard must not call
 foreign code. Measure actual layouts before implementing the selected integration.
-[Design requirements and red evidence](knowledge/pwright-node-lifecycle-events.md).
+[Design requirements and red evidence](knowledge/playwright-rust-node-lifecycle-events.md).
 
 NODE-103 wires the selected collection producer and Node readers. A revision now
 charges 1,232 bytes/one revision slot; the preallocated 32-retirement pool and
@@ -1634,7 +1634,7 @@ Fixed index/queue storage is 31,496 bytes/one state. Creation replenishes before
 native activation and rolls back on failure; removal uses admitted capacity.
 Terminal/discard releases producer ownership. These are logical Rust budgets,
 not process RAM; older checkpoint numbers below are historical.
-[Current contract and verification](knowledge/pwright-frame-publication.md#node-103-rust-collection-producers-and-published-node-reads).
+[Current contract and verification](knowledge/playwright-rust-frame-publication.md#node-103-rust-collection-producers-and-published-node-reads).
 
 NODE-102 implements pre-admitted collection revision storage in the existing
 Rust publication queue. Each bounded 16-Context/16-Page revision charges 1,144
@@ -1644,21 +1644,21 @@ delivery. Fixed selected index/queue storage is now 31,256 bytes/one state.
 Terminal publication and discard release current ownership without allocating.
 Native producers/Node getters are not connected yet; this is not a browser RAM
 improvement or a fix for NODE-101's red gate.
-[Exact ownership, tests and remaining integration](knowledge/pwright-frame-publication.md#node-102-bounded-rust-collection-revision-storage).
+[Exact ownership, tests and remaining integration](knowledge/playwright-rust-frame-publication.md#node-102-bounded-rust-collection-revision-storage).
 
 NODE-101 adds test-only collection publication characterization, not a new
 production budget. The proposed Rust view must charge retained descriptors and
 pending membership changes before native activation, preserve conversion proofs
 and pre-admit saturated teardown. Native active capacity alone cannot bound
 unpublished retirements plus replacement creation. No new storage is implemented.
-[Evidence and required resource proofs](knowledge/pwright-frame-publication.md#node-101-context-and-page-collection-publication-discrepancy).
+[Evidence and required resource proofs](knowledge/playwright-rust-frame-publication.md#node-101-context-and-page-collection-publication-discrepancy).
 
 NODE-100 embeds Browser connection publication in existing Rust metadata.
 There is no new task, queue, cursor, dependency or per-call lease; native
 cancellation/admission remains independent of the public flag. Combined Page
 enumeration still measures 31,248 fixed tree/index/queue bytes and one state,
 with all host ownership and pending metadata counters reclaimed.
-[Scope and evidence](knowledge/pwright-browser-close.md#node-100-rust-owned-browser-disconnect-publication).
+[Scope and evidence](knowledge/playwright-rust-browser-close.md#node-100-rust-owned-browser-disconnect-publication).
 
 NODE-099 pre-admits one metadata EventItem per Page for eventual closure. The
 single existing queue obeys queued items + live close permits <= 256; 16 active
@@ -1668,78 +1668,78 @@ charge is 31,248 bytes and one state on this Mac; close tokens retain charged
 metadata until publication/discard, never a host or transport. MAX sequence is
 reserved for the allocation-free terminal batch. No new task/cursor/dependency.
 These are logical native budgets, not per-chat RAM or total V8 memory.
-[Derivation and tests](knowledge/pwright-page-close.md#node-099-rust-owned-page-close-publication).
+[Derivation and tests](knowledge/playwright-rust-page-close.md#node-099-rust-owned-page-close-publication).
 
 NODE-095 adds bounded identity storage to selected pending CDP calls: 256 bytes
 plus Option<Box<str>> metadata per existing command lease in the Node profile.
 There is no session history, new lease or cursor; unsent wire is released on
 retirement. Event admission/fanout budgets remain unchanged.
-[Contract and evidence](knowledge/pwright-chromium-topology-events.md#node-095-native-detach-before-an-initialization-response).
+[Contract and evidence](knowledge/playwright-rust-chromium-topology-events.md#node-095-native-detach-before-an-initialization-response).
 
 NODE-094 changes only selected Context classification. It adds no production
 storage owner, task, queue, cursor, feature or dependency, and avoids redundant
 Context-list refreshes in that mode. The test relay has explicit bounded target,
 Context and pending-command inventories; these are not production allocations.
-[Bounds and evidence](knowledge/pwright-chromium-topology-events.md#node-094-queued-attachments-from-disposed-contexts).
+[Bounds and evidence](knowledge/playwright-rust-chromium-topology-events.md#node-094-queued-attachments-from-disposed-contexts).
 
 NODE-092 only changes terminal classification of an existing second-stage detach
 receipt. No retries, new queues/tasks/cursors, dependency or allocation owner is
 added. Tests require zero pending native registrations and candidate disconnect
 owners; this is not a native-waker/Node Worker shutdown proof.
-[Boundary](knowledge/pwright-chromium-topology-events.md#node-092-child-disappears-between-resume-and-detach).
+[Boundary](knowledge/playwright-rust-chromium-topology-events.md#node-092-child-disappears-between-resume-and-detach).
 
 NODE-091 reserves a fixed 720-slot weak watch registry (nine requests x 80 routes).
 Each request watch owns three <=256-byte native IDs and two cleared-on-drop waker
 slots. Primary/compensation share watches within the existing 128-KiB plan and
 992-KiB request allowances; weak-slot storage is charged separately. No extra
-cursor/task or unbounded session history. [Derivation](knowledge/pwright-extra-http-headers.md#node-091-native-session-closure-during-header-fanout).
+cursor/task or unbounded session history. [Derivation](knowledge/playwright-rust-extra-http-headers.md#node-091-native-session-closure-during-header-fanout).
 
 NODE-090 explicitly discards lifecycle storage reserved for a Page that disappears
 before publication. Published owners are preserved; escaped unpublished handles
 are sealed and retain their lease until drop. The existing bounded registry is
 reused without a new pool/task/cursor. Ledger reservations are not RAM estimates.
-[Contract](knowledge/pwright-chromium-topology-events.md#node-090-missing-session-retirement-before-page-publication).
+[Contract](knowledge/playwright-rust-chromium-topology-events.md#node-090-missing-session-retirement-before-page-publication).
 
 NODE-089 retains the 992-KiB request and 419-owner bounds while making Page
 snapshot-cell/Arc and sequential-group storage explicit inside the 128-KiB plan
 sub-budget. First-Page snapshots are shared; later Pages materialize one owner
 at dispatch. Test-only CDP receipt gates are bounded and loopback-only, not
 production runtime owners or resident-RAM estimates.
-[Resource derivation](knowledge/pwright-extra-http-headers.md#node-089-native-receipt-gates-and-context-page-sequencing).
+[Resource derivation](knowledge/playwright-rust-extra-http-headers.md#node-089-native-receipt-gates-and-context-page-sequencing).
 
 NODE-088 keeps nine request owners through primary/compensation drainage. Each
 reserves 992 KiB including two 80-member fanouts and a checked 64-KiB job body;
 each native future is checked <=4 KiB before boxing. An 80-permit semaphore
 bounds native JSON scratch with backpressure. The header pool admits 419 owners
 for nine possible compensation plans. No extra runtime task is spawned.
-[Derivation and shutdown exclusions](knowledge/pwright-extra-http-headers.md#node-088-caller-polled-native-jobs-and-early-primary-rejection).
+[Derivation and shutdown exclusions](knowledge/playwright-rust-extra-http-headers.md#node-088-caller-polled-native-jobs-and-early-primary-rejection).
 
 NODE-087 selects nine metadata writers and a derived 291-slot header pool for
 sparse settings, prior/input owners, nine 16-Page frozen plans, initializers and
 compensation. Existing request allowances cover two route/plan copies; no lock
 crosses native awaits. Prepared navigation retains its slot even before polling.
-[Derivation and cancellation limits](knowledge/pwright-extra-http-headers.md#node-087-synchronous-rust-preparation-and-frozen-dispatch).
+[Derivation and cancellation limits](knowledge/playwright-rust-extra-http-headers.md#node-087-synchronous-rust-preparation-and-frozen-dispatch).
 
 NODE-086 adds an explicit writer count to HeaderSettingsProfile, default one.
 Pending Vec storage is charged before allocation; prior snapshots retain their
 existing pool owners. Outstanding writers keep empty tombstones until resolution;
 retirement removes all affected records. Concurrent native uncertainty remains
 conservative and does not block desired-state reads. Host concurrency is pending.
-[Profile and reclamation evidence](knowledge/pwright-extra-http-headers.md#node-086-pending-setter-race-and-bounded-overlapping-model).
+[Profile and reclamation evidence](knowledge/playwright-rust-extra-http-headers.md#node-086-pending-setter-race-and-bounded-overlapping-model).
 
 NODE-085 reserves eight independent 32-KiB navigation preparation allowances in
 the selected header installation. Implicit referrer copying is admitted first and
 capped at 16 KiB; explicit strings move without another copy. The slot guard stays
 alive through native completion and drops on conflict/cancellation. Repeated
 public conflicts followed by navigation exercise reclamation.
-[Selected bounds and exclusions](knowledge/pwright-extra-http-headers.md#node-085-navigation-referrer-reconciliation).
+[Selected bounds and exclusions](knowledge/playwright-rust-extra-http-headers.md#node-085-navigation-referrer-reconciliation).
 
 NODE-084 creation headers share the existing nine request permits and 128-KiB
 request allowance. Prepared bounded Rust strings precede native Context creation;
 FFI reserves 512 KiB plus 32 KiB for baseURL/publication. No new runtime owner or
 cursor is introduced. Oversized creation rejection and eighteen Context retirements
 pass publicly; injected post-create cleanup failure remains unverified.
-[Ownership and exclusions](knowledge/pwright-extra-http-headers.md#node-084-context-creation-headers).
+[Ownership and exclusions](knowledge/playwright-rust-extra-http-headers.md#node-084-context-creation-headers).
 
 NODE-083 adds sixteen pre-admitted `(ObjectId, HeaderSyntaxError)` slots to the
 selected header installation body. Records contain no strings or runtime owners;
@@ -1747,7 +1747,7 @@ first failure is latched, duplicate sessions do not grow storage, and verified
 Page retirement reclaims slots. Desired strings remain within existing snapshot
 bounds; final syntax validation is borrowed and allocation-free. Failure cleanup
 reuses the completed creation call ID for sequential exact-Page compensation.
-[Bounds and recovery evidence](knowledge/pwright-extra-http-headers.md#node-083-deferred-syntax-and-page-local-initialization-failure).
+[Bounds and recovery evidence](knowledge/playwright-rust-extra-http-headers.md#node-083-deferred-syntax-and-page-local-initialization-failure).
 
 NODE-082 admits a 512-KiB FFI ticket before Rust header copying, bounds input
 to 256 enumerable keys / 64 KiB copied strings, and retains lexical JS handles
@@ -1755,7 +1755,7 @@ only through synchronous collection/conversion. Async work owns Rust data only;
 settlement and failed-input paths release their tickets. V8 enumeration arrays
 are created before their length is visible and remain external VM allocations,
 as do arbitrary getters/valueOf work. No hard process-RAM bound is claimed.
-[Allowance, exclusions and live cleanup](knowledge/pwright-extra-http-headers.md#node-082-public-selected-setters-and-language-phase-differential).
+[Allowance, exclusions and live cleanup](knowledge/playwright-rust-extra-http-headers.md#node-082-public-selected-setters-and-language-phase-differential).
 
 NODE-081 reserves header adapter/native scratch before allocation, independently
 caps nine request owners and 80 native applications, and tracks at most 160
@@ -1765,25 +1765,25 @@ before I/O shutdown, preventing a retained-connection wait cycle. Fixed budget
 reservations are not RSS. Two live runs end with zero host leases/operations.
 Ordinary event reconciliation has no stale-session scratch allocation when
 all modified routes remain current, or when no headers have been configured.
-[Exact allowances and exclusions](knowledge/pwright-extra-http-headers.md#admission-and-remaining-compatibility-work).
+[Exact allowances and exclusions](knowledge/playwright-rust-extra-http-headers.md#admission-and-remaining-compatibility-work).
 
 NODE-080 pre-admits the sparse Context/Page index and shared transaction body.
 Original/proposed/prior/effective headers retain separate HeaderPool admissions.
 A single writer prevents overlapping metadata transactions; cancellation retains
 bounded uncertainty markers, while native retirement and final drop reclaim
-owners. [Limits and exclusions](knowledge/pwright-extra-http-headers.md#node-080-bounded-desired-settings-transactions).
+owners. [Limits and exclusions](knowledge/playwright-rust-extra-http-headers.md#node-080-bounded-desired-settings-transactions).
 
 NODE-079 adds borrowed IDs/kind to the existing optional initializer call.
 No settings table, task, cursor or queue is added. The callback's retained
 inputs/future and eventual native/FFI copies remain caller-admitted costs;
 portable IDs do not themselves retain a Page or prove public readiness.
-[Scoped ownership contract](knowledge/pwright-extra-http-headers.md#node-079-identity-aware-native-initialization).
+[Scoped ownership contract](knowledge/playwright-rust-extra-http-headers.md#node-079-identity-aware-native-initialization).
 
 NODE-078 introduces caller-configured header owners/count/byte bounds. Snapshot
 copies and merge planning require admission; clones retain one charge through
 final drop, and a local owner cap cannot borrow unrelated shared capacity.
 Native/FFI storage remains a separate unfinished integration requirement.
-[Exact allowance and exclusions](knowledge/pwright-extra-http-headers.md#rust-ownership-contract).
+[Exact allowance and exclusions](knowledge/playwright-rust-extra-http-headers.md#rust-ownership-contract).
 
 NODE-077 exercises the existing Frame FFI/result owners during Worker teardown:
 pending owned navigation and queued conversion both remove their exact native
@@ -1792,7 +1792,7 @@ Command and at least 512 KiB of FFI reservation before termination. No budget or
 production owner changes; post-destruction ledger/RAM cannot be read from that
 Worker. Public timeout continuation separately confirms waiter cancellation is
 not browser stop-loading at three tested wait policies.
-[Ownership evidence](knowledge/pwright-frame-navigation.md#node-077-causal-close-timeout-continuation-and-worker-teardown).
+[Ownership evidence](knowledge/playwright-rust-frame-navigation.md#node-077-causal-close-timeout-continuation-and-worker-teardown).
 
 NODE-076 Frame.goto reserves a 512-KiB existing Command-lane FFI allowance
 before bounded native input copies. Its typed host output retains the separate
@@ -1800,7 +1800,7 @@ before bounded native input copies. Its typed host output retains the separate
 strings, lowercased header map and JS string-conversion overlap. Async bodies,
 native arenas and Context URL-value copies keep their own admissions. No Rust
 response pointer is handed to JS or made dependent on JS GC after delivery.
-[Owner/copy boundary](knowledge/pwright-frame-navigation.md#node-076-public-node-frame-navigation).
+[Owner/copy boundary](knowledge/playwright-rust-frame-navigation.md#node-076-public-node-frame-navigation).
 
 NODE-075 adds namespace 126/3 for 32 active-or-escaped typed navigation results
 at 384 KiB each, and 126/4 for their independently leased Arc counter. The
@@ -1809,7 +1809,7 @@ projection admits before dispatch and bounds source/headers/strings; returned
 owners expose only borrowed outcomes and retain no native arena or host.
 The executor admission/TaskTracker/deadline covers projection. Native/foreign
 copies, allocator metadata and caller stack remain separate bounds.
-[Proof and native escaped-result test](knowledge/pwright-frame-navigation.md#node-075-typed-rust-host-result-ownership).
+[Proof and native escaped-result test](knowledge/playwright-rust-frame-navigation.md#node-075-typed-rust-host-result-ownership).
 
 NODE-074's selected navigation 1.2 codecs borrow input/result values during
 encoding and traverse bounded headers in canonical order without a copied index
@@ -1818,7 +1818,7 @@ header-byte limits bound wire allocation. Decoding rejects attachments and
 forged duplicated route IDs. No runtime lease owner, native cursor, browser or
 background task is installed by the contract feature. FFI copies and mapping
 from the host's charged response arena remain separately unfinished admission.
-[Boundary](knowledge/pwright-frame-navigation.md#node-074-opt-in-typed-navigation-12-contract).
+[Boundary](knowledge/playwright-rust-frame-navigation.md#node-074-opt-in-typed-navigation-12-contract).
 
 NODE-073 selects a 128-Frame/eight-snapshot retained route owner and eight
 48-KiB host executor allowances. A separately admitted Arc counter enforces
@@ -1826,7 +1826,7 @@ eight operations before publication waiting: shared-plan spare capacity does
 not expand this local count. URL/referrer capacity is bounded before retention.
 Pending native cancellation reclaims its call slot but keeps queued wire bytes
 charged until writer retirement; it does not stop browser loading.
-[Detailed ownership](knowledge/pwright-frame-navigation.md#node-073-rust-host-dispatch-scheduling-and-cancellation).
+[Detailed ownership](knowledge/playwright-rust-frame-navigation.md#node-073-rust-host-dispatch-scheduling-and-cancellation).
 
 NODE-072 adds separately admitted fixed Page registration indexes and per-call
 Arc/Mutex/notification bodies. Ticket drop reclaims a slot on the next checkpoint;
@@ -1834,14 +1834,14 @@ moved results keep their core leases after all Page/driver owners drop. The
 host's separate `frame-navigation` feature declares 128 registration owners,
 allocating response storage only on registration. Readiness-only has no such
 budget. Caller executor/task storage, native requests and FFI copies are separate.
-[Bounds and reclamation](knowledge/pwright-frame-navigation.md#node-072-ordered-operation-registration-and-actual-rust-host-observation).
+[Bounds and reclamation](knowledge/playwright-rust-frame-navigation.md#node-072-ordered-operation-registration-and-actual-rust-host-observation).
 
 NODE-071 admits one navigation invocation's fixed event/request slots, response
 and error arena, receipt ID and owner body before allocation. Escaped response
 bytes borrow the owner; the lease stays until drop. Redirects reuse chain slots;
 capacity failure seals instead of truncating or growing. Caller Arc/Mutex,
 envelopes, native pending calls and FFI copies remain separate admissions.
-[Contract](knowledge/pwright-frame-navigation.md#node-071-bounded-navigation-matching-and-response-retention).
+[Contract](knowledge/playwright-rust-frame-navigation.md#node-071-bounded-navigation-matching-and-response-retention).
 
 NODE-070 admits a fixed lifecycle registry index and distinct per-slot Page
 owners. Active and escaped-retired capacities are separate; a retained handle
@@ -1852,28 +1852,28 @@ capacities, not measured process-RAM guarantees.
 Registry tests and the real-host gate verify retained leases remain after close
 while escaped handles live, then return to zero after final drop. Concurrent
 shutdown rejects queries even while a synchronous notice callback holds its lock.
-[Bounds, reclamation and exclusions](knowledge/pwright-frame-navigation.md#node-070-bounded-multi-page-registry-and-opt-in-rust-host-selection).
+[Bounds, reclamation and exclusions](knowledge/playwright-rust-frame-navigation.md#node-070-bounded-multi-page-registry-and-opt-in-rust-host-selection).
 
 NODE-069 explicitly admits one Page lifecycle owner's body, Mutex and Arc
 overhead in addition to the fixed native/reducer capacities. Clock/sink pointees
 and any retained response/error payload remain caller-owned admissions. The
 observer borrows the existing cursor's envelope; it adds no queue or task.
 Sealing retains storage charges until final drop, not until Page retirement.
-[Boundary and verification](knowledge/pwright-frame-navigation.md#node-069-opt-in-production-ordered-lifecycle-observation).
+[Boundary and verification](knowledge/playwright-rust-frame-navigation.md#node-069-opt-in-production-ordered-lifecycle-observation).
 
 NODE-068 reuses the existing topology shadow transaction and descendant-removal
 storage; it adds no persistent loader/history map or new resource profile.
 Document commit disposes old descendants only after runtime/service-route
 publication succeeds. Retained snapshots remain admitted after retirement;
 renderer handoff can retire a route without destroying its portable Frame.
-[Ownership and verification](knowledge/pwright-frame-navigation.md#node-068-production-document-commit-topology-retirement).
+[Ownership and verification](knowledge/playwright-rust-frame-navigation.md#node-068-production-document-commit-topology-retirement).
 
 NODE-067 pre-admits native Frame/request rows and a fixed native-ID arena in a
 separate scope before allocation. Transitions cannot grow that storage. Borrowed
 response/error notices do not retain envelope payloads; future escaping values,
 event queues, authoritative topology, native sessions and FFI promises retain
 separate admission obligations. Unit and live tests verify lease/byte release.
-[Formula and exclusions](knowledge/pwright-frame-navigation.md#node-067-bounded-native-lifecycle-normalization).
+[Formula and exclusions](knowledge/playwright-rust-frame-navigation.md#node-067-bounded-native-lifecycle-normalization).
 
 NODE-066 separately pre-admits two Frame-navigation route tables and bounded
 escaped snapshots. Snapshots keep old route/service/ID storage admitted after
@@ -1883,20 +1883,20 @@ service-owner Arc. Exact Vec/String
 capacities are checked. Client factory internals, transport, caller input/results,
 event delivery and process RAM remain separate boundaries. No event queue or
 snapshot storage is installed by default.
-[Formula, exclusions and tests](knowledge/pwright-frame-navigation.md#node-066-retained-routes-in-the-production-topology-transaction).
+[Formula, exclusions and tests](knowledge/playwright-rust-frame-navigation.md#node-066-retained-routes-in-the-production-topology-transaction).
 
 NODE-065 reserves the full lifecycle store body and fixed Frame/request slots
 before construction. Later transitions allocate nothing; errors/loss seal
 snapshot queries, and drop releases the lease. Native event normalization,
 delivery queues, retained routes and FFI promises need separate ownership proofs.
-[Exact charge, exclusions and tests](knowledge/pwright-frame-navigation.md#node-065-optional-normalized-lifecycle-reducer).
+[Exact charge, exclusions and tests](knowledge/playwright-rust-frame-navigation.md#node-065-optional-normalized-lifecycle-reducer).
 
 NODE-064 Frame initiation shares existing navigation operation/byte admission
 and borrows the native Frame ID; topology navigation routes borrow existing maps
 without an added allocation or index. These are not owned asynchronous routing
 leases. Future retained routes, lifecycle history, subtree requests and FFI
 delivery require their own admission and retirement proof before public exposure.
-[Current bound and pending ownership](knowledge/pwright-frame-navigation.md#resource-and-dependency-contract).
+[Current bound and pending ownership](knowledge/playwright-rust-frame-navigation.md#resource-and-dependency-contract).
 
 NODE-063 lookup admits 32 KiB before cache-ID conversion/callbacks, with a
 compile-time proof for 128 selected-path DTOs and 256 numeric known IDs.
@@ -1905,7 +1905,7 @@ glob planning keeps its own reservations. The native ancestry test binds only
 the selected nested Frame and missing parent; callback recursion rejects and
 unwinds. Last GC returns to 1 state / 0 revisions / 7672 fixed-index bytes.
 Node language values and process RAM remain outside this logical quota claim.
-[Proof and evidence](knowledge/pwright-frame-lookup.md#selected-path-ownership-and-admission).
+[Proof and evidence](knowledge/playwright-rust-frame-lookup.md#selected-path-ownership-and-admission).
 
 NODE-062 Context scope 121/4 is independently bounded: 16 registry slots, 256
 settings/bindings, 128 conversions, 16 KiB/baseURL and 2 MiB logical bytes.
@@ -1913,14 +1913,14 @@ Real Node pressure retains 127 closed configured Contexts (255 states/36629 byte
 rejects another configured creation, and returns to 0 states/560 fixed-index bytes
 after GC. Foreign callback reentry exhausts admission and unwinds all conversions.
 These are native logical quotas, not process RSS or Node URL/parser memory bounds.
-[Proof and verified evidence](knowledge/pwright-context-creation.md#verification-status-and-remaining-gates).
+[Proof and verified evidence](knowledge/playwright-rust-context-creation.md#verification-status-and-remaining-gates).
 
 NODE-060 admits N-API glob input validation/copy as 2*n+1024, and URL-output
 copies as s+o+2*max(s,o)+1024, each plus a guard body. Five read slots can overlap
 with preparation/restoration/final plan. Actual conversion and failures release
 all temporary charges; Node-owned URL/parser allocation is outside this logical
 Rust ledger and is not claimed as a bounded process/RSS total.
-[Proof and evidence](knowledge/pwright-frame-lookup.md#admitted-native-copies-and-retention).
+[Proof and evidence](knowledge/playwright-rust-frame-lookup.md#admitted-native-copies-and-retention).
 
 NODE-059 adds preprocessing admission: input/final glob 16 KiB, relative-path
 capacity at most 10*n, two fixed restoration buffers each capped at 256 KiB,
@@ -1928,28 +1928,28 @@ and conservative 24*n+32 lowercase temporary storage plus owner bodies. Peak
 is three existing read slots; completion retains only the final GlobPlan lease.
 Borrowed URL parsing is separately owned and still needs production admission;
 the diagnostic parser is not covered by these logical-storage bounds.
-[Derivation and rollback gates](knowledge/pwright-frame-lookup.md#preprocessing-storage-contract).
+[Derivation and rollback gates](knowledge/playwright-rust-frame-lookup.md#preprocessing-storage-contract).
 
 NODE-058 shares existing Frame read/byte admission for lookup and glob plans.
 Lookup adds no body beyond its charged immutable read; callbacks run unlocked.
 For resolved glob length n <= 16 KiB, reserve 7*n+2 output bytes and owner bodies
 before allocation. Plans hold their own read slot through conversion/drop.
 This does not bound the still-unimplemented baseURL preprocessing stage.
-[Derivation and rollback tests](knowledge/pwright-frame-lookup.md#proven-planner-storage-bound).
+[Derivation and rollback tests](knowledge/playwright-rust-frame-lookup.md#proven-planner-storage-bound).
 
 NODE-056 explicitly selects a separate metadata-only name ledger in the Node
 host: 16 KiB/name, 2 MiB total, 512 leases. Nonempty names reserve text, body and
 Arc counters before allocation; revisions share identical names and retain old
 charges through publication/conversion. URL-only books allocate no name ledger.
 Public `nameBytes` is logical storage, not V8/RSS.
-[Accounting and evidence](knowledge/pwright-frame-publication.md#node-056-bounded-navigation-names-and-public-framename).
+[Accounting and evidence](knowledge/playwright-rust-frame-publication.md#node-056-bounded-navigation-names-and-public-framename).
 
 NODE-055 reserves four Page-creation states including both root and tree
 bindings. Synchronous descriptors hold a 32 KiB metadata conversion lease through
 actual Node conversion, with a compile-time DTO-size proof; retained native tree
 wrappers keep separate leases until finalization. Cached enumeration emits only
 IDs. Explicit value-evaluation activation adds no resource requirement or task.
-[Accounting and public pressure evidence](knowledge/pwright-frame-publication.md#node-055-admitted-page-descriptors-and-cache-aware-enumeration).
+[Accounting and public pressure evidence](knowledge/playwright-rust-frame-publication.md#node-055-admitted-page-descriptors-and-cache-aware-enumeration).
 
 NODE-054 includes the main-Frame binding in pre-native Page admission: three
 state slots (node/tree/binding), not two, plus the initial revision and bytes.
@@ -1957,7 +1957,7 @@ Activation transfers the existing binding lease to N-API without re-admission.
 Real public pressure at 254/256 states now rejects without a native target or
 metadata growth; exact-limit activation is separately unit-tested. This shares
 existing caps and adds no ledger, task or larger capacity.
-[Reproduction and accounting](knowledge/pwright-frame-publication.md#node-054-creation-time-root-binding-admission).
+[Reproduction and accounting](knowledge/playwright-rust-frame-publication.md#node-054-creation-time-root-binding-admission).
 
 NODE-053 admits native Frame wrappers until finalization within the existing
 256-state/8 MiB ledger. Synchronous read guards share the 256 revision slots,
@@ -1965,7 +1965,7 @@ reserve descriptor/ID conversion storage before copy and survive actual N-API
 conversion. No FfiBudget/HostSession is captured by retained native metadata.
 Repeated public enumeration does not grow native charges; post-finalization
 returns to the existing one-state/7672-byte empty host index, not zero RSS.
-[Full accounting](knowledge/pwright-frame-publication.md#node-053-public-node-frame-collections-and-retained-wrappers).
+[Full accounting](knowledge/playwright-rust-frame-publication.md#node-053-public-node-frame-collections-and-retained-wrappers).
 
 NODE-052 installs the Frame index: 16 Page/128 Frame index slots, 256 retained
 states, 256 revisions and 8 MiB logical storage at scope 121/2. Page metadata is
@@ -1973,14 +1973,14 @@ reserved before native creation. The fixed empty index is 7672 bytes/one state
 on this Mac and survives session close until its owner drops. The selected
 paused-OOPIF world/resume join uses two existing slots, after the four-command
 prerequisite join; it adds no task or larger queue/deadline.
-[Full accounting and native evidence](knowledge/pwright-frame-publication.md#node-052-live-host-projection-and-paused-oopif-attachment).
+[Full accounting and native evidence](knowledge/playwright-rust-frame-publication.md#node-052-live-host-projection-and-paused-oopif-attachment).
 
 NODE-051 adds an explicitly constructed Frame-tree metadata ledger at scope
 121/2: retained states, immutable revisions and storage bytes are separately
 bounded through last-reference release. Retirement copying is admitted without
 scratch allocation. Mixed URL/tree delivery shares the existing bounded queue;
 no watcher or runtime owner is added. Host installation and FFI output-vector
-admission are still pending. [Exact boundary](knowledge/pwright-frame-publication.md#resource-contract).
+admission are still pending. [Exact boundary](knowledge/playwright-rust-frame-publication.md#resource-contract).
 
 NODE-049 adds default-off runtime `lifetime-handoff`. Selected profiles admit
 one additional BackendStateBytes lease per PendingCall in its existing Call
@@ -1990,24 +1990,24 @@ reference, including retained tokens after command completion, is dropped.
 Original pending/target/connection admission is unchanged. Token/provider storage
 fits the existing Locator invocation's 16 KiB fixed allowance. No new registry,
 task, event cursor or controller capacity is added.
-[Accounting and exhaustion proof](knowledge/pwright-chromium-drag.md#resource-and-verification-boundary).
+[Accounting and exhaustion proof](knowledge/playwright-rust-chromium-drag.md#resource-and-verification-boundary).
 
 NODE-047 admits 16 retained Locator keyboard invocations at scope 122/10,
 with 1104 KiB each (17.25 MiB logical allowance), while the existing Locator
 factory admits eight executing actions. Exact Frame/Page route leases survive
 cancellation. Controller slots are now 536/272; provider allowance is 86 MiB
-plus fixed storage. [Accounting](knowledge/pwright-chromium-drag.md#node-047-resources-and-evidence).
+plus fixed storage. [Accounting](knowledge/playwright-rust-chromium-drag.md#node-047-resources-and-evidence).
 
 NODE-046 extends selected drag admission for eight Keyboard cancellation owners:
 528 dispatcher slots and 264 Page commands per controller. Pending/write CDP
 limits remain 552/32. Started canceled keydown work remains owned by Page
-quarantine until native retirement. [Details](knowledge/pwright-chromium-drag.md#node-046-selection-and-resource-boundary).
+quarantine until native retirement. [Details](knowledge/playwright-rust-chromium-drag.md#node-046-selection-and-resource-boundary).
 
 NODE-045 derives host Mouse admission from eight native operations and 65
 children per maximum click: 520 selected dispatcher slots, 256 Page drag command
 slots and 552 shared pending CDP commands. Write backpressure remains 32.
 The enlarged logical wire/provider allowances are not eager allocation or RSS
-claims. [Exact accounting and limits](knowledge/pwright-chromium-drag.md#node-045-maximum-click-batches-and-matching-host-admission).
+claims. [Exact accounting and limits](knowledge/playwright-rust-chromium-drag.md#node-045-maximum-click-batches-and-matching-host-admission).
 
 Latest Keyboard host budgets: 16 retained invocations at scope 120/18, each
 with argument bytes plus 8192 call/native-binding bytes, alongside 4096 state
@@ -2040,7 +2040,7 @@ fixed policy-specific storage. Every coordinator clone and transaction retains
 the state lease. Node host source selects 32 retained states for its 16-Page
 topology at scope `extension(120,17)`; old/candidate states share this quota.
 Legacy profiles remain opt-in and do not retroactively claim those state budgets.
-[Raw Keyboard ownership and verification](knowledge/pwright-raw-keyboard.md).
+[Raw Keyboard ownership and verification](knowledge/playwright-rust-raw-keyboard.md).
 
 The native reload primitive shares the existing navigation operation/byte budget
 and owns one bounded event cursor. No replay queue or background task is added.
@@ -2049,7 +2049,7 @@ Typed Reload now uses controlled cancellation via Page.stopLoading and Node's
 existing navigation FFI allowance. Timeout resource release passes, but Page close
 during a held response still fails native disappearance confirmation. That proof
 is not weakened or replaced by CDP command acknowledgement.
-[Reload resource contract and tests](knowledge/pwright-page-reload.md).
+[Reload resource contract and tests](knowledge/playwright-rust-page-reload.md).
 
 Sequential typing adds a borrowed input view with a 1 MiB UTF-8 length limit and
 four-byte inline scalar iteration under the existing Page input gate. This is
@@ -2059,7 +2059,7 @@ before cloning, the existing Locator lease covers retained input, and N-API
 admits its existing 6 MiB action ticket before conversion under the 64 MiB
 environment ceiling. Delay, deadline, queue admission and cleanup remain caller
 owned, with no new task or clock in the input leaf. Normal dependency closure
-remains five Pwright packages. [Contract and pending gates](knowledge/pwright-sequential-typing.md).
+remains five Playwright Rust packages. [Contract and pending gates](knowledge/playwright-rust-sequential-typing.md).
 
 The opt-in interleaved Page policy now resolves the earlier delay/cleanup
 contention without enlarging queues or timeouts. It owns one fixed 16-code key
@@ -2125,8 +2125,8 @@ default APIs remain unchanged. See [the host checkpoint](node-ffi-compatibility-
 
 This document is the DT-060 allocation inventory, limit contract, eviction
 policy, and internal memory-metrics schema. It covers memory retained by the
-Pwright client/runtime process. Browser parent, renderer, GPU, and utility
-process memory is measured separately; a Pwright allocation ledger cannot and
+Playwright Rust client/runtime process. Browser parent, renderer, GPU, and utility
+process memory is measured separately; a Playwright Rust allocation ledger cannot and
 must not pretend to cap Chromium's own RSS.
 
 ## Rules
@@ -2186,9 +2186,9 @@ The core ledger defines these stable accounting classes:
 | `LogBytes` | byte | opt-in log capability | dequeue, ring eviction, or capability stop |
 | `TraceBytes` | byte | opt-in trace recorder | bounded chunk flush/spill or trace stop |
 | `ArtifactBytes` | byte | optional Artifact source and Stream read result | explicit Stream/Artifact disposal or returned read-result drop |
-| `ScreenshotBytes` | byte | screenshot call/artifact; retained value type is owned by command-free `pwright-screenshot-model` | result consumption or artifact dispose |
+| `ScreenshotBytes` | byte | screenshot call/artifact; retained value type is owned by command-free `playwright-rust-screenshot-model` | result consumption or artifact dispose |
 | `DomContentBytes` | byte | Frame DOM serialization result | returned budgeted UTF-8 value drop |
-| `SelectorBytes` | byte | operation carrying a `pwright-selector-model` recipe or backend cache | operation end or bounded cache eviction |
+| `SelectorBytes` | byte | operation carrying a `playwright-rust-selector-model` recipe or backend cache | operation end or bounded cache eviction |
 | `RemoteHandle` | item | Page/Frame execution world | explicit handle dispose, world destruction, or page close |
 | `BackendStateBytes` | byte | adapter extension scope | target/session detach or backend close |
 
@@ -2214,7 +2214,7 @@ leases. Zero is a valid limit and rejects the first reservation.
 | Prepared object creation | controlled runtime | at most one active transaction; one object or a finite caller-supplied related-object batch with validated graph insertions and exact lifecycle-outbox slots | reserved `LiveObject` + optional `EventItem` in each new object scope | validate the full candidate before reserve; keep every object absent before commit; Drop releases; commit publishes the graph and ordered Creates together; transport close invalidates the token | implemented for single Context and Page+main-Frame publication |
 | Graceful-close machines | unique client driver / server control decorator | one fixed-size phase value and counters per endpoint | `Connection`; no dynamic units | no queue or allocation; cancelled Ack wait retains only phase; preceding frames are validated and dropped one at a time | implemented |
 | Tailnet endpoint authentication | caller-owned endpoint plus one caller-polled accept/connect future | one zeroized 32-byte PSK; 32-byte nonce; two 32-byte proof buffers; exactly 105 transcript bytes | fixed stack/endpoint state, no variable shared-ledger units | reject non-Tailscale addresses before I/O; reject invalid proof before frame transport; caller bounds concurrent futures and injects deadline | implemented |
-| Mutual-TLS endpoint authentication | caller-owned endpoint; semaphore-bounded accepted handshakes; one caller-polled client connect | rustls cap: 65,535-byte handshake message and 65,536-byte certificate; explicit outbound TLS buffer limit `max(65,536, stream envelope + 8)`; compile-time pin count | third-party TLS state is documented separately; authenticated Pwright frames enter the existing `WireBytes` ledger | reject wildcard/config/ALPN/certificate/pin failures before frame transport; handshake permit releases on success/error/cancellation; caller injects deadline and PKI policy | implemented |
+| Mutual-TLS endpoint authentication | caller-owned endpoint; semaphore-bounded accepted handshakes; one caller-polled client connect | rustls cap: 65,535-byte handshake message and 65,536-byte certificate; explicit outbound TLS buffer limit `max(65,536, stream envelope + 8)`; compile-time pin count | third-party TLS state is documented separately; authenticated Playwright Rust frames enter the existing `WireBytes` ledger | reject wildcard/config/ALPN/certificate/pin failures before frame transport; handshake permit releases on success/error/cancellation; caller injects deadline and PKI policy | implemented |
 | Caller-driven Chromium endpoint server | deployment composition | one caller-selected pre-bound listener, stateless attach factory, and external CDP endpoint; exactly one accept future per call | endpoint-specific pre-authentication resources; each successful peer gets a fresh connection ledger | endpoint rejection precedes CDP; no loop, task, retry, admission policy, or deadline; runtime/application installers remain explicit per connection | Unix UID plus dedicated-Chrome live proof; Tailnet and mTLS static adapters implemented; operational admission/deadline policy remains caller-owned |
 | Complete current-capability Chromium recipe | one accepted Chromium connection | one controlled Page runtime; one static command chain; one activated control receiver; lifecycle plus three typed-event outbound lanes; topology and PageLoad backend cursors; caller-sized cleanup queue; four supervisor/runtime command slots in the full profile | existing per-capability ledger claims; topology driver owns one fixed backend-state lease; PageLoad adds one selected event cursor and one retained future; each typed event owns its declared queue leases | reject any unselected or unnegotiated capability/control/event component; derive reclaiming subscriber capacity from selected plugins; keep supervisor ingress and runtime active-command limits equal; terminate on cursor lag, mapping failure, or event overflow; Page-close poll and cleanup draining remain injected | all eight current browser capabilities plus control and three Page event lanes compile as one concrete application; unit cursor proof, dedicated-Chrome assembly/reattach proof, and four-command navigation/Locator overlap proof pass |
 | Typed result/command to encoded wire frame | protocol connection | per-payload, attachment, attachment-count, aggregate frame, and source representability limits | `WireBytes` | reserve source + maximum output before codec allocation; atomically shrink/move to exact route-owned frame; failure releases | shared budget and production protocol claim implemented |
@@ -2238,18 +2238,18 @@ leases. Zero is a valid limit and rejects the first reservation.
 | Chromium utility-world bootstrap | optional topology-event infrastructure profile | one fixed 34-byte per-Page name, one browser-retained empty new-document registration per live target session, and sequential commands over at most the bounded frame tree | no separate Rust retention class; command/response bytes use the existing CDP `WireBytes` plan, world unique IDs use topology and Page-route `BackendStateBytes` | no task or queue; only a creation failure for a frame absent from a fresh authoritative tree is tolerated; target/session teardown owns Chromium-side registration disposal | implemented for Page and OOPIF sessions with fake-race and dedicated-Chrome isolation proof |
 | Locator query/runtime source | locator capability/Chromium backend | depth, node, aggregate string, value-capacity, generated-script, and concurrent-action limits | `SelectorBytes` in composition-selected scope | production call reserves its complete transient peak synchronously before returning a future; completion/cancellation/unpolled future drop releases | shared budget and production profile implemented |
 | Active Chromium `Page.goto` tracking | navigation backend action | URL/native-ID/inflight-request/header/status limits plus concurrent-operation bound | `BackendStateBytes` in composition-selected scope | production call reserves complete peak synchronously; reject before request insertion/header copy; completion/cancellation/drop releases | shared budget and production profile implemented |
-| HTTP Request/Response lifecycle metadata | optional `pwright.network-events` model/contract, Chromium normalizer, single-cursor attachment driver, subscription registry, and one cross-event remote stream | active request count; Page-lane and BrowserContext counts; one fixed parent Context ID per Page driver lane; separate four-bit Page/Context masks; at most one in-flight Context plan containing bounded Page IDs, compact session IDs, and actions; at most one provisional Page transaction containing bounded session/target identity and fixed client/bookkeeping ownership; one unpublished-batch Page ID; two temporary runtime children per active request; compact in-flight Request/optional-Response metadata; bounded terminal snapshots and ordered queue items/bytes | pre-reserved `BackendStateBytes` for native correlation plus the maximum compact Request/Response snapshot of every active request, exact-session Page state and its parent Context ID, one replacement-only shadow adapter beyond the public Page-lane count, empty-Context masks, the maximum Context transition plan, and one maximum provisional Page transaction; `EventItem`/`EventBytes` count complete terminal snapshot capacity for selected queues; `LiveObject` and lifecycle `EventItem` cover only in-flight Request/Response children | register one connection cursor and exact Page adapters before enable; use direct/inherited union for native ownership; Page edges commit after exact-session CDP success; Context edges snapshot before I/O and commit only after the whole batch, reverse-compensate definite failure, and preserve cancelled enable as idempotent disable cleanup; explicit `newPage` and automatic new-Page discovery hold provisional-session events until atomic publication and reverse enable before target/session cleanup on failure; replace a discovered session through the pre-enabled shadow while preserving masks and disposing old active Request roots in the runtime rebind; Page/session detach and explicit Page/Context close hold network state across topology/routes/runtime publication, preserving adapters on failure and retiring them only after parent-subtree commit; Context close filters adapters by their retained parent identity without another Page-ID allocation or a subscription lock across publication; require exact Page acknowledgment after every normalized batch before another receive, replacement, or retirement; the owned driver turn combines receive, lifecycle/control/event publication, and acknowledgment; fan out Page then Context with shared identities; lifecycle Create is fenced before first exposure; terminal Request/optional-Response values are self-contained and one Request-root Dispose commits only after every selected queue accepts the batch; queue loss or retirement failure is connection-terminal; application install requires unique-driver consumption and the retained backend drops it on terminal connection notification; no completed history or body read | portable model, object kinds, complete terminal snapshot codec/client contract, production normalizer, bounded single-cursor driver/registry, transactional Page activation, resumable multi-session Context activation, explicit-newPage and automatic-discovery inheritance/rollback, atomic session replacement/rollback/recovery, atomic parent retirement, unpublished-batch barrier, owned publish turn/backend, explicit Page/Context close adapter retirement, Page/BrowserContext client helpers, empty Context retention and dual-scope publication, ordered codec/client path, all-capabilities application wiring, 4,096-iteration bounds, overflow proof, unit terminal cleanup, dedicated-Chrome install/drop/external-browser-survival proofs, a persistent-Page Chrome workload with stable `[4, 4, 4]` live objects, and two consecutive three-run RSS series implemented; cross-host series and reviewed budgets pending |
+| HTTP Request/Response lifecycle metadata | optional `playwright.rust.network-events` model/contract, Chromium normalizer, single-cursor attachment driver, subscription registry, and one cross-event remote stream | active request count; Page-lane and BrowserContext counts; one fixed parent Context ID per Page driver lane; separate four-bit Page/Context masks; at most one in-flight Context plan containing bounded Page IDs, compact session IDs, and actions; at most one provisional Page transaction containing bounded session/target identity and fixed client/bookkeeping ownership; one unpublished-batch Page ID; two temporary runtime children per active request; compact in-flight Request/optional-Response metadata; bounded terminal snapshots and ordered queue items/bytes | pre-reserved `BackendStateBytes` for native correlation plus the maximum compact Request/Response snapshot of every active request, exact-session Page state and its parent Context ID, one replacement-only shadow adapter beyond the public Page-lane count, empty-Context masks, the maximum Context transition plan, and one maximum provisional Page transaction; `EventItem`/`EventBytes` count complete terminal snapshot capacity for selected queues; `LiveObject` and lifecycle `EventItem` cover only in-flight Request/Response children | register one connection cursor and exact Page adapters before enable; use direct/inherited union for native ownership; Page edges commit after exact-session CDP success; Context edges snapshot before I/O and commit only after the whole batch, reverse-compensate definite failure, and preserve cancelled enable as idempotent disable cleanup; explicit `newPage` and automatic new-Page discovery hold provisional-session events until atomic publication and reverse enable before target/session cleanup on failure; replace a discovered session through the pre-enabled shadow while preserving masks and disposing old active Request roots in the runtime rebind; Page/session detach and explicit Page/Context close hold network state across topology/routes/runtime publication, preserving adapters on failure and retiring them only after parent-subtree commit; Context close filters adapters by their retained parent identity without another Page-ID allocation or a subscription lock across publication; require exact Page acknowledgment after every normalized batch before another receive, replacement, or retirement; the owned driver turn combines receive, lifecycle/control/event publication, and acknowledgment; fan out Page then Context with shared identities; lifecycle Create is fenced before first exposure; terminal Request/optional-Response values are self-contained and one Request-root Dispose commits only after every selected queue accepts the batch; queue loss or retirement failure is connection-terminal; application install requires unique-driver consumption and the retained backend drops it on terminal connection notification; no completed history or body read | portable model, object kinds, complete terminal snapshot codec/client contract, production normalizer, bounded single-cursor driver/registry, transactional Page activation, resumable multi-session Context activation, explicit-newPage and automatic-discovery inheritance/rollback, atomic session replacement/rollback/recovery, atomic parent retirement, unpublished-batch barrier, owned publish turn/backend, explicit Page/Context close adapter retirement, Page/BrowserContext client helpers, empty Context retention and dual-scope publication, ordered codec/client path, all-capabilities application wiring, 4,096-iteration bounds, overflow proof, unit terminal cleanup, dedicated-Chrome install/drop/external-browser-survival proofs, a persistent-Page Chrome workload with stable `[4, 4, 4]` live objects, and two consecutive three-run RSS series implemented; cross-host series and reviewed budgets pending |
 | Response bodies | future independent body capability | per-call result or chunk bytes and concurrent consumers | `ResponseBodyBytes` | reserve before allocation; bounded result or stream/backpressure; never read or retain all traffic implicitly | capability not yet implemented |
 | Console and browser logs | future opt-in log capability | must declare item and byte limits | `LogBytes` | event-specific ring/drop policy with loss metrics | capability not yet implemented |
 | Trace metadata chunks | optional BrowserContext tracing capability plus injected sink | session/chunk name/title bytes; group depth; entries per chunk; bytes per entry; total in-memory chunk bytes; exactly one detached chunk awaiting sink; preallocated registered-Context count | `TraceBytes` plus independent entry and Context count bounds | reserve before copy; group location and correlated call-ID entries reserve exact encoded size before one allocation; `stopChunk` atomically transfers or discards; a detached chunk gates the next chunk/session and drops payload leases/vector storage before reopening the gate; Context teardown releases recorder first and then requires sink cleanup; sink-cleanup failure cannot retain base state; wire control accepts no attachments; no core I/O/task | core-only bounded recorder, exact production profile, six-command 1.0 schema/capability, bounded binary codec, opt-in client facade, generated server chain, task-free shared recorder service, injected clock/sink, full typed duplex proof, optional navigation contributor, dedicated-Chrome `goto` proof, first DT-003 tracing workload, and bounded atomic file sink implemented; rich contributors, remote streaming, repeated series, and reviewed budgets pending |
-| PWRTRACE encoding and atomic trace files | shared `pwright-trace-format` plus optional `pwright-trace-sink-file` leaf | encoded Artifact byte ceiling; encoded directory-path bytes; distinct Contexts; committed chunks per Context; one encoded file; total committed bytes per Context; exactly one synchronous staging file under the state lock | Artifact path reserves exact `ArtifactBytes` before allocation and returns that owned buffer; file path retains recorder `TraceBytes` only until synchronous handoff and accounts disk separately | one shared exact size/writer contract; Artifact oversize rejects before lease/allocation and makes no staging copy; file sink requires a fresh directory, admits before path creation, then create-new temporary file, stream, sync, and atomic rename; failed publication cleans staging best-effort | two format AAA tests prove exact budget/bytes and oversize pre-admission; six file-sink tests preserve exact tracing-service bytes and Context/chunk/aggregate/directory gates; producer command, directory recovery, archive/ZIP, serving, and remote delivery remain separate |
-| Pullable trace chunks | optional `pwright-trace-sink-pull` leaf | fallibly preallocated global FIFO slots; queued chunks per Context; retained name/title/payload bytes per chunk and globally | original chunk-owned `TraceBytes` leases plus independent queue item/byte admission; peaks and accept/reject totals are sink-local | reject before queue mutation; queued chunk keeps recorder gate closed; `pop` releases queue admission but transfers the non-cloneable chunk and all leases to caller; Context/all abort drops only still-queued chunks; caller must bound and clean any post-pop async send | six AAA tests cover tracing-service handoff, ownership after pop, item/byte/per-Context rejection, label accounting, selective abort, and connection-wide abort; concrete remote transport, cancellation/retry, and delivery acknowledgment remain separate |
-| Artifact byte stream | optional command-free model, `pwright.artifact` 1.0 contract/codec/server, opt-in client facade, task-free registry/service, and separate runtime lifecycle adapter | fixed preallocated Artifact and Stream tables; one immutable source shared by bounded Streams; one cursor/prepared read per Stream; source, read, failure, retained-result, Artifact-count, and Stream-count limits; one successful-result attachment; controlled-runtime live-object/control capacity and ordered-writer waiters | `ArtifactBytes` in source-object and result-call scopes for sources, failure results, and read results; production profile covers maximum sources plus retained-result pool and worst-case one-byte result scopes; a prebudgeted source may transfer the same owned lease/buffer into the Artifact; wire attachment remains separately owned until exact decode copy succeeds; runtime owns its existing `LiveObject` and control-message leases | reserve/copy result before cursor mutation; commit advances, prepared-read drop rolls back; explicit close rejects during preparation; Artifact/parent/connection teardown aborts child Streams first; registry Create stays unpublished until runtime commit; disposal holds and compares stable child-first plans; exact Create/Dispose is fenced before command success; failed Stream Create publication is compensated locally; codec requires index zero, one attachment, exact declared length, and explicit EOF including empty artifacts | stable handles/object vocabulary, eight model tests, frozen generated five-command schema, six codec tests, three client tests, ten registry/service tests including owned-source scope/no-copy and complete typed duplex pull, opt-in/absent manifest proofs, and five runtime transaction/order/failure/trace-ownership tests implemented; tracing producer command pending |
+| PWRTRACE encoding and atomic trace files | shared `playwright-rust-trace-format` plus optional `playwright-rust-trace-sink-file` leaf | encoded Artifact byte ceiling; encoded directory-path bytes; distinct Contexts; committed chunks per Context; one encoded file; total committed bytes per Context; exactly one synchronous staging file under the state lock | Artifact path reserves exact `ArtifactBytes` before allocation and returns that owned buffer; file path retains recorder `TraceBytes` only until synchronous handoff and accounts disk separately | one shared exact size/writer contract; Artifact oversize rejects before lease/allocation and makes no staging copy; file sink requires a fresh directory, admits before path creation, then create-new temporary file, stream, sync, and atomic rename; failed publication cleans staging best-effort | two format AAA tests prove exact budget/bytes and oversize pre-admission; six file-sink tests preserve exact tracing-service bytes and Context/chunk/aggregate/directory gates; producer command, directory recovery, archive/ZIP, serving, and remote delivery remain separate |
+| Pullable trace chunks | optional `playwright-rust-trace-sink-pull` leaf | fallibly preallocated global FIFO slots; queued chunks per Context; retained name/title/payload bytes per chunk and globally | original chunk-owned `TraceBytes` leases plus independent queue item/byte admission; peaks and accept/reject totals are sink-local | reject before queue mutation; queued chunk keeps recorder gate closed; `pop` releases queue admission but transfers the non-cloneable chunk and all leases to caller; Context/all abort drops only still-queued chunks; caller must bound and clean any post-pop async send | six AAA tests cover tracing-service handoff, ownership after pop, item/byte/per-Context rejection, label accounting, selective abort, and connection-wide abort; concrete remote transport, cancellation/retry, and delivery acknowledgment remain separate |
+| Artifact byte stream | optional command-free model, `playwright.rust.artifact` 1.0 contract/codec/server, opt-in client facade, task-free registry/service, and separate runtime lifecycle adapter | fixed preallocated Artifact and Stream tables; one immutable source shared by bounded Streams; one cursor/prepared read per Stream; source, read, failure, retained-result, Artifact-count, and Stream-count limits; one successful-result attachment; controlled-runtime live-object/control capacity and ordered-writer waiters | `ArtifactBytes` in source-object and result-call scopes for sources, failure results, and read results; production profile covers maximum sources plus retained-result pool and worst-case one-byte result scopes; a prebudgeted source may transfer the same owned lease/buffer into the Artifact; wire attachment remains separately owned until exact decode copy succeeds; runtime owns its existing `LiveObject` and control-message leases | reserve/copy result before cursor mutation; commit advances, prepared-read drop rolls back; explicit close rejects during preparation; Artifact/parent/connection teardown aborts child Streams first; registry Create stays unpublished until runtime commit; disposal holds and compares stable child-first plans; exact Create/Dispose is fenced before command success; failed Stream Create publication is compensated locally; codec requires index zero, one attachment, exact declared length, and explicit EOF including empty artifacts | stable handles/object vocabulary, eight model tests, frozen generated five-command schema, six codec tests, three client tests, ten registry/service tests including owned-source scope/no-copy and complete typed duplex pull, opt-in/absent manifest proofs, and five runtime transaction/order/failure/trace-ownership tests implemented; tracing producer command pending |
 | DOM/ARIA snapshots, screencast, network bodies, HAR, sources, video | independent future trace contributors/artifact capabilities | each plugin declares its own acquisition, retained bytes, staging count, redaction, and sink limits | contributor-specific bytes; never borrowed implicitly from base trace budget | independently selectable; shared chunk sequence only after explicit composition; failure attribution remains per contributor | deliberately not bundled with base tracing |
-| OS process-memory attribution | optional `pwright-process-metrics` diagnostic; optional `ledger` feature depends only on `pwright-core` | process-table snapshot bytes, process count, inspected command bytes, explicit stable runtime/browser root PIDs, total/phase observation counts, exact bounded series run count, and one typed owned-process exit proof | sampler-owned transient bytes plus one pre-reserved bounded observation vector per run and one pre-reserved bounded report vector per series; results correlate fixed-size OS counters, `ResourceMetrics`, and browser object counts and are not a `ResourceLedger` limit | read at most limit plus one sentinel byte; kill/reap oversized `ps`; discard command text after role classification; reject malformed/duplicate/cyclic PID graphs, overflow, phase/time/root changes, incomplete runs, teardown deadline violations, series plan mismatch, unclean logical state, or measured teardown above the stable warm process count; owned teardown requires the same snapshot to contain the runtime and omit the exact Browser PID and never fabricates zero browser RSS; reusable variable byte payload requires an explicit per-class plan while owner/lease/scope baselines remain strict | default standard-library-only crate and CLI, opt-in caller-driven external/owned recorders and bounded series, AAA tests, dedicated-Chrome idle/detach, Page/Context, retained-Handle, first tracing run, one three-run Playwright-shaped `goto` series, two consecutive three-run network-lifecycle series, and one three-run real owned-browser teardown series implemented; other repeated/cross-host series, Linux PSS, and budget thresholds remain DT-003 work |
-| Page screenshots | optional `pwright.content` 1.0 | decoded-byte ceiling, one active capture per Page, configured connection concurrency, one attachment | `ScreenshotBytes` for backend/client result; `WireBytes` for frame copy | reserve maximum before decode, reject encoded oversize, shrink to exact retained bytes; drop releases admission | production Chromium adapter and remote/client transfer implemented |
-| Locator screenshots | optional `pwright.locator_screenshot` 1.0 | selector depth/node/string ceilings, bounded Frame topology and native-ID length, one active capture per Page, configured selector/capture concurrency, decoded-byte ceiling, one attachment | `SelectorBytes` during resolution; `ScreenshotBytes` for backend/client result; `BackendStateBytes` for independent Frame routes and shared owner-translation chain; `WireBytes` for frame copy | acquire capture before resolution; drop releases selector/capture admission; scroll then re-resolve geometry; translate each ancestor via `DOM.getFrameOwner` plus native border box; shared attachment helper validates metadata before exact retained copy | independent schema/capability/codec/client/server, Page/main/local-child/nested-OOPIF routing, negotiated remote transfer, dedicated-Chrome main and same-process child proofs implemented; cross-site OOPIF live and decoded pixel fidelity remain conformance work |
-| Frame DOM content | optional `pwright.dom_content` 1.1 | UTF-8 byte ceiling, one active read per Frame by default with explicit nonzero concurrency opt-in, configured shared connection concurrency, one attachment, shared utility-route count/native-ID ceiling | `DomContentBytes` for backend/client result; `WireBytes` for frame copy; one `BackendStateBytes` route reservation shared with locator | reserve maximum before native read/copy, shrink to exact retained text; no navigation retry; drop releases both Frame and shared admission; exact Frame route and utility world only | capability, codec, client/server, Chromium adapter, direct/remote composition, shared route, and dedicated-Chrome proof implemented |
+| OS process-memory attribution | optional `playwright-rust-process-metrics` diagnostic; optional `ledger` feature depends only on `playwright-rust-core` | process-table snapshot bytes, process count, inspected command bytes, explicit stable runtime/browser root PIDs, total/phase observation counts, exact bounded series run count, and one typed owned-process exit proof | sampler-owned transient bytes plus one pre-reserved bounded observation vector per run and one pre-reserved bounded report vector per series; results correlate fixed-size OS counters, `ResourceMetrics`, and browser object counts and are not a `ResourceLedger` limit | read at most limit plus one sentinel byte; kill/reap oversized `ps`; discard command text after role classification; reject malformed/duplicate/cyclic PID graphs, overflow, phase/time/root changes, incomplete runs, teardown deadline violations, series plan mismatch, unclean logical state, or measured teardown above the stable warm process count; owned teardown requires the same snapshot to contain the runtime and omit the exact Browser PID and never fabricates zero browser RSS; reusable variable byte payload requires an explicit per-class plan while owner/lease/scope baselines remain strict | default standard-library-only crate and CLI, opt-in caller-driven external/owned recorders and bounded series, AAA tests, dedicated-Chrome idle/detach, Page/Context, retained-Handle, first tracing run, one three-run Playwright-shaped `goto` series, two consecutive three-run network-lifecycle series, and one three-run real owned-browser teardown series implemented; other repeated/cross-host series, Linux PSS, and budget thresholds remain DT-003 work |
+| Page screenshots | optional `playwright.rust.content` 1.0 | decoded-byte ceiling, one active capture per Page, configured connection concurrency, one attachment | `ScreenshotBytes` for backend/client result; `WireBytes` for frame copy | reserve maximum before decode, reject encoded oversize, shrink to exact retained bytes; drop releases admission | production Chromium adapter and remote/client transfer implemented |
+| Locator screenshots | optional `playwright.rust.locator_screenshot` 1.0 | selector depth/node/string ceilings, bounded Frame topology and native-ID length, one active capture per Page, configured selector/capture concurrency, decoded-byte ceiling, one attachment | `SelectorBytes` during resolution; `ScreenshotBytes` for backend/client result; `BackendStateBytes` for independent Frame routes and shared owner-translation chain; `WireBytes` for frame copy | acquire capture before resolution; drop releases selector/capture admission; scroll then re-resolve geometry; translate each ancestor via `DOM.getFrameOwner` plus native border box; shared attachment helper validates metadata before exact retained copy | independent schema/capability/codec/client/server, Page/main/local-child/nested-OOPIF routing, negotiated remote transfer, dedicated-Chrome main and same-process child proofs implemented; cross-site OOPIF live and decoded pixel fidelity remain conformance work |
+| Frame DOM content | optional `playwright.rust.dom_content` 1.1 | UTF-8 byte ceiling, one active read per Frame by default with explicit nonzero concurrency opt-in, configured shared connection concurrency, one attachment, shared utility-route count/native-ID ceiling | `DomContentBytes` for backend/client result; `WireBytes` for frame copy; one `BackendStateBytes` route reservation shared with locator | reserve maximum before native read/copy, shrink to exact retained text; no navigation retry; drop releases both Frame and shared admission; exact Frame route and utility world only | capability, codec, client/server, Chromium adapter, direct/remote composition, shared route, and dedicated-Chrome proof implemented |
 | PDF and other artifacts | future content/artifact capabilities | command and artifact byte limits | `ScreenshotBytes` or a reviewed plugin class | fail before retaining oversized result; no truncation | capability not yet implemented |
 | JS/element handles | future DOM capability | per-world/page and connection counts | `RemoteHandle` | explicit release; world/page teardown releases descendants | capability not yet implemented |
 
@@ -2266,7 +2266,7 @@ can be advertised by a production composition.
 
 ## Implemented shared ledger
 
-`pwright-core::ResourceLedger` contains only standard-library synchronization
+`playwright-rust-core::ResourceLedger` contains only standard-library synchronization
 and collections. Cloning the ledger shares one connection budget; cloning does
 not create capacity. It exposes:
 
@@ -2306,7 +2306,7 @@ composition cannot accidentally turn an unbudgeted constructor into its
 production path. Constructing or claiming this token has no browser, provider,
 transport, executor, or process side effect.
 
-`pwright-composition-chromium::PreparedChromiumAttach` now uses additive
+`playwright-rust-composition-chromium::PreparedChromiumAttach` now uses additive
 concurrent composition for the raw CDP connection, production topology,
 page-session routes, runtime, each selected backend service profile, and each
 selected wire protocol. Navigation-only composition does not advertise locator
@@ -2399,7 +2399,7 @@ route and topology candidates only after runtime admission succeeds, leaving no
 fallible step after the first live mutation. Failed admission therefore retains
 the previous topology bytes, object leases, lifecycle queue, and route table.
 
-`pwright-transport::WireFrame::new_budgeted` reserves its aggregate payload and
+`playwright-rust-transport::WireFrame::new_budgeted` reserves its aggregate payload and
 attachment length as `WireBytes`. A budgeted `WireProtocol` first reserves
 twice the maximum structurally attainable frame size in connection scope before
 calling its codec. Production codecs must bound variable-size typed source data
@@ -3008,11 +3008,11 @@ one further protocol-encode peak. The ordinary lifecycle outbound future may
 already retain its maximum frame while the ordered inbound Close barrier must
 encode CloseAck, so counting only one peak would make a valid shutdown depend
 on scheduler timing. Both protocols claim the same connection ledger; actual
-frames reserve and release exact bytes. The reserved `pwright.control`
+frames reserve and release exact bytes. The reserved `playwright.rust.control`
 handshake entry also consumes one explicitly bounded capability slot and fails
 composition before I/O when that slot or its ID-byte bound is unavailable.
 
-`pwright-server-events` supplies the matching typed event-output boundary. One
+`playwright-rust-server-events` supplies the matching typed event-output boundary. One
 production profile adds a bounded `EventItem`/`EventBytes` queue to one maximum
 protocol encode, while the separately declared transport covers its own
 retained I/O state. A claimed front event remains logically inside capacity
@@ -3131,7 +3131,7 @@ connection, object, call, or extension scope without cloning or exporting the
 whole bounded scope table. Diagnostics can therefore attribute pressure to a
 specific Page/call/plugin while global metrics remain allocation-free.
 
-OS measurements must report the Pwright client/runtime process separately from
+OS measurements must report the Playwright Rust client/runtime process separately from
 the browser parent, renderer, GPU, and utility processes. Ledger values explain
 retained logical data; RSS/allocator measurements capture allocator overhead,
 code, stacks, and fragmentation. Neither number substitutes for the other.
@@ -3158,7 +3158,7 @@ merely through Rust completion. The bounded registry lets environment teardown
 cancel/join execution and reclaim queued native values without running JS.
 Foreign callbacks can then retain only empty ticket cells. A failed argument
 check, future-size reservation, conversion, or dropped ticket releases admission.
-The `pwrightFfiMetrics()` extension exposes environment-wide running, queued,
+The `playwright-rustFfiMetrics()` extension exposes environment-wide running, queued,
 pending, byte and per-lane counters independently from live-host counters.
 Its `queuedCommands` counter excludes queued notifications/control results from
 command-pressure measurements; `queued` still counts all settlement lanes.
@@ -3182,7 +3182,7 @@ One already-budgeted session-signal wait carries a fixed sequence watermark;
 only Node callbacks publish through it. Command/error/close settlement uses the
 same ordered boundary, so stale callbacks cannot regress URL state. The
 `pendingPublications` metadata metric counts changes awaiting publication.
-Frame-local `pwrightMetadataMetrics().unpublishedUrl` identifies a native URL
+Frame-local `playwright-rustMetadataMetrics().unpublishedUrl` identifies a native URL
 revision not yet published on that exact Frame, without inspecting another Page.
 Environment teardown discards that queue and disables further enqueueing,
 including updates arriving while native shutdown drains. URL snapshots and
@@ -3243,7 +3243,7 @@ and call IDs. The Node timers scheduler and ArrayBuffer capacity getter are
 captured at package import; pre-import replacement of intrinsics is not a
 security boundary this package defends.
 
-`pwrightConversionMetrics()` exposes environment-wide `pending`,
+`playwright-rustConversionMetrics()` exposes environment-wide `pending`,
 `binaryReferences` and `backingBytes` for the prepared phase separately from
 queued native outcomes and active browser operations. Getter/conversion failure
 drops every captured reference. FFI `running` includes admitted prepared calls;
@@ -3277,7 +3277,7 @@ construction and native value finalization release their reservations.
 Locators retain a weak Rust host identity and portable Frame ID, not a DOM
 handle, native session or cached match. Cross-connection/Frame composition
 rejects before copying a query. Browser close need not destroy retained pure
-query values; `pwrightLocatorMetrics()` reports their environment-wide recipe
+query values; `playwright-rustLocatorMetrics()` reports their environment-wide recipe
 and byte counts separately from active-session metrics. JavaScript wrappers
 retain their parent wrappers; this is not a claim about V8 heap or process RSS.
 
@@ -3348,7 +3348,7 @@ through resolution and release. Failed or abandoned group cleanup terminally
 closes admission across resolver clones; reclaiming local leases after failure
 does not establish remote cleanup. Neither leaf is currently installed by the
 Node host or ordinary Locator reads. See the exact formulas and cancellation
-proofs in [Locator evaluation](knowledge/pwright-locator-evaluation.md).
+proofs in [Locator evaluation](knowledge/playwright-rust-locator-evaluation.md).
 
 The optional strict waiter adds a 256-byte installed state lease and a shared
 atomic concurrency limit; the aggregate production ledger alone cannot enforce
@@ -3441,7 +3441,7 @@ External Node references/heap captures remain separately admitted. Cleanup has
 changes. Runtime cancellation is not native-reclamation evidence: the Context
 close gate (NODE-026) now passes only with acknowledged native destruction.
 Full resource derivation and
-evidence: [host continuation](knowledge/pwright-locator-evaluation.md#host-owned-evaluation-continuation-2026-09-07).
+evidence: [host continuation](knowledge/playwright-rust-locator-evaluation.md#host-owned-evaluation-continuation-2026-09-07).
 
 NODE-025 now reproduces attachment failure at the connection's bounded
 `event_channel_capacity + 1` item ceiling (1,025), with Runtime.enable pending.
@@ -3459,7 +3459,7 @@ composing caller must cover all subscribers' interests. A live probe omits
 1,440 irrelevant events and closes with zero recorded host resources, but full
 Node gates still contain attach timeouts and a lifecycle watchdog kill. This
 does not prove browser-native world reclamation or RSS bounds. See
-[the policy contract](knowledge/pwright-cdp-event-admission.md).
+[the policy contract](knowledge/playwright-rust-cdp-event-admission.md).
 
 Semantic Node Locator construction separately reuses the existing query-value
 budget: 1,024 recipes / 8 MiB, depth 32, 256 nodes, 64 KiB aggregate strings.

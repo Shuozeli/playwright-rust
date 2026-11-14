@@ -53,7 +53,7 @@ PRELOAD = (
 )
 PROFILE = "playwright-server-connect-session"
 ARTIFACT_SHA256 = "cc27493d9006fc1a4a2cb1375fb08861ff93758d3f937522b8ae615c5a0f94f7"
-SOURCE_PACKAGE = ROOT / "packages/pwright"
+SOURCE_PACKAGE = ROOT / "packages/playwright-rust"
 LIBRARY_SUITE = "library-server-connect-timeouts-strict-v1"
 BIDI_SUITE = "bidi-server-connect-timeouts-strict-v1"
 RESULT_PARENT = (
@@ -107,17 +107,17 @@ FORBIDDEN_OVERRIDES = (
     "PWTEST_MODE",
     "PWPAGE_IMPL",
     "PWTEST_USE_BIDI_EXPECTATIONS",
-    "PWRIGHT_CANDIDATE_CDP_ENDPOINT",
-    "PWRIGHT_ORACLE_CDP_ENDPOINT",
-    "PWRIGHT_CDP_ENDPOINT",
-    "PWRIGHT_CDP_WS_URL",
-    "PWRIGHT_NATIVE_PROFILE",
-    "PWRIGHT_NODE_CANDIDATE",
-    "PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM",
-    "PWRIGHT_OFFICIAL_SERVER_IP",
-    "PWRIGHT_OFFICIAL_SERVER_HOST",
-    "PWRIGHT_CORE_SERVER_CONNECT_TIMEOUTS_V1_MODE",
-    "PWRIGHT_CORE_SERVER_CONNECT_TIMEOUTS_V1_RECEIPT",
+    "PLAYWRIGHT_RUST_CANDIDATE_CDP_ENDPOINT",
+    "PLAYWRIGHT_RUST_ORACLE_CDP_ENDPOINT",
+    "PLAYWRIGHT_RUST_CDP_ENDPOINT",
+    "PLAYWRIGHT_RUST_CDP_WS_URL",
+    "PLAYWRIGHT_RUST_NATIVE_PROFILE",
+    "PLAYWRIGHT_RUST_NODE_CANDIDATE",
+    "PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM",
+    "PLAYWRIGHT_RUST_OFFICIAL_SERVER_IP",
+    "PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST",
+    "PLAYWRIGHT_RUST_CORE_SERVER_CONNECT_TIMEOUTS_V1_MODE",
+    "PLAYWRIGHT_RUST_CORE_SERVER_CONNECT_TIMEOUTS_V1_RECEIPT",
 )
 
 
@@ -165,7 +165,7 @@ def check_sources() -> None:
         marker = f"test('{CASE_TITLES[line]}', async ({{ connect, server }}) => {{"
         before = f"const e = await connect(`ws://localhost:${{server.PORT}}{PATH_BY_LINE[line]}`, {{"
         after = before.replace(
-            "ws://localhost", "ws://${process.env.PWRIGHT_OFFICIAL_SERVER_HOST}"
+            "ws://localhost", "ws://${process.env.PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST}"
         )
         assertion = f"expect(e.message).toContain('browserType.connect: Timeout {timeout}ms exceeded');"
         assert (
@@ -327,7 +327,7 @@ def capture(result_dir: Path) -> dict[str, object]:
             "strict timeout diagnostic rejects inherited runtime overrides"
         )
     check_sources()
-    artifact = SOURCE_PACKAGE / "native" / PROFILE / "pwright.node"
+    artifact = SOURCE_PACKAGE / "native" / PROFILE / "playwright_rust.node"
     assert artifact.is_file() and not artifact.is_symlink()
     assert sha256(artifact) == ARTIFACT_SHA256
     fixture_dns_preflight()
@@ -360,8 +360,8 @@ def capture(result_dir: Path) -> dict[str, object]:
             receipt.open("x").close()
             env = os.environ.copy()
             env["NODE_OPTIONS"] = f"--require={PRELOAD}"
-            env["PWRIGHT_CORE_SERVER_CONNECT_TIMEOUTS_V1_MODE"] = mode
-            env["PWRIGHT_CORE_SERVER_CONNECT_TIMEOUTS_V1_RECEIPT"] = str(receipt)
+            env["PLAYWRIGHT_RUST_CORE_SERVER_CONNECT_TIMEOUTS_V1_MODE"] = mode
+            env["PLAYWRIGHT_RUST_CORE_SERVER_CONNECT_TIMEOUTS_V1_RECEIPT"] = str(receipt)
             command = [
                 "uv",
                 "run",

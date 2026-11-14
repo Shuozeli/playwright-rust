@@ -1,0 +1,28 @@
+[package]
+name = "playwright-rust-codec-locator"
+description = "Canonical bounded binary codec for Playwright Rust locator actions"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+playwright-rust-cap-locator = { workspace = true }
+playwright-rust-codec-binary = { workspace = true }
+playwright-rust-codec-common = { workspace = true }
+playwright-rust-core = { workspace = true }
+playwright-rust-transport = { workspace = true }
+
+[dev-dependencies]
+playwright-rust-browser-model = { workspace = true }
+playwright-rust-client = { workspace = true }
+playwright-rust-client-locator = { workspace = true }
+playwright-rust-client-wire = { workspace = true }
+playwright-rust-codec-control = { workspace = true }
+playwright-rust-runtime = { workspace = true }
+playwright-rust-runtime-control = { workspace = true }
+playwright-rust-server-wire = { workspace = true }
+playwright-rust-transport-stream = { workspace = true }
+playwright-rust-transport-tokio = { workspace = true }
+tokio = { workspace = true }

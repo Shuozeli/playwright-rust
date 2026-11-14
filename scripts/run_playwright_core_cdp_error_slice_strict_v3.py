@@ -23,7 +23,7 @@ ARTIFACT_SHA256 = "0d7dcb931c42d5e912b594ec20fd12e202cc76590c7cab93187fe6829388f
 SCOPE = base.SCOPE + "-post-fix-paired-v3"
 RESULT_PARENT = ROOT / ".work/official-conformance/results/core-cdp-error-slice-strict-v3"
 ORACLE_SIDECAR = RESULT_PARENT / "oracle-v1.strict.json"
-SOURCE_PACKAGE = ROOT / "packages/pwright"
+SOURCE_PACKAGE = ROOT / "packages/playwright-rust"
 SNAPSHOT_PACKAGE = RESULT_PARENT / "candidate-package-snapshot-v1"
 SNAPSHOT_MANIFEST = RESULT_PARENT / "candidate-package-snapshot-v1.files.json"
 SELECTED_LINES = base.SELECTED_LINES
@@ -70,7 +70,7 @@ def check_pin() -> None:
 
 def check_artifact(path: Path | None = None) -> Path:
     check_pin()
-    artifact = path or ROOT / "packages/pwright/native" / PROFILE / "pwright.node"
+    artifact = path or ROOT / "packages/playwright-rust/native" / PROFILE / "playwright_rust.node"
     if not artifact.is_file() or artifact.is_symlink():
         raise ValueError("strict v3 candidate artifact is missing or not a regular file")
     if base.sha256(artifact) != ARTIFACT_SHA256:
@@ -84,13 +84,13 @@ def _check_environment() -> None:
         "PWTEST_MODE",
         "PWPAGE_IMPL",
         "PWTEST_USE_BIDI_EXPECTATIONS",
-        "PWRIGHT_CANDIDATE_CDP_ENDPOINT",
-        "PWRIGHT_ORACLE_CDP_ENDPOINT",
-        "PWRIGHT_NATIVE_PROFILE",
-        "PWRIGHT_NODE_CANDIDATE",
-        "PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM",
-        "PWRIGHT_OFFICIAL_SERVER_HOST",
-        "PWRIGHT_CORE_CDP_ERROR_SLICE_GUARD_RECEIPT",
+        "PLAYWRIGHT_RUST_CANDIDATE_CDP_ENDPOINT",
+        "PLAYWRIGHT_RUST_ORACLE_CDP_ENDPOINT",
+        "PLAYWRIGHT_RUST_NATIVE_PROFILE",
+        "PLAYWRIGHT_RUST_NODE_CANDIDATE",
+        "PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM",
+        "PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST",
+        "PLAYWRIGHT_RUST_CORE_CDP_ERROR_SLICE_GUARD_RECEIPT",
     )
     if any(os.environ.get(key) for key in forbidden):
         raise ValueError("strict v3 CDP error slice rejects inherited runtime overrides")
@@ -139,7 +139,7 @@ def run(mode: str, result: Path) -> dict[str, Any]:
     inputs = {str(path.relative_to(ROOT)): base.sha256(path) for path in INPUT_FILES}
     env = os.environ.copy()
     env["NODE_OPTIONS"] = f"--require={base.PRELOAD}"
-    env["PWRIGHT_CORE_CDP_ERROR_SLICE_GUARD_RECEIPT"] = str(receipt)
+    env["PLAYWRIGHT_RUST_CORE_CDP_ERROR_SLICE_GUARD_RECEIPT"] = str(receipt)
     command = [
         "uv",
         "run",
@@ -196,9 +196,9 @@ def run(mode: str, result: Path) -> dict[str, Any]:
     if mode == "oracle":
         assert all(item["status"] == "expected" for item in selected)
     if mode == "candidate":
-        assert "[pwright-candidate]" in log
+        assert "[playwright-rust-candidate]" in log
     else:
-        assert "[pwright-candidate]" not in log
+        assert "[playwright-rust-candidate]" not in log
     provenance_data = json.loads(provenance.read_text())
     if mode == "candidate":
         assert provenance_data["candidate"] == str(SNAPSHOT_PACKAGE)

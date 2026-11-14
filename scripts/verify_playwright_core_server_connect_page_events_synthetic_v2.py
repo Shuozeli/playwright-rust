@@ -28,8 +28,8 @@ from verify_playwright_core_server_connect_waiters_synthetic_v1 import (
 ROOT = Path(__file__).parents[1].resolve()
 SUITE = "library-chromium-server-connect-page-events-synthetic-v2"
 PROFILE = "playwright-server-connect-page-events"
-SOURCE_PACKAGE = ROOT / "packages/pwright"
-ARTIFACT_SOURCE = SOURCE_PACKAGE / "native" / PROFILE / "pwright.node"
+SOURCE_PACKAGE = ROOT / "packages/playwright-rust"
+ARTIFACT_SOURCE = SOURCE_PACKAGE / "native" / PROFILE / "playwright_rust.node"
 MANIFEST = ROOT / "tests/official/playwright-core-server-connect-page-events-synthetic-v2-manifest.json"
 PRELOAD = ROOT / "tests/official/playwright-core-server-connect-page-events-synthetic-v2-preload.cjs"
 SERVER = ROOT / "tests/official/playwright-core-server-connect-page-events-synthetic-v2-server.cjs"
@@ -290,12 +290,12 @@ def verify_lane(
                 and source.get("candidateProfile") == PROFILE
                 and source.get("candidateArtifactSha256") == snapshot_data["artifactSha256"]
                 and source.get("candidateSourceSha256") == snapshot_data["candidateSourceSha256"]
-                and "[pwright-candidate]" in log.read_text(),
+                and "[playwright-rust-candidate]" in log.read_text(),
                 "candidate lane did not load the selected frozen addon")
     else:
         require(source.get("candidate") is None and source.get("candidateProfile") is None
-                and "[pwright-candidate]" not in log.read_text(),
-                "oracle lane loaded Pwright")
+                and "[playwright-rust-candidate]" not in log.read_text(),
+                "oracle lane loaded Playwright Rust")
     selected = _selected_tests(report, "oracle")
     official_wire = _verify_official_receipt(receipt, mode, host, bind)
     positive_result = read_json(result_dir / f"{mode}.positive.json")

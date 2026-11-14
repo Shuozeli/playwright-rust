@@ -1,0 +1,28 @@
+[package]
+name = "playwright-rust-composition-chromium-locator-resolution"
+description = "Caller-owned cancellation-safe Chromium Locator resolution"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+default = []
+retained-reference = ["playwright-rust-backend-cdp-locator-resolution/retained-reference"]
+
+[dependencies]
+playwright-rust-backend-cdp-locator-resolution = { workspace = true }
+playwright-rust-backend-cdp-selector-runtime = { workspace = true }
+playwright-rust-cdp = { workspace = true }
+playwright-rust-core = { workspace = true }
+playwright-rust-runtime = { workspace = true }
+playwright-rust-selector-model = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+anyhow = { workspace = true }
+playwright-rust-browser-provider = { workspace = true }
+playwright-rust-fake = { workspace = true }
+playwright-rust-provider-cdp = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt", "sync"] }

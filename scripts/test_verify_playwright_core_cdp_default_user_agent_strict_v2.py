@@ -288,13 +288,13 @@ def test_candidate_requires_pinned_artifact_digest_before_capture(
         "PWTEST_MODE",
         "PWPAGE_IMPL",
         "PWTEST_USE_BIDI_EXPECTATIONS",
-        "PWRIGHT_CANDIDATE_CDP_ENDPOINT",
-        "PWRIGHT_ORACLE_CDP_ENDPOINT",
-        "PWRIGHT_NATIVE_PROFILE",
-        "PWRIGHT_NODE_CANDIDATE",
-        "PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM",
-        "PWRIGHT_OFFICIAL_SERVER_HOST",
-        "PWRIGHT_CORE_CDP_DEFAULT_UA_V2_GUARD_RECEIPT",
+        "PLAYWRIGHT_RUST_CANDIDATE_CDP_ENDPOINT",
+        "PLAYWRIGHT_RUST_ORACLE_CDP_ENDPOINT",
+        "PLAYWRIGHT_RUST_NATIVE_PROFILE",
+        "PLAYWRIGHT_RUST_NODE_CANDIDATE",
+        "PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM",
+        "PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST",
+        "PLAYWRIGHT_RUST_CORE_CDP_DEFAULT_UA_V2_GUARD_RECEIPT",
     ):
         monkeypatch.delenv(key, raising=False)
     monkeypatch.setattr(
@@ -316,9 +316,9 @@ def test_preload_only_changes_target_test_endpoint(tmp_path: Path) -> None:
     env = os.environ.copy()
     env.update(
         {
-            "PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM": str(capture.UPSTREAM),
-            "PWRIGHT_OFFICIAL_SERVER_HOST": HOST,
-            "PWRIGHT_CORE_CDP_DEFAULT_UA_V2_GUARD_RECEIPT": str(receipt),
+            "PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM": str(capture.UPSTREAM),
+            "PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST": HOST,
+            "PLAYWRIGHT_RUST_CORE_CDP_DEFAULT_UA_V2_GUARD_RECEIPT": str(receipt),
             "TEST_WORKER_INDEX": "0",
         }
     )

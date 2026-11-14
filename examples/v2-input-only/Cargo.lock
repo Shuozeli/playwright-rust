@@ -577,24 +577,24 @@ dependencies = [
 ]
 
 [[package]]
-name = "pwright-backend-cdp-input"
+name = "playwright-rust-backend-cdp-input"
 version = "0.1.0"
 dependencies = [
- "pwright-cdp",
- "pwright-core",
- "pwright-input-model",
+ "playwright-rust-cdp",
+ "playwright-rust-core",
+ "playwright-rust-input-model",
  "tokio",
 ]
 
 [[package]]
-name = "pwright-cdp"
+name = "playwright-rust-cdp"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
  "dashmap",
  "futures-util",
- "pwright-core",
+ "playwright-rust-core",
  "serde",
  "serde_json",
  "thiserror",
@@ -606,18 +606,18 @@ dependencies = [
 ]
 
 [[package]]
-name = "pwright-core"
+name = "playwright-rust-core"
 version = "0.1.0"
 
 [[package]]
-name = "pwright-input-model"
+name = "playwright-rust-input-model"
 version = "0.1.0"
 
 [[package]]
-name = "pwright-v2-input-only-example"
+name = "playwright-rust-v2-input-only-example"
 version = "0.1.0"
 dependencies = [
- "pwright-backend-cdp-input",
+ "playwright-rust-backend-cdp-input",
 ]
 
 [[package]]

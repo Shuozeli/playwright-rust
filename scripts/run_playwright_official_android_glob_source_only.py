@@ -1,7 +1,7 @@
 """Run one pinned upstream-private Android glob test with no-I/O receipts.
 
 Candidate and oracle are independent evidence labels for the same upstream
-body; neither lane loads Pwright or attests public API compatibility.
+body; neither lane loads Playwright Rust or attests public API compatibility.
 """
 
 from __future__ import annotations
@@ -38,9 +38,9 @@ def main() -> None:
     args = parser.parse_args()
     for key in (
         "NODE_OPTIONS", "CI", "PWTEST_MODE", "PWPAGE_IMPL", "PWTEST_USE_BIDI_EXPECTATIONS",
-        "PW_TAG", "PW_CLOCK", "PWRIGHT_CORE_SOURCE_ONLY_TEST_WORKER",
-        "PWRIGHT_CORE_SOURCE_ONLY_ACTIVE", "PWRIGHT_CORE_SOURCE_ONLY_MODE",
-        "PWRIGHT_NODE_CANDIDATE", "PWRIGHT_NATIVE_PROFILE",
+        "PW_TAG", "PW_CLOCK", "PLAYWRIGHT_RUST_CORE_SOURCE_ONLY_TEST_WORKER",
+        "PLAYWRIGHT_RUST_CORE_SOURCE_ONLY_ACTIVE", "PLAYWRIGHT_RUST_CORE_SOURCE_ONLY_MODE",
+        "PLAYWRIGHT_RUST_NODE_CANDIDATE", "PLAYWRIGHT_RUST_NATIVE_PROFILE",
         "GITHUB_ACTIONS", "GITLAB_CI",
     ):
         if os.environ.get(key):
@@ -68,18 +68,18 @@ def main() -> None:
     ]
     env = os.environ.copy()
     for key in (
-        "PWRIGHT_OFFICIAL_CROSS_ORIGIN_FORWARD", "PWRIGHT_CANDIDATE_CDP_ENDPOINT",
-        "PWRIGHT_ORACLE_CDP_ENDPOINT", "PWRIGHT_OFFICIAL_SERVER_IP", "PWRIGHT_OFFICIAL_SERVER_HOST",
+        "PLAYWRIGHT_RUST_OFFICIAL_CROSS_ORIGIN_FORWARD", "PLAYWRIGHT_RUST_CANDIDATE_CDP_ENDPOINT",
+        "PLAYWRIGHT_RUST_ORACLE_CDP_ENDPOINT", "PLAYWRIGHT_RUST_OFFICIAL_SERVER_IP", "PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST",
     ):
         env.pop(key, None)
     env.update({
         "PLAYWRIGHT_JSON_OUTPUT_FILE": str(result),
-        "PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM": str(upstream),
-        "PWRIGHT_CORE_SOURCE_ONLY_ACTIVE": "1",
-        "PWRIGHT_CORE_SOURCE_ONLY_MODE": args.mode,
-        "PWRIGHT_CORE_SOURCE_ONLY_MANIFEST": str(_MANIFEST),
-        "PWRIGHT_CORE_SOURCE_ONLY_SUITE": _SUITE,
-        "PWRIGHT_CORE_SOURCE_ONLY_GUARD_RECEIPT": str(receipt),
+        "PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM": str(upstream),
+        "PLAYWRIGHT_RUST_CORE_SOURCE_ONLY_ACTIVE": "1",
+        "PLAYWRIGHT_RUST_CORE_SOURCE_ONLY_MODE": args.mode,
+        "PLAYWRIGHT_RUST_CORE_SOURCE_ONLY_MANIFEST": str(_MANIFEST),
+        "PLAYWRIGHT_RUST_CORE_SOURCE_ONLY_SUITE": _SUITE,
+        "PLAYWRIGHT_RUST_CORE_SOURCE_ONLY_GUARD_RECEIPT": str(receipt),
         "NODE_OPTIONS": f"--require={_GUARD}",
     })
     result.parent.mkdir(parents=True, exist_ok=True)

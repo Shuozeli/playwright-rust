@@ -1,4 +1,4 @@
-use pwright_backend_cdp_context_lifecycle::CdpContextCloseLimits;
+use playwright_rust_backend_cdp_context_lifecycle::CdpContextCloseLimits;
 
 fn main() {
     let limits = CdpContextCloseLimits::new(256);

@@ -61,11 +61,11 @@ def sample(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
                 "playwrightPackageSha256": "b" * 64,
                 "driverNode": f"/pinned/{mode}/site/playwright/driver/node",
                 "driverNodeSha256": "c" * 64,
-                "pwrightPackage": f"/pinned/{mode}/site/pwright"
+                "playwright_rustPackage": f"/pinned/{mode}/site/playwright_rust"
                 if mode == "candidate"
                 else None,
-                "pwrightPackageSha256": "d" * 64 if mode == "candidate" else None,
-                "nativePath": f"/pinned/{mode}/site/pwright/_native.abi3.so"
+                "playwright_rustPackageSha256": "d" * 64 if mode == "candidate" else None,
+                "nativePath": f"/pinned/{mode}/site/playwright_rust/_native.abi3.so"
                 if mode == "candidate"
                 else None,
                 "nativeSha256": "e" * 64 if mode == "candidate" else None,

@@ -577,48 +577,48 @@ dependencies = [
 ]
 
 [[package]]
-name = "pwright-backend-cdp-common"
+name = "playwright-rust-backend-cdp-common"
 version = "0.1.0"
 dependencies = [
- "pwright-cdp",
- "pwright-core",
+ "playwright-rust-cdp",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-backend-cdp-dom-content"
+name = "playwright-rust-backend-cdp-dom-content"
 version = "0.1.0"
 dependencies = [
- "pwright-backend-cdp-common",
- "pwright-browser-backend",
- "pwright-cap-dom-content",
- "pwright-cdp",
- "pwright-core",
+ "playwright-rust-backend-cdp-common",
+ "playwright-rust-browser-backend",
+ "playwright-rust-cap-dom-content",
+ "playwright-rust-cdp",
+ "playwright-rust-core",
  "serde_json",
 ]
 
 [[package]]
-name = "pwright-browser-backend"
+name = "playwright-rust-browser-backend"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-cap-dom-content"
+name = "playwright-rust-cap-dom-content"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-cdp"
+name = "playwright-rust-cdp"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
  "dashmap",
  "futures-util",
- "pwright-core",
+ "playwright-rust-core",
  "serde",
  "serde_json",
  "thiserror",
@@ -630,86 +630,86 @@ dependencies = [
 ]
 
 [[package]]
-name = "pwright-codec-binary"
+name = "playwright-rust-codec-binary"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-codec-common"
+name = "playwright-rust-codec-common"
 version = "0.1.0"
 dependencies = [
- "pwright-codec-binary",
- "pwright-core",
+ "playwright-rust-codec-binary",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-codec-dom-content"
+name = "playwright-rust-codec-dom-content"
 version = "0.1.0"
 dependencies = [
- "pwright-cap-dom-content",
- "pwright-codec-binary",
- "pwright-codec-common",
- "pwright-core",
- "pwright-transport",
+ "playwright-rust-cap-dom-content",
+ "playwright-rust-codec-binary",
+ "playwright-rust-codec-common",
+ "playwright-rust-core",
+ "playwright-rust-transport",
 ]
 
 [[package]]
-name = "pwright-composition-chromium-dom-content"
+name = "playwright-rust-composition-chromium-dom-content"
 version = "0.1.0"
 dependencies = [
- "pwright-backend-cdp-dom-content",
- "pwright-cap-dom-content",
- "pwright-cdp",
- "pwright-codec-dom-content",
- "pwright-core",
- "pwright-server-dom-content",
- "pwright-transport",
+ "playwright-rust-backend-cdp-dom-content",
+ "playwright-rust-cap-dom-content",
+ "playwright-rust-cdp",
+ "playwright-rust-codec-dom-content",
+ "playwright-rust-core",
+ "playwright-rust-server-dom-content",
+ "playwright-rust-transport",
 ]
 
 [[package]]
-name = "pwright-connection-control"
+name = "playwright-rust-connection-control"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-core"
+name = "playwright-rust-core"
 version = "0.1.0"
 
 [[package]]
-name = "pwright-server-dom-content"
+name = "playwright-rust-server-dom-content"
 version = "0.1.0"
 dependencies = [
- "pwright-cap-dom-content",
- "pwright-codec-dom-content",
- "pwright-server-wire",
- "pwright-transport",
+ "playwright-rust-cap-dom-content",
+ "playwright-rust-codec-dom-content",
+ "playwright-rust-server-wire",
+ "playwright-rust-transport",
 ]
 
 [[package]]
-name = "pwright-server-wire"
+name = "playwright-rust-server-wire"
 version = "0.1.0"
 dependencies = [
- "pwright-connection-control",
- "pwright-core",
- "pwright-transport",
+ "playwright-rust-connection-control",
+ "playwright-rust-core",
+ "playwright-rust-transport",
 ]
 
 [[package]]
-name = "pwright-transport"
+name = "playwright-rust-transport"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-v2-dom-content-only-example"
+name = "playwright-rust-v2-dom-content-only-example"
 version = "0.1.0"
 dependencies = [
- "pwright-composition-chromium-dom-content",
+ "playwright-rust-composition-chromium-dom-content",
 ]
 
 [[package]]

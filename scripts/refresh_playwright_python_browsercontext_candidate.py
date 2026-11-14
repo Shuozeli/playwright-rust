@@ -85,7 +85,7 @@ def _prepare(spec: dict[str, str]) -> tuple[dict[str, Any], bytes]:
         and payload.get("manifestSha256") == previous["manifestSha256"]
         and Path(str(payload.get("manifest"))).resolve() == manifest
         and payload.get("exitCode") == 1
-        and payload.get("pwrightArtifactSha256") == PINNED_SHA256["candidateArtifact"],
+        and payload.get("playwright_rustArtifactSha256") == PINNED_SHA256["candidateArtifact"],
         "candidate 39-case execution profile or artifact drift",
     )
     original_oracle = prior._json_file(Path(previous["oracle"]["parentProvenance"]))

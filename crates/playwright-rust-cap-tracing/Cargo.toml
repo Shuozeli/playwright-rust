@@ -1,0 +1,11 @@
+[package]
+name = "playwright-rust-cap-tracing"
+description = "Portable opt-in tracing lifecycle contracts for Playwright Rust"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+playwright-rust-core = { workspace = true }

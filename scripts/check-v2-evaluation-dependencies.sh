@@ -14,25 +14,25 @@ cargo tree \
   --edges normal \
   --prefix none \
   --format '{p}' \
-  | awk '/^pwright-/ { print $1 }' \
+  | awk '/^playwright-rust-/ { print $1 }' \
   | sort -u >"$tree_file"
 
 required_packages=(
-  pwright-v2-evaluation-only-example
-  pwright-composition-chromium-evaluation
-  pwright-backend-cdp-common
-  pwright-backend-cdp-evaluation
-  pwright-browser-backend
-  pwright-cap-evaluation
-  pwright-cdp
-  pwright-codec-binary
-  pwright-codec-common
-  pwright-codec-evaluation
-  pwright-connection-control
-  pwright-core
-  pwright-server-evaluation
-  pwright-server-wire
-  pwright-transport
+  playwright-rust-v2-evaluation-only-example
+  playwright-rust-composition-chromium-evaluation
+  playwright-rust-backend-cdp-common
+  playwright-rust-backend-cdp-evaluation
+  playwright-rust-browser-backend
+  playwright-rust-cap-evaluation
+  playwright-rust-cdp
+  playwright-rust-codec-binary
+  playwright-rust-codec-common
+  playwright-rust-codec-evaluation
+  playwright-rust-connection-control
+  playwright-rust-core
+  playwright-rust-server-evaluation
+  playwright-rust-server-wire
+  playwright-rust-transport
 )
 
 for package in "${required_packages[@]}"; do
@@ -51,9 +51,9 @@ while IFS= read -r package; do
     fi
   done
   if [[ "$allowed" != true ]]; then
-    echo "evaluation-only dependency proof found forbidden Pwright package: $package" >&2
+    echo "evaluation-only dependency proof found forbidden Playwright Rust package: $package" >&2
     exit 1
   fi
 done <"$tree_file"
 
-echo "evaluation-only dependency proof passed (${#required_packages[@]} Pwright packages)"
+echo "evaluation-only dependency proof passed (${#required_packages[@]} Playwright Rust packages)"

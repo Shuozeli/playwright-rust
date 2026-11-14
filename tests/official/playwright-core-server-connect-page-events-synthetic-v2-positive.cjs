@@ -10,22 +10,22 @@ const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
 
-const mode = process.env.PWRIGHT_CORE_PAGE_EVENTS_SYNTHETIC_MODE;
-const upstream = process.env.PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM;
-const candidate = process.env.PWRIGHT_NODE_CANDIDATE;
-const fixture = process.env.PWRIGHT_CORE_PAGE_EVENTS_SYNTHETIC_SERVER;
-const receipt = process.env.PWRIGHT_CORE_PAGE_EVENTS_SYNTHETIC_RECEIPT;
+const mode = process.env.PLAYWRIGHT_RUST_CORE_PAGE_EVENTS_SYNTHETIC_MODE;
+const upstream = process.env.PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM;
+const candidate = process.env.PLAYWRIGHT_RUST_NODE_CANDIDATE;
+const fixture = process.env.PLAYWRIGHT_RUST_CORE_PAGE_EVENTS_SYNTHETIC_SERVER;
+const receipt = process.env.PLAYWRIGHT_RUST_CORE_PAGE_EVENTS_SYNTHETIC_RECEIPT;
 if (!['oracle', 'candidate'].includes(mode) || !upstream || !fixture || !receipt)
   throw new Error('positive probe requires a pinned lane, upstream and fixture');
 if (mode === 'candidate' && (!candidate ||
-    process.env.PWRIGHT_NATIVE_PROFILE !== 'playwright-server-connect-page-events'))
+    process.env.PLAYWRIGHT_RUST_NATIVE_PROFILE !== 'playwright-server-connect-page-events'))
   throw new Error('positive candidate probe requires selected addon snapshot');
-if (mode === 'oracle' && (candidate || process.env.PWRIGHT_NATIVE_PROFILE))
-  throw new Error('positive oracle probe must not load Pwright');
+if (mode === 'oracle' && (candidate || process.env.PLAYWRIGHT_RUST_NATIVE_PROFILE))
+  throw new Error('positive oracle probe must not load Playwright Rust');
 if (!path.isAbsolute(fixture) || !fs.statSync(fixture).isFile())
   throw new Error('positive probe fixture is not a regular absolute file');
-for (const key of ['PWRIGHT_CANDIDATE_CDP_ENDPOINT', 'PWRIGHT_ORACLE_CDP_ENDPOINT',
-  'PWRIGHT_CDP_ENDPOINT', 'PWRIGHT_CDP_WS_URL']) {
+for (const key of ['PLAYWRIGHT_RUST_CANDIDATE_CDP_ENDPOINT', 'PLAYWRIGHT_RUST_ORACLE_CDP_ENDPOINT',
+  'PLAYWRIGHT_RUST_CDP_ENDPOINT', 'PLAYWRIGHT_RUST_CDP_WS_URL']) {
   if (process.env[key]) throw new Error(`positive probe forbids ${key}`);
 }
 
@@ -40,7 +40,7 @@ const implementation = mode === 'oracle'
 function startServer() {
   const child = spawn(process.execPath, [fixture], {
     env: { ...process.env, NODE_OPTIONS: '',
-      PWRIGHT_CORE_PAGE_EVENTS_SYNTHETIC_PROBE_TOKEN: token },
+      PLAYWRIGHT_RUST_CORE_PAGE_EVENTS_SYNTHETIC_PROBE_TOKEN: token },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let stdout = '';
@@ -64,7 +64,7 @@ function trigger(endpoint) {
   url.pathname = '/emit-positive';
   return new Promise((resolve, reject) => {
     const request = http.request(url, {
-      method: 'POST', headers: { 'x-pwright-probe-token': token },
+      method: 'POST', headers: { 'x-playwright-rust-probe-token': token },
     }, response => {
       response.resume();
       response.on('end', () => {

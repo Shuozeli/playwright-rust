@@ -1,4 +1,4 @@
-<!-- agent-updated: 2026-10-06T06:01:05Z -->
+<!-- agent-updated: 2026-11-14T05:28:56Z -->
 
 # Playwright-compatible API request design
 
@@ -48,7 +48,7 @@ change the remaining APIRequest/full-corpus boundaries below.
 
 ## NODE-363 BrowserContext proxy and request composition
 
-`pwright-api-request-connector-proxy-bypass` is an independent injected
+`playwright-rust-api-request-connector-proxy-bypass` is an independent injected
 connector decorator. It owns bounded comma-separated parsing and implements
 Playwright's hostname-suffix bypass rule without adding proxy, TLS or browser
 dependencies. HTTP CONNECT and SOCKS5 proxy selection remain separate leaves;
@@ -125,8 +125,8 @@ expected / 47,551 not-run.
 ## NODE-359 SOCKS5 composition
 
 `api-request-socks5-proxy` is a separate native profile rather than an
-extension of HTTP CONNECT. It adds exactly one Pwright dependency leaf over
-`api-request`: `pwright-api-request-connector-socks5`. The leaf wraps the
+extension of HTTP CONNECT. It adds exactly one Playwright Rust dependency leaf over
+`api-request`: `playwright-rust-api-request-connector-socks5`. The leaf wraps the
 injected direct connector, parses an explicit `socks5:` or `socks5h:` endpoint,
 performs the bounded SOCKS5 no-auth negotiation and sends domain names to the
 proxy instead of resolving them locally. IPv4 and IPv6 target forms use their
@@ -179,7 +179,7 @@ Playwright exposes two related HTTP clients:
 - `browserContext.request` and `page.request` share cookie state with their
   owning `BrowserContext`.
 
-Neither client needs CDP or a browser process to perform the request. Pwright
+Neither client needs CDP or a browser process to perform the request. Playwright Rust
 therefore must not hide HTTP inside the Chromium aggregate or force an HTTP
 stack into installations that only need browser automation. The capability is
 an optional Rust owner with a transport port. Browser-context cookie sharing is
@@ -205,22 +205,22 @@ The implementation and official tests establish these initial invariants:
 - the global context owns cookies and storage state; the BrowserContext form
   delegates cookies and storage state to that BrowserContext.
 
-These are source-derived contracts, not evidence that Pwright already passes
+These are source-derived contracts, not evidence that Playwright Rust already passes
 the corresponding official tests.
 
 ## Package and dependency boundary
 
-`pwright-api-request` owns policy and lifetime only:
+`playwright-rust-api-request` owns policy and lifetime only:
 
 ```text
 Node facade ─┐
-             ├─ thin binding ─> pwright-api-request ─> ApiRequestTransport
+             ├─ thin binding ─> playwright-rust-api-request ─> ApiRequestTransport
 Python facade┘                                      ├─ transport policy
                                                     │  ├─ HTTP/1 codec
                                                     │  └─ connector/TLS plugins
                                                     └─ test fake
 
-BrowserContext cookie adapter ─> cookie port ─> pwright-api-request
+BrowserContext cookie adapter ─> cookie port ─> playwright-rust-api-request
 ```
 
 The crate has no `reqwest`, Hyper, CDP, browser, Node or Python dependency. Its
@@ -237,7 +237,7 @@ Multipart boundaries are deterministic context-owned identities and reject a
 body collision after four bounded scans; no language binding supplies
 randomness or constructs wire bytes.
 
-`pwright-api-request-http1` is a separate optional, runtime-free codec. It
+`playwright-rust-api-request-http1` is a separate optional, runtime-free codec. It
 encodes one bounded HTTP/1.1 exchange, injects `Host` and connection ownership
 when absent, and incrementally decodes informational, fixed-length, chunked and
 close-delimited responses. It preserves response header spelling, duplicate
@@ -248,7 +248,7 @@ executor, TLS, proxy, decompressor, cookie jar, redirect or retry policy.
 Its event API exposes the final response head before consuming body bytes;
 the original complete-response API remains a wrapper over those events.
 
-`pwright-api-request-transport` is a third selectable layer. It drives one
+`playwright-rust-api-request-transport` is a third selectable layer. It drives one
 codec exchange through injected `ApiConnector`/`ApiConnection` ports, drops
 each connection after that exchange, follows 301/302/303/307/308 with pinned
 method/body/header rewriting, distinguishes public `maxRedirects: 0` from an
@@ -260,18 +260,18 @@ into a public failure.
 
 The first concrete leaves remain independently selectable:
 
-- `pwright-api-request-connector-tokio` owns bounded DNS and plain TCP only;
-- `pwright-api-request-connector-rustls` adds HTTP/HTTPS, WebPKI roots,
+- `playwright-rust-api-request-connector-tokio` owns bounded DNS and plain TCP only;
+- `playwright-rust-api-request-connector-rustls` adds HTTP/HTTPS, WebPKI roots,
   HTTP/1.1 ALPN and request-scoped verified versus `ignoreHTTPSErrors` config;
-- `pwright-api-request-connector-http-proxy` wraps an injected connector with
+- `playwright-rust-api-request-connector-http-proxy` wraps an injected connector with
   bounded HTTP CONNECT, optional redacted Basic proxy credentials and retained
   prefetched tunnel bytes; the first profile accepts plain-HTTP origins only;
-- `pwright-api-request-decompress` implements the pinned empty-stream-safe
+- `playwright-rust-api-request-decompress` implements the pinned empty-stream-safe
   gzip/x-gzip, zlib deflate and Brotli behavior while bounding decoded output;
-- `pwright-api-request-cookie` owns the bounded global cookie jar, structured
+- `playwright-rust-api-request-cookie` owns the bounded global cookie jar, structured
   import/export and URL-specific request/response composition behind the base
   `ApiCookieStore` port;
-- `pwright-api-request-auth-basic` owns bounded UTF-8 credentials, exact
+- `playwright-rust-api-request-auth-basic` owns bounded UTF-8 credentials, exact
   case-insensitive origin matching, Basic encoding and `unauthorized` versus
   `always` send policy behind the base `ApiAuthorizationProvider` port.
 

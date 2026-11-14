@@ -1,0 +1,19 @@
+[package]
+name = "playwright-rust-client-page-events"
+description = "Opt-in Playwright-shaped Page event helpers for Playwright Rust clients"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+playwright-rust-cap-page-events = { workspace = true }
+playwright-rust-client = { workspace = true }
+playwright-rust-client-events = { workspace = true }
+playwright-rust-codec-page-events = { workspace = true }
+playwright-rust-core = { workspace = true }
+playwright-rust-transport = { workspace = true }
+
+[dev-dependencies]
+playwright-rust-browser-model = { workspace = true }

@@ -163,7 +163,7 @@ class OwnedLaunchEvidenceTests(unittest.TestCase):
             (candidate / "src").mkdir(parents=True)
             (candidate / "package.json").write_text('{"main":"src/index.cjs"}\n')
             (candidate / "src/index.cjs").write_text("module.exports = {};\n")
-            artifact = candidate / "native/owned-launch/pwright.node"
+            artifact = candidate / "native/owned-launch/playwright_rust.node"
             artifact.parent.mkdir(parents=True)
             artifact.write_bytes(b"fake-native-artifact-for-browserless-verifier-test")
             executable = Path(sys.executable).resolve()

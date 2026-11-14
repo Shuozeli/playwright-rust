@@ -39,7 +39,7 @@ from verify_playwright_python_dummy_engine_strict import (
     verify_provenance,
 )
 
-OFFICIAL = ROOT / "packages/pwright-python/tests/official"
+OFFICIAL = ROOT / "packages/playwright-rust-python/tests/official"
 GUARD_DIR = OFFICIAL / "dummy_engine_guard_strict"
 
 
@@ -91,19 +91,19 @@ def run(args: argparse.Namespace) -> Path:
         "PYTHONPATH": ":".join(map(str, python_paths)),
         "PYTHONNOUSERSITE": "1",
         "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
-        "PWRIGHT_OFFICIAL_MODE": args.mode,
-        "PWRIGHT_OFFICIAL_LAUNCH_MODE": "owned",
-        "PWRIGHT_OFFICIAL_BROWSER_CHANNEL": "",
-        "PWRIGHT_OFFICIAL_UPSTREAM_TESTS": str(upstream / "tests"),
-        "PWRIGHT_OFFICIAL_TAILSCALE_IP": bind,
-        "PWRIGHT_OFFICIAL_TAILSCALE_HOST": host,
-        "PWRIGHT_PYTHON_DUMMY_UPSTREAM": str(upstream),
-        "PWRIGHT_PYTHON_DUMMY_API": args.api,
-        "PWRIGHT_PYTHON_DUMMY_BROWSER": args.browser,
-        "PWRIGHT_PYTHON_DUMMY_LAUNCH_RECEIPT": str(public),
-        "PWRIGHT_PYTHON_DUMMY_PROCESS_RECEIPT": str(process),
-        "PWRIGHT_PYTHON_DUMMY_REAL_NODE": str(node),
-        "PWRIGHT_PYTHON_DUMMY_NONCE": nonce,
+        "PLAYWRIGHT_RUST_OFFICIAL_MODE": args.mode,
+        "PLAYWRIGHT_RUST_OFFICIAL_LAUNCH_MODE": "owned",
+        "PLAYWRIGHT_RUST_OFFICIAL_BROWSER_CHANNEL": "",
+        "PLAYWRIGHT_RUST_OFFICIAL_UPSTREAM_TESTS": str(upstream / "tests"),
+        "PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_IP": bind,
+        "PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_HOST": host,
+        "PLAYWRIGHT_RUST_PYTHON_DUMMY_UPSTREAM": str(upstream),
+        "PLAYWRIGHT_RUST_PYTHON_DUMMY_API": args.api,
+        "PLAYWRIGHT_RUST_PYTHON_DUMMY_BROWSER": args.browser,
+        "PLAYWRIGHT_RUST_PYTHON_DUMMY_LAUNCH_RECEIPT": str(public),
+        "PLAYWRIGHT_RUST_PYTHON_DUMMY_PROCESS_RECEIPT": str(process),
+        "PLAYWRIGHT_RUST_PYTHON_DUMMY_REAL_NODE": str(node),
+        "PLAYWRIGHT_RUST_PYTHON_DUMMY_NONCE": nonce,
     }
     selected = upstream / f"tests/{args.api}/test_launcher.py"
     command = [
@@ -122,15 +122,15 @@ def run(args: argparse.Namespace) -> Path:
         "-p",
         "pytest_timeout",
         "-p",
-        "pwright_official_server_runtime",
+        "playwright_rust_official_server_runtime",
         "-p",
         (
-            "pwright_candidate_runtime"
+            "playwright_rust_candidate_runtime"
             if args.mode == "candidate"
-            else "pwright_official_oracle_runtime"
+            else "playwright_rust_official_oracle_runtime"
         ),
         "-p",
-        "pwright_official_dummy_engine_guard",
+        "playwright_rust_official_dummy_engine_guard",
         f"--browser={args.browser}",
         "--timeout=20",
         "--timeout-method=signal",

@@ -292,7 +292,7 @@ def main() -> None:
             hashes = {name: digest(payload) for name, payload in files.items()}
             if args.publish:
                 require(
-                    os.environ.get("PWRIGHT_OFFICIAL_V8_PUBLISH_APPROVED") == "1",
+                    os.environ.get("PLAYWRIGHT_RUST_OFFICIAL_V8_PUBLISH_APPROVED") == "1",
                     "v8 publication requires explicit approval for this run",
                 )
                 require(files == prepare_pair(), "paired inputs changed before publish")

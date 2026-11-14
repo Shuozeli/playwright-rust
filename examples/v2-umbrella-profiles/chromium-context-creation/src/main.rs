@@ -1,4 +1,4 @@
-use pwright::chromium_context_creation::{
+use playwright_rust::chromium_context_creation::{
     ChromiumContextCreationProfile, NoopChromiumContextPublication,
 };
 

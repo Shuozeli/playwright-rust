@@ -46,7 +46,7 @@ def make_receipt(site_packages: Path, mode: str, statuses: tuple[str, ...]) -> l
     records: list[dict[str, Any]] = [
         {**shared, "kind": "runtime-import", "publicApiPath": str(public),
          "candidatePackagePath": (
-             str(site_packages / "pwright/__init__.py") if mode == "candidate" else None
+             str(site_packages / "playwright_rust/__init__.py") if mode == "candidate" else None
          )},
         {**shared, "kind": "fixture-adapted", "fixture": "launch_server",
          "testSourceAdapted": False, "browserProcessLaunched": False,

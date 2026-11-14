@@ -1,6 +1,8 @@
+<!-- agent-updated: 2026-11-14T05:28:56Z -->
+
 # API Parity: gRPC vs CLI vs Playwright Bridge
 
-This document tracks feature coverage across pwright's three API surfaces.
+This document tracks feature coverage across playwright-rust's three API surfaces.
 
 ## Coverage Matrix
 

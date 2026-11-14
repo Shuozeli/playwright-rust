@@ -319,7 +319,7 @@ class SidecarMutationTests(unittest.TestCase):
                 "verifierSha256": promoter.sha256(Path(promoter.strict.__file__).read_bytes()),
                 "guardSha256": promoter.sha256(
                     (
-                        promoter.strict.GUARD / "pwright_official_upstream_skip_guard_v1.py"
+                        promoter.strict.GUARD / "playwright_rust_official_upstream_skip_guard_v1.py"
                     ).read_bytes()
                 ),
                 "result": str(result),

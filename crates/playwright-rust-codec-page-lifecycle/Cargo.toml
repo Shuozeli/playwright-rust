@@ -1,0 +1,15 @@
+[package]
+name = "playwright-rust-codec-page-lifecycle"
+description = "Canonical binary codec for the optional Playwright Rust Page lifecycle capability"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+playwright-rust-cap-page-lifecycle = { workspace = true }
+playwright-rust-codec-binary = { workspace = true }
+playwright-rust-codec-common = { workspace = true }
+playwright-rust-core = { workspace = true }
+playwright-rust-transport = { workspace = true }

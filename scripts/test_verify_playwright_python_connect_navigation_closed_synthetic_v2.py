@@ -94,7 +94,7 @@ def _receipt_records(site: Path, mode: str) -> list[dict[str, object]]:
                 else site / "playwright/async_api/__init__.py"
             ),
             "candidatePackagePath": (
-                str(site / "pwright/__init__.py") if mode == "candidate" else None
+                str(site / "playwright_rust/__init__.py") if mode == "candidate" else None
             ),
         },
         {

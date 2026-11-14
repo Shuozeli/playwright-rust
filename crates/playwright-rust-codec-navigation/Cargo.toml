@@ -1,0 +1,30 @@
+[package]
+name = "playwright-rust-codec-navigation"
+description = "Canonical bounded binary codec for Playwright Rust navigation commands"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[features]
+default = []
+frame-navigation = ["playwright-rust-cap-navigation/frame-navigation", "playwright-rust-client-navigation/frame-navigation"]
+
+[dependencies]
+playwright-rust-cap-navigation = { workspace = true }
+playwright-rust-codec-binary = { workspace = true }
+playwright-rust-codec-common = { workspace = true }
+playwright-rust-core = { workspace = true }
+playwright-rust-transport = { workspace = true }
+
+[dev-dependencies]
+playwright-rust-browser-model = { workspace = true }
+playwright-rust-client = { workspace = true }
+playwright-rust-client-navigation = { workspace = true }
+playwright-rust-client-wire = { workspace = true }
+playwright-rust-runtime = { workspace = true }
+playwright-rust-server-wire = { workspace = true }
+playwright-rust-transport-stream = { workspace = true }
+playwright-rust-transport-tokio = { workspace = true }
+tokio = { workspace = true }

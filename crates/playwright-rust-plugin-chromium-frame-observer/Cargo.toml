@@ -1,0 +1,13 @@
+[package]
+name = "playwright-rust-plugin-chromium-frame-observer"
+description = "Optional synchronous Chromium frame-topology observation contracts for Playwright Rust drivers"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+playwright-rust-backend-cdp-topology = { workspace = true }
+playwright-rust-cdp = { workspace = true }
+playwright-rust-core = { workspace = true }

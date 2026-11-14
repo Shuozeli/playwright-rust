@@ -7,7 +7,7 @@ const path = require('node:path');
 const { after, test } = require('node:test');
 const { buildCommand, rewriteWorkspaceLinks } = require('./bootstrap_playwright_core455_source_only.cjs');
 
-const upstream = fs.mkdtempSync(path.join(os.tmpdir(), 'pwright-core455-bootstrap-test-'));
+const upstream = fs.mkdtempSync(path.join(os.tmpdir(), 'playwright-rust-core455-bootstrap-test-'));
 after(() => fs.rmSync(upstream, { recursive: true, force: true }));
 
 function directory(relative) {

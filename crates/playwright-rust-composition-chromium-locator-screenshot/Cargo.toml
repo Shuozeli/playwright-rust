@@ -1,0 +1,22 @@
+[package]
+name = "playwright-rust-composition-chromium-locator-screenshot"
+description = "Minimal pluggable Chromium CDP Locator screenshot server composition"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+playwright-rust-backend-cdp-content = { workspace = true }
+playwright-rust-backend-cdp-locator-screenshot = { workspace = true }
+playwright-rust-cap-locator-screenshot = { workspace = true }
+playwright-rust-cdp = { workspace = true }
+playwright-rust-codec-locator-screenshot = { workspace = true }
+playwright-rust-core = { workspace = true }
+playwright-rust-server-locator-screenshot = { workspace = true }
+playwright-rust-transport = { workspace = true }
+
+[dev-dependencies]
+playwright-rust-fake = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt"] }

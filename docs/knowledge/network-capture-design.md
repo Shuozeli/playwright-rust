@@ -1,4 +1,4 @@
-<!-- agent-updated: 2026-05-25T02:30:00Z -->
+<!-- agent-updated: 2026-11-14T05:28:56Z -->
 
 # Design: Network Capture CLI
 
@@ -12,7 +12,7 @@ traffic while interacting with a site across multiple CLI invocations.
 ## Solution: Second CDP Session Listener
 
 CDP supports multiple sessions attached to the same target. Each session
-receives its own copy of domain events. `pwright network-listen` creates a
+receives its own copy of domain events. `playwright-rust network-listen` creates a
 second session on the active tab, enables the Network domain on it, and
 streams events as JSONL to stdout until Ctrl+C or `--duration` expires.
 
@@ -23,28 +23,28 @@ same tab — no interference.
 ```
 Chrome Tab (target_id: ABC123)
   |
-  +-- Session 1 (from pwright click/fill/press)
+  +-- Session 1 (from playwright-rust click/fill/press)
   |     Used for DOM, Input, Runtime commands
   |
-  +-- Session 2 (from pwright network-listen)
+  +-- Session 2 (from playwright-rust network-listen)
         Network.enable -> streams events to stdout
 ```
 
 ## Commands
 
-### `pwright network-listen`
+### `playwright-rust network-listen`
 
 Long-running command. Attaches a second CDP session to the active tab,
 enables Network domain, prints request/response events as JSONL to stdout.
 
 ```bash
 # Terminal 1: start listener
-pwright network-listen
-pwright network-listen --duration 60               # stop after 60s
-pwright network-listen --filter "/api/"            # only URLs containing /api/
-pwright network-listen --resource-type XHR         # only XHR requests
-pwright network-listen --resource-type Fetch,XHR   # XHR and Fetch
-pwright network-listen --filter "/api/" --include-body  # inline response bodies
+playwright-rust network-listen
+playwright-rust network-listen --duration 60               # stop after 60s
+playwright-rust network-listen --filter "/api/"            # only URLs containing /api/
+playwright-rust network-listen --resource-type XHR         # only XHR requests
+playwright-rust network-listen --resource-type Fetch,XHR   # XHR and Fetch
+playwright-rust network-listen --filter "/api/" --include-body  # inline response bodies
 ```
 
 Output (one JSON object per line; tracing logs and the start/stop banner
@@ -74,7 +74,7 @@ Exits on:
 - Tab closed
 - Chrome disconnected
 
-### `pwright network-get <reqid>`
+### `playwright-rust network-get <reqid>`
 
 Fetches the response body for a request ID **using a fresh CDP session**.
 This only works in narrow cases (e.g., when the body was captured by a
@@ -86,22 +86,22 @@ process generally cannot retrieve a body captured by a separate
 listen-and-fetch case.
 
 ```bash
-pwright network-get 1001.2                   # print body to stdout
-pwright network-get 1001.2 --output data.json   # save to file
+playwright-rust network-get 1001.2                   # print body to stdout
+playwright-rust network-get 1001.2 --output data.json   # save to file
 ```
 
 The `reqid` comes from the `network-listen` output. It's Chrome's internal
 `Network.requestId` which is stable for the lifetime of the page.
 
-### `pwright network-list` (bonus, retroactive)
+### `playwright-rust network-list` (bonus, retroactive)
 
 Quick one-shot query using `performance.getEntriesByType('resource')`.
 Works after the fact without needing a listener running. Returns less
 detail (no headers, no bodies, no requestIds) but useful for quick checks.
 
 ```bash
-pwright network-list                         # all resources
-pwright network-list --filter ".js"          # only JS files
+playwright-rust network-list                         # all resources
+playwright-rust network-list --filter ".js"          # only JS files
 ```
 
 Output:
@@ -187,12 +187,12 @@ No CDP Network domain needed. Pure JS query.
 ## File changes
 
 ```
-crates/pwright-cli/src/main.rs        Add NetworkListen, NetworkList, NetworkGet commands
-crates/pwright-cli/src/commands.rs    Add network_listen, network_list, network_get handlers
-crates/pwright-cli/Cargo.toml         Add ctrlc or tokio signal for Ctrl+C handling
+crates/playwright-rust-cli/src/main.rs        Add NetworkListen, NetworkList, NetworkGet commands
+crates/playwright-rust-cli/src/commands.rs    Add network_listen, network_list, network_get handlers
+crates/playwright-rust-cli/Cargo.toml         Add ctrlc or tokio signal for Ctrl+C handling
 ```
 
-No changes needed in pwright-cdp or pwright-bridge — all the CDP primitives
+No changes needed in playwright-rust-cdp or playwright-rust-bridge — all the CDP primitives
 (`target_attach`, `network_enable`, `subscribe_events`, `network_get_response_body`)
 already exist.
 
@@ -200,16 +200,16 @@ already exist.
 
 ```bash
 # 1. Open a site
-pwright open https://example.com
+playwright-rust open https://example.com
 
 # 2. Start network listener in background (or separate terminal)
-pwright network-listen --filter "/api/" > traffic.jsonl &
+playwright-rust network-listen --filter "/api/" > traffic.jsonl &
 
 # 3. Interact with the site
-pwright snapshot
-pwright click e5
-pwright fill e3 "search query"
-pwright press Enter
+playwright-rust snapshot
+playwright-rust click e5
+playwright-rust fill e3 "search query"
+playwright-rust press Enter
 
 # 4. Check captured traffic
 cat traffic.jsonl
@@ -217,7 +217,7 @@ cat traffic.jsonl
 # {"event":"response","reqid":"1001.5","status":200,"mime":"application/json",...}
 
 # 5. Grab the response body
-pwright network-get 1001.5
+playwright-rust network-get 1001.5
 # {"results": [{"title": "Result 1", ...}, ...]}
 
 # 6. Stop listener

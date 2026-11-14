@@ -132,7 +132,7 @@ def process_event(case: dict[str, object], mode: str) -> dict[str, object]:
         profile = (
             "/tmp/playwright_chromiumdev_profile-test"
             if mode == "oracle"
-            else "/tmp/pwright-node-test"
+            else "/tmp/playwright-rust-node-test"
         )
         return {
             **event,
@@ -142,7 +142,7 @@ def process_event(case: dict[str, object], mode: str) -> dict[str, object]:
             "browserArguments": [f"--user-data-dir={profile}"],
         }
     profile = (
-        "/tmp/playwright_firefoxdev_profile-test" if mode == "oracle" else "/tmp/pwright-node-test"
+        "/tmp/playwright_firefoxdev_profile-test" if mode == "oracle" else "/tmp/playwright-rust-node-test"
     )
     return {
         **event,

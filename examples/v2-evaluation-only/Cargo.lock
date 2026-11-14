@@ -583,49 +583,49 @@ dependencies = [
 ]
 
 [[package]]
-name = "pwright-backend-cdp-common"
+name = "playwright-rust-backend-cdp-common"
 version = "0.1.0"
 dependencies = [
- "pwright-cdp",
- "pwright-core",
+ "playwright-rust-cdp",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-backend-cdp-evaluation"
+name = "playwright-rust-backend-cdp-evaluation"
 version = "0.1.0"
 dependencies = [
  "base64",
- "pwright-backend-cdp-common",
- "pwright-browser-backend",
- "pwright-cap-evaluation",
- "pwright-cdp",
- "pwright-core",
+ "playwright-rust-backend-cdp-common",
+ "playwright-rust-browser-backend",
+ "playwright-rust-cap-evaluation",
+ "playwright-rust-cdp",
+ "playwright-rust-core",
  "serde_json",
 ]
 
 [[package]]
-name = "pwright-browser-backend"
+name = "playwright-rust-browser-backend"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-cap-evaluation"
+name = "playwright-rust-cap-evaluation"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-cdp"
+name = "playwright-rust-cdp"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
  "dashmap",
  "futures-util",
- "pwright-core",
+ "playwright-rust-core",
  "serde",
  "serde_json",
  "thiserror",
@@ -637,86 +637,86 @@ dependencies = [
 ]
 
 [[package]]
-name = "pwright-codec-binary"
+name = "playwright-rust-codec-binary"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-codec-common"
+name = "playwright-rust-codec-common"
 version = "0.1.0"
 dependencies = [
- "pwright-codec-binary",
- "pwright-core",
+ "playwright-rust-codec-binary",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-codec-evaluation"
+name = "playwright-rust-codec-evaluation"
 version = "0.1.0"
 dependencies = [
- "pwright-cap-evaluation",
- "pwright-codec-binary",
- "pwright-codec-common",
- "pwright-core",
- "pwright-transport",
+ "playwright-rust-cap-evaluation",
+ "playwright-rust-codec-binary",
+ "playwright-rust-codec-common",
+ "playwright-rust-core",
+ "playwright-rust-transport",
 ]
 
 [[package]]
-name = "pwright-composition-chromium-evaluation"
+name = "playwright-rust-composition-chromium-evaluation"
 version = "0.1.0"
 dependencies = [
- "pwright-backend-cdp-evaluation",
- "pwright-cap-evaluation",
- "pwright-cdp",
- "pwright-codec-evaluation",
- "pwright-core",
- "pwright-server-evaluation",
- "pwright-transport",
+ "playwright-rust-backend-cdp-evaluation",
+ "playwright-rust-cap-evaluation",
+ "playwright-rust-cdp",
+ "playwright-rust-codec-evaluation",
+ "playwright-rust-core",
+ "playwright-rust-server-evaluation",
+ "playwright-rust-transport",
 ]
 
 [[package]]
-name = "pwright-connection-control"
+name = "playwright-rust-connection-control"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-core"
+name = "playwright-rust-core"
 version = "0.1.0"
 
 [[package]]
-name = "pwright-server-evaluation"
+name = "playwright-rust-server-evaluation"
 version = "0.1.0"
 dependencies = [
- "pwright-cap-evaluation",
- "pwright-codec-evaluation",
- "pwright-server-wire",
- "pwright-transport",
+ "playwright-rust-cap-evaluation",
+ "playwright-rust-codec-evaluation",
+ "playwright-rust-server-wire",
+ "playwright-rust-transport",
 ]
 
 [[package]]
-name = "pwright-server-wire"
+name = "playwright-rust-server-wire"
 version = "0.1.0"
 dependencies = [
- "pwright-connection-control",
- "pwright-core",
- "pwright-transport",
+ "playwright-rust-connection-control",
+ "playwright-rust-core",
+ "playwright-rust-transport",
 ]
 
 [[package]]
-name = "pwright-transport"
+name = "playwright-rust-transport"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-v2-evaluation-only-example"
+name = "playwright-rust-v2-evaluation-only-example"
 version = "0.1.0"
 dependencies = [
- "pwright-composition-chromium-evaluation",
+ "playwright-rust-composition-chromium-evaluation",
 ]
 
 [[package]]

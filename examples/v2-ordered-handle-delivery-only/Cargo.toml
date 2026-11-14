@@ -1,5 +1,5 @@
 [package]
-name = "pwright-v2-ordered-handle-delivery-only-example"
+name = "playwright-rust-v2-ordered-handle-delivery-only-example"
 version = "0.1.0"
 edition = "2024"
 publish = false
@@ -7,5 +7,5 @@ publish = false
 [workspace]
 
 [dependencies]
-pwright-cap-handle-evaluation = { path = "../../crates/pwright-cap-handle-evaluation" }
-pwright-plugin-ordered-handle-delivery = { path = "../../crates/pwright-plugin-ordered-handle-delivery" }
+playwright-rust-cap-handle-evaluation = { path = "../../crates/playwright-rust-cap-handle-evaluation" }
+playwright-rust-plugin-ordered-handle-delivery = { path = "../../crates/playwright-rust-plugin-ordered-handle-delivery" }

@@ -6,13 +6,13 @@ const fs = require('node:fs');
 const Module = require('node:module');
 const path = require('node:path');
 
-const mode = process.env.PWRIGHT_OFFICIAL_OWNED_LAUNCH_MODE;
+const mode = process.env.PLAYWRIGHT_RUST_OFFICIAL_OWNED_LAUNCH_MODE;
 const executable = process.env.CRPATH;
-const upstream = process.env.PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM;
-const receipt = process.env.PWRIGHT_OFFICIAL_OWNED_LAUNCH_RECEIPT;
+const upstream = process.env.PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM;
+const receipt = process.env.PLAYWRIGHT_RUST_OFFICIAL_OWNED_LAUNCH_RECEIPT;
 if (!['candidate', 'oracle'].includes(mode) || !executable || !path.isAbsolute(executable) || !upstream || !receipt)
   throw new Error('owned Core launch needs mode, absolute CRPATH, upstream and receipt');
-if (process.env.PWRIGHT_CANDIDATE_CDP_ENDPOINT || process.env.PWRIGHT_ORACLE_CDP_ENDPOINT)
+if (process.env.PLAYWRIGHT_RUST_CANDIDATE_CDP_ENDPOINT || process.env.PLAYWRIGHT_RUST_ORACLE_CDP_ENDPOINT)
   throw new Error('owned Core launch forbids the historical CDP adapter endpoints');
 
 const testModeSource = path.join(path.resolve(upstream), 'tests', 'config', 'testMode.ts');
@@ -29,7 +29,7 @@ function record(event, options) {
   }) + '\n');
 }
 
-Module._load = function pwrightOwnedLaunchLoad(request, parent, isMain) {
+Module._load = function playwrightRustOwnedLaunchLoad(request, parent, isMain) {
   if (request !== 'playwright-core' || parent?.filename !== testModeSource)
     return originalLoad(request, parent, isMain);
   if (adapted) return adapted;

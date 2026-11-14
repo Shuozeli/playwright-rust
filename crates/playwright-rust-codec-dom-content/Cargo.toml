@@ -1,0 +1,15 @@
+[package]
+name = "playwright-rust-codec-dom-content"
+description = "Bounded binary codec for Playwright Rust read-only DOM content"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+playwright-rust-cap-dom-content = { workspace = true }
+playwright-rust-codec-binary = { workspace = true }
+playwright-rust-codec-common = { workspace = true }
+playwright-rust-core = { workspace = true }
+playwright-rust-transport = { workspace = true }

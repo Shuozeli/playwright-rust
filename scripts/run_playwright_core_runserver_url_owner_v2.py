@@ -28,13 +28,13 @@ OWNER = ROOT / "tests/official/playwright-core-browser-type-owner-v2-preload.cjs
 PROFILE = "playwright-server-connect-session"
 FORBIDDEN_AMBIENT = (
     "NODE_OPTIONS",
-    "PWRIGHT_NODE_CANDIDATE",
-    "PWRIGHT_NATIVE_PROFILE",
-    "PWRIGHT_CANDIDATE_CDP_ENDPOINT",
-    "PWRIGHT_ORACLE_CDP_ENDPOINT",
-    "PWRIGHT_CDP_ENDPOINT",
-    "PWRIGHT_CDP_WS_URL",
-    "PWRIGHT_CORE_BROWSER_TYPE_OWNER_RECEIPT",
+    "PLAYWRIGHT_RUST_NODE_CANDIDATE",
+    "PLAYWRIGHT_RUST_NATIVE_PROFILE",
+    "PLAYWRIGHT_RUST_CANDIDATE_CDP_ENDPOINT",
+    "PLAYWRIGHT_RUST_ORACLE_CDP_ENDPOINT",
+    "PLAYWRIGHT_RUST_CDP_ENDPOINT",
+    "PLAYWRIGHT_RUST_CDP_WS_URL",
+    "PLAYWRIGHT_RUST_CORE_BROWSER_TYPE_OWNER_RECEIPT",
 )
 
 
@@ -98,7 +98,7 @@ def node_options(mode: str) -> str:
 
 def check_ambient(environment: dict[str, str]) -> None:
     if any(environment.get(key, "").strip() for key in FORBIDDEN_AMBIENT) or any(
-        key.startswith("PWRIGHT_OFFICIAL_RUNSERVER_") for key in environment
+        key.startswith("PLAYWRIGHT_RUST_OFFICIAL_RUNSERVER_") for key in environment
     ):
         raise ValueError(
             "ambient Node, CDP, candidate, or RunServer overrides are forbidden"
@@ -120,7 +120,7 @@ def check_raw_identity(raw: dict[str, Any], envelope: dict[str, Any]) -> None:
         or raw["candidateProfile"]
         != (PROFILE if envelope["mode"] == "candidate" else None)
         or raw["candidate"]
-        != (str(ROOT / "packages/pwright") if envelope["mode"] == "candidate" else None)
+        != (str(ROOT / "packages/playwright-rust") if envelope["mode"] == "candidate" else None)
     ):
         raise ValueError("raw provenance bind, host, profile, or selection differs")
 
@@ -267,14 +267,14 @@ def run(mode: str, upstream: Path, result: Path) -> int:
             "TAILSCALE_IP": bind,
             "TAILSCALE_HOST": host,
             "NODE_OPTIONS": node_options(mode),
-            "PWRIGHT_OFFICIAL_RUNSERVER_URL_SUITE": SUITE,
-            "PWRIGHT_OFFICIAL_RUNSERVER_EXPECT_BIND": bind,
-            "PWRIGHT_OFFICIAL_RUNSERVER_EXPECT_HOST": host,
-            "PWRIGHT_OFFICIAL_RUNSERVER_RECEIPT": str(base.receipt_path(result)),
+            "PLAYWRIGHT_RUST_OFFICIAL_RUNSERVER_URL_SUITE": SUITE,
+            "PLAYWRIGHT_RUST_OFFICIAL_RUNSERVER_EXPECT_BIND": bind,
+            "PLAYWRIGHT_RUST_OFFICIAL_RUNSERVER_EXPECT_HOST": host,
+            "PLAYWRIGHT_RUST_OFFICIAL_RUNSERVER_RECEIPT": str(base.receipt_path(result)),
         }
     )
     if mode == "candidate":
-        env["PWRIGHT_CORE_BROWSER_TYPE_OWNER_RECEIPT"] = str(owner_receipt_path(result))
+        env["PLAYWRIGHT_RUST_CORE_BROWSER_TYPE_OWNER_RECEIPT"] = str(owner_receipt_path(result))
     command = [
         sys.executable,
         str(base.RUNNER),

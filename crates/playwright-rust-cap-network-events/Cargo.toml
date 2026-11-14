@@ -1,0 +1,17 @@
+[package]
+name = "playwright-rust-cap-network-events"
+description = "Portable Playwright-aligned HTTP lifecycle event contracts for Playwright Rust"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[features]
+default = []
+request-timing = ["playwright-rust-network-model/request-timing"]
+
+[dependencies]
+playwright-rust-browser-model = { workspace = true }
+playwright-rust-core = { workspace = true }
+playwright-rust-network-model = { workspace = true }

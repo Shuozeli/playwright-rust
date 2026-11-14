@@ -1,0 +1,18 @@
+[package]
+name = "playwright-rust-client-evaluation"
+description = "Opt-in value-only evaluation methods for Playwright Rust clients"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+playwright-rust-cap-evaluation = { workspace = true }
+playwright-rust-client = { workspace = true }
+playwright-rust-core = { workspace = true }
+
+[dev-dependencies]
+playwright-rust-browser-model = { workspace = true }
+playwright-rust-cap-page-creation = { workspace = true }
+tokio = { workspace = true }

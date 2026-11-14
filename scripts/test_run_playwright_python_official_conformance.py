@@ -53,7 +53,7 @@ class PythonOfficialRunnerInputTests(unittest.TestCase):
     def test_proxy_preflight_rejects_changed_runtime_source(self) -> None:
         # Arrange
         with TemporaryDirectory() as directory:
-            package = Path(directory) / "pwright"
+            package = Path(directory) / "playwright_rust"
             package.mkdir()
             (package / "async_api.py").write_text("changed launch implementation\n")
 
@@ -71,7 +71,7 @@ class PythonOfficialRunnerInputTests(unittest.TestCase):
         # Arrange
         manifest_path = (
             Path(__file__).parents[1]
-            / "packages/pwright-python/tests/official/proxy-bad-server-browserless-manifest.json"
+            / "packages/playwright-rust-python/tests/official/proxy-bad-server-browserless-manifest.json"
         )
         manifest = cast(Manifest, json.loads(manifest_path.read_text()))
         arguments = cast(
@@ -101,7 +101,7 @@ class PythonOfficialRunnerInputTests(unittest.TestCase):
         # Arrange
         manifest_path = (
             Path(__file__).parents[1]
-            / "packages/pwright-python/tests/official/proxy-bad-server-browserless-manifest.json"
+            / "packages/playwright-rust-python/tests/official/proxy-bad-server-browserless-manifest.json"
         )
         manifest = cast(Manifest, json.loads(manifest_path.read_text()))
         arguments = cast(
@@ -148,7 +148,7 @@ class PythonOfficialRunnerInputTests(unittest.TestCase):
     ) -> None:
         # Arrange
         with TemporaryDirectory() as directory:
-            package = Path(directory) / "pwright"
+            package = Path(directory) / "playwright_rust"
             package.mkdir()
             (package / "async_api.py").write_text("changed preflight implementation\n")
             official = Path(directory) / "official"
@@ -172,7 +172,7 @@ class PythonOfficialRunnerInputTests(unittest.TestCase):
         # Arrange
         manifest_path = (
             Path(__file__).parents[1]
-            / "packages/pwright-python/tests/official"
+            / "packages/playwright-rust-python/tests/official"
             / "persistent-context-page-argument-browserless-manifest.json"
         )
         manifest = cast(Manifest, json.loads(manifest_path.read_text()))
@@ -205,7 +205,7 @@ class PythonOfficialRunnerInputTests(unittest.TestCase):
         # Arrange
         manifest_path = (
             Path(__file__).parents[1]
-            / "packages/pwright-python/tests/official"
+            / "packages/playwright-rust-python/tests/official"
             / "persistent-context-page-argument-browserless-manifest.json"
         )
         manifest = cast(Manifest, json.loads(manifest_path.read_text()))
@@ -252,7 +252,7 @@ class PythonOfficialRunnerInputTests(unittest.TestCase):
         # Arrange
         manifest_path = (
             Path(__file__).parents[1]
-            / "packages/pwright-python/tests/official"
+            / "packages/playwright-rust-python/tests/official"
             / "persistent-context-page-argument-browserless-manifest.json"
         )
         manifest = cast(Manifest, json.loads(manifest_path.read_text()))
@@ -428,7 +428,7 @@ class PythonOfficialRunnerInputTests(unittest.TestCase):
         # Arrange
         manifest_path = (
             Path(__file__).parents[1]
-            / "packages/pwright-python/tests/official/sync-lifecycle-running-loop-manifest.json"
+            / "packages/playwright-rust-python/tests/official/sync-lifecycle-running-loop-manifest.json"
         )
         manifest = cast(Manifest, json.loads(manifest_path.read_text()))
 
@@ -460,7 +460,7 @@ class PythonOfficialRunnerInputTests(unittest.TestCase):
         # Arrange
         manifest_path = (
             Path(__file__).parents[1]
-            / "packages/pwright-python/tests/official/sync-lifecycle-running-loop-manifest.json"
+            / "packages/playwright-rust-python/tests/official/sync-lifecycle-running-loop-manifest.json"
         )
         manifest = cast(Manifest, json.loads(manifest_path.read_text()))
 

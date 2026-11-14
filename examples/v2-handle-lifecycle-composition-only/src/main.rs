@@ -1,4 +1,4 @@
-use pwright_composition_chromium_handle_lifecycle::ChromiumHandleLifecycleProfile;
+use playwright_rust_composition_chromium_handle_lifecycle::ChromiumHandleLifecycleProfile;
 
 fn main() {
     println!(

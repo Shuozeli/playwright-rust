@@ -1,6 +1,6 @@
 """Source-only gates for the complete pinned Core Frame.frameElement file.
 
-These checks do not execute browser tests or attest Pwright/Oracle parity.
+These checks do not execute browser tests or attest Playwright Rust/Oracle parity.
 """
 
 from __future__ import annotations

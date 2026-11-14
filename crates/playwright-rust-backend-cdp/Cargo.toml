@@ -1,0 +1,120 @@
+[package]
+name = "playwright-rust-backend-cdp"
+description = "Chromium CDP adapters for portable Playwright Rust capabilities"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[features]
+default = ["full"]
+navigation = []
+history-navigation = [
+    "navigation",
+    "dep:playwright-rust-cap-history-navigation",
+    "playwright-rust-backend-cdp-navigation/history-navigation",
+]
+request-frame = [
+    "dep:playwright-rust-backend-cdp-network-events",
+    "playwright-rust-backend-cdp-network-events/request-frame",
+]
+response-security-details = [
+    "dep:playwright-rust-backend-cdp-network-events",
+    "playwright-rust-backend-cdp-network-events/response-security-details",
+]
+request-timing = [
+    "dep:playwright-rust-backend-cdp-network-events",
+    "playwright-rust-backend-cdp-network-events/request-timing",
+]
+touchscreen-input = ["full", "playwright-rust-backend-cdp-locator/touchscreen-input"]
+fill-navigation-commit = ["full", "playwright-rust-backend-cdp-locator/fill-navigation-commit"]
+select-option-navigation-commit = ["full", "playwright-rust-backend-cdp-locator/select-option-navigation-commit"]
+select-option-timeout-progress = ["full", "playwright-rust-backend-cdp-locator/select-option-timeout-progress"]
+full = [
+    "navigation",
+    "dep:base64",
+    "dep:playwright-rust-backend-cdp-common",
+    "dep:playwright-rust-backend-cdp-context-creation",
+    "dep:playwright-rust-backend-cdp-context-lifecycle",
+    "dep:playwright-rust-backend-cdp-content",
+    "dep:playwright-rust-backend-cdp-locator-screenshot",
+    "dep:playwright-rust-backend-cdp-locator",
+    "dep:playwright-rust-backend-cdp-dom-content",
+    "dep:playwright-rust-backend-cdp-evaluation",
+    "dep:playwright-rust-backend-cdp-handle-evaluation",
+    "dep:playwright-rust-backend-cdp-handle-lifecycle",
+    "dep:playwright-rust-backend-cdp-input",
+    "dep:playwright-rust-backend-cdp-network-events",
+    "dep:playwright-rust-backend-cdp-page-creation",
+    "dep:playwright-rust-backend-cdp-page-events",
+    "dep:playwright-rust-backend-cdp-page-lifecycle",
+    "dep:playwright-rust-backend-cdp-topology",
+    "dep:playwright-rust-browser-model",
+    "dep:playwright-rust-cap-content",
+    "dep:playwright-rust-cap-context-creation",
+    "dep:playwright-rust-cap-context-lifecycle",
+    "dep:playwright-rust-cap-dom-content",
+    "dep:playwright-rust-cap-evaluation",
+    "dep:playwright-rust-cap-handle-evaluation",
+    "dep:playwright-rust-cap-handle-lifecycle",
+    "dep:playwright-rust-cap-locator",
+    "dep:playwright-rust-cap-locator-screenshot",
+    "dep:playwright-rust-cap-network-events",
+    "dep:playwright-rust-cap-page-creation",
+    "dep:playwright-rust-cap-page-events",
+    "dep:playwright-rust-cap-page-lifecycle",
+]
+
+[dependencies]
+playwright-rust-backend-cdp-common = { workspace = true, optional = true }
+playwright-rust-backend-cdp-context-creation = { workspace = true, optional = true }
+playwright-rust-backend-cdp-context-lifecycle = { workspace = true, optional = true }
+playwright-rust-backend-cdp-navigation = { workspace = true }
+playwright-rust-backend-cdp-handle-evaluation = { workspace = true, optional = true }
+playwright-rust-backend-cdp-handle-lifecycle = { workspace = true, optional = true }
+playwright-rust-backend-cdp-input = { workspace = true, optional = true }
+playwright-rust-backend-cdp-network-events = { workspace = true, optional = true }
+playwright-rust-backend-cdp-page-creation = { workspace = true, optional = true }
+playwright-rust-backend-cdp-page-events = { workspace = true, optional = true }
+playwright-rust-backend-cdp-page-lifecycle = { workspace = true, optional = true }
+playwright-rust-backend-cdp-topology = { workspace = true, optional = true }
+playwright-rust-backend-cdp-content = { workspace = true, optional = true }
+playwright-rust-backend-cdp-locator-screenshot = { workspace = true, optional = true }
+playwright-rust-backend-cdp-locator = { workspace = true, optional = true }
+playwright-rust-backend-cdp-dom-content = { workspace = true, optional = true }
+playwright-rust-backend-cdp-evaluation = { workspace = true, optional = true }
+playwright-rust-browser-backend = { workspace = true }
+playwright-rust-browser-model = { workspace = true, optional = true }
+playwright-rust-core = { workspace = true }
+playwright-rust-cap-locator = { workspace = true, optional = true }
+playwright-rust-cap-locator-screenshot = { workspace = true, optional = true }
+playwright-rust-cap-content = { workspace = true, optional = true }
+playwright-rust-cap-dom-content = { workspace = true, optional = true }
+playwright-rust-cap-context-lifecycle = { workspace = true, optional = true }
+playwright-rust-cap-handle-lifecycle = { workspace = true, optional = true }
+playwright-rust-cap-handle-evaluation = { workspace = true, optional = true }
+playwright-rust-cap-context-creation = { workspace = true, optional = true }
+playwright-rust-cap-evaluation = { workspace = true, optional = true }
+playwright-rust-cap-navigation = { workspace = true }
+playwright-rust-cap-history-navigation = { workspace = true, optional = true }
+playwright-rust-cap-page-events = { workspace = true, optional = true }
+playwright-rust-cap-network-events = { workspace = true, optional = true }
+playwright-rust-cap-page-creation = { workspace = true, optional = true }
+playwright-rust-cap-page-lifecycle = { workspace = true, optional = true }
+playwright-rust-cdp = { workspace = true }
+base64 = { workspace = true, optional = true }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["sync", "time"] }
+
+[dev-dependencies]
+playwright-rust-browser-provider = { workspace = true }
+playwright-rust-client = { workspace = true }
+playwright-rust-client-locator = { workspace = true }
+playwright-rust-client-navigation = { workspace = true }
+playwright-rust-fake = { workspace = true }
+playwright-rust-network-model = { workspace = true }
+playwright-rust-provider-cdp = { workspace = true }
+playwright-rust-runtime = { workspace = true }
+playwright-rust-runtime-tokio = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt", "test-util"] }

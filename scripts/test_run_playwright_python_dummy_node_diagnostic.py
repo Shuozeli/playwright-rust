@@ -24,7 +24,7 @@ from run_playwright_python_dummy_node_diagnostic import (
 
 UPSTREAM = Path(
     os.environ.get(
-        "PWRIGHT_PYTHON_DUMMY_TEST_UPSTREAM",
+        "PLAYWRIGHT_RUST_PYTHON_DUMMY_TEST_UPSTREAM",
         "/Users/cyuan/projects/thirdparty/playwright-python",
     )
 )
@@ -46,7 +46,7 @@ def test_oracle_python_path_uses_installed_package_not_upstream_source() -> None
     assert upstream not in oracle
     assert candidate == [
         OFFICIAL / "shim",
-        ROOT / "packages/pwright-python/python",
+        ROOT / "packages/playwright-rust-python/python",
         upstream,
         OFFICIAL / "runtime",
         GUARD_DIR,
@@ -97,11 +97,11 @@ def test_node_wrapper_receipts_only_after_pinned_dummy_exits(tmp_path: Path) -> 
     env.update(
         {
             "PATH": f"{GUARD_DIR}:/opt/homebrew/bin:/usr/bin:/bin",
-            "PWRIGHT_PYTHON_DUMMY_UPSTREAM": str(UPSTREAM),
-            "PWRIGHT_PYTHON_DUMMY_PROCESS_RECEIPT": str(receipt),
-            "PWRIGHT_PYTHON_DUMMY_REAL_NODE": str(SYSTEM_NODE),
-            "PWRIGHT_PYTHON_DUMMY_API": "async",
-            "PWRIGHT_OFFICIAL_MODE": "candidate",
+            "PLAYWRIGHT_RUST_PYTHON_DUMMY_UPSTREAM": str(UPSTREAM),
+            "PLAYWRIGHT_RUST_PYTHON_DUMMY_PROCESS_RECEIPT": str(receipt),
+            "PLAYWRIGHT_RUST_PYTHON_DUMMY_REAL_NODE": str(SYSTEM_NODE),
+            "PLAYWRIGHT_RUST_PYTHON_DUMMY_API": "async",
+            "PLAYWRIGHT_RUST_OFFICIAL_MODE": "candidate",
         }
     )
 

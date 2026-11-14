@@ -1,8 +1,10 @@
+<!-- agent-updated: 2026-11-14T05:28:56Z -->
+
 # Script Runner Design
 
 ## Overview
 
-A declarative script runner for pwright that takes a YAML script with parameters,
+A declarative script runner for playwright-rust that takes a YAML script with parameters,
 executes browser automation steps sequentially (with control flow), and produces
 structured JSONL output with full observability.
 
@@ -27,53 +29,53 @@ Deviations from design in current implementation:
 ## Architecture
 
 ```
-pwright-script/          New crate: script parser, validator, executor
+playwright-rust-script/          New crate: script parser, validator, executor
   proto/script.proto     Protobuf schema for script input/output
   src/
     lib.rs
     parser.rs            YAML -> Script AST
     validator.rs         Validate script against proto schema
-    executor.rs          Execute script steps against pwright-bridge
+    executor.rs          Execute script steps against playwright-rust-bridge
     output.rs            JSONL streaming output
 
-pwright-cli/
-  src/main.rs            `pwright script run script.yaml --param key=val`
+playwright-rust-cli/
+  src/main.rs            `playwright-rust script run script.yaml --param key=val`
 ```
 
 ### Crate Dependencies
 
 ```
-pwright-script
-  depends on: pwright-bridge, pwright-cdp, serde_yaml, prost
-  used by: pwright-cli
+playwright-rust-script
+  depends on: playwright-rust-bridge, playwright-rust-cdp, serde_yaml, prost
+  used by: playwright-rust-cli
 
-pwright-cli
-  depends on: pwright-script (new)
+playwright-rust-cli
+  depends on: playwright-rust-script (new)
 ```
 
 ## CLI Interface
 
 ```bash
 # Basic execution
-pwright script run crawl.yaml
+playwright-rust script run crawl.yaml
 
 # With parameters
-pwright script run crawl.yaml --param url=https://example.com --param max_pages=10
+playwright-rust script run crawl.yaml --param url=https://example.com --param max_pages=10
 
 # Parameters from file (for credentials etc.)
-pwright script run crawl.yaml --param-file secrets.yaml
+playwright-rust script run crawl.yaml --param-file secrets.yaml
 
 # Streaming output to file
-pwright script run crawl.yaml --output results.jsonl
+playwright-rust script run crawl.yaml --output results.jsonl
 
 # Debug mode (verbose step-by-step with CDP details)
-pwright script run crawl.yaml --debug
+playwright-rust script run crawl.yaml --debug
 
 # Validate without executing
-pwright script validate crawl.yaml
+playwright-rust script validate crawl.yaml
 
 # Dry run (parse + validate + show plan)
-pwright script run crawl.yaml --dry-run
+playwright-rust script run crawl.yaml --dry-run
 ```
 
 ### Param File Format
@@ -473,7 +475,7 @@ for type safety and cross-language compatibility.
 
 ```protobuf
 syntax = "proto3";
-package pwright.script.v1;
+package playwright.rust.script.v1;
 
 // ── Script Input ──
 
@@ -733,7 +735,7 @@ Adds verbose info: CDP commands sent, selector resolution, variable state:
 
 ## Validation
 
-The `pwright-script` crate includes a validator that checks:
+The `playwright-rust-script` crate includes a validator that checks:
 
 1. **Schema validity**: YAML parses into valid Script proto message
 2. **Param completeness**: all `required: true` params have values
@@ -745,11 +747,11 @@ The `pwright-script` crate includes a validator that checks:
    (bracket matching, no obvious syntax errors)
 
 ```bash
-pwright script validate script.yaml
+playwright-rust script validate script.yaml
 # OK: 12 steps, 3 params (url, max_pages, timeout)
 # WARNING: param 'timeout' has no default and is not required
 
-pwright script validate script.yaml --param url=https://example.com
+playwright-rust script validate script.yaml --param url=https://example.com
 # OK: all params resolved, 12 steps valid
 ```
 
@@ -757,14 +759,14 @@ pwright script validate script.yaml --param url=https://example.com
 
 ### Phase 1: Crate scaffold + protobuf + parser + basic execution
 
-**Goal:** `pwright script run script.yaml --param url=... ` works end-to-end
+**Goal:** `playwright-rust script run script.yaml --param url=... ` works end-to-end
 for a flat script with basic steps.
 
 #### Deliverables
 
-1. **`pwright-script` crate** with Cargo.toml, deps: pwright-bridge, prost,
+1. **`playwright-rust-script` crate** with Cargo.toml, deps: playwright-rust-bridge, prost,
    serde_yaml, serde_json
-2. **Protobuf schema** (`proto/pwright/script/v1/script.proto`)
+2. **Protobuf schema** (`proto/playwright-rust/script/v1/script.proto`)
    - Messages: `Script`, `ScriptConfig`, `ParamDef`, `Step`, `JsFunction`
    - Step messages: `GotoStep`, `ClickStep`, `FillStep`, `ExtractStep`,
      `EvalStep`, `OutputStep`, `PressStep`
@@ -780,13 +782,13 @@ for a flat script with basic steps.
    - Template validation: all `{{ ref }}` resolve to params or prior `save_as`
    - JS registry validation: all `eval.ref` exist in `scripts` map
 5. **Executor** (`executor.rs`)
-   - Sequential step execution against `pwright-bridge`
+   - Sequential step execution against `playwright-rust-bridge`
    - `save_as` variable storage (HashMap<String, Value>)
    - JSONL output per step (StepResult as JSON)
    - Final ScriptResult summary
-6. **CLI integration** (`pwright run` subcommand)
-   - `pwright script run script.yaml --param key=val`
-   - `pwright script validate script.yaml` (validate only)
+6. **CLI integration** (`playwright-rust run` subcommand)
+   - `playwright-rust script run script.yaml --param key=val`
+   - `playwright-rust script validate script.yaml` (validate only)
    - `--output file.jsonl` (write results to file)
 
 #### Steps supported in Phase 1
@@ -809,13 +811,13 @@ for a flat script with basic steps.
 - Unit: JS registry ref resolution
 - Integration (FakeCdpClient): execute a 5-step script, verify JSONL output
 - Integration (Docker): execute against real Chrome with test server
-- E2E: `pwright script validate examples/hello.yaml --param url=http://...`
+- E2E: `playwright-rust script validate examples/hello.yaml --param url=http://...`
 
 #### Acceptance criteria
 
-- [ ] `pwright script run hello.yaml --param url=http://example.com` navigates,
+- [ ] `playwright-rust script run hello.yaml --param url=http://example.com` navigates,
       extracts title, outputs JSONL
-- [ ] `pwright script validate hello.yaml` exits 0 with valid script, exits 1 with
+- [ ] `playwright-rust script validate hello.yaml` exits 0 with valid script, exits 1 with
       clear error for invalid
 - [ ] `--param-file` loads params from YAML file
 - [ ] JS scripts in `scripts:` section are referenced by `eval.ref`

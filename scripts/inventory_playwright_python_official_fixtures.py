@@ -17,7 +17,7 @@ from typing import Protocol, TypedDict, cast
 
 import pytest
 
-_PLUGIN_OUTPUT = "PWRIGHT_PYTHON_FIXTURE_INVENTORY_OUTPUT"
+_PLUGIN_OUTPUT = "PLAYWRIGHT_RUST_PYTHON_FIXTURE_INVENTORY_OUTPUT"
 
 
 class Manifest(TypedDict):
@@ -267,7 +267,7 @@ def _collect_profile(
     profile: CollectionProfile,
 ) -> tuple[list[dict[str, object]], list[str]]:
     with tempfile.TemporaryDirectory(
-        prefix=f"pwright-python-fixtures-{profile['name']}-"
+        prefix=f"playwright-rust-python-fixtures-{profile['name']}-"
     ) as directory:
         raw_output = Path(directory) / "raw.jsonl"
         environment = os.environ.copy()
@@ -322,7 +322,7 @@ def main() -> None:
     parser.add_argument(
         "--manifest",
         type=Path,
-        default=root / "packages/pwright-python/tests/official/manifest.json",
+        default=root / "packages/playwright-rust-python/tests/official/manifest.json",
     )
     parser.add_argument(
         "--examples-python",

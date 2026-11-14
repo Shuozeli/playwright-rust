@@ -1,0 +1,22 @@
+[package]
+name = "playwright-rust-server-navigation"
+description = "Generated composable server bindings for the Playwright Rust navigation capability"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[features]
+default = []
+frame-navigation = ["playwright-rust-cap-navigation/frame-navigation", "playwright-rust-codec-navigation/frame-navigation"]
+
+[dependencies]
+playwright-rust-cap-navigation = { workspace = true }
+playwright-rust-codec-navigation = { workspace = true }
+playwright-rust-server-wire = { workspace = true }
+playwright-rust-transport = { workspace = true }
+
+[dev-dependencies]
+playwright-rust-browser-model = { workspace = true }
+playwright-rust-core = { workspace = true }

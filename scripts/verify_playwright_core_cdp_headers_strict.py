@@ -61,7 +61,7 @@ def verify_strict(strict_path: Path) -> dict:
     provenance = verify_provenance(
         json.loads(provenance_path.read_text()), provenance_path=provenance_path,
         manifest_override=MANIFEST, result_override=result, upstream_override=UPSTREAM,
-        candidate_override=ROOT / "packages/pwright", tooling_root=ROOT,
+        candidate_override=ROOT / "packages/playwright-rust", tooling_root=ROOT,
     )
     assert provenance["mode"] == strict["mode"]
     assert provenance["suite"] == SUITE
@@ -74,7 +74,7 @@ def verify_strict(strict_path: Path) -> dict:
         assert strict["candidateArtifactSha256"] == ARTIFACT_SHA256
         assert provenance["candidateProfile"] == PROFILE
         assert provenance["candidateArtifactSha256"] == ARTIFACT_SHA256
-        assert "[pwright-candidate]" in log_path.read_text()
+        assert "[playwright-rust-candidate]" in log_path.read_text()
     else:
         assert strict["candidateProfile"] is None
         assert strict["candidateArtifactSha256"] is None

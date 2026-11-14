@@ -353,7 +353,7 @@ def test_candidate_provenance_live_artifact_path_drift_is_rejected(
     tmp_path: Path,
 ) -> None:
     # Arrange
-    artifact = tmp_path / "pwright.node"
+    artifact = tmp_path / "playwright_rust.node"
     artifact.write_bytes(b"wrong addon")
     provenance = verifier.provenance_path("candidate").read_bytes()
 

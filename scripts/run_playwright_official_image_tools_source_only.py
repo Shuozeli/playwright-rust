@@ -1,6 +1,6 @@
 """Run only the pinned upstream-private, browserless Core image-tools bodies.
 
-This lane intentionally does not preload or attest the Pwright runtime. Its
+This lane intentionally does not preload or attest the Playwright Rust runtime. Its
 separate tooling keeps existing Core source-only provenance hashes unchanged.
 """
 
@@ -223,8 +223,8 @@ def main() -> None:
     args = parser.parse_args()
     for key in (
         "NODE_OPTIONS", "PWTEST_MODE", "PWPAGE_IMPL", "PWTEST_USE_BIDI_EXPECTATIONS",
-        "PWRIGHT_CORE_SOURCE_ONLY_TEST_WORKER", "PWRIGHT_NODE_CANDIDATE",
-        "PWRIGHT_NATIVE_PROFILE", "IMAGE_TOOLS_FIXTURES", "GITHUB_ACTIONS", "GITLAB_CI",
+        "PLAYWRIGHT_RUST_CORE_SOURCE_ONLY_TEST_WORKER", "PLAYWRIGHT_RUST_NODE_CANDIDATE",
+        "PLAYWRIGHT_RUST_NATIVE_PROFILE", "IMAGE_TOOLS_FIXTURES", "GITHUB_ACTIONS", "GITLAB_CI",
     ):
         if os.environ.get(key):
             parser.error(f"image-tools source-only lane forbids inherited {key}")
@@ -250,18 +250,18 @@ def main() -> None:
     ]
     env = os.environ.copy()
     for key in (
-        "PWRIGHT_OFFICIAL_CROSS_ORIGIN_FORWARD", "PWRIGHT_CANDIDATE_CDP_ENDPOINT",
-        "PWRIGHT_ORACLE_CDP_ENDPOINT", "PWRIGHT_OFFICIAL_SERVER_IP",
-        "PWRIGHT_OFFICIAL_SERVER_HOST",
+        "PLAYWRIGHT_RUST_OFFICIAL_CROSS_ORIGIN_FORWARD", "PLAYWRIGHT_RUST_CANDIDATE_CDP_ENDPOINT",
+        "PLAYWRIGHT_RUST_ORACLE_CDP_ENDPOINT", "PLAYWRIGHT_RUST_OFFICIAL_SERVER_IP",
+        "PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST",
     ):
         env.pop(key, None)
     env.update({
         "PLAYWRIGHT_JSON_OUTPUT_FILE": str(result),
-        "PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM": str(upstream),
-        "PWRIGHT_CORE_SOURCE_ONLY_ACTIVE": "1",
-        "PWRIGHT_CORE_SOURCE_ONLY_MANIFEST": str(_MANIFEST),
-        "PWRIGHT_CORE_SOURCE_ONLY_SUITE": _SUITE_ID,
-        "PWRIGHT_CORE_SOURCE_ONLY_GUARD_RECEIPT": str(receipt),
+        "PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM": str(upstream),
+        "PLAYWRIGHT_RUST_CORE_SOURCE_ONLY_ACTIVE": "1",
+        "PLAYWRIGHT_RUST_CORE_SOURCE_ONLY_MANIFEST": str(_MANIFEST),
+        "PLAYWRIGHT_RUST_CORE_SOURCE_ONLY_SUITE": _SUITE_ID,
+        "PLAYWRIGHT_RUST_CORE_SOURCE_ONLY_GUARD_RECEIPT": str(receipt),
         "NODE_OPTIONS": f"--require={_GUARD}",
     })
     result.parent.mkdir(parents=True, exist_ok=True)
@@ -293,7 +293,7 @@ def main() -> None:
         "upstream": str(upstream),
         "suite": _SUITE_ID,
         "suiteRole": suite["role"],
-        "adapter": "upstream-private-source-only-no-pwright-runtime",
+        "adapter": "upstream-private-source-only-no-playwright-rust-runtime",
         "sourceOnlyExecution": {
             "scope": "upstream-private-source-only",
             "candidateRuntimeAttested": False,

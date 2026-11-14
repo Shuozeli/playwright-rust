@@ -1,0 +1,13 @@
+[package]
+name = "playwright-rust-codec-screenshot"
+description = "Command-free screenshot attachment validation for Playwright Rust codecs"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+playwright-rust-core = { workspace = true }
+playwright-rust-screenshot-model = { workspace = true }
+playwright-rust-transport = { workspace = true }

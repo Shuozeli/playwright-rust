@@ -95,7 +95,7 @@ def run(args: argparse.Namespace) -> Path:
         _fail("strict connect-refused capture requires the frozen candidate wheel")
     _runtime(policy, {**artifact, "mode": args.mode})
     if args.mode == "candidate" and (
-        artifact["pwrightPackageSha256"] != policy["candidatePackageTreeSha256"]
+        artifact["playwright_rustPackageSha256"] != policy["candidatePackageTreeSha256"]
         or artifact["nativeSha256"] != policy["candidateNativeSha256"]
         or artifact["runtimeLibraries"] != policy["candidateRuntimeLibraries"]
     ):
@@ -125,17 +125,17 @@ def run(args: argparse.Namespace) -> Path:
         "PYTHONPATH": ":".join(map(str, paths)),
         "PYTHONNOUSERSITE": "1",
         "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
-        "PWRIGHT_OFFICIAL_MODE": args.mode,
-        "PWRIGHT_OFFICIAL_LAUNCH_MODE": "owned",
-        "PWRIGHT_OFFICIAL_BROWSER_CHANNEL": "",
-        "PWRIGHT_OFFICIAL_UPSTREAM_TESTS": str(upstream / "tests"),
-        "PWRIGHT_OFFICIAL_TAILSCALE_IP": bind,
-        "PWRIGHT_OFFICIAL_TAILSCALE_HOST": host,
-        "PWRIGHT_PYTHON_REFUSED_V1_EXPECTED_TEST": test_id,
-        "PWRIGHT_PYTHON_REFUSED_V1_UPSTREAM": str(upstream),
-        "PWRIGHT_PYTHON_REFUSED_V1_PORT": str(port),
-        "PWRIGHT_PYTHON_REFUSED_V1_RECEIPT": str(receipt),
-        "PWRIGHT_PYTHON_REFUSED_V1_NONCE": nonce,
+        "PLAYWRIGHT_RUST_OFFICIAL_MODE": args.mode,
+        "PLAYWRIGHT_RUST_OFFICIAL_LAUNCH_MODE": "owned",
+        "PLAYWRIGHT_RUST_OFFICIAL_BROWSER_CHANNEL": "",
+        "PLAYWRIGHT_RUST_OFFICIAL_UPSTREAM_TESTS": str(upstream / "tests"),
+        "PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_IP": bind,
+        "PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_HOST": host,
+        "PLAYWRIGHT_RUST_PYTHON_REFUSED_V1_EXPECTED_TEST": test_id,
+        "PLAYWRIGHT_RUST_PYTHON_REFUSED_V1_UPSTREAM": str(upstream),
+        "PLAYWRIGHT_RUST_PYTHON_REFUSED_V1_PORT": str(port),
+        "PLAYWRIGHT_RUST_PYTHON_REFUSED_V1_RECEIPT": str(receipt),
+        "PLAYWRIGHT_RUST_PYTHON_REFUSED_V1_NONCE": nonce,
     }
     command = [
         "/usr/bin/sandbox-exec",
@@ -153,13 +153,13 @@ def run(args: argparse.Namespace) -> Path:
         "-p",
         "pytest_timeout",
         "-p",
-        "pwright_official_server_runtime",
+        "playwright_rust_official_server_runtime",
         "-p",
-        "pwright_candidate_runtime"
+        "playwright_rust_candidate_runtime"
         if args.mode == "candidate"
-        else "pwright_official_oracle_runtime",
+        else "playwright_rust_official_oracle_runtime",
         "-p",
-        "pwright_official_connect_refused_guard_v1",
+        "playwright_rust_official_connect_refused_guard_v1",
         f"--browser={engine}",
         "--timeout=20",
         "--timeout-method=signal",

@@ -8,16 +8,16 @@ const fs = require('node:fs');
 const Module = require('node:module');
 const path = require('node:path');
 
-const mode = process.env.PWRIGHT_OTHER_DUMMY_MODE;
-const engine = process.env.PWRIGHT_OTHER_DUMMY_ENGINE;
-const upstream = process.env.PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM;
-const manifestPath = process.env.PWRIGHT_OTHER_DUMMY_MANIFEST;
-const manifestSha256 = process.env.PWRIGHT_OTHER_DUMMY_MANIFEST_SHA256;
-const launchReceipt = process.env.PWRIGHT_OTHER_DUMMY_LAUNCH_RECEIPT;
-const profileReceipt = process.env.PWRIGHT_OTHER_DUMMY_PROFILE_RECEIPT;
-const runId = process.env.PWRIGHT_OTHER_DUMMY_RUN_ID;
-const candidate = process.env.PWRIGHT_NODE_CANDIDATE;
-const candidateProfile = process.env.PWRIGHT_NATIVE_PROFILE;
+const mode = process.env.PLAYWRIGHT_RUST_OTHER_DUMMY_MODE;
+const engine = process.env.PLAYWRIGHT_RUST_OTHER_DUMMY_ENGINE;
+const upstream = process.env.PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM;
+const manifestPath = process.env.PLAYWRIGHT_RUST_OTHER_DUMMY_MANIFEST;
+const manifestSha256 = process.env.PLAYWRIGHT_RUST_OTHER_DUMMY_MANIFEST_SHA256;
+const launchReceipt = process.env.PLAYWRIGHT_RUST_OTHER_DUMMY_LAUNCH_RECEIPT;
+const profileReceipt = process.env.PLAYWRIGHT_RUST_OTHER_DUMMY_PROFILE_RECEIPT;
+const runId = process.env.PLAYWRIGHT_RUST_OTHER_DUMMY_RUN_ID;
+const candidate = process.env.PLAYWRIGHT_RUST_NODE_CANDIDATE;
+const candidateProfile = process.env.PLAYWRIGHT_RUST_NATIVE_PROFILE;
 const assetRelative = 'tests/assets/dummy_bad_browser_executable.js';
 const assetSha256 = '9928a78e7de42f29dfc61783a2f31673b387d7d6ea27cda5bc4472e4338c1f7f';
 
@@ -32,8 +32,8 @@ if (!['candidate', 'oracle'].includes(mode) || !['firefox', 'webkit'].includes(e
     !/^[0-9a-f]{32}$/.test(runId || '') || digest(manifestPath) !== manifestSha256 ||
     process.env.PWTEST_MODE !== 'default' || process.env.PWTEST_CHANNEL ||
     process.env.PWTEST_VIDEO || process.env.PWTEST_TRACE ||
-    process.env.PWRIGHT_CANDIDATE_CDP_ENDPOINT || process.env.PWRIGHT_ORACLE_CDP_ENDPOINT ||
-    process.env.PWRIGHT_CDP_ENDPOINT || process.env.PWRIGHT_CDP_WS_URL || process.env.CRPATH)
+    process.env.PLAYWRIGHT_RUST_CANDIDATE_CDP_ENDPOINT || process.env.PLAYWRIGHT_RUST_ORACLE_CDP_ENDPOINT ||
+    process.env.PLAYWRIGHT_RUST_CDP_ENDPOINT || process.env.PLAYWRIGHT_RUST_CDP_WS_URL || process.env.CRPATH)
   throw new Error('other-engine dummy launch environment differs from strict policy');
 
 const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
@@ -86,7 +86,7 @@ Module._load = function guardedOtherEngineLoad(request, parent, isMain) {
   let candidateInherited = null;
   let artifactSha256 = null;
   if (mode === 'candidate') {
-    const artifact = path.join(candidate, 'native', candidateProfile, 'pwright.node');
+    const artifact = path.join(candidate, 'native', candidateProfile, 'playwright_rust.node');
     candidateInherited = !Object.prototype.hasOwnProperty.call(browserType, 'launch') &&
       Object.getPrototypeOf(browserType)?.launch === browserType.launch;
     if (implementation.compatibility?.nativeProfile !== candidateProfile ||

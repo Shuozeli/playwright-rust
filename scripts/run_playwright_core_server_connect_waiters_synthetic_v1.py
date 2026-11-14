@@ -52,18 +52,18 @@ FORBIDDEN_OVERRIDES = (
     "PWTEST_MODE",
     "PWPAGE_IMPL",
     "PWTEST_USE_BIDI_EXPECTATIONS",
-    "PWRIGHT_CANDIDATE_CDP_ENDPOINT",
-    "PWRIGHT_ORACLE_CDP_ENDPOINT",
-    "PWRIGHT_CDP_ENDPOINT",
-    "PWRIGHT_CDP_WS_URL",
-    "PWRIGHT_NATIVE_PROFILE",
-    "PWRIGHT_NODE_CANDIDATE",
-    "PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM",
-    "PWRIGHT_OFFICIAL_SERVER_IP",
-    "PWRIGHT_OFFICIAL_SERVER_HOST",
-    "PWRIGHT_CORE_WAITERS_SYNTHETIC_MODE",
-    "PWRIGHT_CORE_WAITERS_SYNTHETIC_RECEIPT",
-    "PWRIGHT_CORE_WAITERS_SYNTHETIC_SERVER",
+    "PLAYWRIGHT_RUST_CANDIDATE_CDP_ENDPOINT",
+    "PLAYWRIGHT_RUST_ORACLE_CDP_ENDPOINT",
+    "PLAYWRIGHT_RUST_CDP_ENDPOINT",
+    "PLAYWRIGHT_RUST_CDP_WS_URL",
+    "PLAYWRIGHT_RUST_NATIVE_PROFILE",
+    "PLAYWRIGHT_RUST_NODE_CANDIDATE",
+    "PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM",
+    "PLAYWRIGHT_RUST_OFFICIAL_SERVER_IP",
+    "PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST",
+    "PLAYWRIGHT_RUST_CORE_WAITERS_SYNTHETIC_MODE",
+    "PLAYWRIGHT_RUST_CORE_WAITERS_SYNTHETIC_RECEIPT",
+    "PLAYWRIGHT_RUST_CORE_WAITERS_SYNTHETIC_SERVER",
 )
 
 
@@ -73,9 +73,9 @@ def _run_lane(result_dir: Path, mode: str, snapshot: Path) -> None:
     log = result_dir / f"{mode}.log"
     env = os.environ.copy()
     env["NODE_OPTIONS"] = f"--require={PRELOAD}"
-    env["PWRIGHT_CORE_WAITERS_SYNTHETIC_MODE"] = mode
-    env["PWRIGHT_CORE_WAITERS_SYNTHETIC_RECEIPT"] = str(receipt)
-    env["PWRIGHT_CORE_WAITERS_SYNTHETIC_SERVER"] = str(SERVER)
+    env["PLAYWRIGHT_RUST_CORE_WAITERS_SYNTHETIC_MODE"] = mode
+    env["PLAYWRIGHT_RUST_CORE_WAITERS_SYNTHETIC_RECEIPT"] = str(receipt)
+    env["PLAYWRIGHT_RUST_CORE_WAITERS_SYNTHETIC_SERVER"] = str(SERVER)
     command = [
         "uv",
         "run",
@@ -130,7 +130,7 @@ def capture(result_dir: Path) -> dict[str, object]:
         raise ValueError(
             "diagnostic destination already exists; choose a fresh versioned path"
         )
-    artifact = SOURCE_PACKAGE / "native" / PROFILE / "pwright.node"
+    artifact = SOURCE_PACKAGE / "native" / PROFILE / "playwright_rust.node"
     if not artifact.is_file() or artifact.is_symlink():
         raise ValueError("selected-profile release addon is missing")
     if sha256(artifact) != BASE_ARTIFACT_SHA256:
@@ -151,7 +151,7 @@ def capture(result_dir: Path) -> dict[str, object]:
     overlay.mkdir(exist_ok=False)
     shutil.copyfile(SOURCE_PACKAGE / "package.json", overlay / "package.json")
     shutil.copytree(SOURCE_PACKAGE / "src", overlay / "src", symlinks=False)
-    overlay_artifact = overlay / "native" / PROFILE / "pwright.node"
+    overlay_artifact = overlay / "native" / PROFILE / "playwright_rust.node"
     overlay_artifact.parent.mkdir(parents=True, exist_ok=False)
     shutil.copyfile(ARTIFACT_SOURCE, overlay_artifact)
     if (

@@ -70,7 +70,7 @@ def _secure_specs(suite: Suite) -> list[dict[str, object]]:
 
 def _source_only_test_fixture(directory: Path) -> tuple[Path, Path, Suite]:
     root = Path(__file__).parents[1]
-    typescript = root / "packages/pwright/node_modules/typescript"
+    typescript = root / "packages/playwright-rust/node_modules/typescript"
     if not typescript.is_dir():
         raise unittest.SkipTest("pnpm TypeScript dependency is not installed")
     upstream = directory / "upstream"
@@ -110,7 +110,7 @@ def _image_tools_source_fixture(directory: Path) -> tuple[Path, Path, Suite]:
     root = Path(__file__).parents[1]
     checkout = Path(
         os.environ.get(
-            "PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM",
+            "PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM",
             "/Users/cyuan/projects/thirdparty/playwright-v1.58.0",
         )
     )
@@ -221,12 +221,12 @@ class ResolveCandidateProfileTests(unittest.TestCase):
                 env.pop(key, None)
             env.update({
                 "NODE_OPTIONS": f"--require={guard}",
-                "PWRIGHT_CORE_SOURCE_ONLY_ACTIVE": "1",
-                "PWRIGHT_CORE_SOURCE_ONLY_TEST_WORKER": "1",
-                "PWRIGHT_CORE_SOURCE_ONLY_MANIFEST": str(manifest),
-                "PWRIGHT_CORE_SOURCE_ONLY_SUITE": suite["id"],
-                "PWRIGHT_CORE_SOURCE_ONLY_GUARD_RECEIPT": str(receipt),
-                "PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM": str(upstream),
+                "PLAYWRIGHT_RUST_CORE_SOURCE_ONLY_ACTIVE": "1",
+                "PLAYWRIGHT_RUST_CORE_SOURCE_ONLY_TEST_WORKER": "1",
+                "PLAYWRIGHT_RUST_CORE_SOURCE_ONLY_MANIFEST": str(manifest),
+                "PLAYWRIGHT_RUST_CORE_SOURCE_ONLY_SUITE": suite["id"],
+                "PLAYWRIGHT_RUST_CORE_SOURCE_ONLY_GUARD_RECEIPT": str(receipt),
+                "PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM": str(upstream),
             })
             script = """
 const assert = require('node:assert/strict');
@@ -248,13 +248,13 @@ assert.throws(() => fetch('http://127.0.0.1/'), /forbids fetch/);
             # Assert
             self.assertEqual(completed.returncode, 0, completed.stderr)
             self.assertEqual(json.loads(receipt.read_text())["kind"], "worker-no-io")
-            env["PWRIGHT_NODE_CANDIDATE"] = str(candidate)
+            env["PLAYWRIGHT_RUST_NODE_CANDIDATE"] = str(candidate)
             blocked = subprocess.run(
-                ["node", "-e", "require(process.env.PWRIGHT_NODE_CANDIDATE)"],
+                ["node", "-e", "require(process.env.PLAYWRIGHT_RUST_NODE_CANDIDATE)"],
                 env=env, cwd=root, capture_output=True, text=True, check=False,
             )
             self.assertNotEqual(blocked.returncode, 0)
-            self.assertIn("forbids loading the Pwright candidate runtime", blocked.stderr)
+            self.assertIn("forbids loading the Playwright Rust candidate runtime", blocked.stderr)
 
     def test_source_only_image_tools_result_requires_exact_25_ids_and_attempts(self) -> None:
         # Arrange
@@ -376,12 +376,12 @@ assert.throws(() => fetch('http://127.0.0.1/'), /forbids fetch/);
             env.update(
                 {
                     "NODE_OPTIONS": f"--require={guard}",
-                    "PWRIGHT_CORE_SOURCE_ONLY_ACTIVE": "1",
-                    "PWRIGHT_CORE_SOURCE_ONLY_TEST_WORKER": "1",
-                    "PWRIGHT_CORE_SOURCE_ONLY_MANIFEST": str(manifest),
-                    "PWRIGHT_CORE_SOURCE_ONLY_SUITE": "core455-internal-viewport-library",
-                    "PWRIGHT_CORE_SOURCE_ONLY_GUARD_RECEIPT": str(receipt),
-                    "PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM": str(upstream),
+                    "PLAYWRIGHT_RUST_CORE_SOURCE_ONLY_ACTIVE": "1",
+                    "PLAYWRIGHT_RUST_CORE_SOURCE_ONLY_TEST_WORKER": "1",
+                    "PLAYWRIGHT_RUST_CORE_SOURCE_ONLY_MANIFEST": str(manifest),
+                    "PLAYWRIGHT_RUST_CORE_SOURCE_ONLY_SUITE": "core455-internal-viewport-library",
+                    "PLAYWRIGHT_RUST_CORE_SOURCE_ONLY_GUARD_RECEIPT": str(receipt),
+                    "PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM": str(upstream),
                 }
             )
             script = """
@@ -534,7 +534,7 @@ assert.throws(() => fetch('http://127.0.0.1/'), /forbids fetch/);
 
     def test_explicit_profile_wins_over_environment(self) -> None:
         # Arrange
-        environment = {"PWRIGHT_NATIVE_PROFILE": "default"}
+        environment = {"PLAYWRIGHT_RUST_NATIVE_PROFILE": "default"}
 
         # Act
         selected = _resolve_candidate_profile(
@@ -546,7 +546,7 @@ assert.throws(() => fetch('http://127.0.0.1/'), /forbids fetch/);
 
     def test_environment_profile_is_accepted(self) -> None:
         # Arrange
-        environment = {"PWRIGHT_NATIVE_PROFILE": "api-request"}
+        environment = {"PLAYWRIGHT_RUST_NATIVE_PROFILE": "api-request"}
 
         # Act
         selected = _resolve_candidate_profile("candidate", False, None, environment)
@@ -564,7 +564,7 @@ assert.throws(() => fetch('http://127.0.0.1/'), /forbids fetch/);
 
     def test_oracle_does_not_select_candidate_profile(self) -> None:
         # Arrange
-        environment = {"PWRIGHT_NATIVE_PROFILE": "default"}
+        environment = {"PLAYWRIGHT_RUST_NATIVE_PROFILE": "default"}
 
         # Act
         selected = _resolve_candidate_profile("oracle", False, None, environment)
@@ -593,7 +593,7 @@ assert.throws(() => fetch('http://127.0.0.1/'), /forbids fetch/);
             (candidate / "src").mkdir(parents=True)
             (candidate / "package.json").write_text('{"main":"src/index.cjs"}\n')
             (candidate / "src/index.cjs").write_text("module.exports = {};\n")
-            artifact = candidate / "native/official/pwright.node"
+            artifact = candidate / "native/official/playwright_rust.node"
             artifact.parent.mkdir(parents=True)
             artifact.write_bytes(b"native-test-artifact")
             manifest = cast(
@@ -1124,7 +1124,7 @@ class PinnedFullFileTests(unittest.TestCase):
         root = Path(__file__).parents[1]
         upstream = Path(
             os.environ.get(
-                "PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM",
+                "PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM",
                 "/Users/cyuan/projects/thirdparty/playwright-v1.58.0",
             )
         )
@@ -1151,7 +1151,7 @@ class PinnedFullFileTests(unittest.TestCase):
         root = Path(__file__).parents[1]
         upstream = Path(
             os.environ.get(
-                "PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM",
+                "PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM",
                 "/Users/cyuan/projects/thirdparty/playwright-v1.58.0",
             )
         )

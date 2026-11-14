@@ -4,13 +4,13 @@ set -euo pipefail
 repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$repo_dir"
 
-proof_dir=$(mktemp -d "${TMPDIR:-/tmp}/pwright-proxy-tls-proof.XXXXXX")
+proof_dir=$(mktemp -d "${TMPDIR:-/tmp}/playwright-rust-proxy-tls-proof.XXXXXX")
 trap 'rm -rf "$proof_dir"' EXIT
 
 dependency_closure() {
   local features=$1
   local output=$2
-  cargo tree --locked -p pwright-node-addon \
+  cargo tree --locked -p playwright-rust-node-addon \
     --no-default-features --features "$features" \
     --edges normal --prefix none --format '{p}' \
     | awk '{ print $1 }' \
@@ -42,10 +42,10 @@ prove_exact_union() {
 prove_exact_union api-request-http-proxy 'Client-certificate plus HTTP-proxy'
 prove_exact_union api-request-socks5-proxy 'Client-certificate plus SOCKS5-proxy'
 
-CARGO_INCREMENTAL=0 cargo check --release --locked -p pwright-node-addon \
+CARGO_INCREMENTAL=0 cargo check --release --locked -p playwright-rust-node-addon \
   --no-default-features \
   --features api-request-client-certificates,api-request-http-proxy
-CARGO_INCREMENTAL=0 cargo check --release --locked -p pwright-node-addon \
+CARGO_INCREMENTAL=0 cargo check --release --locked -p playwright-rust-node-addon \
   --no-default-features \
   --features api-request-client-certificates,api-request-socks5-proxy
 

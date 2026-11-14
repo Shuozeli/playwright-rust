@@ -10,7 +10,7 @@
       "runner": "packages/playwright/cli.js",
       "config": "tests/mcp/playwright.config.ts",
       "args": ["tests/mcp/config.spec.ts:82", "tests/mcp/config.spec.ts:87"],
-      "sourceOnlyAdapter": "upstream-private-source-only-no-pwright-runtime",
+      "sourceOnlyAdapter": "upstream-private-source-only-no-playwright-rust-runtime",
       "requiresBrowser": false,
       "fixtureMode": "pinned-private-source-only-no-io",
       "sourceOnlyCase": "private-mcp-config-sandbox-v1",

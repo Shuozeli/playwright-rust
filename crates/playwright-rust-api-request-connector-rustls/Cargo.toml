@@ -1,0 +1,25 @@
+[package]
+name = "playwright-rust-api-request-connector-rustls"
+description = "Optional Rustls HTTPS connector for Playwright Rust API requests"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[features]
+default = []
+
+[dependencies]
+async-trait.workspace = true
+playwright-rust-api-request-connector-tokio.workspace = true
+playwright-rust-api-request-transport.workspace = true
+tokio.workspace = true
+tokio-rustls.workspace = true
+tokio-util.workspace = true
+webpki-roots.workspace = true
+url.workspace = true
+
+[dev-dependencies]
+rcgen = "0.13.2"
+url.workspace = true

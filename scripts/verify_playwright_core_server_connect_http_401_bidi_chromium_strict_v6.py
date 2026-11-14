@@ -329,7 +329,7 @@ def verify_strict(strict_path: Path) -> dict[str, Any]:
         )
         if mode == "oracle":
             assert all(item["status"] == "expected" for item in selected)
-        assert ("[pwright-candidate]" in output["log"].read_text()) == (mode == "candidate")
+        assert ("[playwright-rust-candidate]" in output["log"].read_text()) == (mode == "candidate")
         checked_receipts(output["receipt"], mode, selected, dns["fixtureHost"], dns["fixtureBind"])
         for item in selected:
             assert item["specId"] not in observed_ids

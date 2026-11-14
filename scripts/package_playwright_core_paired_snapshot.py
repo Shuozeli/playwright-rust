@@ -281,7 +281,7 @@ def verify_archive(archive_path: Path, expected_sha256: str) -> coverage.JsonObj
         archive_path.stat().st_size <= MAX_ARCHIVE_BYTES,
         "compressed archive exceeds size limit",
     )
-    with tempfile.TemporaryDirectory(prefix="pwright-core-archive-verify-") as temp:
+    with tempfile.TemporaryDirectory(prefix="playwright-rust-core-archive-verify-") as temp:
         root = Path(temp) / "bundle"
         root.mkdir()
         archive_copy = Path(temp) / "pinned.tar.gz"

@@ -1,0 +1,24 @@
+[package]
+name = "playwright-rust-api-request-transport"
+description = "Composable connection policy for Playwright Rust API requests"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[features]
+default = []
+
+[dependencies]
+async-trait.workspace = true
+playwright-rust-api-request.workspace = true
+playwright-rust-api-request-http1.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+url.workspace = true
+
+[dev-dependencies]
+playwright-rust-api-request-cookie.workspace = true
+playwright-rust-api-request-auth-basic.workspace = true

@@ -546,7 +546,7 @@ def check_process_events(
         )
         require(
             profile_path.name.startswith(
-                "pwright-node-bidi-startup-"
+                "playwright-rust-node-bidi-startup-"
                 if mode == "candidate"
                 else "playwright_firefoxdev_profile-"
             ),
@@ -650,8 +650,8 @@ def check_process_events(
             )
         else:
             require(
-                profile_path.name.startswith("pwright-node-bidi-startup-"),
-                "candidate Chromium profile was not Pwright-owned",
+                profile_path.name.startswith("playwright-rust-node-bidi-startup-"),
+                "candidate Chromium profile was not Playwright Rust-owned",
             )
 
 
@@ -844,7 +844,7 @@ def verify_one(strict_path: Path) -> dict[str, Any]:
     )
     for relative, sha in local.items():
         hashed(ROOT / relative, sha, relative)
-    candidate_path = ROOT / "packages/pwright"
+    candidate_path = ROOT / "packages/playwright-rust"
     if candidate:
         require(
             strict["candidate"] == str(candidate_path)
@@ -858,7 +858,7 @@ def verify_one(strict_path: Path) -> dict[str, Any]:
             "candidate frozen source/profile differs",
         )
         hashed(
-            candidate_path / f"native/{PROFILE}/pwright.node",
+            candidate_path / f"native/{PROFILE}/playwright_rust.node",
             strict["candidateArtifactSha256"],
             "candidate native artifact",
         )

@@ -76,7 +76,7 @@ def verify_strict(strict_path: Path) -> dict[str, Any]:
         manifest_override=base.MANIFEST,
         result_override=result,
         upstream_override=base.UPSTREAM,
-        candidate_override=base.ROOT / "packages/pwright",
+        candidate_override=base.ROOT / "packages/playwright-rust",
         tooling_root=base.ROOT,
     )
     assert provenance["mode"] == strict["mode"]
@@ -92,18 +92,18 @@ def verify_strict(strict_path: Path) -> dict[str, Any]:
     if strict["mode"] == "candidate":
         assert strict["candidateProfile"] == base.PROFILE
         assert strict["candidateArtifactSha256"] == base.ARTIFACT_SHA256
-        artifact = base.ROOT / "packages/pwright/native" / base.PROFILE / "pwright.node"
+        artifact = base.ROOT / "packages/playwright-rust/native" / base.PROFILE / "playwright_rust.node"
         _regular(artifact)
         assert base.sha256(artifact) == base.ARTIFACT_SHA256
         assert provenance["candidateProfile"] == base.PROFILE
         assert provenance["candidateArtifactSha256"] == base.ARTIFACT_SHA256
         assert provenance["candidate"] is not None
-        assert "[pwright-candidate]" in log
+        assert "[playwright-rust-candidate]" in log
     else:
         assert strict["candidateProfile"] is None
         assert strict["candidateArtifactSha256"] is None
         assert provenance["candidate"] is None
-        assert "[pwright-candidate]" not in log
+        assert "[playwright-rust-candidate]" not in log
     selected = capture.selected_tests(json.loads(result.read_text()))
     assert selected == strict["selected"]
     assert strict["exitCode"] == (

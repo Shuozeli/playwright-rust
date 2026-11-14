@@ -1,0 +1,20 @@
+[package]
+name = "playwright-rust-schema-gen"
+description = "Development-only generator for composable Playwright Rust capability schemas"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[[bin]]
+name = "playwright-rust-schema-gen"
+path = "src/main.rs"
+
+[dependencies]
+serde = { workspace = true }
+serde_yaml = { workspace = true }
+
+[dev-dependencies]
+playwright-rust-codec-binary = { path = "../playwright-rust-codec-binary" }
+playwright-rust-core = { path = "../playwright-rust-core" }

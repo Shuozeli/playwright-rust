@@ -145,7 +145,7 @@ def process_event(case: dict[str, object], mode: str) -> dict[str, object]:
         profile = (
             "/tmp/playwright_chromiumdev_profile-test"
             if mode == "oracle"
-            else "/tmp/pwright-node-bidi-startup-test"
+            else "/tmp/playwright-rust-node-bidi-startup-test"
         )
         return {
             **event,
@@ -157,7 +157,7 @@ def process_event(case: dict[str, object], mode: str) -> dict[str, object]:
     profile = (
         "/tmp/playwright_firefoxdev_profile-test"
         if mode == "oracle"
-        else "/tmp/pwright-node-bidi-startup-test"
+        else "/tmp/playwright-rust-node-bidi-startup-test"
     )
     return {
         **event,
@@ -532,12 +532,12 @@ def test_rejects_unremoved_candidate_profile(case: dict[str, object]) -> None:
 def test_rejects_candidate_profile_with_foreign_prefix(case: dict[str, object]) -> None:
     process = process_event(case, "candidate")
     if case["engine"] == "firefox":
-        process["browserProfile"]["path"] = "/tmp/pwright-node-other-feature-test"
-        process["browserArguments"][1] = "/tmp/pwright-node-other-feature-test"
+        process["browserProfile"]["path"] = "/tmp/playwright-rust-node-other-feature-test"
+        process["browserArguments"][1] = "/tmp/playwright-rust-node-other-feature-test"
     else:
-        process["browserProfilePath"] = "/tmp/pwright-node-other-feature-test"
+        process["browserProfilePath"] = "/tmp/playwright-rust-node-other-feature-test"
         process["browserArguments"][0] = (
-            "--user-data-dir=/tmp/pwright-node-other-feature-test"
+            "--user-data-dir=/tmp/playwright-rust-node-other-feature-test"
         )
     with pytest.raises(ValueError, match="profile"):
         verifier.check_process_events(
@@ -593,7 +593,7 @@ def test_capture_rejects_missing_candidate_process(tmp_path: Path) -> None:
 
 def test_capture_rejects_unremoved_candidate_profile(tmp_path: Path) -> None:
     # Arrange
-    profile = tmp_path / "pwright-node-bidi-startup-test"
+    profile = tmp_path / "playwright-rust-node-bidi-startup-test"
     profile.mkdir()
     process = process_event(CASE, "candidate")
     process["browserProfilePath"] = str(profile)

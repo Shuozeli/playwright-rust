@@ -4,12 +4,12 @@ set -euo pipefail
 repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$repo_dir"
 
-base=$(cargo tree --locked -p pwright-node-addon \
+base=$(cargo tree --locked -p playwright-rust-node-addon \
   --features api-request \
   --edges normal --prefix none --format '{p}' \
   | awk '{ print $1 }' \
   | sort -u)
-selected=$(cargo tree --locked -p pwright-node-addon \
+selected=$(cargo tree --locked -p playwright-rust-node-addon \
   --features api-request-client-certificates \
   --edges normal --prefix none --format '{p}' \
   | awk '{ print $1 }' \
@@ -22,7 +22,7 @@ foreign-types-shared
 openssl
 openssl-macros
 openssl-sys
-pwright-api-request-client-certificates
+playwright-rust-api-request-client-certificates
 EOF
 )
 
@@ -37,8 +37,8 @@ if [[ "$added" != "$expected" ]]; then
   exit 1
 fi
 
-CARGO_INCREMENTAL=0 cargo check --release --locked -p pwright-node-addon \
+CARGO_INCREMENTAL=0 cargo check --release --locked -p playwright-rust-node-addon \
   --features api-request
-CARGO_INCREMENTAL=0 cargo check --release --locked -p pwright-node-addon \
+CARGO_INCREMENTAL=0 cargo check --release --locked -p playwright-rust-node-addon \
   --features api-request-client-certificates
-echo "Node client-certificate dependency proof passed (one Pwright leaf and five OpenSSL packages)"
+echo "Node client-certificate dependency proof passed (one Playwright Rust leaf and five OpenSSL packages)"

@@ -32,7 +32,7 @@ from verify_playwright_python_connect_navigation_closed_synthetic_v1 import (
     verify_sources,
 )
 
-RUNTIME = ROOT / "packages/pwright-python/tests/official/runtime"
+RUNTIME = ROOT / "packages/playwright-rust-python/tests/official/runtime"
 FORBIDDEN_INHERITED = (
     "CI",
     "NODE_OPTIONS",
@@ -42,12 +42,12 @@ FORBIDDEN_INHERITED = (
     "PYTHONUSERBASE",
     "PYTEST_ADDOPTS",
     "PYTEST_PLUGINS",
-    "PWRIGHT_CDP_ENDPOINT",
-    "PWRIGHT_CDP_WS_URL",
-    "PWRIGHT_PYTHON_NAV_CLOSED_MODE",
-    "PWRIGHT_PYTHON_NAV_CLOSED_ENGINE",
-    "PWRIGHT_PYTHON_NAV_CLOSED_RECEIPT",
-    "PWRIGHT_PYTHON_NAV_CLOSED_SERVER",
+    "PLAYWRIGHT_RUST_CDP_ENDPOINT",
+    "PLAYWRIGHT_RUST_CDP_WS_URL",
+    "PLAYWRIGHT_RUST_PYTHON_NAV_CLOSED_MODE",
+    "PLAYWRIGHT_RUST_PYTHON_NAV_CLOSED_ENGINE",
+    "PLAYWRIGHT_RUST_PYTHON_NAV_CLOSED_RECEIPT",
+    "PLAYWRIGHT_RUST_PYTHON_NAV_CLOSED_SERVER",
 )
 
 
@@ -93,16 +93,16 @@ def _run_pytest(
                 if mode == "candidate"
                 else [str(RUNTIME), str(PLUGIN_DIR)]
             ),
-            "PWRIGHT_OFFICIAL_LAUNCH_MODE": "owned",
-            "PWRIGHT_OFFICIAL_BROWSER_CHANNEL": "",
-            "PWRIGHT_OFFICIAL_TAILSCALE_IP": bind,
-            "PWRIGHT_OFFICIAL_TAILSCALE_HOST": host,
-            "PWRIGHT_PYTHON_NAV_CLOSED_MODE": mode,
-            "PWRIGHT_PYTHON_NAV_CLOSED_ENGINE": engine,
-            "PWRIGHT_PYTHON_NAV_CLOSED_RECEIPT": str(receipt),
-            "PWRIGHT_PYTHON_NAV_CLOSED_SERVER": str(SERVER),
-            "PWRIGHT_PYTHON_NAV_CLOSED_UPSTREAM": str(UPSTREAM),
-            "PWRIGHT_PYTHON_NAV_CLOSED_CORE_UPSTREAM": str(CORE),
+            "PLAYWRIGHT_RUST_OFFICIAL_LAUNCH_MODE": "owned",
+            "PLAYWRIGHT_RUST_OFFICIAL_BROWSER_CHANNEL": "",
+            "PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_IP": bind,
+            "PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_HOST": host,
+            "PLAYWRIGHT_RUST_PYTHON_NAV_CLOSED_MODE": mode,
+            "PLAYWRIGHT_RUST_PYTHON_NAV_CLOSED_ENGINE": engine,
+            "PLAYWRIGHT_RUST_PYTHON_NAV_CLOSED_RECEIPT": str(receipt),
+            "PLAYWRIGHT_RUST_PYTHON_NAV_CLOSED_SERVER": str(SERVER),
+            "PLAYWRIGHT_RUST_PYTHON_NAV_CLOSED_UPSTREAM": str(UPSTREAM),
+            "PLAYWRIGHT_RUST_PYTHON_NAV_CLOSED_CORE_UPSTREAM": str(CORE),
         }
     )
     command = [
@@ -117,11 +117,11 @@ def _run_pytest(
         "-c",
         str(UPSTREAM / "pyproject.toml"),
         "-p",
-        "pwright_official_server_runtime",
+        "playwright_rust_official_server_runtime",
         "-p",
-        "pwright_python_connect_navigation_closed_synthetic_v1",
+        "playwright_rust_python_connect_navigation_closed_synthetic_v1",
         "-p",
-        "pwright_candidate_runtime" if mode == "candidate" else "pwright_official_oracle_runtime",
+        "playwright_rust_candidate_runtime" if mode == "candidate" else "playwright_rust_official_oracle_runtime",
         f"--browser={engine}",
         "--timeout=30",
         "--timeout-method=signal",
@@ -160,15 +160,15 @@ def _run_pytest(
             key: env[key]
             for key in (
                 "PYTHONPATH",
-                "PWRIGHT_OFFICIAL_LAUNCH_MODE",
-                "PWRIGHT_OFFICIAL_TAILSCALE_IP",
-                "PWRIGHT_OFFICIAL_TAILSCALE_HOST",
-                "PWRIGHT_PYTHON_NAV_CLOSED_MODE",
-                "PWRIGHT_PYTHON_NAV_CLOSED_ENGINE",
-                "PWRIGHT_PYTHON_NAV_CLOSED_RECEIPT",
-                "PWRIGHT_PYTHON_NAV_CLOSED_SERVER",
-                "PWRIGHT_PYTHON_NAV_CLOSED_UPSTREAM",
-                "PWRIGHT_PYTHON_NAV_CLOSED_CORE_UPSTREAM",
+                "PLAYWRIGHT_RUST_OFFICIAL_LAUNCH_MODE",
+                "PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_IP",
+                "PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_HOST",
+                "PLAYWRIGHT_RUST_PYTHON_NAV_CLOSED_MODE",
+                "PLAYWRIGHT_RUST_PYTHON_NAV_CLOSED_ENGINE",
+                "PLAYWRIGHT_RUST_PYTHON_NAV_CLOSED_RECEIPT",
+                "PLAYWRIGHT_RUST_PYTHON_NAV_CLOSED_SERVER",
+                "PLAYWRIGHT_RUST_PYTHON_NAV_CLOSED_UPSTREAM",
+                "PLAYWRIGHT_RUST_PYTHON_NAV_CLOSED_CORE_UPSTREAM",
             )
         },
         "fileSha256": {

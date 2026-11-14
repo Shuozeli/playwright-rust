@@ -62,7 +62,7 @@ def test_unready_policy_cannot_verify_a_run() -> None:
 def test_changed_capture_source_hash_is_rejected() -> None:
     # Arrange
     policy = copy.deepcopy(_policy_data())
-    path = "packages/pwright-python/tests/official/dummy_engine_guard_strict/node"
+    path = "packages/playwright-rust-python/tests/official/dummy_engine_guard_strict/node"
     policy["captureSourceSha256"][path] = "0" * 64
 
     # Act

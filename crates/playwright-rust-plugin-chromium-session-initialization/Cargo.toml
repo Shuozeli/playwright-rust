@@ -1,0 +1,12 @@
+[package]
+name = "playwright-rust-plugin-chromium-session-initialization"
+description = "Optional Chromium session-initialization contract for Playwright Rust topology drivers"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+playwright-rust-backend-cdp-topology = { workspace = true }
+playwright-rust-core = { workspace = true }

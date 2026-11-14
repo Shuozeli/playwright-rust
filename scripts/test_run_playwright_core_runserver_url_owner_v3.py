@@ -15,11 +15,11 @@ def identity(mode: str) -> tuple[dict[str, object], dict[str, object]]:
     harness_inputs = v3.expected_raw_harness_inputs(mode)
     snapshot = {
         "artifactRoot": "/isolated/artifact",
-        "addon": "/isolated/artifact/pwright.node",
+        "addon": "/isolated/artifact/playwright_rust.node",
         "addonSha256": "a" * 64,
         "candidate": str(v3.CANDIDATE),
         "candidateSourceSha256": "b" * 64,
-        "candidateArtifact": str(v3.CANDIDATE / "native" / v3.PROFILE / "pwright.node"),
+        "candidateArtifact": str(v3.CANDIDATE / "native" / v3.PROFILE / "playwright_rust.node"),
         "candidateArtifactSha256": "a" * 64,
     }
     candidate = mode == "candidate"
@@ -160,10 +160,10 @@ def test_raw_identity_rejects_mutated_harness_input_path() -> None:
     "environment",
     [
         {"NODE_OPTIONS": "--require=/untracked.cjs"},
-        {"PWRIGHT_NODE_CANDIDATE": "/other/package"},
-        {"PWRIGHT_NATIVE_PROFILE": "other-profile"},
-        {"PWRIGHT_CORE_BROWSER_TYPE_OWNER_RECEIPT": "/untracked/receipt"},
-        {"PWRIGHT_OFFICIAL_RUNSERVER_EXPECT_BIND": "127.0.0.1"},
+        {"PLAYWRIGHT_RUST_NODE_CANDIDATE": "/other/package"},
+        {"PLAYWRIGHT_RUST_NATIVE_PROFILE": "other-profile"},
+        {"PLAYWRIGHT_RUST_CORE_BROWSER_TYPE_OWNER_RECEIPT": "/untracked/receipt"},
+        {"PLAYWRIGHT_RUST_OFFICIAL_RUNSERVER_EXPECT_BIND": "127.0.0.1"},
     ],
 )
 def test_ambient_execution_override_is_rejected(environment: dict[str, str]) -> None:
@@ -270,8 +270,8 @@ def fake_artifact_snapshot(
     root = tmp_path / "artifact-root"
     candidate = root / "candidate-package"
     source = candidate / "src" / "index.cjs"
-    artifact = candidate / "native" / v3.PROFILE / "pwright.node"
-    addon = root / "pwright.node"
+    artifact = candidate / "native" / v3.PROFILE / "playwright_rust.node"
+    addon = root / "playwright_rust.node"
     source.parent.mkdir(parents=True)
     artifact.parent.mkdir(parents=True)
     (candidate / "package.json").write_text('{"name":"isolated-candidate"}\n')

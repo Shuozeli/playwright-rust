@@ -128,7 +128,7 @@ def test_receipt_mutations_are_rejected(tmp_path, tamper: str, message: str) -> 
         records.remove(call)
         records.append(call)
     elif tamper == "wrong-oracle":
-        select("runtime-import")["candidatePackagePath"] = "/injected/pwright"
+        select("runtime-import")["candidatePackagePath"] = "/injected/playwright_rust"
     else:
         select("fixture-stopped")["returnCode"] = 1
 

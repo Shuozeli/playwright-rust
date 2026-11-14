@@ -21,7 +21,7 @@ UPSTREAM = Path("/Users/cyuan/projects/thirdparty/playwright-v1.58.0")
 COMMIT = "961381ec73a9fa2661d92504eab1a6bd6eaffc75"
 SUITE = "library-chromium-server-connect-child-close-synthetic-v1"
 PROFILE = "playwright-server-connect-session"
-SOURCE_PACKAGE = ROOT / "packages/pwright"
+SOURCE_PACKAGE = ROOT / "packages/playwright-rust"
 MANIFEST = (
     ROOT
     / "tests/official/playwright-core-server-connect-child-close-synthetic-v1-manifest.json"
@@ -395,14 +395,14 @@ def verify_directory(result_dir: Path) -> dict[str, Any]:
                 and source.get("candidateArtifactSha256") == artifact_digest
                 and source.get("candidateSourceSha256")
                 == snapshot_data.get("candidateSourceSha256")
-                and "[pwright-candidate]" in log.read_text(),
+                and "[playwright-rust-candidate]" in log.read_text(),
                 "candidate snapshot or adapter differs from run",
             )
         else:
             require(
                 source.get("candidate") is None
                 and source.get("candidateProfile") is None
-                and "[pwright-candidate]" not in log.read_text(),
+                and "[playwright-rust-candidate]" not in log.read_text(),
                 "oracle loaded candidate adapter",
             )
         selected = selected_test(report)

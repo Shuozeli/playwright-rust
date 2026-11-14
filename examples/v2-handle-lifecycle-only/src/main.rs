@@ -1,4 +1,4 @@
-use pwright_backend_cdp_handle_lifecycle::CdpHandleDisposeLimits;
+use playwright_rust_backend_cdp_handle_lifecycle::CdpHandleDisposeLimits;
 
 fn main() {
     let limits = CdpHandleDisposeLimits::new(4096);

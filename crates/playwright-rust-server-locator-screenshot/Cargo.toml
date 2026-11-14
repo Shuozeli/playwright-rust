@@ -1,0 +1,18 @@
+[package]
+name = "playwright-rust-server-locator-screenshot"
+description = "Generated composable server binding for the Playwright Rust Locator screenshot capability"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+playwright-rust-cap-locator-screenshot = { workspace = true }
+playwright-rust-codec-locator-screenshot = { workspace = true }
+playwright-rust-server-wire = { workspace = true }
+playwright-rust-transport = { workspace = true }
+
+[dev-dependencies]
+playwright-rust-browser-model = { workspace = true }
+playwright-rust-core = { workspace = true }

@@ -14,25 +14,25 @@ cargo tree \
   --edges normal \
   --prefix none \
   --format '{p}' \
-  | awk '/^pwright-/ { print $1 }' \
+  | awk '/^playwright-rust-/ { print $1 }' \
   | sort -u >"$tree_file"
 
 required_packages=(
-  pwright-v2-navigation-only-example
-  pwright-composition-chromium-navigation
-  pwright-backend-cdp-common
-  pwright-backend-cdp-navigation
-  pwright-browser-backend
-  pwright-cap-navigation
-  pwright-cdp
-  pwright-codec-binary
-  pwright-codec-common
-  pwright-codec-navigation
-  pwright-connection-control
-  pwright-core
-  pwright-server-navigation
-  pwright-server-wire
-  pwright-transport
+  playwright-rust-v2-navigation-only-example
+  playwright-rust-composition-chromium-navigation
+  playwright-rust-backend-cdp-common
+  playwright-rust-backend-cdp-navigation
+  playwright-rust-browser-backend
+  playwright-rust-cap-navigation
+  playwright-rust-cdp
+  playwright-rust-codec-binary
+  playwright-rust-codec-common
+  playwright-rust-codec-navigation
+  playwright-rust-connection-control
+  playwright-rust-core
+  playwright-rust-server-navigation
+  playwright-rust-server-wire
+  playwright-rust-transport
 )
 
 for package in "${required_packages[@]}"; do
@@ -51,9 +51,9 @@ while IFS= read -r package; do
     fi
   done
   if [[ "$allowed" != true ]]; then
-    echo "navigation-only dependency proof found forbidden Pwright package: $package" >&2
+    echo "navigation-only dependency proof found forbidden Playwright Rust package: $package" >&2
     exit 1
   fi
 done <"$tree_file"
 
-echo "navigation-only dependency proof passed (${#required_packages[@]} Pwright packages)"
+echo "navigation-only dependency proof passed (${#required_packages[@]} Playwright Rust packages)"

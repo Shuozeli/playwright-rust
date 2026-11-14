@@ -120,34 +120,20 @@ PINNED_FETCH_GLOBAL_SOURCES = {
         "f3768666392be83d3685dfb10038f7a15c45222b69d0ce6eb1cddb08bee30afe"
     ),
     "tests/conftest.py": "c4236e98ff1731fff1f7ef1c00b37fe3a0cb1e4a3fd07e89a491dc7129ea93cc",
-    "tests/async/conftest.py": (
-        "3001008bb97ba0cc1ddb397a53df530b6881e3e3ba69a1ed2cac0de94cab4cdb"
-    ),
-    "tests/sync/conftest.py": (
-        "9ec5a65a98c312de67590792e80d3d9ea45312d56188f45101e71df6f7773d0b"
-    ),
-    "tests/async/utils.py": (
-        "ee618a20d789a28f953ba23a2c24249f3b21f7bd00b1a2d2435aa75ce9b0b478"
-    ),
-    "tests/sync/utils.py": (
-        "ae98bc4ec9132e71456246209de88e4300c9624bf355d763d1881c2919e29bc4"
-    ),
+    "tests/async/conftest.py": ("3001008bb97ba0cc1ddb397a53df530b6881e3e3ba69a1ed2cac0de94cab4cdb"),
+    "tests/sync/conftest.py": ("9ec5a65a98c312de67590792e80d3d9ea45312d56188f45101e71df6f7773d0b"),
+    "tests/async/utils.py": ("ee618a20d789a28f953ba23a2c24249f3b21f7bd00b1a2d2435aa75ce9b0b478"),
+    "tests/sync/utils.py": ("ae98bc4ec9132e71456246209de88e4300c9624bf355d763d1881c2919e29bc4"),
     "tests/server.py": "2cf1a6b805f99c1c82c5351b67df995f06f2a9a18d21dbd48d4d4dc6079c3030",
     "tests/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "tests/async/__init__.py": (
-        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-    ),
-    "tests/sync/__init__.py": (
-        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-    ),
+    "tests/async/__init__.py": ("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"),
+    "tests/sync/__init__.py": ("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"),
 }
 PINNED_FETCH_GLOBAL_FIXTURE_FILES = {
     "tests/assets/simple.json": (
         "1a30b52dacd02b3698f473e5d9df017c54b1e006846363e878dcc2ade9624712"
     ),
-    "tests/assets/empty.html": (
-        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-    ),
+    "tests/assets/empty.html": ("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"),
     "tests/testserver/cert.pem": (
         "402a4ecc40aba35f8143673ac7c20d02c742954a79dc94523b06a5bd9c5fb18e"
     ),
@@ -155,9 +141,7 @@ PINNED_FETCH_GLOBAL_FIXTURE_FILES = {
         "3302e5f7eb8485e832a10f54a63cc049f98e98a5a2d55671c9ed9b440c59053a"
     ),
 }
-PINNED_FETCH_GLOBAL_IDS_SHA256 = (
-    "1df02248b98853fb4ef28dd4d8f35d64fb464d0eeb18d3ca848240fcc60472b0"
-)
+PINNED_FETCH_GLOBAL_IDS_SHA256 = "1df02248b98853fb4ef28dd4d8f35d64fb464d0eeb18d3ca848240fcc60472b0"
 PINNED_FETCH_GLOBAL_COUNTS = {
     "tests/async/test_fetch_global.py": 138,
     "tests/sync/test_fetch_global.py": 93,
@@ -299,19 +283,25 @@ def _validate_fetch_global_manifest(manifest: Mapping[str, object]) -> None:
         raise SystemExit("fetch-global suite requires exact HTTP and TLS fixture files")
 
     cases = manifest.get("cases")
-    if not isinstance(cases, list) or len(cases) != 231:
+    if not isinstance(cases, list):
+        raise SystemExit("fetch-global suite must select all 231 expanded IDs")
+    typed_cases = cast(list[object], cases)
+    if len(typed_cases) != 231:
         raise SystemExit("fetch-global suite must select all 231 expanded IDs")
     ids: list[str] = []
     counts = {relative: 0 for relative in PINNED_FETCH_GLOBAL_COUNTS}
-    for raw_case in cases:
-        if not isinstance(raw_case, dict) or set(raw_case) != {"id", "capabilities"}:
+    for raw_case_value in typed_cases:
+        if not isinstance(raw_case_value, dict):
             raise SystemExit("fetch-global suite contains a malformed case")
-        case_id = raw_case["id"]
+        raw_case = cast(dict[object, object], raw_case_value)
+        if set(raw_case) != {"id", "capabilities"}:
+            raise SystemExit("fetch-global suite contains a malformed case")
+        case_id = raw_case.get("id")
         if not isinstance(case_id, str):
             raise SystemExit("fetch-global suite contains a non-string ID")
         relative, _ = _fetch_global_case_function(case_id)
         api = "async-api" if relative.startswith("tests/async/") else "sync-api"
-        if raw_case["capabilities"] != [
+        if raw_case.get("capabilities") != [
             BROWSERLESS_CAPABILITY,
             "api-request-context",
             api,
@@ -385,9 +375,7 @@ def _verify_fetch_global_source_files(
             if case_id.startswith(f"{relative}::")
         }
         source_functions = {
-            function
-            for function in function_nodes[relative]
-            if function.startswith("test_")
+            function for function in function_nodes[relative] if function.startswith("test_")
         }
         if selected_functions != source_functions:
             raise SystemExit(f"fetch-global suite omits whole-file tests: {relative}")
@@ -524,7 +512,8 @@ def main() -> None:
     parser.add_argument(
         "--manifest",
         type=Path,
-        default=Path(__file__).parents[1] / "packages/pwright-python/tests/official/manifest.json",
+        default=Path(__file__).parents[1]
+        / "packages/playwright-rust-python/tests/official/manifest.json",
     )
     args = parser.parse_args()
 

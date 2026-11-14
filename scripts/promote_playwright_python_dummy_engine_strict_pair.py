@@ -287,7 +287,7 @@ def _reports(
                 f"{mode} runtime {field} differs across cases",
             )
         if mode == "candidate":
-            for field in ("pwrightPackage", "pwrightPackageSha256", "nativePath", "nativeSha256"):
+            for field in ("playwright_rustPackage", "playwright_rustPackageSha256", "nativePath", "nativeSha256"):
                 _require(
                     len({report.get(field) for report in lane}) == 1,
                     f"candidate {field} differs across cases",

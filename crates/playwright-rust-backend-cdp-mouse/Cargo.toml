@@ -1,0 +1,24 @@
+[package]
+name = "playwright-rust-backend-cdp-mouse"
+description = "Optional bounded Chromium Page Mouse services for Playwright Rust"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+playwright-rust-backend-cdp-common = { workspace = true }
+playwright-rust-backend-cdp-input = { workspace = true }
+playwright-rust-browser-backend = { workspace = true }
+playwright-rust-cap-mouse = { workspace = true }
+playwright-rust-cdp = { workspace = true }
+playwright-rust-core = { workspace = true }
+playwright-rust-input-model = { workspace = true }
+
+[dev-dependencies]
+playwright-rust-fake = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt", "time"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+url = { workspace = true }

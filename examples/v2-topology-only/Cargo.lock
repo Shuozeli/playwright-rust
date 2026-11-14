@@ -578,30 +578,30 @@ dependencies = [
 ]
 
 [[package]]
-name = "pwright-backend-cdp-topology"
+name = "playwright-rust-backend-cdp-topology"
 version = "0.1.0"
 dependencies = [
- "pwright-browser-model",
- "pwright-cdp",
- "pwright-core",
+ "playwright-rust-browser-model",
+ "playwright-rust-cdp",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-browser-model"
+name = "playwright-rust-browser-model"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-cdp"
+name = "playwright-rust-cdp"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
  "dashmap",
  "futures-util",
- "pwright-core",
+ "playwright-rust-core",
  "serde",
  "serde_json",
  "thiserror",
@@ -613,14 +613,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "pwright-core"
+name = "playwright-rust-core"
 version = "0.1.0"
 
 [[package]]
-name = "pwright-v2-topology-only-example"
+name = "playwright-rust-v2-topology-only-example"
 version = "0.1.0"
 dependencies = [
- "pwright-backend-cdp-topology",
+ "playwright-rust-backend-cdp-topology",
 ]
 
 [[package]]

@@ -18,7 +18,7 @@ import verify_playwright_python_connect_close_strict_v2 as strict
 from verify_playwright_python_ws_transport_strict import StrictWebSocketEvidenceError
 
 sys.path.insert(0, str(strict.GUARD))
-import pwright_official_connect_guard_v2 as guard
+import playwright_rust_official_connect_guard_v2 as guard
 
 
 class PolicyTests(unittest.TestCase):
@@ -290,14 +290,14 @@ class GuardTests(unittest.TestCase):
         self.port = 48000
         self.host = "machine.tail8f3b66.ts.net"
         self.env = {
-            "PWRIGHT_PYTHON_CONNECT_V2_EXPECTED_TEST": strict.TEST_IDS[1],
-            "PWRIGHT_PYTHON_CONNECT_V2_UPSTREAM": str(self.root),
-            "PWRIGHT_PYTHON_CONNECT_V2_PORT": str(self.port),
-            "PWRIGHT_PYTHON_CONNECT_V2_RECEIPT": str(self.receipt),
-            "PWRIGHT_PYTHON_CONNECT_V2_NONCE": "a" * 32,
-            "PWRIGHT_OFFICIAL_TAILSCALE_HOST": self.host,
-            "PWRIGHT_OFFICIAL_TAILSCALE_IP": "100.78.97.63",
-            "PWRIGHT_OFFICIAL_MODE": "candidate",
+            "PLAYWRIGHT_RUST_PYTHON_CONNECT_V2_EXPECTED_TEST": strict.TEST_IDS[1],
+            "PLAYWRIGHT_RUST_PYTHON_CONNECT_V2_UPSTREAM": str(self.root),
+            "PLAYWRIGHT_RUST_PYTHON_CONNECT_V2_PORT": str(self.port),
+            "PLAYWRIGHT_RUST_PYTHON_CONNECT_V2_RECEIPT": str(self.receipt),
+            "PLAYWRIGHT_RUST_PYTHON_CONNECT_V2_NONCE": "a" * 32,
+            "PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_HOST": self.host,
+            "PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_IP": "100.78.97.63",
+            "PLAYWRIGHT_RUST_OFFICIAL_MODE": "candidate",
         }
 
         class Server:

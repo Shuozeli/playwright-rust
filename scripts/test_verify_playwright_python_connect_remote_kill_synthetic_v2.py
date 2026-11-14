@@ -20,12 +20,12 @@ def test_new_wheel_and_selected_source_are_pinned() -> None:
     # Act
     ledgers = verify.verify_sources()
     with zipfile.ZipFile(wheel) as archive:
-        api_source = archive.read("pwright/async_api.py")
+        api_source = archive.read("playwright_rust/async_api.py")
 
     # Assert
     assert prior.sha256(wheel) == verify.WHEEL_SHA256
-    assert prior.sha256(verify.ROOT / "packages/pwright-python/python/pwright/async_api.py") == verify.SOURCE_HASHES["packages/pwright-python/python/pwright/async_api.py"]
-    assert prior.hashlib.sha256(api_source).hexdigest() == verify.SOURCE_HASHES["packages/pwright-python/python/pwright/async_api.py"]
+    assert prior.sha256(verify.ROOT / "packages/playwright-rust-python/python/playwright_rust/async_api.py") == verify.SOURCE_HASHES["packages/playwright-rust-python/python/playwright_rust/async_api.py"]
+    assert prior.hashlib.sha256(api_source).hexdigest() == verify.SOURCE_HASHES["packages/playwright-rust-python/python/playwright_rust/async_api.py"]
     assert set(ledgers) == {"oracle", "candidate"}
 
 
@@ -60,7 +60,7 @@ def test_manifest_mutation_cannot_claim_false_evidence(
 def test_source_hash_mutation_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
     # Arrange
     changed = dict(verify.SOURCE_HASHES)
-    changed["packages/pwright-python/python/pwright/async_api.py"] = "0" * 64
+    changed["packages/playwright-rust-python/python/playwright_rust/async_api.py"] = "0" * 64
     monkeypatch.setattr(verify, "SOURCE_HASHES", changed)
 
     # Act / Assert
@@ -80,10 +80,10 @@ def test_stale_red_wheel_cannot_be_relabelled_as_fixed() -> None:
 def tooling_evidence(tmp_path: Path, wheel: Path) -> tuple[Path, Path]:
     install_log = tmp_path / "install.log"
     freeze = tmp_path / "tooling-freeze.txt"
-    install_log.write_text(" + playwright==1.58.0\n + shuozeli-pwright==0.1.0\n")
+    install_log.write_text(" + playwright==1.58.0\n + shuozeli-playwright-rust==0.1.0\n")
     freeze.write_text("\n".join(
         [f"{name}=={version}" for name, version in prior.TOOLING.items() if name != "python"]
-        + [f"shuozeli-pwright @ file://{wheel}"]
+        + [f"shuozeli-playwright-rust @ file://{wheel}"]
     ) + "\n")
     return install_log, freeze
 
@@ -158,7 +158,7 @@ def test_saved_provenance_mutations_are_rejected_when_present(
         value = original(path)
         if path == FINAL / "candidate-1.provenance.json":
             if tamper == "cdp":
-                value["environment"]["PWRIGHT_CDP_ENDPOINT"] = "http://127.0.0.1:9222"
+                value["environment"]["PLAYWRIGHT_RUST_CDP_ENDPOINT"] = "http://127.0.0.1:9222"
             elif tamper == "xml-hash":
                 value["fileSha256"]["xml"] = "0" * 64
             elif tamper == "origin":

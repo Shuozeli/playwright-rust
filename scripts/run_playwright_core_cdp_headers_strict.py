@@ -97,11 +97,11 @@ def main() -> None:
     args = parser.parse_args()
     if any(os.environ.get(key) for key in (
         "NODE_OPTIONS", "PWTEST_MODE", "PWPAGE_IMPL", "PWTEST_USE_BIDI_EXPECTATIONS",
-        "PWRIGHT_CANDIDATE_CDP_ENDPOINT", "PWRIGHT_ORACLE_CDP_ENDPOINT",
+        "PLAYWRIGHT_RUST_CANDIDATE_CDP_ENDPOINT", "PLAYWRIGHT_RUST_ORACLE_CDP_ENDPOINT",
     )):
         parser.error("strict CDP header run rejects inherited runtime overrides")
     check_source()
-    artifact = ROOT / "packages/pwright/native" / PROFILE / "pwright.node"
+    artifact = ROOT / "packages/playwright-rust/native" / PROFILE / "playwright_rust.node"
     if args.mode == "candidate":
         assert sha256(artifact) == ARTIFACT_SHA256
     result = args.result.resolve()
@@ -120,7 +120,7 @@ def main() -> None:
     inputs = {str(path.relative_to(ROOT)): sha256(path) for path in (MANIFEST, PRELOAD, Path(__file__))}
     env = os.environ.copy()
     env["NODE_OPTIONS"] = f"--require={PRELOAD}"
-    env["PWRIGHT_CORE_CDP_HEADERS_GUARD_RECEIPT"] = str(receipt)
+    env["PLAYWRIGHT_RUST_CORE_CDP_HEADERS_GUARD_RECEIPT"] = str(receipt)
     cmd = [
         "uv", "run", "--with", "pytest", str(ROOT / "scripts/run_playwright_official_conformance.py"),
         args.mode, str(UPSTREAM), "--suite", SUITE, "--manifest", str(MANIFEST),
@@ -144,7 +144,7 @@ def main() -> None:
                and record["replacements"] == {"websocket": 2, "discovery": 1}
                for record in records)
     if args.mode == "candidate":
-        assert "[pwright-candidate]" in log
+        assert "[playwright-rust-candidate]" in log
     strict = {
         "schema": 1,
         "scope": "unchanged-upstream-assertions-browser-free-fixture-host-adaptation",

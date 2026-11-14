@@ -37,19 +37,19 @@ FORBIDDEN_OVERRIDES = (
     "PWTEST_MODE",
     "PWPAGE_IMPL",
     "PWTEST_USE_BIDI_EXPECTATIONS",
-    "PWRIGHT_CANDIDATE_CDP_ENDPOINT",
-    "PWRIGHT_ORACLE_CDP_ENDPOINT",
-    "PWRIGHT_CDP_ENDPOINT",
-    "PWRIGHT_CDP_WS_URL",
-    "PWRIGHT_NATIVE_PROFILE",
-    "PWRIGHT_NODE_CANDIDATE",
-    "PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM",
-    "PWRIGHT_OFFICIAL_SERVER_IP",
-    "PWRIGHT_OFFICIAL_SERVER_HOST",
-    "PWRIGHT_CORE_PAGE_EVENTS_SYNTHETIC_MODE",
-    "PWRIGHT_CORE_PAGE_EVENTS_SYNTHETIC_RECEIPT",
-    "PWRIGHT_CORE_PAGE_EVENTS_SYNTHETIC_SERVER",
-    "PWRIGHT_CORE_PAGE_EVENTS_SYNTHETIC_PROBE_TOKEN",
+    "PLAYWRIGHT_RUST_CANDIDATE_CDP_ENDPOINT",
+    "PLAYWRIGHT_RUST_ORACLE_CDP_ENDPOINT",
+    "PLAYWRIGHT_RUST_CDP_ENDPOINT",
+    "PLAYWRIGHT_RUST_CDP_WS_URL",
+    "PLAYWRIGHT_RUST_NATIVE_PROFILE",
+    "PLAYWRIGHT_RUST_NODE_CANDIDATE",
+    "PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM",
+    "PLAYWRIGHT_RUST_OFFICIAL_SERVER_IP",
+    "PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST",
+    "PLAYWRIGHT_RUST_CORE_PAGE_EVENTS_SYNTHETIC_MODE",
+    "PLAYWRIGHT_RUST_CORE_PAGE_EVENTS_SYNTHETIC_RECEIPT",
+    "PLAYWRIGHT_RUST_CORE_PAGE_EVENTS_SYNTHETIC_SERVER",
+    "PLAYWRIGHT_RUST_CORE_PAGE_EVENTS_SYNTHETIC_PROBE_TOKEN",
 )
 
 
@@ -59,9 +59,9 @@ def _run_official(result_dir: Path, mode: str, snapshot: Path) -> None:
     log = result_dir / f"{mode}.log"
     env = os.environ.copy()
     env["NODE_OPTIONS"] = f"--require={PRELOAD}"
-    env["PWRIGHT_CORE_PAGE_EVENTS_SYNTHETIC_MODE"] = mode
-    env["PWRIGHT_CORE_PAGE_EVENTS_SYNTHETIC_RECEIPT"] = str(receipt)
-    env["PWRIGHT_CORE_PAGE_EVENTS_SYNTHETIC_SERVER"] = str(SERVER)
+    env["PLAYWRIGHT_RUST_CORE_PAGE_EVENTS_SYNTHETIC_MODE"] = mode
+    env["PLAYWRIGHT_RUST_CORE_PAGE_EVENTS_SYNTHETIC_RECEIPT"] = str(receipt)
+    env["PLAYWRIGHT_RUST_CORE_PAGE_EVENTS_SYNTHETIC_SERVER"] = str(SERVER)
     command = [
         "uv", "run", "--with", "pytest", str(OFFICIAL_RUNNER), mode,
         str(UPSTREAM), "--suite", SUITE, "--manifest", str(MANIFEST),
@@ -85,17 +85,17 @@ def _run_official(result_dir: Path, mode: str, snapshot: Path) -> None:
 def _run_positive(result_dir: Path, mode: str, snapshot: Path) -> None:
     provenance = json.loads((result_dir / f"{mode}.provenance.json").read_text())
     env = os.environ.copy()
-    env["PWRIGHT_CORE_PAGE_EVENTS_SYNTHETIC_MODE"] = mode
-    env["PWRIGHT_CORE_PAGE_EVENTS_SYNTHETIC_RECEIPT"] = str(
+    env["PLAYWRIGHT_RUST_CORE_PAGE_EVENTS_SYNTHETIC_MODE"] = mode
+    env["PLAYWRIGHT_RUST_CORE_PAGE_EVENTS_SYNTHETIC_RECEIPT"] = str(
         result_dir / f"{mode}.positive.receipt.jsonl"
     )
-    env["PWRIGHT_CORE_PAGE_EVENTS_SYNTHETIC_SERVER"] = str(SERVER)
-    env["PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM"] = str(UPSTREAM)
-    env["PWRIGHT_OFFICIAL_SERVER_HOST"] = provenance["fixtureHost"]
-    env["PWRIGHT_OFFICIAL_SERVER_IP"] = provenance["fixtureBind"]
+    env["PLAYWRIGHT_RUST_CORE_PAGE_EVENTS_SYNTHETIC_SERVER"] = str(SERVER)
+    env["PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM"] = str(UPSTREAM)
+    env["PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST"] = provenance["fixtureHost"]
+    env["PLAYWRIGHT_RUST_OFFICIAL_SERVER_IP"] = provenance["fixtureBind"]
     if mode == "candidate":
-        env["PWRIGHT_NODE_CANDIDATE"] = str(snapshot)
-        env["PWRIGHT_NATIVE_PROFILE"] = PROFILE
+        env["PLAYWRIGHT_RUST_NODE_CANDIDATE"] = str(snapshot)
+        env["PLAYWRIGHT_RUST_NATIVE_PROFILE"] = PROFILE
     completed = subprocess.run(
         ["node", str(POSITIVE)], cwd=ROOT, env=env, capture_output=True,
         text=True, check=False, timeout=45,

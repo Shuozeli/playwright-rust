@@ -8,15 +8,15 @@ const { lookup } = require('node:dns/promises');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const bind = process.env.PWRIGHT_OFFICIAL_SERVER_IP;
-const host = process.env.PWRIGHT_OFFICIAL_SERVER_HOST;
-const upstream = process.env.PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM;
-const receipt = process.env.PWRIGHT_CORE_CHILD_CLOSE_SYNTHETIC_RECEIPT;
-const mode = process.env.PWRIGHT_CORE_CHILD_CLOSE_SYNTHETIC_MODE;
+const bind = process.env.PLAYWRIGHT_RUST_OFFICIAL_SERVER_IP;
+const host = process.env.PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST;
+const upstream = process.env.PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM;
+const receipt = process.env.PLAYWRIGHT_RUST_CORE_CHILD_CLOSE_SYNTHETIC_RECEIPT;
+const mode = process.env.PLAYWRIGHT_RUST_CORE_CHILD_CLOSE_SYNTHETIC_MODE;
 if (!bind || !host || !upstream || !receipt || !['oracle', 'candidate'].includes(mode))
   throw new Error('child-close synthetic server requires explicit Tailscale and diagnostic settings');
-for (const key of ['PWRIGHT_CDP_ENDPOINT', 'PWRIGHT_CDP_WS_URL',
-  'PWRIGHT_CANDIDATE_CDP_ENDPOINT', 'PWRIGHT_ORACLE_CDP_ENDPOINT']) {
+for (const key of ['PLAYWRIGHT_RUST_CDP_ENDPOINT', 'PLAYWRIGHT_RUST_CDP_WS_URL',
+  'PLAYWRIGHT_RUST_CANDIDATE_CDP_ENDPOINT', 'PLAYWRIGHT_RUST_ORACLE_CDP_ENDPOINT']) {
   if (process.env[key]) throw new Error(`child-close synthetic server forbids ${key}`);
 }
 const { WebSocketServer } = require(require.resolve('ws', { paths: [path.resolve(upstream)] }));

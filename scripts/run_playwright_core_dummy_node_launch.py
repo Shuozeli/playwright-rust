@@ -267,10 +267,10 @@ def preflight_environment(env: dict[str, str]) -> None:
         "PWTEST_CHANNEL",
         "PWTEST_VIDEO",
         "PWTEST_TRACE",
-        "PWRIGHT_CANDIDATE_CDP_ENDPOINT",
-        "PWRIGHT_ORACLE_CDP_ENDPOINT",
-        "PWRIGHT_CDP_ENDPOINT",
-        "PWRIGHT_CDP_WS_URL",
+        "PLAYWRIGHT_RUST_CANDIDATE_CDP_ENDPOINT",
+        "PLAYWRIGHT_RUST_ORACLE_CDP_ENDPOINT",
+        "PLAYWRIGHT_RUST_CDP_ENDPOINT",
+        "PLAYWRIGHT_RUST_CDP_WS_URL",
         "PYTHONHOME",
         "PYTHONPATH",
         "PYTHONUSERBASE",
@@ -557,7 +557,7 @@ def strict_process_receipt(
         not profile.is_absolute()
         or profile.exists()
         or profile.is_symlink()
-        or (mode == "candidate" and not profile.name.startswith("pwright-node-"))
+        or (mode == "candidate" and not profile.name.startswith("playwright-rust-node-"))
         or not isinstance(profile_stat, dict)
         or set(profile_stat) != {"device", "inode", "uid"}
         or not all(
@@ -671,7 +671,7 @@ def run(args: argparse.Namespace) -> None:
         raise ValueError("dummy-node pinned runner is missing or linked")
     candidate = args.candidate.resolve() if args.mode == "candidate" else None
     artifact = (
-        candidate / f"native/{candidate_profile}/pwright.node" if candidate else None
+        candidate / f"native/{candidate_profile}/playwright_rust.node" if candidate else None
     )
     if candidate and (
         source_digest(candidate) != source_sha
@@ -702,30 +702,30 @@ def run(args: argparse.Namespace) -> None:
         target.open("x").close()
     env.pop("CI", None)
     env["PWTEST_MODE"] = "default"
-    env["PWRIGHT_OFFICIAL_SERVER_IP"] = bind
-    env["PWRIGHT_OFFICIAL_SERVER_HOST"] = host
-    env["PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM"] = str(upstream)
-    env["PWRIGHT_DUMMY_LAUNCH_MODE"] = args.mode
-    env["PWRIGHT_DUMMY_LAUNCH_MANIFEST"] = str(selected_manifest)
-    env["PWRIGHT_DUMMY_LAUNCH_MANIFEST_SHA256"] = selected_manifest_sha256
-    env["PWRIGHT_DUMMY_LAUNCH_RECEIPT"] = str(receipt)
-    env["PWRIGHT_DUMMY_PROCESS_ASSET"] = str(upstream / ASSET)
-    env["PWRIGHT_DUMMY_PROCESS_RECEIPT"] = str(process_receipt)
-    env["PWRIGHT_DUMMY_REAL_NODE"] = str(node)
+    env["PLAYWRIGHT_RUST_OFFICIAL_SERVER_IP"] = bind
+    env["PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST"] = host
+    env["PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM"] = str(upstream)
+    env["PLAYWRIGHT_RUST_DUMMY_LAUNCH_MODE"] = args.mode
+    env["PLAYWRIGHT_RUST_DUMMY_LAUNCH_MANIFEST"] = str(selected_manifest)
+    env["PLAYWRIGHT_RUST_DUMMY_LAUNCH_MANIFEST_SHA256"] = selected_manifest_sha256
+    env["PLAYWRIGHT_RUST_DUMMY_LAUNCH_RECEIPT"] = str(receipt)
+    env["PLAYWRIGHT_RUST_DUMMY_PROCESS_ASSET"] = str(upstream / ASSET)
+    env["PLAYWRIGHT_RUST_DUMMY_PROCESS_RECEIPT"] = str(process_receipt)
+    env["PLAYWRIGHT_RUST_DUMMY_REAL_NODE"] = str(node)
     run_id = uuid.uuid4().hex if strict else None
     if run_id:
-        env["PWRIGHT_DUMMY_STRICT_RUN_ID"] = run_id
-        env["PWRIGHT_DUMMY_HARNESS_PID"] = str(os.getpid())
+        env["PLAYWRIGHT_RUST_DUMMY_STRICT_RUN_ID"] = run_id
+        env["PLAYWRIGHT_RUST_DUMMY_HARNESS_PID"] = str(os.getpid())
     env["PATH"] = f"{guard.parent}:/opt/homebrew/bin:/usr/bin:/bin"
     env["PLAYWRIGHT_JSON_OUTPUT_FILE"] = str(result)
     preloads = [SERVER_PRELOAD]
     if candidate:
-        env["PWRIGHT_NODE_CANDIDATE"] = str(candidate)
-        env["PWRIGHT_NATIVE_PROFILE"] = candidate_profile
+        env["PLAYWRIGHT_RUST_NODE_CANDIDATE"] = str(candidate)
+        env["PLAYWRIGHT_RUST_NATIVE_PROFILE"] = candidate_profile
         preloads.append(CANDIDATE_PRELOAD)
     else:
-        env.pop("PWRIGHT_NODE_CANDIDATE", None)
-        env.pop("PWRIGHT_NATIVE_PROFILE", None)
+        env.pop("PLAYWRIGHT_RUST_NODE_CANDIDATE", None)
+        env.pop("PLAYWRIGHT_RUST_NATIVE_PROFILE", None)
     preloads.append(GUARD_PRELOAD)
     env["NODE_OPTIONS"] = " ".join(
         f"--require={ROOT / relative}" for relative in preloads
@@ -948,7 +948,7 @@ def main() -> None:
         selected.add_argument("--strict", action="store_true")
         if mode == "candidate":
             selected.add_argument(
-                "--candidate", type=Path, default=ROOT / "packages/pwright"
+                "--candidate", type=Path, default=ROOT / "packages/playwright-rust"
             )
     args = parser.parse_args()
     try:

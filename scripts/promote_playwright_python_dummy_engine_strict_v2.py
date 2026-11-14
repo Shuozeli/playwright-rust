@@ -66,10 +66,10 @@ TOOL_SHA256 = {
         "b6b71cceca4563ddc3d49dca0cc58ff6f961801bc470f86ad324f10b180f7abb"
     ),
     (
-        "packages/pwright-python/tests/official/dummy_engine_guard_strict_v2/"
-        "pwright_official_dummy_engine_guard_v2.py"
+        "packages/playwright-rust-python/tests/official/dummy_engine_guard_strict_v2/"
+        "playwright_rust_official_dummy_engine_guard_v2.py"
     ): "014a3f78d4087622ae96acb6ba92fe15d9c4f185aa66203bb2e5759bd805eadf",
-    "packages/pwright-python/tests/official/dummy_engine_guard_strict_v2/node": (
+    "packages/playwright-rust-python/tests/official/dummy_engine_guard_strict_v2/node": (
         "7a41a91c7d26b363d7097eff5e28b0e47b1a46fe0d6a5c55496452b1ff31a766"
     ),
 }
@@ -405,7 +405,7 @@ def reports() -> dict[tuple[str, str, str], dict[str, Any]]:
         lane = [verified[(mode, api, browser)] for api in APIS for browser in BROWSERS]
         fields = ("pythonExecutable", "playwrightPackage", "driverNode")
         if mode == "candidate":
-            fields += ("wheelSha256", "pwrightPackageSha256", "nativeSha256", "runtimeLibraries")
+            fields += ("wheelSha256", "playwright_rustPackageSha256", "nativeSha256", "runtimeLibraries")
         for field in fields:
             require(
                 all(payload.get(field) == lane[0].get(field) for payload in lane),

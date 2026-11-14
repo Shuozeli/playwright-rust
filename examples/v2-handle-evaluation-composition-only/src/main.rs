@@ -1,4 +1,4 @@
-use pwright_composition_chromium_handle_evaluation::ChromiumHandleEvaluationProfile;
+use playwright_rust_composition_chromium_handle_evaluation::ChromiumHandleEvaluationProfile;
 
 fn main() {
     println!(

@@ -1,0 +1,32 @@
+[package]
+name = "playwright-rust-composition-chromium-keyboard"
+description = "Optional bounded Page Keyboard route and wire composition"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[features]
+default = []
+runtime = ["dep:playwright-rust-runtime"]
+
+[dependencies]
+playwright-rust-runtime = { workspace = true, optional = true }
+playwright-rust-backend-cdp-keyboard = { workspace = true }
+playwright-rust-backend-cdp-input = { workspace = true }
+playwright-rust-cap-keyboard = { workspace = true }
+playwright-rust-cdp = { workspace = true }
+playwright-rust-codec-keyboard = { workspace = true }
+playwright-rust-core = { workspace = true }
+playwright-rust-server-keyboard = { workspace = true }
+playwright-rust-transport = { workspace = true }
+
+[dev-dependencies]
+playwright-rust-browser-model = { workspace = true }
+playwright-rust-fake = { workspace = true }
+playwright-rust-server-wire = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt", "time"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+url = { workspace = true }

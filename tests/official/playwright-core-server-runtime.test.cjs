@@ -20,15 +20,15 @@ function tailscaleEndpoint() {
 }
 
 const endpoint = tailscaleEndpoint();
-const upstream = process.env.PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM || path.resolve(__dirname, '../..');
+const upstream = process.env.PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM || path.resolve(__dirname, '../..');
 const upstreamFixturePath = path.join(upstream, 'tests', 'config', 'serverFixtures.ts');
 const upstreamFixtureSource = fs.existsSync(upstreamFixturePath)
   ? fs.readFileSync(upstreamFixturePath, 'utf8')
   : null;
-process.env.PWRIGHT_OFFICIAL_SERVER_IP = endpoint?.ip || 'missing-tailscale-interface';
-process.env.PWRIGHT_OFFICIAL_SERVER_HOST = endpoint?.host || 'missing-tailscale-host.invalid';
-process.env.PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM = upstream;
-process.env.PWRIGHT_OFFICIAL_CROSS_ORIGIN_FORWARD = '1';
+process.env.PLAYWRIGHT_RUST_OFFICIAL_SERVER_IP = endpoint?.ip || 'missing-tailscale-interface';
+process.env.PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST = endpoint?.host || 'missing-tailscale-host.invalid';
+process.env.PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM = upstream;
+process.env.PLAYWRIGHT_RUST_OFFICIAL_CROSS_ORIGIN_FORWARD = '1';
 const { rewriteServerFixtures, startCrossOriginForward } = require('./playwright-core-server-runtime.cjs');
 
 const fixtureSource = `  loopback: [undefined, { scope: 'worker', option: true }],
@@ -98,7 +98,7 @@ test('opt-in source rewrite changes the origin and keeps legacy fixtures unchang
   assert.match(optedIn, /finally \{\s*await Promise\.all\(\[\s*server\.stop\(\)/);
   assert.doesNotMatch(legacy, /startCrossOriginForward/);
   assert.match(legacy, /await run\(\{/);
-  assert.match(optedIn, /loopback: \[process\.env\.PWRIGHT_OFFICIAL_SERVER_HOST/);
+  assert.match(optedIn, /loopback: \[process\.env\.PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST/);
 });
 
 test('checked-out upstream server fixture rewrites and transpiles cleanly', { skip: !upstreamFixtureSource }, () => {

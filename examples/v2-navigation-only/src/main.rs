@@ -1,4 +1,4 @@
-use pwright_composition_chromium_navigation::{
+use playwright_rust_composition_chromium_navigation::{
     CdpNavigationLimits, CdpNavigationProductionProfile, ChromiumNavigationProfile, FrameLimits,
     NavigationCodecLimits, ObjectId, ProtocolVersion, ResourceScope,
 };

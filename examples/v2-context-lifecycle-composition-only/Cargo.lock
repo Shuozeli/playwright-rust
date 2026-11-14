@@ -578,56 +578,56 @@ dependencies = [
 ]
 
 [[package]]
-name = "pwright-backend-cdp-common"
+name = "playwright-rust-backend-cdp-common"
 version = "0.1.0"
 dependencies = [
- "pwright-cdp",
- "pwright-core",
+ "playwright-rust-cdp",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-backend-cdp-context-lifecycle"
+name = "playwright-rust-backend-cdp-context-lifecycle"
 version = "0.1.0"
 dependencies = [
- "pwright-backend-cdp-common",
- "pwright-backend-cdp-topology",
- "pwright-cap-context-lifecycle",
- "pwright-cdp",
- "pwright-core",
+ "playwright-rust-backend-cdp-common",
+ "playwright-rust-backend-cdp-topology",
+ "playwright-rust-cap-context-lifecycle",
+ "playwright-rust-cdp",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-backend-cdp-topology"
+name = "playwright-rust-backend-cdp-topology"
 version = "0.1.0"
 dependencies = [
- "pwright-browser-model",
- "pwright-cdp",
- "pwright-core",
+ "playwright-rust-browser-model",
+ "playwright-rust-cdp",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-browser-model"
+name = "playwright-rust-browser-model"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-cap-context-lifecycle"
+name = "playwright-rust-cap-context-lifecycle"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-cdp"
+name = "playwright-rust-cdp"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
  "dashmap",
  "futures-util",
- "pwright-core",
+ "playwright-rust-core",
  "serde",
  "serde_json",
  "thiserror",
@@ -639,95 +639,95 @@ dependencies = [
 ]
 
 [[package]]
-name = "pwright-codec-binary"
+name = "playwright-rust-codec-binary"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-codec-common"
+name = "playwright-rust-codec-common"
 version = "0.1.0"
 dependencies = [
- "pwright-codec-binary",
- "pwright-core",
+ "playwright-rust-codec-binary",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-codec-context-lifecycle"
+name = "playwright-rust-codec-context-lifecycle"
 version = "0.1.0"
 dependencies = [
- "pwright-cap-context-lifecycle",
- "pwright-codec-binary",
- "pwright-codec-common",
- "pwright-core",
- "pwright-transport",
+ "playwright-rust-cap-context-lifecycle",
+ "playwright-rust-codec-binary",
+ "playwright-rust-codec-common",
+ "playwright-rust-core",
+ "playwright-rust-transport",
 ]
 
 [[package]]
-name = "pwright-composition-chromium-context-lifecycle"
+name = "playwright-rust-composition-chromium-context-lifecycle"
 version = "0.1.0"
 dependencies = [
- "pwright-backend-cdp-context-lifecycle",
- "pwright-backend-cdp-topology",
- "pwright-cap-context-lifecycle",
- "pwright-cdp",
- "pwright-codec-context-lifecycle",
- "pwright-core",
- "pwright-runtime",
- "pwright-server-context-lifecycle",
- "pwright-transport",
+ "playwright-rust-backend-cdp-context-lifecycle",
+ "playwright-rust-backend-cdp-topology",
+ "playwright-rust-cap-context-lifecycle",
+ "playwright-rust-cdp",
+ "playwright-rust-codec-context-lifecycle",
+ "playwright-rust-core",
+ "playwright-rust-runtime",
+ "playwright-rust-server-context-lifecycle",
+ "playwright-rust-transport",
 ]
 
 [[package]]
-name = "pwright-connection-control"
+name = "playwright-rust-connection-control"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-core"
+name = "playwright-rust-core"
 version = "0.1.0"
 
 [[package]]
-name = "pwright-runtime"
+name = "playwright-rust-runtime"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-server-context-lifecycle"
+name = "playwright-rust-server-context-lifecycle"
 version = "0.1.0"
 dependencies = [
- "pwright-cap-context-lifecycle",
- "pwright-codec-context-lifecycle",
- "pwright-server-wire",
- "pwright-transport",
+ "playwright-rust-cap-context-lifecycle",
+ "playwright-rust-codec-context-lifecycle",
+ "playwright-rust-server-wire",
+ "playwright-rust-transport",
 ]
 
 [[package]]
-name = "pwright-server-wire"
+name = "playwright-rust-server-wire"
 version = "0.1.0"
 dependencies = [
- "pwright-connection-control",
- "pwright-core",
- "pwright-transport",
+ "playwright-rust-connection-control",
+ "playwright-rust-core",
+ "playwright-rust-transport",
 ]
 
 [[package]]
-name = "pwright-transport"
+name = "playwright-rust-transport"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-v2-context-lifecycle-composition-only-example"
+name = "playwright-rust-v2-context-lifecycle-composition-only-example"
 version = "0.1.0"
 dependencies = [
- "pwright-composition-chromium-context-lifecycle",
+ "playwright-rust-composition-chromium-context-lifecycle",
 ]
 
 [[package]]

@@ -1,0 +1,18 @@
+[package]
+name = "playwright-rust-server-artifact"
+description = "Generated opt-in typed server handlers for Artifact streaming"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+playwright-rust-cap-artifact = { workspace = true }
+playwright-rust-codec-artifact = { workspace = true }
+playwright-rust-server-wire = { workspace = true }
+playwright-rust-transport = { workspace = true }
+
+[dev-dependencies]
+playwright-rust-browser-model = { workspace = true }
+playwright-rust-core = { workspace = true }

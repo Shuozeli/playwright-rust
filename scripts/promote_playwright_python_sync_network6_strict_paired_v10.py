@@ -105,13 +105,13 @@ def prepare(output_dir: Path) -> tuple[dict[str, bytes], dict[str, Any]]:
 
 
 def _archive(staging: Path) -> None:
-    candidate_package = verify.ROOT / "packages/pwright-python/python/pwright"
-    candidate_libraries = verify.ROOT / "packages/pwright-python/python/shuozeli_pwright.dylibs"
-    official_harness = verify.ROOT / "packages/pwright-python/tests/official"
+    candidate_package = verify.ROOT / "packages/playwright-rust-python/python/playwright_rust"
+    candidate_libraries = verify.ROOT / "packages/playwright-rust-python/python/shuozeli_playwright_rust.dylibs"
+    official_harness = verify.ROOT / "packages/playwright-rust-python/tests/official"
     archive = staging / "archive"
     archive.mkdir(mode=0o755)
-    shutil.copytree(candidate_package, archive / "pwright", symlinks=True)
-    shutil.copytree(candidate_libraries, archive / "shuozeli_pwright.dylibs", symlinks=True)
+    shutil.copytree(candidate_package, archive / "playwright_rust", symlinks=True)
+    shutil.copytree(candidate_libraries, archive / "shuozeli_playwright_rust.dylibs", symlinks=True)
     (archive / "harness").mkdir(mode=0o755)
     for name in ("shim", "runtime"):
         shutil.copytree(official_harness / name, archive / "harness" / name, symlinks=True)
@@ -121,7 +121,7 @@ def _archive(staging: Path) -> None:
     )
     payloads, _ = verify._reports(archive)
     require(
-        payloads["candidateQualified"]["pwrightPackageSha256"]
+        payloads["candidateQualified"]["playwright_rustPackageSha256"]
         == "ae49b06f267c68194edfe268a3f1ca19debbd9bb8895286acd9871f789dfa482",
         "archived candidate package differs",
     )

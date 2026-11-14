@@ -78,7 +78,7 @@ def test_ready_policy_pins_exact_new_guard_and_runner_sources() -> None:
 def test_changed_capture_source_is_rejected() -> None:
     # Arrange
     policy = _ready_policy()
-    path = "packages/pwright-python/tests/official/dummy_engine_guard_strict_v2/node"
+    path = "packages/playwright-rust-python/tests/official/dummy_engine_guard_strict_v2/node"
     policy["captureSourceSha256"][path] = "0" * 64
 
     # Act
@@ -294,7 +294,7 @@ def test_candidate_unsupported_error_is_rejected_after_real_process(
     public = Path(payload["publicReceipt"])
     rows = [json.loads(line) for line in public.read_text().splitlines()]
     rows[1]["errorClass"] = "UnsupportedError"
-    rows[1]["errorMessage"] = "PWRIGHT_UNSUPPORTED"
+    rows[1]["errorMessage"] = "PLAYWRIGHT_RUST_UNSUPPORTED"
     public.write_text("".join(json.dumps(row) + "\n" for row in rows))
     payload["publicReceiptSha256"] = file_sha256(public)
 
@@ -340,9 +340,9 @@ def test_wheel_install_must_match_each_pinned_candidate_file(tmp_path: Path) -> 
     site = tmp_path / "site-packages"
     wheel = tmp_path / "candidate.whl"
     entries = {
-        "pwright/__init__.py": b"source = 'wheel'\n",
-        "pwright/_native.abi3.so": b"native",
-        "shuozeli_pwright.dylibs/libfake.dylib": b"dylib",
+        "playwright_rust/__init__.py": b"source = 'wheel'\n",
+        "playwright_rust/_native.abi3.so": b"native",
+        "shuozeli_playwright_rust.dylibs/libfake.dylib": b"dylib",
     }
     with zipfile.ZipFile(wheel, "w") as archive:
         for name, content in entries.items():
@@ -356,7 +356,7 @@ def test_wheel_install_must_match_each_pinned_candidate_file(tmp_path: Path) -> 
     _wheel_matches_install(wheel, site)
 
     # Assert
-    changed = site / "pwright/__init__.py"
+    changed = site / "playwright_rust/__init__.py"
     changed.write_text("source = 'other'\n")
     with pytest.raises(StrictEvidenceError, match="differs from wheel"):
         _wheel_matches_install(wheel, site)
@@ -367,11 +367,11 @@ def test_wheel_install_rejects_unrecorded_installed_file(tmp_path: Path) -> None
     site = tmp_path / "site-packages"
     wheel = tmp_path / "candidate.whl"
     with zipfile.ZipFile(wheel, "w") as archive:
-        archive.writestr("pwright/_native.abi3.so", b"native")
-    native = site / "pwright/_native.abi3.so"
+        archive.writestr("playwright_rust/_native.abi3.so", b"native")
+    native = site / "playwright_rust/_native.abi3.so"
     native.parent.mkdir(parents=True)
     native.write_bytes(b"native")
-    adjacent = site / "shuozeli_pwright.dylibs/libextra.dylib"
+    adjacent = site / "shuozeli_playwright_rust.dylibs/libextra.dylib"
     adjacent.parent.mkdir()
     adjacent.write_bytes(b"unexpected")
 
@@ -388,7 +388,7 @@ def test_wheel_install_rejects_unsafe_member_path(tmp_path: Path) -> None:
     site = tmp_path / "site-packages"
     wheel = tmp_path / "candidate.whl"
     with zipfile.ZipFile(wheel, "w") as archive:
-        archive.writestr("../pwright/_native.abi3.so", b"native")
+        archive.writestr("../playwright_rust/_native.abi3.so", b"native")
 
     # Act
     with pytest.raises(StrictEvidenceError, match="unsafe or linked"):
@@ -403,12 +403,12 @@ def test_wheel_install_rejects_unpinned_sourceless_bytecode(tmp_path: Path) -> N
     site = tmp_path / "site-packages"
     wheel = tmp_path / "candidate.whl"
     with zipfile.ZipFile(wheel, "w") as archive:
-        archive.writestr("pwright/_native.abi3.so", b"native")
-    native = site / "pwright/_native.abi3.so"
+        archive.writestr("playwright_rust/_native.abi3.so", b"native")
+    native = site / "playwright_rust/_native.abi3.so"
     native.parent.mkdir(parents=True)
     native.write_bytes(b"native")
-    (site / "shuozeli_pwright.dylibs").mkdir()
-    bytecode = site / "pwright/extra.pyc"
+    (site / "shuozeli_playwright_rust.dylibs").mkdir()
+    bytecode = site / "playwright_rust/extra.pyc"
     bytecode.write_bytes(b"unrecorded executable code")
 
     # Act
@@ -434,19 +434,19 @@ def test_path_wrapper_accepts_both_lanes_and_records_exit_one(tmp_path: Path, mo
     receipt = tmp_path / "dummy-process.jsonl"
     receipt.write_text("")
     env = {
-        "PWRIGHT_PYTHON_DUMMY_UPSTREAM": str(upstream),
-        "PWRIGHT_PYTHON_DUMMY_PROCESS_RECEIPT": str(receipt),
-        "PWRIGHT_PYTHON_DUMMY_REAL_NODE": str(node),
-        "PWRIGHT_PYTHON_DUMMY_NONCE": "0123456789abcdef0123456789abcdef",
-        "PWRIGHT_PYTHON_DUMMY_API": "async",
-        "PWRIGHT_OFFICIAL_MODE": mode,
-        "PWRIGHT_PYTHON_DUMMY_BROWSER": "firefox",
+        "PLAYWRIGHT_RUST_PYTHON_DUMMY_UPSTREAM": str(upstream),
+        "PLAYWRIGHT_RUST_PYTHON_DUMMY_PROCESS_RECEIPT": str(receipt),
+        "PLAYWRIGHT_RUST_PYTHON_DUMMY_REAL_NODE": str(node),
+        "PLAYWRIGHT_RUST_PYTHON_DUMMY_NONCE": "0123456789abcdef0123456789abcdef",
+        "PLAYWRIGHT_RUST_PYTHON_DUMMY_API": "async",
+        "PLAYWRIGHT_RUST_OFFICIAL_MODE": mode,
+        "PLAYWRIGHT_RUST_PYTHON_DUMMY_BROWSER": "firefox",
     }
 
     # Act
     completed = subprocess.run(
         [
-            str(ROOT / "packages/pwright-python/tests/official/dummy_engine_guard_strict_v2/node"),
+            str(ROOT / "packages/playwright-rust-python/tests/official/dummy_engine_guard_strict_v2/node"),
             str(asset),
             "--headless",
         ],
@@ -463,4 +463,4 @@ def test_path_wrapper_accepts_both_lanes_and_records_exit_one(tmp_path: Path, mo
     assert row["mode"] == mode
     assert row["exitCode"] == 1
     assert row["argv"][:2] == [str(node), str(asset)]
-    assert row["runNonce"] == env["PWRIGHT_PYTHON_DUMMY_NONCE"]
+    assert row["runNonce"] == env["PLAYWRIGHT_RUST_PYTHON_DUMMY_NONCE"]

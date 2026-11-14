@@ -1,5 +1,5 @@
 [package]
-name = "pwright-v2-content-only-example"
+name = "playwright-rust-v2-content-only-example"
 version = "0.1.0"
 edition = "2024"
 publish = false
@@ -7,4 +7,4 @@ publish = false
 [workspace]
 
 [dependencies]
-pwright-composition-chromium-content = { path = "../../crates/pwright-composition-chromium-content" }
+playwright-rust-composition-chromium-content = { path = "../../crates/playwright-rust-composition-chromium-content" }

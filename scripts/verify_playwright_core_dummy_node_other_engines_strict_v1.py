@@ -312,7 +312,7 @@ def official_case(
         )
         require(
             '"Browser logs:"' in messages
-            and "browserType.launch is not supported by the current Pwright native profile"
+            and "browserType.launch is not supported by the current Playwright Rust native profile"
             in messages
             and "> 72 |" in messages,
             "candidate RED is not the pinned launch-logs assertion discrepancy",
@@ -427,7 +427,7 @@ def verify_one(strict_path: Path) -> dict[str, Any]:
     )
     for relative, sha in local.items():
         hashed(ROOT / relative, sha, relative)
-    candidate = ROOT / "packages/pwright"
+    candidate = ROOT / "packages/playwright-rust"
     if not expected:
         require(
             strict["candidate"] == str(candidate)
@@ -438,7 +438,7 @@ def verify_one(strict_path: Path) -> dict[str, Any]:
             "candidate package/profile/source differs",
         )
         hashed(
-            candidate / "native/playwright-trace/pwright.node",
+            candidate / "native/playwright-trace/playwright_rust.node",
             strict["candidateArtifactSha256"],
             "candidate native artifact",
         )

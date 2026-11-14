@@ -1,0 +1,15 @@
+[package]
+name = "playwright-rust-codec-artifact"
+description = "Bounded binary codec for optional Artifact and Stream commands"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+playwright-rust-cap-artifact = { workspace = true }
+playwright-rust-codec-binary = { workspace = true }
+playwright-rust-codec-common = { workspace = true }
+playwright-rust-core = { workspace = true }
+playwright-rust-transport = { workspace = true }

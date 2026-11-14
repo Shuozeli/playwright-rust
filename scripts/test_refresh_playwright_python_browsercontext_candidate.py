@@ -182,7 +182,7 @@ class CandidateRefreshTests(unittest.TestCase):
                     "browserChannel": "chrome",
                     "manifest": str(self.manifest),
                     "exitCode": 1,
-                    "pwrightArtifactSha256": refresh.PINNED_SHA256["candidateArtifact"],
+                    "playwright_rustArtifactSha256": refresh.PINNED_SHA256["candidateArtifact"],
                     "result": str(self.report),
                     "upstream": str(self.upstream),
                     "caseReports": str(case_dir),

@@ -578,39 +578,39 @@ dependencies = [
 ]
 
 [[package]]
-name = "pwright-backend-cdp-common"
+name = "playwright-rust-backend-cdp-common"
 version = "0.1.0"
 dependencies = [
- "pwright-cdp",
- "pwright-core",
+ "playwright-rust-cdp",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-backend-cdp-context-creation"
+name = "playwright-rust-backend-cdp-context-creation"
 version = "0.1.0"
 dependencies = [
- "pwright-backend-cdp-common",
- "pwright-cap-context-creation",
- "pwright-cdp",
- "pwright-core",
+ "playwright-rust-backend-cdp-common",
+ "playwright-rust-cap-context-creation",
+ "playwright-rust-cdp",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-cap-context-creation"
+name = "playwright-rust-cap-context-creation"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-cdp"
+name = "playwright-rust-cdp"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
  "dashmap",
  "futures-util",
- "pwright-core",
+ "playwright-rust-core",
  "serde",
  "serde_json",
  "thiserror",
@@ -622,14 +622,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "pwright-core"
+name = "playwright-rust-core"
 version = "0.1.0"
 
 [[package]]
-name = "pwright-v2-context-creation-only-example"
+name = "playwright-rust-v2-context-creation-only-example"
 version = "0.1.0"
 dependencies = [
- "pwright-backend-cdp-context-creation",
+ "playwright-rust-backend-cdp-context-creation",
 ]
 
 [[package]]

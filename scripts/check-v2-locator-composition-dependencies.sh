@@ -14,28 +14,28 @@ cargo tree \
   --edges normal \
   --prefix none \
   --format '{p}' \
-  | awk '/^pwright-/ { print $1 }' \
+  | awk '/^playwright-rust-/ { print $1 }' \
   | sort -u >"$tree_file"
 
 required_packages=(
-  pwright-v2-locator-composition-only-example
-  pwright-backend-cdp-common
-  pwright-backend-cdp-input
-  pwright-backend-cdp-locator
-  pwright-backend-cdp-selector-runtime
-  pwright-cap-locator
-  pwright-cdp
-  pwright-codec-binary
-  pwright-codec-common
-  pwright-codec-locator
-  pwright-composition-chromium-locator
-  pwright-connection-control
-  pwright-core
-  pwright-input-model
-  pwright-selector-model
-  pwright-server-locator
-  pwright-server-wire
-  pwright-transport
+  playwright-rust-v2-locator-composition-only-example
+  playwright-rust-backend-cdp-common
+  playwright-rust-backend-cdp-input
+  playwright-rust-backend-cdp-locator
+  playwright-rust-backend-cdp-selector-runtime
+  playwright-rust-cap-locator
+  playwright-rust-cdp
+  playwright-rust-codec-binary
+  playwright-rust-codec-common
+  playwright-rust-codec-locator
+  playwright-rust-composition-chromium-locator
+  playwright-rust-connection-control
+  playwright-rust-core
+  playwright-rust-input-model
+  playwright-rust-selector-model
+  playwright-rust-server-locator
+  playwright-rust-server-wire
+  playwright-rust-transport
 )
 
 for package in "${required_packages[@]}"; do
@@ -54,9 +54,9 @@ while IFS= read -r package; do
     fi
   done
   if [[ "$allowed" != true ]]; then
-    echo "Locator-composition dependency proof found forbidden Pwright package: $package" >&2
+    echo "Locator-composition dependency proof found forbidden Playwright Rust package: $package" >&2
     exit 1
   fi
 done <"$tree_file"
 
-echo "Locator-composition dependency proof passed (${#required_packages[@]} Pwright packages)"
+echo "Locator-composition dependency proof passed (${#required_packages[@]} Playwright Rust packages)"

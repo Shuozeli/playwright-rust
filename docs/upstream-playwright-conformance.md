@@ -1,4 +1,4 @@
-<!-- agent-updated: 2026-10-21T03:43:07Z -->
+<!-- agent-updated: 2026-11-14T05:28:56Z -->
 
 # Full upstream Playwright conformance
 
@@ -29,7 +29,7 @@ classes without changing either strict ledger. In **each** lane, 2,610
 `expected` rows have `evidenceScope=upstream-private-source-only` and
 `candidateRuntimeRequired=false`: 2,581 reviewed implementation-internal,
 ten product-infrastructure, nine plain public API, and ten public API with a
-private test helper. These are source-accounted rows, **not Pwright runtime
+private test helper. These are source-accounted rows, **not Playwright Rust runtime
 passes**; the 19 reviewed-public IDs remain applicable but runtime-unproven
 in both lanes. Thus even the candidate's 4,674 `expected` rows cannot be read
 as 4,674 executed passes. The other 2,064 `expected` rows are merely
@@ -81,7 +81,7 @@ remained alive and was not restarted. These four raw runs do not alter v22.
 
 The complete Python
 `tests/sync/test_network.py` source is separately
-[pinned](../packages/pwright-python/tests/official/sync-network-full-v1-manifest.json):
+[pinned](../packages/playwright-rust-python/tests/official/sync-network-full-v1-manifest.json):
 six functions, 18 browser-expanded IDs, source-only checker 3/3. Its six
 Chromium cases ran source-bound: [candidate v2](../.work/official-conformance/results/python-sync-network6-chromium-candidate-20261021-v2.xml)
 1/6 versus [Oracle](../.work/official-conformance/results/python-sync-network6-chromium-oracle-20261021-v1.xml)
@@ -100,13 +100,13 @@ Python totals are candidate 1,651 passed / 124 failed / three errors / 37
 skipped / 4,711 not-run; Oracle 1,436 / 13 / 37 / 5,040. The archived
 candidate/harness snapshot does not include the hash-verified external Oracle
 package or upstream checkout. The remaining twelve expanded IDs are unrun. A separate
-[two-case Oracle-only HTTPS manifest](../packages/pwright-python/tests/official/sync-network-service-worker-secure-chromium-oracle-v1-manifest.json)
+[two-case Oracle-only HTTPS manifest](../packages/playwright-rust-python/tests/official/sync-network-service-worker-secure-chromium-oracle-v1-manifest.json)
 pins the same upstream Service Worker cases, fixtures, and assets. Under a
 trusted Tailscale HTTPS fixture, both unchanged Oracle cases
 [pass](../.work/official-conformance/results/python-sync-network-sw2-secure-chromium-oracle-20261021-v1.xml)
 (2/2); its source-bound provenance independently verifies (report SHA-256
 `ad2f8f651c2c29b3e500638d538a63788b9046fc6b6900da3f2553c73c08ffca`).
-A separate source-pinned [paired HTTPS diagnostic](../packages/pwright-python/tests/official/sync-network-service-worker-secure-chromium-paired-v1-manifest.json)
+A separate source-pinned [paired HTTPS diagnostic](../packages/playwright-rust-python/tests/official/sync-network-service-worker-secure-chromium-paired-v1-manifest.json)
 then ran both lanes: [candidate](../.work/official-conformance/results/python-sync-network-sw2-secure-paired-candidate-20261021-v1.xml)
 1/2 and [Oracle](../.work/official-conformance/results/python-sync-network-sw2-secure-paired-oracle-20261021-v1.xml)
 2/2, with independently verified provenance. The candidate now passes the
@@ -126,7 +126,7 @@ security-details case passes `Response.finished()` and advances to the absent
 method. This interim join requires explicit `request-history`, unlike the
 still-open independent bounded-owner design target. It does not change the
 strict v10 receipt or claim full response lifecycle compatibility.
-The [focused sync/async security manifest](../packages/pwright-python/tests/official/response-security-chromium-sync-async-v1-manifest.json)
+The [focused sync/async security manifest](../packages/playwright-rust-python/tests/official/response-security-chromium-sync-async-v1-manifest.json)
 pins four unchanged Chromium IDs from both upstream network files; its
 source/inventory checker passes 3/3. It has no new browser outcome yet and
 cannot by itself replace complete-file evidence.
@@ -544,10 +544,10 @@ SHA-256 `3dfb11b6ad7eb4736166ee2c4f7fa32cda78063324ad8314ce12f3e2d49b9d41`.
 The new CI step checks that digest and four inventory unit tests; it has not
 yet run in remote CI. This
 proves collection identity only, not that any upstream assertion passed or
-that a Pwright candidate route executed.
+that a Playwright Rust candidate route executed.
 
 Python upstream marker-skip diagnostic (2026-10-20): the
-[strict 15-node manifest](../packages/pwright-python/tests/official/upstream-skip-markers-strict-v1-manifest.json)
+[strict 15-node manifest](../packages/playwright-rust-python/tests/official/upstream-skip-markers-strict-v1-manifest.json)
 pins the v1.58.0 source and candidate/oracle runtime identities. In the
 ignored `python-upstream-skip-markers-strict-v1-final-v2` result directory,
 both lanes produced 15/15 upstream `skipped` outcomes with zero case retries.
@@ -572,7 +572,7 @@ strict Pyright. The earlier 67-error whole-project finding has since narrowed
 to the 66-diagnostic interim baseline described above.
 
 Python callable-fixture marker-skip successor (2026-10-20): an independent
-[strict 11-node manifest](../packages/pwright-python/tests/official/upstream-skip-callable-fixtures-strict-v2-manifest.json)
+[strict 11-node manifest](../packages/playwright-rust-python/tests/official/upstream-skip-callable-fixtures-strict-v2-manifest.json)
 selects only upstream-marked Firefox/WebKit cases whose setup supplies a
 `launch_persistent` or `launch_persistent_context` callable but does not
 launch a browser. All 11 candidate/oracle pairs independently verify the
@@ -811,7 +811,7 @@ Core Bidi-config public launch-failure slice (2026-10-20): all twelve v2
 strict lanes of the unchanged official
 `library/browsertype-launch.spec.ts:64` test completed. All six Playwright
 oracles passed with a separately attested exit-1 dummy Node child, including
-the BiDi Firefox `--profile` path and profile cleanup; all six frozen Pwright
+the BiDi Firefox `--profile` path and profile cleanup; all six frozen Playwright Rust
 candidates failed the original line-72 `Browser logs:` assertion before
 starting that child. The received candidate error is that merged
 `firefoxUserPrefs` is unsupported by the frozen native profile. The
@@ -859,7 +859,7 @@ session. Locally, the Rust leaf passes 8/8 release tests, the Node adapter
 46/46, native integration 3/3, addon ABI/load smoke, the complete browserless
 Node package 829/829, and strict TypeScript checks. Focused addon Clippy
 passes; full-dependency strict Clippy is blocked by the pre-existing
-`pwright-node-host` `too_many_arguments` warnings at lines 1268 and 1324.
+`playwright-rust-node-host` `too_many_arguments` warnings at lines 1268 and 1324.
 The package-boundary check, including the new feature-specific exact Cargo
 closure proof, passes locally: the new profile adds only its addon marker and
 browser-neutral startup leaf beyond `playwright-trace`, and older profiles
@@ -999,7 +999,7 @@ skipped, and 44,156 not-run. The latest immutable
 [receipt](../.work/official-conformance/outcomes/core-dummy-node-other-engines-strict-paired-v1/promotion-receipt.json)
 changes exactly the Firefox and WebKit Library dummy-executable launch rows:
 the unchanged official assertion passes 1/1 per oracle engine and fails 1/1
-per Pwright engine because their launch capability is not installed. The
+per Playwright Rust engine because their launch capability is not installed. The
 candidate has no process/profile or native-runtime attestation for those
 engines; the two rows are public-behavior RED, not parity credit. The earlier
 ten pinned upstream skips remain explicit but likewise grant no parity.
@@ -1062,7 +1062,7 @@ command/event/close paths against a synthetic server. A separate default-off
 HTTP(S) `/json` endpoint-discovery crate resolves to WS(S) with bounded,
 explicit live HTTP support (12/12 default
 and 15/15 live-feature release tests, plus three selected Tailscale-bound live
-HTTP fixture tests). A new explicit `pwright-playwright-server-connect` crate
+HTTP fixture tests). A new explicit `playwright-rust-playwright-server-connect` crate
 composes discovery, checked WebSocket headers, bootstrap and supervisor. Its
 default and all-feature release suites pass 9/9 each, plus one selected
 synthetic Tailscale-bound HTTP-to-WebSocket fixture; the default closure omits
@@ -1118,7 +1118,7 @@ and adds no official ledger credit.
 The separate [Core HTTP-redirect timeout v1 attestation](../.work/official-conformance/results/core-server-connect-redirect-timeout-strict-v1/core-server-connect-redirect-timeout-strict-v1-second-20261012/attestation.json)
 preserves the pre-fix RED: oracle 9/9, candidate 0/9. The selected source passes
 `Connection: Close` and expects the 2-second discovery timeout plus socket
-abort; Pwright rejects that WebSocket-reserved header before starting HTTP
+abort; Playwright Rust rejects that WebSocket-reserved header before starting HTTP
 discovery. The independently verified [v2 GREEN successor](../.work/official-conformance/results/core-server-connect-redirect-timeout-strict-v2/core-server-connect-redirect-timeout-strict-v2-fixed-20261012/attestation.json)
 passes the same nine unchanged assertions in both oracle and candidate lanes.
 Seven verifier mutation controls pass (nine verifier tests total). HTTP(S) discovery validates header
@@ -1137,7 +1137,7 @@ delivery or terminal-order evidence. Only the server launcher is replaced by a
 Tailscale-bound synthetic protocol fixture. These implementation-internal rows
 remain `not-run` in the canonical Core ledgers.
 The default-off
-[`pwright-playwright-server-page-events` Rust leaf](../crates/pwright-playwright-server-page-events/src/lib.rs)
+[`playwright-rust-playwright-server-page-events` Rust leaf](../crates/playwright-rust-playwright-server-page-events/src/lib.rs)
 has 16 passing release tests for bounded, wire-ordered
 Request/Response/Download and terminal notice projection, including
 generation/parent checks, disposal survival, closed-parent rejection and queue
@@ -1220,12 +1220,12 @@ the server-launch fixture was replaced, so the result is internal diagnostic
 evidence and earns no official ledger credit.
 The first paired lifecycle success diagnostic exposed an endpoint discrepancy:
 the pinned upstream `run-server` fixture retains a trailing newline, accepted
-by official Playwright but initially rejected by Pwright. A Rust N-API boundary
+by official Playwright but initially rejected by Playwright Rust. A Rust N-API boundary
 fix now normalizes only outer URL controls/space; embedded controls remain
 invalid. The fresh, independently verified
 [synthetic lifecycle attestation](../.work/official-conformance/results/core-connect-lifecycle-synthetic-v1-green-v2/attestation.json)
 records the unchanged Core line-304 and line-321 assertion bodies passing
-**2/2 in both oracle and selected Pwright lanes**, with separate Tailscale-bound
+**2/2 in both oracle and selected Playwright Rust lanes**, with separate Tailscale-bound
 synthetic servers and per-lane upgrade, `Root.initialize`, bootstrap, close,
 and stop receipts. Its candidate addon SHA-256 is
 `ef6093533f521893f9aba9c78f270bfce46237d13fa7255c2b0c838890a1547a`.
@@ -1336,7 +1336,7 @@ preserved as RED.
 The latest Core paired successor is a diagnostic GREEN slice:
 `.work/official-conformance/outcomes/core-server-connect-ws-error-strict-green-paired-v2/`.
 Two unchanged official `browsertype-connect.spec.ts:122` WebSocket-error
-assertions pass 2/2 in each frozen Pwright candidate and Playwright 1.58.0
+assertions pass 2/2 in each frozen Playwright Rust candidate and Playwright 1.58.0
 oracle lane. The [receipt](../.work/official-conformance/outcomes/core-server-connect-ws-error-strict-green-paired-v2/promotion-receipt.json)
 has SHA-256 `e5921619fdfd88dd14ec71ab124ae952f34edc6678e7b914e46692ac0c754da4`;
 the versioned [RED predecessor](../.work/official-conformance/outcomes/core-server-connect-ws-error-strict-red-paired-v1/promotion-receipt.json)
@@ -1350,8 +1350,8 @@ return a remote Browser. These tests require a private upstream fixture, so
 the receipt remains `implementation-internal`, `diagnosticOnly=true`, and
 `publicApiParityEvidence=false`: this is not public API, BrowserServer, or
 browser-execution parity. Also, 2,610 of the candidate's 4,543 `expected`
-Core rows are `upstream-private-source-only` and did not load Pwright; the raw
-ledger pass count is not a count of Pwright runtime-compatible cases.
+Core rows are `upstream-private-source-only` and did not load Playwright Rust; the raw
+ledger pass count is not a count of Playwright Rust runtime-compatible cases.
 
 The latest browser-free Python paired successor is
 `.work/official-conformance/outcomes/python-connect-refused-strict-paired-v1/`.
@@ -1371,7 +1371,7 @@ Exactly six rows per lane change; the other 6,520 are byte-identical to the
 predecessor. The ledger's existing row schema does not encode the fixture
 variant, so these `passed` rows must be read with the receipt's fixture-only
 scope and `publicApiParityEvidence=false`; see the
-[strict evidence note](knowledge/pwright-python-connect-refused-strict.md).
+[strict evidence note](knowledge/playwright-rust-python-connect-refused-strict.md).
 
 The preceding Python paired successor is
 `.work/official-conformance/outcomes/python-connect-close-post-fix-strict-paired-v2/`.
@@ -1422,7 +1422,7 @@ working Firefox/WebKit browser protocol or full Python conformance.
 
 The ABI121 browser-free Chromium CDP WebSocket shard uses the full
 109-capability ABI121 Python wheel at
-`.work/official-conformance/builds/python-abi121-ws-AE870c/shuozeli_pwright-0.1.0-cp39-abi3-macosx_11_0_arm64.whl`
+`.work/official-conformance/builds/python-abi121-ws-AE870c/shuozeli_playwright-rust-0.1.0-cp39-abi3-macosx_11_0_arm64.whl`
 (SHA-256 `20033ac820480165caf4c420961e22f0fd8c4c29732d2fbcde582c05adabe46e`).
 Fresh CPython 3.9.6 and 3.12.14 installations of that wheel each pass
 578/578 browserless Python units and `uv pip check`.
@@ -1520,7 +1520,7 @@ reverified the unchanged UA sidecars and ledgers against the same frozen
 capture-time candidate source used by the later error-slice seal.
 The selected default-off Rust-owned UA composition is
 `official-conformance-page-cdp-default-user-agent`, with release addon at
-`packages/pwright/native/official-conformance-page-cdp-default-user-agent/pwright.node`
+`packages/playwright-rust/native/official-conformance-page-cdp-default-user-agent/playwright_rust.node`
 (SHA-256 `92f039f5530075841ca7d59ff523c1f6b7a5ec4884a29ff20042ef3c95826fb2`).
 Focused Rust tests pass 7/7, real N-API boundary tests 4/4, both selected
 and default browserless Node suites 788/788, strict TypeScript and release
@@ -1529,7 +1529,7 @@ prior Page-plus-headers composition (419 versus 419). These local checks do
 not extend the single official Core result to full conformance.
 The post-fix browser-free Core CDP error slice reran the unchanged official
 `connect-over-cdp.spec.ts` assertions at lines 399, 411 and 572 against a
-frozen 66-file Pwright package snapshot and an independent Playwright 1.58.0
+frozen 66-file Playwright Rust package snapshot and an independent Playwright 1.58.0
 oracle. Both lanes pass **3/3**, with zero skip or retry. The strict v3
 [candidate](../.work/official-conformance/results/core-cdp-error-slice-strict-v3/candidate-v1.strict.json)
 and [oracle](../.work/official-conformance/results/core-cdp-error-slice-strict-v3/oracle-v1.strict.json)
@@ -1580,7 +1580,7 @@ The existing `implementation-internal` classification is preserved, and the
 receipt records `publicApiParityEvidence=false`: these three genuine
 discrepancies do not establish full Core or public API parity.
 The original v2 verifier compares candidate provenance with the *live*
-`packages/pwright` source, so it now rejects that historical run after the
+`packages/playwright-rust` source, so it now rejects that historical run after the
 next opt-in profile changed `package.json` and `src/native-artifact.cjs`.
 An independent [snapshot seal](../.work/official-conformance/outcomes/core-cdp-error-slice-strict-paired-v2-seal-v1/attestation.json)
 (SHA-256 `65e96b04c6e1cc0edcad15c63dd4ae67ecb4fca9441716a390de52016fef6d7b`)
@@ -1611,14 +1611,14 @@ place without invalidating the eight sealed results; version and recapture
 before claiming a green lint gate for this shard.
 The full 39-feature Node Page-plus-CDP-headers composition now also has a
 release native artifact at
-`packages/pwright/native/official-conformance-page-cdp-handshake-headers/pwright.node`
+`packages/playwright-rust/native/official-conformance-page-cdp-handshake-headers/playwright_rust.node`
 (SHA-256 `dfe9607df2c7cfa16d304338e88eb2fa01302b4736e4116c0c67b655a3482769`).
 It passes native load 1/1, real N-API header boundary 3/3, strict TypeScript,
 and the selected and default browserless package suites (783/783 each). Its
 normal Cargo package closure is the same 338 packages as the Page base
 (zero added). These are local checks, not official Core test passes.
 Separately, the opt-in Node `cdp-handshake-headers` profile now has a release
-native artifact at `packages/pwright/native/cdp-handshake-headers/pwright.node`
+native artifact at `packages/playwright-rust/native/cdp-handshake-headers/playwright_rust.node`
 (SHA-256 `82b11e24df70eec254aaa4e751dfa978422265a9ae517932eb89c781160fabc9`).
 It passes native-load 1/1, facade adapter 10/10, and real N-API boundary
 3/3 without a browser; its selected normal dependency closure adds zero
@@ -1651,7 +1651,7 @@ record candidate **0/3** and oracle **3/3**. All three candidate failures are
 the genuine missing `BrowserType.connect` method, not a fixture substitution.
 This uses Playwright Server's wire protocol rather than CDP and must not be
 redirected to `connect_over_cdp`; the [pinned protocol map and implementation
-gates](knowledge/pwright-playwright-server-connect.md) record the required
+gates](knowledge/playwright-rust-playwright-server-connect.md) record the required
 independent connection and object lifecycle. The six strict sidecars are at
 `.work/official-conformance/outcomes/connect-close-strict-{candidate,oracle}-abi121-{chromium,firefox,webkit}-v1.provenance.json`.
 The strict promoter published and read-only verified the connect-close paired
@@ -1769,7 +1769,7 @@ wheel SHA-256 is
 fresh Python 3.9.6 and 3.12.14 installs each pass 535/535 browserless package
 units and `uv pip check`, and the minimal-feature release Rust addon suite
 passes 44/44. The new capability adds exactly the three opt-in touchscreen
-Pwright packages; retained tap adds no additional package. No unchanged
+Playwright Rust packages; retained tap adds no additional package. No unchanged
 official browser case has been rerun on ABI116: the strict Python ledger and
 its earlier 0/10 candidate versus 10/10 oracle tap evidence remain unchanged.
 The full `scripts/check-python-addon-dependencies.sh` feature-by-feature
@@ -2020,7 +2020,7 @@ change exactly the same ten previously not-run Chromium rows. All other
 The pinned `tests/page/interception.spec.ts:73` Android-page invocation
 `should work with glob` calls an upstream-private URL-match helper. Independent
 candidate-labeled and oracle-labeled no-I/O executions each pass **1/1**;
-neither loads Pwright or a browser. The exact source-bound manifest is
+neither loads Playwright Rust or a browser. The exact source-bound manifest is
 `tests/official/playwright-core-android-glob-source-only-v1-manifest.json`.
 The candidate result/provenance/guard SHA-256 values are
 `e6ef72fbcddc802607568046f73b08f062bcfa8a17823a8e6c601fec433de6ce` /
@@ -2050,7 +2050,7 @@ JSON receipts are fixed by
 `tests/official/playwright-core-fit-to-width-source-only-v1-manifest.json`
 (SHA-256 `2f32944cd8c2a971d2bae832b805d4fa1e11875f4730cc431b6728a2223c2785`).
 Independent candidate-labeled and oracle-labeled executions pass **2/2**
-each, but neither loads Pwright; `candidateRuntimeRequired=false` and
+each, but neither loads Playwright Rust; `candidateRuntimeRequired=false` and
 `evidenceScope=upstream-private-source-only` remain explicit. These rows are
 product-infrastructure coverage, **not public API compatibility**.
 
@@ -2316,7 +2316,7 @@ reports `page.goto: Target page, context or browser has been closed`, while
 the oracle reaches an assertion about a duplicated Referer header. Thus
 matching pass counts do not establish full compatibility. The same CDP-adapted
 oracle measured only one Referer value in two runs, so this expectation is not
-evidence that Pwright should synthesize a duplicate. In the candidate, a
+evidence that Playwright Rust should synthesize a duplicate. In the candidate, a
 route-handler exception can close the session and mask the original assertion;
 its actual header value was not captured. Keep the row unexpected until a
 one-case diagnostic records both the header and handler error.
@@ -2358,7 +2358,7 @@ and
 Exactly eight previously `not-run` rows become `expected` per lane, with no
 other row changes; both complete invocation audits pass. These rows are
 upstream-private source-only evidence (`candidateRuntimeRequired=false`),
-**not** Pwright runtime, browser, or public API compatibility evidence. The
+**not** Playwright Rust runtime, browser, or public API compatibility evidence. The
 audit classifies the MCP suite as product infrastructure even though the
 inventory marks these direct private-import rows as implementation-internal;
 neither classification implies public API parity.
@@ -2401,7 +2401,7 @@ skipped / 44,251 not run**. Fresh complete invocation audits passed for both
 successors. The rows retain `sourceClassification=implementation-internal`,
 `role=official-entrypoint`, `evidenceScope=upstream-private-source-only`, and
 `candidateRuntimeRequired=false`. This is source-only accounting of official
-upstream bodies, **not** Pwright runtime attestation, public API parity, or a
+upstream bodies, **not** Playwright Rust runtime attestation, public API parity, or a
 browser pass. The superseded v1 receipt is retained without mutation.
 
 ## Core460 private source-only batch (2026-10-11)
@@ -2436,7 +2436,7 @@ Full 48,477-row invocation audits pass. A line-paired predecessor/successor chec
 exactly 2,556 changed `not-run` rows in each lane and zero other changed
 rows. All new entries carry `evidenceScope=upstream-private-source-only` and
 `candidateRuntimeRequired=false`. They account for execution of official
-upstream internal test bodies but do **not** exercise or validate Pwright's
+upstream internal test bodies but do **not** exercise or validate Playwright Rust's
 public API.
 
 The original file-level inventory labels remain frozen: 2,115 of these rows
@@ -2723,7 +2723,7 @@ Candidate: **57 unexpected / three skipped**, JSON / verified provenance SHA-256
 `b6b635482563a7da3a3d208e007f6463faef7caf361fcc7bc7385a888fef46b9`.
 Upstream first queries React component matches; on nonzero matches it reports
 the deprecated `_react` engine and actual match count, while zero-match
-queries succeed. Pwright currently forwards `_react=` to CSS and fails with a
+queries succeed. Playwright Rust currently forwards `_react=` to CSS and fails with a
 syntax error. Merely changing error text cannot satisfy the semantic tests.
 The resulting immutable candidate/oracle strict ledgers are respectively
 `.work/official-conformance/outcomes/playwright-core-candidate-core459-page-goto64-route55-fill45-selectors-react60-v3.jsonl`
@@ -3115,7 +3115,7 @@ the earlier v1 manifest remains immutable for its historical receipts.
 Separate installed-v5 candidate and independent-oracle browserless
 collections against v2 each find 70 with source-bound provenance. The exact
 eight-case execution is pinned separately by
-`packages/pwright-python/tests/official/async-click-eight-chromium-manifest.json`
+`packages/playwright-rust-python/tests/official/async-click-eight-chromium-manifest.json`
 (SHA-256 `bc6c6c05c77e087d1792d9571f0afa2ab953a6069a0e3df205b83526969f4a8d`);
 the complete click-file strict rows are now candidate eight passed / one failed /
 61 not run and oracle 69 passed / one failed.
@@ -3202,7 +3202,7 @@ tooling hashes alone cannot reverify them after the runner guard changed.
 
 Fresh opt-in burst-21 checkpoint (2026-10-10): the current-source composite
 release addon at
-`packages/pwright/native/official-conformance-page-goto-burst-20/pwright.node`
+`packages/playwright-rust/native/official-conformance-page-goto-burst-20/playwright_rust.node`
 has SHA-256
 `cb612ebf609e31526efb03de3a094ba3037463662978fc97f5b8777975e6ad29`
 and passes selected native-load 1/1. The exact pinned
@@ -3334,7 +3334,7 @@ Opt-in Core Page navigation composition checkpoint (2026-10-10): the new
 `official-conformance-page-goto-burst-20` profile selects the existing
 38-feature official Page union plus only `frame-navigation-burst-20`. Its
 release native addon at
-`packages/pwright/native/official-conformance-page-goto-burst-20/pwright.node`
+`packages/playwright-rust/native/official-conformance-page-goto-burst-20/playwright_rust.node`
 has SHA-256
 `3dfb2ac8698de70f5b2416688b2d15de879251d9d7bf5c5549474ecb9fbd5c83`.
 Browserless native-load probes for this profile and both prior profiles pass;
@@ -3357,7 +3357,7 @@ those pages were left untouched. There are no result/provenance reports or
 strict-ledger changes for this new manifest yet.
 
 Prepared Python Chromium focus shard (2026-10-10): the exact
-`packages/pwright-python/tests/official/emulation-focus-chromium-manifest.json`
+`packages/playwright-rust-python/tests/official/emulation-focus-chromium-manifest.json`
 (SHA-256 `c6e1449fbbfc55bfc6418d4cb51ee1b6e7bfeb04e123a9d173f72ea6cda708c3`)
 pins the unchanged v1.58.0 `tests/async/test_emulation_focus.py` source
 (SHA-256 `45bcb78e451c3f54eb729ec595b83cf4d628a1805d4d78399ef69030592bff7e`)
@@ -3554,7 +3554,7 @@ upstream drops `data:` before request creation. The 20-concurrent
 opt-in profile's four per-Page registration slots and eight host operation
 slots. The top-level referer-policy path is now locally repaired through a
 shared typed CDP navigation-parameter constructor; two new serialization
-tests and the `pwright-cdp` release library suite (133/133) pass. This repair
+tests and the `playwright-rust-cdp` release library suite (133/133) pass. This repair
 is included in the cumulative artifact above. At that local-repair checkpoint
 the official cross-origin referer case had no new pass credit; the v2 full-file
 rerun below now records it as `expected`. The CDP network-event leaf locally
@@ -3647,7 +3647,7 @@ profile retains four Page slots and eight host operations. The Node native
 profile has a distinct build-identity probe and rejects a stale addon. Rust
 release plugin/host checks pass 3/3 and 560/560 (eight pre-existing Chrome-only
 tests ignored); Node package tests pass 564/564, types pass, and the actual
-release addon at `packages/pwright/native/frame-navigation-burst-20/pwright.node`
+release addon at `packages/playwright-rust/native/frame-navigation-burst-20/playwright_rust.node`
 (SHA-256 `8971cab639d711e6e93013e9c5cb2c0b862b0d942c3b3d0da64b886723652fe4`)
 passes its browserless native-load probe. The 21st permit is rejected and
 cancellation releases permits in local tests. This is **not** a rerun of the
@@ -3728,10 +3728,10 @@ The formal applicability audit labels all three glob rows
 private helpers: this is whole-corpus execution evidence, not additional
 public-API compatibility evidence.
 Candidate-only diagnostic has since launched installed Chrome through
-Pwright and passed both pinned official Python Chromium async/sync
+Playwright Rust and passed both pinned official Python Chromium async/sync
 close-twice tests, with a verified schema-4 sidecar. The independent oracle
 was not run because its genuine launch would control Chrome through official
-Playwright rather than Pwright, conflicting with the global browser rule;
+Playwright rather than Playwright Rust, conflicting with the global browser rule;
 those two rows stay `not-run` in both strict ledgers. Browser-process/profile
 identity and child-tree cleanup remain unproven by that diagnostic.
 For Core, a separate exact-source `chromium-library` one-spec owned-launch
@@ -3838,14 +3838,14 @@ oracle 1,357 expected / five skipped / nine unexpected / 47,106 not run
 `72cdf773d4ba9b2ee4b75e3277a78b8fcc66d2a20cdc4d7afdeff1ad248daf58`).
 The three executable-path failures are **not** evidence that the candidate's
 public `executablePath()` disagrees: pinned upstream line 24 first reads
-private `_playwright._defaultLaunchOptions`, which is absent from Pwright, so
+private `_playwright._defaultLaunchOptions`, which is absent from Playwright Rust, so
 the candidate never reaches line 26. The oracle reaches the public method but
 then fails the line-27 file-existence assertion because its v1.58.0 browser
 cache is absent here. The fixed whole-corpus invocation audit classifies the
 three Library invocations and six unrun Bidi variants as
 `implementation-internal`/`private-client-access`, while the two `name()`
 passes remain public-API evidence. Separately, source inspection finds that
-Pwright's public JS `BrowserType` had no `executablePath()` method
+Playwright Rust's public JS `BrowserType` had no `executablePath()` method
 or TypeScript declaration at core449. This was an API surface gap, but the unchanged
 official test does not directly measure it because of its private precondition.
 Candidate and oracle classification ledgers
@@ -3868,7 +3868,7 @@ oracle 1,369 expected / five skipped / nine unexpected / 47,094 not run
 (SHA-256
 `f6ee9a5b3c26c31bd8a0c6c6dd0d1440d9a33e56d8aa2a4562a809c395ebb5c1`).
 After preserving that candidate source/addon under
-`.work/official-conformance/pwright-node-owned-core450-before-preflight-fix.t1ghwh/`,
+`.work/official-conformance/playwright-rust-node-owned-core450-before-preflight-fix.t1ghwh/`,
 the Node façade now applies the pinned engine-specific preflight before the
 unsupported provider boundary. Five new AAA adapter units pass. The exact
 same 12 official candidate invocations then passed 12/12 in core451, matching
@@ -3883,7 +3883,7 @@ whole-corpus audit still classifies all 12 as public-API candidates; its
 classification ledger SHA-256 is
 `f5e63b043f85437a2cc3e6b5b5972a9db98ea0fb1b23f588aa84614f1eeae3d3`.
 The current package/addon are archived at
-`.work/official-conformance/pwright-node-owned-core451-launch-preflight.oPZl90/`
+`.work/official-conformance/playwright-rust-node-owned-core451-launch-preflight.oPZl90/`
 and the candidate sidecars verify against that archive. This repairs only
 pre-spawn errors; positive Firefox/WebKit launch remains unsupported.
 The five remaining core451 candidate `unexpected:public-api-candidate` rows
@@ -3942,7 +3942,7 @@ launch. Oracle recorded 17 expected and the pinned Firefox Library skip;
 candidate recorded 17 unexpected because it returned the unsupported
 `launchPersistentContext` boundary before upstream's pre-spawn validation,
 plus the same skip. The pre-fix candidate source/addon is archived at
-`.work/official-conformance/pwright-node-owned-core452-before-preflight-fix.QcGtKL/`.
+`.work/official-conformance/playwright-rust-node-owned-core452-before-preflight-fix.QcGtKL/`.
 The new immutable 48,477-row strict candidate ledger has 1,666 expected /
 seven skipped / 27 unexpected / 46,777 not run (SHA-256
 `db08893e67ca7e7f49449d48c1a1d5130d34d087166d4609866fbc6d6c20af58`);
@@ -3969,7 +3969,7 @@ The same 18 source-fixed Core invocations were rerun candidate-only as
 nine new source-bound sidecars verify, and every selected outcome matches the
 unchanged core452 oracle. Current package source and owned addon are archived
 byte-for-byte at
-`.work/official-conformance/pwright-node-owned-core453-before-next-fix.UWHQui/`.
+`.work/official-conformance/playwright-rust-node-owned-core453-before-next-fix.UWHQui/`.
 The new immutable 48,477-row strict candidate ledger has 1,683 expected /
 seven skipped / ten unexpected / 46,777 not run, SHA-256
 `14c3ffac26ae15897c93d81b35a9b7853add367448484de4a7bb96cac6207cb7`.
@@ -3988,7 +3988,7 @@ the exact manifest
 (SHA-256 `f4eb2595970997e1ccb166f229bfcc07c257fa406526c02c2616469a8dff96dd`)
 and
 the candidate's exact source/addon archive at
-`.work/official-conformance/pwright-node-owned-core454-before-invalid-proxy.wOW0gt/`.
+`.work/official-conformance/playwright-rust-node-owned-core454-before-invalid-proxy.wOW0gt/`.
 The immutable 48,477-row strict candidate ledger is now 1,685 expected /
 seven skipped / ten unexpected / 46,775 not run, SHA-256
 `b2362075a2f4f748388e4eabdd4a1fc9b799fc52babf816e9a2d3fa70a719292`;
@@ -4051,7 +4051,7 @@ confirm those blocks and that the parent test process is unaffected. No
 browser, CDP connection, or fixture server is part of this mode.
 
 Oracle and the frozen candidate package/addon at
-`.work/official-conformance/pwright-node-owned-core455-internal-source-only.kPAe4a/candidate/`
+`.work/official-conformance/playwright-rust-node-owned-core455-internal-source-only.kPAe4a/candidate/`
 each pass the four exact selections 3+6+3+6 = 18/18. Eight schema-3
 sidecars verify the source, report and guarded-process receipts. The first
 live-candidate reports were deliberately not promoted after the package
@@ -4072,7 +4072,7 @@ retains each row's original inventory `sourceClassification` and
 these two source files); the corrected symbol-use label belongs to the
 separate invocation audit, not a rewrite of pinned inventory. Candidate
 adapter loading appeared in
-worker output, but the selected bodies do not require or exercise Pwright's
+worker output, but the selected bodies do not require or exercise Playwright Rust's
 public API; the provenance deliberately sets
 `candidateRuntimeAttested=false` and `publicApiParityEvidence=false`.
 CI now includes a pnpm-only clean-checkout bootstrap and replay of all four
@@ -4128,7 +4128,7 @@ launches an immediately exiting Node executable and checks `Browser logs:`;
 it never calls a tracing method. Its worker fixture nevertheless injects
 `tracesDir` even with tracing off, and upstream recursively creates that
 caller-owned directory before allocating its temporary profile or spawning
-the process. The new opt-in `pwright-trace-playwright-v8` Rust leaf has a
+the process. The new opt-in `playwright-rust-trace-playwright-v8` Rust leaf has a
 typed, non-deleting directory preparer plus a separately bounded v8 JSONL
 context/API-event writer (11/11 release tests, strict Clippy); neither is a
 public Context recorder yet. There is no official browserless public
@@ -4221,7 +4221,7 @@ loaded from an isolated Python 3.12 venv outside the source tree and passed
 `.work/official-conformance/builds/python-abi107-host-guard-20261010/`.
 The older pre-close-event archive has an earlier source tree despite
 containing the same old native `.so`. Before replacing the editable extension,
-the exact ABI109 `python/pwright` tree, shim/runtime and four provenance-bound
+the exact ABI109 `python/playwright_rust` tree, shim/runtime and four provenance-bound
 tooling files were copied to
 `.work/official-conformance/python-abi109-exact-archive.yO61kG/`.
 All seven prior candidate sidecars bound to that ABI109 package digest verify
@@ -4237,10 +4237,10 @@ the bundled crypto/SSL dylib hashes are
 `a5486ffa809746d423d1f47bc6319664aba9560805fe1c923b6be4d6d3c22069`.
 The existing Python strict ledgers do not change. The new Python official
 capture/verification schema 5 records every adjacent
-`shuozeli_pwright.dylibs` member as an absolute path and SHA-256 in
-`pwrightRuntimeLibraries` (oracle records an empty list), verifies exact
+`shuozeli_playwright_rust.dylibs` member as an absolute path and SHA-256 in
+`playwright-rustRuntimeLibraries` (oracle records an empty list), verifies exact
 membership and bytes, and requires that sibling directory beside an archived
-`python/pwright` passed to `--package-root`. The 57 focused provenance and
+`python/playwright_rust` passed to `--package-root`. The 57 focused provenance and
 verifier units pass. The same pinned browserless Python
 `test_should_work_with_glob` then passed candidate-owned 1/1 for each of
 Chromium, Firefox and WebKit under ABI107. All three schema-5 sidecars verify
@@ -4312,7 +4312,7 @@ the Node FFI uses the published projection; this timing window is untested.
 The hidden default Page may also consume one of the current 16 total Page
 slots; the public quota contract has not been tested.
 After preserving the pre-guard Node `owned-launch` addon and exact package
-source under `.work/official-conformance/pwright-node-owned-core449.dJYI61/`,
+source under `.work/official-conformance/playwright-rust-node-owned-core449.dJYI61/`,
 all nine latest core447–449 candidate sidecars reverified against that archive
 both before and after rebuild. The old addon SHA-256 is
 `9231bb5f4e0407c7984dcdbc77b8fb08d979f76c5e6df31b5b15e68ee22d4b43`;
@@ -4333,7 +4333,7 @@ composition already have an opt-in process lease, and the host exposes
 valid `BrowserType.launch` or `launchServer`. Upstream `launch` returns a
 Browser without a default Context; persistent launch returns a Context;
 `launchServer` additionally owns a Playwright WebSocket endpoint and browser
-process. The current Pwright server wire is a different protocol, and a CDP
+process. The current Playwright Rust server wire is a different protocol, and a CDP
 URL is not a compatible `BrowserServer.wsEndpoint()`. Successful provider
 leases disable kill-on-drop until a host re-arms it, so any new owner must
 take that authority immediately and cover startup cancellation, listener
@@ -4383,7 +4383,7 @@ The eight repaired candidate keys and no others changed outcome from the red
 preflight capture also matches the pinned oracle without launching a browser:
 both result reports classify the unchanged validation case as expected 1/1.
 The thin Node facade reproduces only the upstream early validation error;
-valid `launchServer` requests still return `PWRIGHT_UNSUPPORTED`, and no
+valid `launchServer` requests still return `PLAYWRIGHT_RUST_UNSUPPORTED`, and no
 BrowserServer or native launch capability is claimed. Node units pass 450/450,
 type and dependency-boundary checks pass, and both schema-2 report sidecars
 independently verify. The exact one-row strict merge then had candidate 1,592
@@ -4436,7 +4436,7 @@ The exact hook-dependent IDs are
 (`__testHookAfterStable`, click during navigation) and
 `cfaf4d74fb499322b955-ba064d75cc610f34650d`
 (`__testHookBeforePointerAction`, no click after timeout). Both old candidate
-reports lack provenance sidecars. Pwright rejects the private options before
+reports lack provenance sidecars. Playwright Rust rejects the private options before
 the Rust action; silently ignoring them would not test the asserted timing
 semantics. A fresh isolated oracle comparison and explicit per-row
 applicability decision are still required.
@@ -4478,7 +4478,7 @@ v1.58.0 `page-dispatchevent.spec.ts` source SHA-256 is
 complete 17-case Chromium Page file (manifest SHA-256
 `4bb9714f113992367330d0578f2862b0ced17d766c69310faaca655310b06137`).
 The Python v1.58.0 async file has 12 exact Chromium cases, pinned in
-`packages/pwright-python/tests/official/page-dispatch-event-manifest.json`
+`packages/playwright-rust-python/tests/official/page-dispatch-event-manifest.json`
 (manifest SHA-256
 `acbe71f2b9922e5040b17c2bcbcb3946b9096964f314de0f63ddc909353d0128`,
 source SHA-256
@@ -4617,7 +4617,7 @@ oracle 798 passed / seven skipped / four failed / 5,717 not run (SHA-256
 `2c02dffe0d102fe0d2dd660b30318097e455018c074140f73db5707067511852`).
 
 Python Page check/uncheck pins all 18 unchanged v1.58.0 Chromium async/sync
-cases in `packages/pwright-python/tests/official/page-check-manifest.json`
+cases in `packages/playwright-rust-python/tests/official/page-check-manifest.json`
 (SHA-256
 `7e9b34f4ed0b0c193e213375ad2fc8dad6fbd13b622cda3f77c5d2ecf51809ae`).
 Candidate v1 failed all 18 at missing Page methods; the independent oracle
@@ -4892,7 +4892,7 @@ either acknowledgement, matching the upstream driver, and retain bounded
 active-touch cleanup state until the end succeeds.
 
 The final navigation discrepancy was not missing native input: diagnostics
-proved both touch commands and cleanup completed. Pwright then awaited generic
+proved both touch commands and cleanup completed. Playwright Rust then awaited generic
 topology and Page-binding publication fences, which could sit behind a
 non-committed navigation whose response the test deliberately held. Upstream
 always invokes tap with `waitAfter: 'disabled'`, so tap alone now bypasses
@@ -5286,7 +5286,7 @@ native load, dependency boundary, release check and full feature-union Clippy
 pass. Full official-corpus execution remains open.
 
 NODE-417 completes the unchanged Chromium `queryselector.spec.ts` file in both
-the Pwright candidate and independent Playwright 1.58.0 oracle: 17/17 in each
+the Playwright Rust candidate and independent Playwright 1.58.0 oracle: 17/17 in each
 lane with verified provenance and identical invocation IDs. The initial
 candidate passed 10/17; all seven failures were XPath forms. Rust now retains
 an explicitly tagged browser selector plan instead of misclassifying XPath as
@@ -5402,7 +5402,7 @@ existing bounded Rust registry owns duplicate/predefined-name validation,
 64-engine and 8 MiB aggregate limits, test-id configuration and registered
 selector compilation for later browser sessions. The registry is shared by
 the lazily created environment and attached sessions instead of duplicated in
-JavaScript. The opt-in adds no Pwright package dependency; default and selected
+JavaScript. The opt-in adds no Playwright Rust package dependency; default and selected
 release checks, selected clippy, dependency/boundary proof, 317/317 Node units,
 strict TypeScript, eight Rust registry units and native load verification pass.
 This checkpoint proves registration/error parity only; the remaining
@@ -5424,7 +5424,7 @@ No browser, native addon or new implementation participates in this lane.
 NODE-410 executes nine sync Chromium BrowserContext event rows whose async
 counterparts were already green. The initial candidate passed 7/9 and failed
 only the two popup cases at the missing public `context.expect_page()` method;
-the independent oracle passed 9/9. Pwright adds only the thin async/sync
+the independent oracle passed 9/9. Playwright Rust adds only the thin async/sync
 facades over its existing Rust-owned, bounded Context page-event path. The
 repaired portable-wheel candidate and oracle both pass 9/9; their sidecars
 verify, their case-ID digest is
@@ -5456,7 +5456,7 @@ The two oracle-red rows remain explicit and unpromoted.
 NODE-408 adds an exact browserless manifest slice for the two public launcher
 metadata assertions across Chromium, Firefox and WebKit projects. The first
 candidate run passed `playwright.errors` 3/3 and failed `playwright.devices`
-3/3 because the registry was absent; the unchanged oracle passed 6/6. Pwright
+3/3 because the registry was absent; the unchanged oracle passed 6/6. Playwright Rust
 now vendors all 143 descriptors from the pinned Playwright source, rather than
 adding only the asserted iPhone entry. The snapshot SHA-256 is
 `ceb47c6d0366b273151121ade0217f1e96a4043594c8188fcc12c0c9b30f9353`
@@ -5497,7 +5497,7 @@ The same checkpoint preserves two candidate/oracle shared-red diagnostics
 without promotion: Chrome 154 exposes a Page for the early `javascript:` popup
 dialog where the old test expects `None`, and the Tailscale-only fixture host
 correctly becomes the cookie domain where the test hard-codes `localhost`.
-Pwright and the independent oracle agree on both observations, so no product
+Playwright Rust and the independent oracle agree on both observations, so no product
 behavior is changed to satisfy either environment-specific assertion.
 
 NODE-403 repairs sync exception provenance without changing ABI104/90 or a
@@ -5547,7 +5547,7 @@ arrow inside an expression must not classify the whole evaluation source as a
 function. Tracing recording/output remains explicitly unsupported. A separate
 initial oracle diagnostic records Chrome 154 rejecting
 `Browser.setDownloadBehavior` when no default Page exists; creating one
-task-owned `about:blank` Page through Pwright restores the documented
+task-owned `about:blank` Page through Playwright Rust restores the documented
 precondition, after which the oracle passes 25/25. Neither diagnostic is
 promoted. ABI remains 104 with 90 selected features. Two portable wheel builds
 have identical normalized payloads, the installed wheel passes 249/249 units,
@@ -5741,7 +5741,7 @@ part of the open goal.
 NODE-388 corrects one applicability-classification error without changing a
 test outcome. All 19 files under `tests/library/events/` exercise the upstream
 repository's copied `./utils` EventEmitter rather than the Playwright or
-Pwright public API. Their 477 expanded invocations now carry the explicit
+Playwright Rust public API. Their 477 expanded invocations now carry the explicit
 `local-implementation-under-test:tests/library/events/utils` reason: 36 retain
 their prior implementation-internal class and 441 move from public candidate
 to implementation-internal.
@@ -5841,7 +5841,7 @@ changing ordinary remote file paths into colocated paths. Candidate passes
 17/18 and official Playwright 1.58.0 passes 16/18 in the required CDP lane.
 Both hit the same official 50 MiB guard for a 200 MiB single file; only the
 oracle also hits its aggregate transport guard for ten 49 MiB chooser files,
-which Pwright's native chooser path passes. All 16 oracle-executable rows
+which Playwright Rust's native chooser path passes. All 16 oracle-executable rows
 agree, and environment-limited rows remain visible and unmerged.
 
 The Python candidate ledger is 1,093 passed / seven skipped / 5,426 not run,
@@ -5907,7 +5907,7 @@ The first NODE-372 diagnostic accidentally omitted the native profile and
 therefore loaded the default artifact, producing 1/9 with eight explicit
 missing-method errors. It is retained as diagnostic evidence and is not merged
 into either ledger. The runner now fails closed before execution unless every
-candidate run supplies `--candidate-profile` or `PWRIGHT_NATIVE_PROFILE`;
+candidate run supplies `--candidate-profile` or `PLAYWRIGHT_RUST_NATIVE_PROFILE`;
 `default` must be named explicitly when it is intentional. Five AAA tests
 cover explicit selection, environment selection, missing selection and oracle
 isolation, plus deterministic result provenance.
@@ -6092,7 +6092,7 @@ The fixed manifest pins `chromium-library` and selects the unchanged
 the pinned clean Playwright v1.58.0 checkout at
 `961381ec73a9fa2661d92504eab1a6bd6eaffc75`. Both lanes use the dedicated
 loopback-only Chrome CDP process; candidate stderr confirms that the fixture
-loads the local Pwright package and adapts only `browserType.launch` to that
+loads the local Playwright Rust package and adapts only `browserType.launch` to that
 endpoint. No assertion or test source is changed.
 
 Candidate/oracle report SHA-256 values are
@@ -6113,7 +6113,7 @@ NODE-362 runs the two previously unrun global-request client-certificate rows
 through both proxy kinds. The unchanged HTTP CONNECT+mTLS and SOCKS5+mTLS rows
 each pass 3/3 candidate and oracle in Library and 6/6 candidate and oracle in
 Bidi: 18/18 new outcomes in each lane. Candidate logs confirm the local
-Pwright adapter; no browser/CDP is used. A common source-only fixture adapter
+Playwright Rust adapter; no browser/CDP is used. A common source-only fixture adapter
 changes only bind/address hosts for Tailscale and is applied identically to
 both lanes; the pinned upstream remains clean at
 `961381ec73a9fa2661d92504eab1a6bd6eaffc75`.
@@ -6142,7 +6142,7 @@ NODE-361 runs the eight already-supported global-request client-certificate
 rows through all six official Bidi projects. The unchanged input-validation
 row passes 6/6 and the seven direct-request rows pass 42/42 in both candidate
 and independent oracle. The candidate artifact is rebuilt from current source
-and load-verified first; every candidate project confirms the local Pwright
+and load-verified first; every candidate project confirms the local Playwright Rust
 adapter, and no browser/CDP is used. Candidate validation/request report hashes
 are
 `709d386639f3d22ca09cf643da3be960f5479989dede78da32b3ad0ca7d8681b`
@@ -6163,7 +6163,7 @@ HTTPS target tunneling is implemented.
 NODE-360 runs the same three unchanged global-request proxy rows through all
 six official Bidi projects. Authenticated HTTP CONNECT, HTTPS proxy-server ALPN
 and SOCKS5 each pass 6/6 candidate and 6/6 independent oracle, for 18/18 in
-each lane. The candidate lane confirms the local Pwright adapter for every
+each lane. The candidate lane confirms the local Playwright Rust adapter for every
 invocation; neither lane launches or attaches to a browser. Candidate report
 SHA-256 values are
 `62dad11b718eb7862072ae21856247363983e1bb272ec44d97dcbc6fb3d3350a`,
@@ -7676,13 +7676,13 @@ Clippy pass.
 
 ## Completion rule
 
-Pwright may claim full upstream conformance only after all of the following are
+Playwright Rust may claim full upstream conformance only after all of the following are
 true:
 
 1. Every test from the pinned Playwright core and Playwright Python sources has
    a stable inventory identity.
 2. The unchanged upstream assertion runs in isolated official-oracle and
-   Pwright-candidate lanes.
+   Playwright Rust-candidate lanes.
 3. Every invocation has a recorded pass, fail, skip, or explicitly reviewed
    non-applicable result. There are no silent exclusions.
 4. Public API failures are eliminated through composable Rust capabilities and
@@ -7702,7 +7702,7 @@ candidate pass, and a source-file count is not an expanded test count.
 | `microsoft/playwright-python` | `v1.58.0` | `47a5d35ef4f815a2021349f86ae391f7c20c02d6` |
 
 The core manifest is `tests/official/playwright-core-manifest.json`. The Python
-manifest is `packages/pwright-python/tests/official/manifest.json`. Both source
+manifest is `packages/playwright-rust-python/tests/official/manifest.json`. Both source
 checkouts must match their commits and have no tracked modifications.
 
 ## Inventory baseline
@@ -7778,7 +7778,7 @@ it does not substitute for those later platform executions.
   `.work/official-conformance/results/`.
 - The earlier false-green candidate collection was rejected because pytest was
   loading the upstream source package from its working directory. The runner
-  now starts from the Pwright repository, uses importlib mode, and asserts the
+  now starts from the Playwright Rust repository, uses importlib mode, and asserts the
   loaded package path before running pytest.
 - Seven official Python Chromium files plus the complete async/sync global
   request files, six stop/cancel rows and 12 certificate rows have recorded
@@ -7829,9 +7829,9 @@ it does not substitute for those later platform executions.
 - Core JS/TS oracle inventory collection passes for all 20 entries. Full
   candidate execution has started but is nowhere near complete. A test-only
   preload redirects only `tests/config/testMode.ts`'s `playwright-core` lookup
-  to the local Pwright package; the Playwright Test runner keeps its own
+  to the local Playwright Rust package; the Playwright Test runner keeps its own
   official implementation. The preload supplies explicit empty fixture-only
-  instrumentation views and maps its `launch` fixture to Pwright
+  instrumentation views and maps its `launch` fixture to Playwright Rust
   `connectOverCDP` so the base profile can obey external-browser ownership.
 - The first full official Chromium file, `tests/page/page-basic.spec.ts`, now
   records 17 passes and one failure out of 18 after optional Rust-owned
@@ -8009,7 +8009,7 @@ it does not substitute for those later platform executions.
   records one unexpected result. The unchanged test casts a private
   `__testHookAfterStable` option through `any`; the pinned implementation reads
   that option only in `packages/playwright-core/src/server/dom.ts`, outside the
-  public API types. Pwright rejects the private option rather than silently
+  public API types. Playwright Rust rejects the private option rather than silently
   moving an action-phase callback into Node. The report SHA-256 is
   `68c8a779232a099e93a98e2201da2164c17dccd94f735420c02c67d7bfea6dd6`.
   It remains an unexpected candidate result until the invocation receives a
@@ -8110,7 +8110,7 @@ it does not substitute for those later platform executions.
   only the pre-existing XLQY page remained. Dedicated Chrome nevertheless
   measured about 3.36 GiB aggregate RSS with a 1.57 GiB renderer and no swap.
   Because that renderer owns the pre-existing shared page, this is a memory
-  warning and attribution limit, not a Pwright-test leak claim.
+  warning and attribution limit, not a Playwright Rust-test leak claim.
 
 ## Reproduction
 
@@ -8156,7 +8156,7 @@ harness.
    all-corpus and lifecycle gates.
 5. Expand the Node package-substitution adapter beyond the declared `library`
    suite only when each additional official config can positively prove that
-   it loaded Pwright.
+   it loaded Playwright Rust.
 6. Execute both corpora in bounded shards, preserving upstream assertions and recording all
    failures, skips, cleanup state, and memory measurements.
 7. Implement missing behavior as composable Rust capabilities with thin

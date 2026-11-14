@@ -35,7 +35,7 @@ class PythonEnvironmentBlockerTests(unittest.TestCase):
         # Arrange
         root = Path(__file__).parents[1]
         path = (
-            root / "packages/pwright-python/tests/official/python-fixture-environment-blockers.json"
+            root / "packages/playwright-rust-python/tests/official/python-fixture-environment-blockers.json"
         )
 
         # Act

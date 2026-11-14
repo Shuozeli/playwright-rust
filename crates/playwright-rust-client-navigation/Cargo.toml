@@ -1,0 +1,21 @@
+[package]
+name = "playwright-rust-client-navigation"
+description = "Opt-in typed navigation extensions for playwright-rust-client"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[features]
+default = []
+frame-navigation = ["playwright-rust-cap-navigation/frame-navigation"]
+
+[dependencies]
+playwright-rust-core = { workspace = true }
+playwright-rust-client = { workspace = true }
+playwright-rust-cap-navigation = { workspace = true }
+
+[dev-dependencies]
+playwright-rust-browser-model = { workspace = true }
+playwright-rust-runtime = { workspace = true }

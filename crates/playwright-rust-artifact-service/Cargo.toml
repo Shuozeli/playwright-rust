@@ -1,0 +1,25 @@
+[package]
+name = "playwright-rust-artifact-service"
+description = "Task-free bounded Artifact and Stream registry services"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+playwright-rust-artifact-model = { workspace = true }
+playwright-rust-browser-model = { workspace = true }
+playwright-rust-cap-artifact = { workspace = true }
+playwright-rust-core = { workspace = true }
+playwright-rust-server-artifact = { workspace = true }
+
+[dev-dependencies]
+playwright-rust-client = { workspace = true }
+playwright-rust-client-artifact = { workspace = true }
+playwright-rust-client-wire = { workspace = true }
+playwright-rust-codec-artifact = { workspace = true }
+playwright-rust-server-wire = { workspace = true }
+playwright-rust-transport = { workspace = true }
+playwright-rust-transport-memory = { workspace = true }
+tokio = { workspace = true }

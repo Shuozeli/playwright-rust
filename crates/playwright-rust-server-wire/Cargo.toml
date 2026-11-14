@@ -1,0 +1,22 @@
+[package]
+name = "playwright-rust-server-wire"
+description = "Caller-driven composable typed command server for Playwright Rust wire transports"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+playwright-rust-connection-control = { workspace = true }
+playwright-rust-core = { workspace = true }
+playwright-rust-transport = { workspace = true }
+
+[dev-dependencies]
+playwright-rust-client = { workspace = true }
+playwright-rust-client-wire = { workspace = true }
+playwright-rust-codec-handshake = { workspace = true }
+playwright-rust-runtime = { workspace = true }
+playwright-rust-transport-stream = { workspace = true }
+playwright-rust-transport-tokio = { workspace = true }
+tokio = { workspace = true }

@@ -204,7 +204,7 @@ def verify_strict(strict_path: Path) -> dict[str, Any]:
         )
         if mode == "oracle":
             assert all(item["status"] == "expected" for item in selected)
-        assert ("[pwright-candidate]" in output["log"].read_text()) == (
+        assert ("[playwright-rust-candidate]" in output["log"].read_text()) == (
             mode == "candidate"
         )
         checked_receipts(output["receipt"], mode, selected, fixture_host, fixture_bind)

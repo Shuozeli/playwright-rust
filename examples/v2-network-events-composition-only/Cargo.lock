@@ -577,42 +577,42 @@ dependencies = [
 ]
 
 [[package]]
-name = "pwright-backend-cdp-network-events"
+name = "playwright-rust-backend-cdp-network-events"
 version = "0.1.0"
 dependencies = [
- "pwright-browser-model",
- "pwright-cap-network-events",
- "pwright-cdp",
- "pwright-core",
- "pwright-network-model",
+ "playwright-rust-browser-model",
+ "playwright-rust-cap-network-events",
+ "playwright-rust-cdp",
+ "playwright-rust-core",
+ "playwright-rust-network-model",
  "serde_json",
 ]
 
 [[package]]
-name = "pwright-browser-model"
+name = "playwright-rust-browser-model"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-cap-network-events"
+name = "playwright-rust-cap-network-events"
 version = "0.1.0"
 dependencies = [
- "pwright-browser-model",
- "pwright-core",
- "pwright-network-model",
+ "playwright-rust-browser-model",
+ "playwright-rust-core",
+ "playwright-rust-network-model",
 ]
 
 [[package]]
-name = "pwright-cdp"
+name = "playwright-rust-cdp"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
  "dashmap",
  "futures-util",
- "pwright-core",
+ "playwright-rust-core",
  "serde",
  "serde_json",
  "thiserror",
@@ -624,102 +624,102 @@ dependencies = [
 ]
 
 [[package]]
-name = "pwright-codec-binary"
+name = "playwright-rust-codec-binary"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-codec-network-events"
+name = "playwright-rust-codec-network-events"
 version = "0.1.0"
 dependencies = [
- "pwright-cap-network-events",
- "pwright-codec-binary",
- "pwright-core",
- "pwright-transport",
+ "playwright-rust-cap-network-events",
+ "playwright-rust-codec-binary",
+ "playwright-rust-core",
+ "playwright-rust-transport",
 ]
 
 [[package]]
-name = "pwright-composition-chromium-network-events"
+name = "playwright-rust-composition-chromium-network-events"
 version = "0.1.0"
 dependencies = [
- "pwright-backend-cdp-network-events",
- "pwright-cap-network-events",
- "pwright-codec-network-events",
- "pwright-core",
- "pwright-runtime",
- "pwright-runtime-control",
- "pwright-server-events",
- "pwright-server-wire",
- "pwright-transport",
+ "playwright-rust-backend-cdp-network-events",
+ "playwright-rust-cap-network-events",
+ "playwright-rust-codec-network-events",
+ "playwright-rust-core",
+ "playwright-rust-runtime",
+ "playwright-rust-runtime-control",
+ "playwright-rust-server-events",
+ "playwright-rust-server-wire",
+ "playwright-rust-transport",
 ]
 
 [[package]]
-name = "pwright-connection-control"
+name = "playwright-rust-connection-control"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-core"
+name = "playwright-rust-core"
 version = "0.1.0"
 
 [[package]]
-name = "pwright-network-model"
+name = "playwright-rust-network-model"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-runtime"
+name = "playwright-rust-runtime"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-runtime-control"
+name = "playwright-rust-runtime-control"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
- "pwright-runtime",
- "pwright-server-wire",
- "pwright-transport",
+ "playwright-rust-core",
+ "playwright-rust-runtime",
+ "playwright-rust-server-wire",
+ "playwright-rust-transport",
 ]
 
 [[package]]
-name = "pwright-server-events"
+name = "playwright-rust-server-events"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
- "pwright-server-wire",
- "pwright-transport",
+ "playwright-rust-core",
+ "playwright-rust-server-wire",
+ "playwright-rust-transport",
 ]
 
 [[package]]
-name = "pwright-server-wire"
+name = "playwright-rust-server-wire"
 version = "0.1.0"
 dependencies = [
- "pwright-connection-control",
- "pwright-core",
- "pwright-transport",
+ "playwright-rust-connection-control",
+ "playwright-rust-core",
+ "playwright-rust-transport",
 ]
 
 [[package]]
-name = "pwright-transport"
+name = "playwright-rust-transport"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-v2-network-events-composition-only-example"
+name = "playwright-rust-v2-network-events-composition-only-example"
 version = "0.1.0"
 dependencies = [
- "pwright-composition-chromium-network-events",
+ "playwright-rust-composition-chromium-network-events",
 ]
 
 [[package]]

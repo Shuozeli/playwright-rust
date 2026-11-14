@@ -146,7 +146,7 @@ function buildCommand(command, args, options, upstream) {
 }
 
 function installBuildPreload() {
-  const upstream = fs.realpathSync(process.env.PWRIGHT_CORE455_UPSTREAM || '');
+  const upstream = fs.realpathSync(process.env.PLAYWRIGHT_RUST_CORE455_UPSTREAM || '');
   requireCleanPinnedCheckout(upstream);
   const original = childProcess.spawn;
   childProcess.spawn = function pnpmOnlyUpstreamBuild(command, args, options) {
@@ -197,8 +197,8 @@ function bootstrap(upstreamArgument) {
 
   run(process.execPath, ['--require', __filename, 'utils/build/build.js'], upstream, {
     ...installEnv,
-    PWRIGHT_CORE455_BUILD_PRELOAD: '1',
-    PWRIGHT_CORE455_UPSTREAM: upstream,
+    PLAYWRIGHT_RUST_CORE455_BUILD_PRELOAD: '1',
+    PLAYWRIGHT_RUST_CORE455_UPSTREAM: upstream,
   });
   for (const relative of [
     'packages/playwright/lib/program.js',
@@ -212,7 +212,7 @@ function bootstrap(upstreamArgument) {
   process.stdout.write(`Derived pnpm lock SHA-256: ${sha256(lockPath)}\n`);
 }
 
-if (process.env.PWRIGHT_CORE455_BUILD_PRELOAD === '1') {
+if (process.env.PLAYWRIGHT_RUST_CORE455_BUILD_PRELOAD === '1') {
   installBuildPreload();
 } else if (require.main === module) {
   if (process.argv.length !== 3)

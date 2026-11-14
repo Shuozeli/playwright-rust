@@ -1,10 +1,10 @@
-<!-- agent-updated: 2026-09-05T05:12:38Z -->
+<!-- agent-updated: 2026-11-14T05:28:56Z -->
 
 # Playwright design and capability course
 
-> Status: active learning notes. We study Playwright before deciding Pwright
+> Status: active learning notes. We study Playwright before deciding Playwright Rust
 > v2 architecture. Statements about Playwright are evidence, not automatic
-> decisions for Pwright.
+> decisions for Playwright Rust.
 
 ## Course map
 
@@ -28,7 +28,7 @@
 - Lesson 17: Installation, driver processes, remote server, and language clients
 - Lesson 18: Resource lifecycle, object retention, memory, and failure handling
 - Lesson 19: Extension points and the limits of Playwright composability
-- Lesson 20: Compatibility inventory and candidate lessons for Pwright
+- Lesson 20: Compatibility inventory and candidate lessons for Playwright Rust
 
 ## Lesson format
 
@@ -39,7 +39,7 @@ Each lesson records:
 - The internal design logic
 - Source locations
 - Costs and limitations
-- Questions for Pwright, without deciding them prematurely
+- Questions for Playwright Rust, without deciding them prematurely
 
 ## Recording status
 
@@ -210,12 +210,12 @@ events. This distinction is central to Playwright's retry and lifecycle model.
 - Server implementations: `packages/playwright-core/src/server/`
 - Dispatch boundary: `packages/playwright-core/src/server/dispatchers/`
 
-### Questions raised for Pwright
+### Questions raised for Playwright Rust
 
 - Which compatibility target matters: names, behavior, tests, or wire protocol?
 - Which top-level objects must exist in the first supported profile?
 - Which objects need runtime identity, and which should remain cheap values?
-- Is a test runner part of Pwright, a separate product, or a non-goal?
+- Is a test runner part of Playwright Rust, a separate product, or a non-goal?
 - Which browser and special-target families are actual requirements?
 - Which capability families must be independently installable?
 
@@ -294,16 +294,16 @@ another user or system.
   `launchPersistentContext(userDataDir)` immediately returns the single
   persistent BrowserContext whose stored browser data can survive restarts.
 
-### Questions raised for Pwright
+### Questions raised for Playwright Rust
 
 - Should browser acquisition be expressed as BrowserType, provider components,
   or both?
 - How should Rust encode owned versus borrowed browser processes?
 - Should attach, launch, remote runtime, and managed download be independently
   installable?
-- Does Pwright need both its own remote protocol and direct CDP attachment?
+- Does Playwright Rust need both its own remote protocol and direct CDP attachment?
 
-No Pwright decision is selected in this lesson.
+No Playwright Rust decision is selected in this lesson.
 
 ## Lesson 3: Browser, BrowserContext, isolation, and ownership
 
@@ -408,11 +408,11 @@ They are related but not equivalent.
 - Server implementations: `packages/playwright-core/src/server/browser.ts` and
   `browserContext.ts`
 
-### Questions raised for Pwright
+### Questions raised for Playwright Rust
 
 - Is Browser primarily a connection, an owned process, or a typed combination
   that makes ownership explicit?
-- What exact state must Pwright isolate per BrowserContext on a CDP backend?
+- What exact state must Playwright Rust isolate per BrowserContext on a CDP backend?
 - Can capability-specific context state remain absent when that capability is
   not installed?
 - Which cleanup failures should make context closure fail, warn, or remain
@@ -420,9 +420,9 @@ They are related but not equivalent.
 - How should memory and concurrency budgets divide across Browser, Context,
   Page, and backend session?
 
-No Pwright decision is selected in this lesson.
+No Playwright Rust decision is selected in this lesson.
 
-### Later Pwright checkpoint: connection-scoped process authority
+### Later Playwright Rust checkpoint: connection-scoped process authority
 
 The implemented owned-launch leaf preserves this lesson's ownership
 distinction structurally. Negotiating `browser.close` is necessary but not
@@ -549,12 +549,12 @@ operation rather than merely dropping a client object.
 - Client Frame: `packages/playwright-core/src/client/frame.ts`
 - Server frame/navigation state: `packages/playwright-core/src/server/frames.ts`
 
-### Questions raised for Pwright
+### Questions raised for Playwright Rust
 
 - Should Page map one-to-one to a CDP target, or remain a portable logical
   object with backend-specific target recovery?
 - Which navigation milestones are compatibility requirements?
-- How should Pwright represent a stable Frame identity across document changes
+- How should Playwright Rust represent a stable Frame identity across document changes
   without retaining stale execution contexts or handles?
 - Which Page events require lossless delivery, and which can be bounded or
   coalesced?
@@ -575,9 +575,9 @@ operation rather than merely dropping a client object.
   action, then await the already-created wait; otherwise the event can occur
   before a listener exists.
 
-No Pwright decision is selected in this lesson.
+No Playwright Rust decision is selected in this lesson.
 
-### Pwright implementation decision: explicit Page creation
+### Playwright Rust implementation decision: explicit Page creation
 
 The first `BrowserContext.newPage()` slice must return an initialized Page and
 its required stable main Frame together. Chromium creation therefore includes
@@ -586,7 +586,7 @@ ID alone is not success. Runtime publication is one Page+Frame creation batch,
 and remote publication sends both Create controls before Result. Explicit
 creation is kept separate from popup/event discovery and opener semantics.
 The complete transaction and acceptance gates are recorded in
-[`pwright-page-creation.md`](pwright-page-creation.md).
+[`playwright-rust-page-creation.md`](playwright-rust-page-creation.md).
 
 Implementation checkpoint: the optional capability is now wired end to end.
 AAA tests prove two-object runtime rollback, atomic client claims, exact
@@ -654,14 +654,14 @@ page.getByRole(listitem)
 Inner `has`/`hasNot` locators and locator intersections must belong to the same
 Frame, because selector evaluation cannot silently cross document boundaries.
 
-Pwright checkpoint: locator protocol 1.3 represents `hasText`, `hasNotText`,
+Playwright Rust checkpoint: locator protocol 1.3 represents `hasText`, `hasNotText`,
 `has`, `hasNot`, and `visible` as bounded recursive AST nodes. Page locators
 normalize to an initialized main Frame, so Page and main-Frame locators compare
 as the same scope while another Frame is rejected before dispatch. Chromium
 keeps base candidates for `has`/`hasNot`, evaluates the inner selector relative
 to each candidate, and does not retain a resolved DOM node between actions.
 
-Pwright checkpoint: locator protocol 1.4 adds Playwright's string-or-`RegExp`
+Playwright Rust checkpoint: locator protocol 1.4 adds Playwright's string-or-`RegExp`
 branch without treating Rust regex syntax as equivalent. The portable value is
 ECMAScript source plus canonical JavaScript flags; string matching retains its
 normalization/exact rules, while regex matching tests complete text and ignores
@@ -671,18 +671,18 @@ expression per selector evaluation, returns invalid source as
 `InvalidSelector`, and retains neither compiled regex nor a DOM match between
 retries.
 
-Pwright checkpoint: locator protocol 1.5 adds `get_by_placeholder`,
+Playwright Rust checkpoint: locator protocol 1.5 adds `get_by_placeholder`,
 `get_by_alt_text`, `get_by_title`, and `get_by_test_id`, including regex
 branches. Placeholder/alt/title string matching uses the raw attribute value:
 `exact` is case-sensitive equality, while the default is a case-insensitive
 substring. Unlike text locators, it does not normalize whitespace. Test-ID
-strings are always exact and default to `data-testid`. Pwright carries any
+strings are always exact and default to `data-testid`. Playwright Rust carries any
 explicit comma-separated test-ID attribute names inside the immutable Locator
 (maximum 16), avoiding Playwright's mutable selector-registry setting while
 keeping the same query behavior. Chromium runtime v6 and a real Chrome 152
 test cover the string, regex, default-name, and multi-name paths.
 
-Pwright checkpoint: locator protocol 1.6 adds `Locator.count` as the first
+Playwright Rust checkpoint: locator protocol 1.6 adds `Locator.count` as the first
 multi-match read. It follows Playwright's `queryCount` shape: resolve with
 strictness disabled, take one snapshot, return `0` immediately when nothing
 matches, and return the number of matches without waiting for actionability.
@@ -690,7 +690,7 @@ The portable result is a checked `u32`; Chromium retains no node or result
 array after the evaluation. The same lazy Locator resolves again after a page
 navigation.
 
-Pwright checkpoint: locator protocol 1.7 adds Playwright's immediate
+Playwright Rust checkpoint: locator protocol 1.7 adds Playwright's immediate
 `isVisible` behavior. It is strict for multiple matches, returns `false` for a
 missing target, and does not poll for a later visible state. `isHidden` is the
 logical inverse and is composed in the Rust client over the same typed command,
@@ -698,7 +698,7 @@ showing that API conveniences need not become separate backend plugins. A real
 Chrome 152 proof covers visible, CSS-hidden, missing, strict, and post-navigation
 resolution.
 
-Pwright checkpoint: locator protocol 1.8 adds `isChecked`, `isEditable`, and
+Playwright Rust checkpoint: locator protocol 1.8 adds `isChecked`, `isEditable`, and
 `isEnabled` as separate typed routes, while `isDisabled` is composed by
 negating enabled. Playwright treats these differently from visibility: they
 wait for one strict connected target, then return its current state rather
@@ -707,7 +707,7 @@ label retargeting, native disabled/readonly/checked behavior, and applicable
 ARIA state behavior without retaining the resolved node. A real Chrome 152
 proof includes a target inserted after the query begins.
 
-Pwright checkpoint: locator protocol 1.9 adds Playwright's `waitFor` timing
+Playwright Rust checkpoint: locator protocol 1.9 adds Playwright's `waitFor` timing
 contract as a separate optional route. The four states are attached, detached,
 visible, and hidden; visible is the default. The operation is strict and
 re-resolves the Locator on every attempt. With no current match, hidden and
@@ -716,15 +716,15 @@ the caller deadline. Success returns no element, so this waiting primitive
 does not convert a Locator into a retained ElementHandle. Strictness, invalid
 selectors, and malformed responses remain terminal rather than retryable.
 
-Pwright checkpoint: locator protocol 1.10 adds `textContent` as the first
+Playwright Rust checkpoint: locator protocol 1.10 adds `textContent` as the first
 single-target DOM-content read. Like Playwright, it waits for one strict target
 and re-resolves the lazy Locator while waiting. It returns `Node.textContent`
 exactly, including whitespace, and preserves the nullable result rather than
-inventing an empty string. Pwright bounds the UTF-8 result to 1 MiB and keeps
+inventing an empty string. Playwright Rust bounds the UTF-8 result to 1 MiB and keeps
 the operation handle-free; an assertion such as `toHaveText` remains a
 different polling contract layered above this one-shot content read.
 
-Pwright checkpoint: locator protocol 1.11 adds `innerText` as a distinct
+Playwright Rust checkpoint: locator protocol 1.11 adds `innerText` as a distinct
 optional route. It waits for one strict connected target like `textContent`,
 but then requires an `HTMLElement` and returns the browser's rendered text:
 hidden descendants and layout whitespace rules can therefore make it differ
@@ -732,60 +732,60 @@ from raw `Node.textContent`. The result is non-null, bounded to 1 MiB, and
 handle-free. An SVG target is a typed `Node is not an HTMLElement` failure,
 matching the relevant Playwright server boundary.
 
-Pwright checkpoint: locator protocol 1.12 adds `innerHTML` as another distinct
+Playwright Rust checkpoint: locator protocol 1.12 adds `innerHTML` as another distinct
 optional route. It has the same strict waiting and re-resolution behavior, but
 returns the browser's serialized child markup rather than text. Playwright
 reads `Element.innerHTML` directly, so SVG is valid here even though SVG is
-invalid for `innerText`. Pwright preserves comments and browser escaping,
+invalid for `innerText`. Playwright Rust preserves comments and browser escaping,
 bounds the non-null UTF-8 result to 1 MiB, and retains no ElementHandle. This
 contract was checked against the local upstream Playwright snapshot at commit
 `de214f440b7e34937fe4886f046b78b757136087`.
 
-Pwright checkpoint: locator protocol 1.13 adds `getAttribute(name)` as its own
+Playwright Rust checkpoint: locator protocol 1.13 adds `getAttribute(name)` as its own
 optional route. Playwright's client forces strict selector resolution and its
 server waits/re-resolves before directly calling `Element.getAttribute(name)`.
 That means an existing attribute returns its exact string, a missing attribute
 returns `null`/Rust `None`, and SVG is valid because no HTMLElement-only check
-is involved. Pwright bounds the name to 64 KiB and a present value to 1 MiB,
+is involved. Playwright Rust bounds the name to 64 KiB and a present value to 1 MiB,
 runs the read in the utility world under the caller deadline, and retains no
 ElementHandle. The same local upstream commit above is the source reference.
 
-Pwright checkpoint: locator protocol 1.14 adds `inputValue()` as its own
+Playwright Rust checkpoint: locator protocol 1.14 adds `inputValue()` as its own
 optional route. Playwright's client forces strict resolution; its server then
 uses `retarget(node, 'follow-label')`, accepts only `INPUT`, `TEXTAREA`, or
-`SELECT`, and returns the current `.value`. Pwright mirrors that boundary with
+`SELECT`, and returns the current `.value`. Playwright Rust mirrors that boundary with
 selector runtime v6's shared retarget primitive, a typed non-control error,
 strict retrying resolution, a 1 MiB UTF-8 result ceiling, caller deadline, and
 no ElementHandle. Real Chrome 152 verifies delayed label retargeting plus exact
 input, textarea, and select values. The local upstream commit above is the
 source reference.
 
-Pwright checkpoint: locator protocol 1.15 adds `allTextContents()` as a
+Playwright Rust checkpoint: locator protocol 1.15 adds `allTextContents()` as a
 separate collection route. At upstream commit
 `de214f440b7e34937fe4886f046b78b757136087`, the client implementation calls
 `frame.$$eval(selector, ee => ee.map(e => e.textContent || ''))`. Therefore it
 does not wait for a match, does not apply strictness, returns `[]` immediately
 for zero matches, converts a nullable `textContent` to `""`, and preserves the
-current selector order. Pwright mirrors those semantics while bounding the
+current selector order. Playwright Rust mirrors those semantics while bounding the
 handle-free result to 4096 values, 1 MiB per string, and 4 MiB total UTF-8; a
 real Chrome 152 proof also reuses the same lazy Locator after navigation.
 
-Pwright checkpoint: locator protocol 1.16 adds `allInnerTexts()` as a separate
+Playwright Rust checkpoint: locator protocol 1.16 adds `allInnerTexts()` as a separate
 rendered-text collection route. At the same upstream commit, the client calls
 `frame.$$eval(selector, ee => ee.map(e => (e as HTMLElement).innerText))`.
 It therefore has the same immediate, zero-or-many, non-strict snapshot shape
 as `allTextContents()`, but `innerText` is layout-aware and omits hidden
 descendant text. The TypeScript cast does not check runtime element type, so an
-SVG match can yield `undefined` despite the declared `string[]`. Pwright makes
+SVG match can yield `undefined` despite the declared `string[]`. Playwright Rust makes
 that edge explicit: every match must be an `HTMLElement`, otherwise the call
 returns typed `InvalidTarget`. The result remains handle-free and uses the
 same 4096-item, 1 MiB-per-item, and 4 MiB aggregate bounds; Chrome 152 verifies
 rendered output, the SVG failure, and lazy re-resolution after navigation.
 
-Pwright client-composition checkpoint: Playwright implements `clear()` by
+Playwright Rust client-composition checkpoint: Playwright implements `clear()` by
 calling `fill('')`, and implements `all()` by awaiting `count()` once and
 creating `nth(i)` Locators for that count. Neither behavior needs a new browser
-protocol command. Pwright follows that dependency shape: Clear installs only
+protocol command. Playwright Rust follows that dependency shape: Clear installs only
 the Fill service and All installs only Count. The Rust result is a lightweight
 `LocatorList`, not an eagerly allocated array: it records the count snapshot
 and one base selector, then creates `nth(i)` values through `get` or `iter`.
@@ -793,17 +793,17 @@ The indices are a snapshot but the Locators remain lazy, so DOM changes or
 navigation between `all()` and use affect what each index resolves to. Chrome
 152 verifies both that behavior and the empty Fill used by Clear.
 
-Pwright checkpoint: locator protocol 1.17 adds `hover()` as a separate action
+Playwright Rust checkpoint: locator protocol 1.17 adds `hover()` as a separate action
 route. At upstream commit `de214f440b7e34937fe4886f046b78b757136087`, hover
 uses strict resolution, waits for visible and stable geometry, scrolls unless
 disabled, chooses either the visible center or a padding-box-relative position,
 and checks the hit target unless forced. Unlike click it does not wait for
-enabled state or navigation. Pwright preserves finite fractional coordinates,
+enabled state or navigation. Playwright Rust preserves finite fractional coordinates,
 canonical bounded modifiers, platform-sensitive `ControlOrMeta`, force, scroll,
 and trial. Playwright distinguishes omitted modifiers from explicit `[]`:
 omission leaves current Page keys alone, while a supplied set is ensured for
 the action and the prior set is restored. This also happens during trial even
-though trial sends no mouse move. Pwright now follows that ownership model with
+though trial sends no mouse move. Playwright Rust now follows that ownership model with
 one fixed-size Page coordinator shared across main, local-frame, and OOPIF
 Locator routes. Chrome 152 verifies a disabled target, fractional positioned
 input, Meta plus Shift on macOS, the actual key events and restoration, and the
@@ -848,7 +848,7 @@ strictness.
 - Server selector resolution: `packages/playwright-core/src/server/frameSelectors.ts`
 - Frame action protocol: `packages/protocol/spec/frame.yml`
 
-### Questions raised for Pwright
+### Questions raised for Playwright Rust
 
 - Should the selector representation be an inspectable typed AST, a compatible
   string language, or both?
@@ -858,7 +858,7 @@ strictness.
 - Should Locator remain entirely client-side and allocation-light?
 - Which strictness and composition behaviors are required for compatibility?
 
-No Pwright decision is selected in this lesson.
+No Playwright Rust decision is selected in this lesson.
 
 ## Lesson 6: Actions, actionability, auto-waiting, and timeouts
 
@@ -905,7 +905,7 @@ each down/up pair; a nonzero delay is awaited between down and up and between
 multiple clicks. Modifier setup and restoration surround the pointer action,
 including trial's temporary modifier behavior.
 
-Pwright checkpoint: the existing Click route now shares Hover's Page-scoped
+Playwright Rust checkpoint: the existing Click route now shares Hover's Page-scoped
 input transaction and emits move, down, then up. The owner remembers only fixed
 pointer coordinates, one pressed button, and modifier bitsets, so cancellation
 can release a button before later Page input proceeds. Richer options are not
@@ -913,7 +913,7 @@ yet added because locator 1.x uses exact positional records; extending that
 record requires an explicit protocol-versioning design rather than silently
 breaking older payloads.
 
-Pwright design experiment: a generated option bag can instead use a bounded
+Playwright Rust design experiment: a generated option bag can instead use a bounded
 extensible record. Each present option has a stable nonzero tag and an exact
 borrowed value slice; absent and present-empty remain distinct, while old
 decoders skip future tags without allocating. The complete envelope keeps one
@@ -963,7 +963,7 @@ termination causes.
 - Client timeout precedence: `packages/playwright-core/src/client/timeoutSettings.ts`
 - Action flags and typed parameters: `packages/protocol/spec/frame.yml`
 
-### Questions raised for Pwright
+### Questions raised for Playwright Rust
 
 - Which actionability definitions must be behaviorally compatible with
   Playwright, including shadow DOM, SVG, CSS transforms, and iframes?
@@ -975,7 +975,7 @@ termination causes.
   spawned by an action?
 - Which force/trial semantics are safe to expose and test?
 
-No Pwright decision is selected in this lesson.
+No Playwright Rust decision is selected in this lesson.
 
 ## Lesson 7: Assertions and retry semantics
 
@@ -1058,7 +1058,7 @@ best for independent checks.
 - Server-side retried expect query: `packages/playwright-core/src/server/frames.ts`
 - Public assertion types and timeout configuration: `packages/playwright/types/test.d.ts`
 
-### Questions raised for Pwright
+### Questions raised for Playwright Rust
 
 - Are assertions part of the core automation library, an optional Rust testing
   crate, or adapters for existing Rust assertion frameworks?
@@ -1070,7 +1070,7 @@ best for independent checks.
   navigation deadlines?
 - Which comparison artifacts require optional capabilities?
 
-No Pwright decision is selected in this lesson.
+No Playwright Rust decision is selected in this lesson.
 
 ## Lesson 8: JavaScript evaluation, JSHandle, and ElementHandle
 
@@ -1149,7 +1149,7 @@ must be disposed on success, error, timeout, and cancellation paths.
 - ElementHandle implementation: `packages/playwright-core/src/server/dom.ts`
 - Public API guidance: `packages/playwright-core/types/types.d.ts`
 
-### Questions raised for Pwright
+### Questions raised for Playwright Rust
 
 - Is arbitrary JavaScript evaluation a core feature or an optional capability?
 - Which typed value format should Rust use without depending on Serde JSON in
@@ -1159,11 +1159,11 @@ must be disposed on success, error, timeout, and cancellation paths.
   backend release from synchronous `Drop`?
 - What hard limits and metrics are required for live handles per context?
 
-### Pwright implementation checkpoints (2026-09-04)
+### Playwright Rust implementation checkpoints (2026-09-04)
 
 The first Handle slice deliberately implemented release before creation.
 `JsHandle` and `ElementHandle` have stable portable object kinds under Frame,
-and the optional `pwright.handle_lifecycle` capability provides explicit async
+and the optional `playwright.rust.handle_lifecycle` capability provides explicit async
 `dispose`. Its Chromium leaf maps object-backed Handles to exactly one
 `Runtime.releaseObject` call on the bound CDP session. Rust `Drop` still
 performs no I/O.
@@ -1180,7 +1180,7 @@ externally owned browser.
 
 The 1.1 follow-up now mirrors Playwright's important argument boundary: a
 recursive serialized graph may contain portable Handle leaves, while native
-object IDs remain server-local CDP `CallArgument`s. Pwright deliberately checks
+object IDs remain server-local CDP `CallArgument`s. Playwright Rust deliberately checks
 that a generic JSHandle and target Frame share one still-current execution
 world; cross-Frame and disposed values fail before CDP. A dedicated Chrome 152
 test passes a real ElementHandle into a second evaluation and reads `SECTION`.
@@ -1190,8 +1190,8 @@ and 1.0 Handle-evaluation peers are prevented from sending the new leaf.
 This still does not equal Playwright's complete JSHandle surface. Cross-world
 ElementHandle adoption remains a lesson-derived gate. Handle-local evaluation,
 `jsonValue`, `getProperty`, and `getProperties` are now specified together as
-the additive `pwright.handle_evaluation` 1.2 contract in
-`pwright-handle-operations.md`; implementation remains open. The live-Chrome negotiated Handle-command round
+the additive `playwright.rust.handle_evaluation` 1.2 contract in
+`playwright-rust-handle-operations.md`; implementation remains open. The live-Chrome negotiated Handle-command round
 trip now passes through the complete typed client/server recipe at capability
 version 1.1, including lifecycle Create ordering, a Handle-valued second
 command, graceful close, and external-browser preservation. It also exposed
@@ -1200,9 +1200,9 @@ an operation identity before command encoding.
 The production
 route profile now accounts every retained Handle and byte. Explicit Page/
 Context close, main execution-world replacement, Frame detach, Page crash,
-reconnect, and the Handle-aware Pwright connection-close target all retire the
+reconnect, and the Handle-aware Playwright Rust connection-close target all retire the
 corresponding runtime objects, routes, and leases without redundant native
-release calls. See `pwright-handle-evaluation.md`.
+release calls. See `playwright-rust-handle-evaluation.md`.
 Direct creation also reserves caller-owned continuation capacity before CDP;
 abandoning a started future completes evaluation and explicitly disposes its
 otherwise unreachable result.
@@ -1237,7 +1237,7 @@ test still needs to execute a Handle command through that negotiated channel.
   essence; a live handle roots browser-side state and also occupies protocol,
   driver, and client object tables until disposal or context destruction.
 
-No Pwright decision is selected in this lesson.
+No Playwright Rust decision is selected in this lesson.
 
 ## Lesson 9: Request, Response, Route, WebSocket, HAR, and Download
 
@@ -1327,7 +1327,7 @@ triggering the action.
   `packages/playwright-core/src/server/download.ts`, and
   `packages/playwright-core/src/server/artifact.ts`
 
-### Questions raised for Pwright
+### Questions raised for Playwright Rust
 
 - Which network objects require stable remote identity, and for how long?
 - Can metadata observation remain lightweight while body capture is a separate
@@ -1354,7 +1354,7 @@ triggering the action.
 - Question 5 answer: create the download wait first. Correct; then trigger the
   action and await the already-armed wait to avoid an event race.
 
-No Pwright decision is selected in this lesson.
+No Playwright Rust decision is selected in this lesson.
 
 ## Lesson 10: Context state, authentication, permissions, and emulation
 
@@ -1445,13 +1445,13 @@ requirements rather than convenience details.
 - Server state capture/restore: `packages/playwright-core/src/server/browserContext.ts`
 - Public context options: `packages/playwright-core/types/types.d.ts`
 
-### Questions raised for Pwright
+### Questions raised for Playwright Rust
 
 - Which context policies belong to separately installable emulation,
   authentication, storage, network, and credential capabilities?
 - How can a backend report unsupported or partially supported settings instead
   of silently pretending they worked?
-- What portable storage-state subset should Pwright support, and how are secret
+- What portable storage-state subset should Playwright Rust support, and how are secret
   files protected?
 - Which creation-time settings form one consistency contract and cannot be
   enabled lazily after a Page already exists?
@@ -1473,7 +1473,7 @@ requirements rather than convenience details.
   touch, mobile layout behavior, user agent, scale, engine, OS, and hardware
   signals remain separate.
 
-No Pwright decision is selected in this lesson.
+No Playwright Rust decision is selected in this lesson.
 
 ## Lesson 11: Events, dialogs, workers, bindings, and exposed functions
 
@@ -1543,7 +1543,7 @@ reentrancy, and disposal all require policy.
   `packages/playwright-core/src/client/browserContext.ts`, and
   `packages/playwright-core/src/server/page.ts`
 
-### Questions raised for Pwright
+### Questions raised for Playwright Rust
 
 - Which event types must be lossless, coalescible, or droppable under pressure?
 - Can a Rust Stream/subscription API make removal and cancellation more
@@ -1553,7 +1553,7 @@ reentrancy, and disposal all require policy.
 - How are page-to-host callbacks authenticated, bounded, cancelled, and drained
   during Context shutdown?
 
-No Pwright decision is selected in this lesson.
+No Playwright Rust decision is selected in this lesson.
 
 ## Lesson 12: Screenshots, PDF, video, tracing, console, and artifacts
 
@@ -1640,7 +1640,7 @@ inherits security and retention requirements.
 - Trace client/recorder: `packages/playwright-core/src/client/tracing.ts` and
   `packages/playwright-core/src/server/trace/recorder/tracing.ts`
 
-### Questions raised for Pwright
+### Questions raised for Playwright Rust
 
 - Which screenshot, PDF, video, trace, and console features are separate
   installable capabilities?
@@ -1651,7 +1651,7 @@ inherits security and retention requirements.
 - How are partial outputs committed atomically and recovered after disconnect?
 - Which secrets and page data must tracing and diagnostics redact by default?
 
-No Pwright decision is selected in this lesson.
+No Playwright Rust decision is selected in this lesson.
 
 ## Lesson 13: APIRequestContext and browser-independent HTTP
 
@@ -1748,7 +1748,7 @@ optimizations.
 5. Why would a streaming response protocol matter even if the public API also
    offers a convenient `bytes()` helper?
 
-### Questions raised for Pwright
+### Questions raised for Playwright Rust
 
 - Is browser-independent HTTP a separate crate/capability rather than browser
   core?
@@ -1758,7 +1758,7 @@ optimizations.
   temporary files?
 - Can a client disconnect cancel the upstream HTTP body immediately?
 
-No Pwright decision is selected in this lesson.
+No Playwright Rust decision is selected in this lesson.
 
 ## Lesson 14: Test runner, fixtures, projects, retries, reporters, and parallelism
 
@@ -1769,7 +1769,7 @@ discovers tests, constructs fixtures, schedules workers, retries failures,
 collects artifacts, and reports results. A program can use `playwright-core`
 without the test runner, and an alternative runner can use the automation API.
 
-The separation matters for Pwright: browser semantics should not depend on a
+The separation matters for Playwright Rust: browser semantics should not depend on a
 particular test scheduler, while a runner may add strong lifecycle policy on
 top of otherwise flexible library objects.
 
@@ -1866,7 +1866,7 @@ reporter are conceptually different responsibilities.
 4. Why does teardown need a separate bounded opportunity after a timeout?
 5. What information must remain visible if a retry later passes?
 
-### Questions raised for Pwright
+### Questions raised for Playwright Rust
 
 - Is a Rust runner part of the first compatibility target or a separately
   installable layer?
@@ -1877,7 +1877,7 @@ reporter are conceptually different responsibilities.
 - How do retries distinguish infrastructure failure, product failure, and test
   nondeterminism?
 
-No Pwright decision is selected in this lesson.
+No Playwright Rust decision is selected in this lesson.
 
 ## Lesson 15: Channel protocol, generated schema, dispatchers, and transports
 
@@ -1987,7 +1987,7 @@ provide streaming, quotas, or backpressure.
    closes?
 5. Does changing WebSocket to a pipe automatically solve large-body memory use?
 
-### Questions raised for Pwright
+### Questions raised for Playwright Rust
 
 - Which parts of the portable API require stable, versioned wire contracts?
 - Can capability schemas be generated independently and composed without one
@@ -1997,7 +1997,7 @@ provide streaming, quotas, or backpressure.
 - Does every command carry cancellation and deadline information end to end?
 - Which payloads require stream channels rather than unary RPC results?
 
-No Pwright decision is selected in this lesson.
+No Playwright Rust decision is selected in this lesson.
 
 ## Lesson 16: Chromium CDP, Firefox Juggler, WebKit protocol, and Electron/Android
 
@@ -2091,7 +2091,7 @@ specialized/experimental surfaces and should not be forced into browser core.
 5. Why are Electron and Android poor candidates for unconditional browser-core
    dependencies?
 
-### Questions raised for Pwright
+### Questions raised for Playwright Rust
 
 - What is the smallest backend trait that supports shared semantics without
   becoming one enormous interface?
@@ -2102,7 +2102,7 @@ specialized/experimental surfaces and should not be forced into browser core.
 - Which compatibility tests run identically against every backend, and where do
   backend-specific suites begin?
 
-No Pwright decision is selected in this lesson.
+No Playwright Rust decision is selected in this lesson.
 
 ## Lesson 17: Installation, driver processes, remote server, and language clients
 
@@ -2198,7 +2198,7 @@ does not expose the same portable fidelity.
 5. When a client disconnects from an externally owned browser, should the
    browser always be killed?
 
-### Questions raised for Pwright
+### Questions raised for Playwright Rust
 
 - Can Rust be both the native runtime and a language-neutral server, eliminating
   a mandatory Node driver?
@@ -2206,11 +2206,11 @@ does not expose the same portable fidelity.
   engine?
 - How are downloaded engines verified, cached, selected, updated, and removed?
 - What authentication, tenancy, quotas, and version negotiation protect a
-  remote Pwright server?
+  remote Playwright Rust server?
 - How are server-local paths replaced with typed upload/download/artifact
   resources?
 
-No Pwright decision is selected in this lesson.
+No Playwright Rust decision is selected in this lesson.
 
 ## Lesson 18: Resource lifecycle, object retention, memory, and failure handling
 
@@ -2257,7 +2257,7 @@ dispatchers before the generic threshold trims the oldest 10% of an overflowing
 bucket. This is a concrete plausible contributor to long-running Playwright
 memory growth, not proof that it is the only or dominant cause.
 
-Pwright's base network-events plugin now makes a different, explicit tradeoff.
+Playwright Rust's base network-events plugin now makes a different, explicit tradeoff.
 While a request is active it may expose temporary Request/Response identities,
 but `requestfinished` and `requestfailed` carry complete immutable Request and
 optional Response value snapshots. Once every selected bounded event queue has
@@ -2341,7 +2341,7 @@ leases/finalizers remain necessary.
 4. Can Rust `Drop` guarantee cleanup of a server object after network loss?
 5. Which counters would distinguish handle leakage from response-body retention?
 
-### Questions raised for Pwright
+### Questions raised for Playwright Rust
 
 - What is the explicit ownership tree and close state machine for every resource?
 - Which resources use RAII only, explicit async close, leases, or all three?
@@ -2350,7 +2350,7 @@ leases/finalizers remain necessary.
 - Can built-in metrics attribute memory to browser, runtime, protocol objects,
   bodies, and artifacts before a production leak investigation is needed?
 
-No Pwright decision is selected in this lesson.
+No Playwright Rust decision is selected in this lesson.
 
 ## Lesson 19: Extension points and the limits of Playwright composability
 
@@ -2400,7 +2400,7 @@ and resource budget.
 
 ### Composability has several independent meanings
 
-For Pwright, the phrase “everything is composable and pluggable” must be split
+For Playwright Rust, the phrase “everything is composable and pluggable” must be split
 into testable design dimensions:
 
 | Dimension | Question |
@@ -2445,7 +2445,7 @@ but cannot automatically add a new browser protocol object family.
 4. What composability dimensions do Cargo features solve, and which do they not?
 5. What must happen to plugin-owned tasks and resources when a Context closes?
 
-### Questions raised for Pwright
+### Questions raised for Playwright Rust
 
 - Which extension classes exist, and what narrow trait belongs to each class?
 - Is runtime dynamic loading required initially, or are separately installable
@@ -2455,9 +2455,9 @@ but cannot automatically add a new browser protocol object family.
 - Can generated protocol fragments be namespaced and negotiated independently?
 - Which core invariants are deliberately not overrideable by plugins?
 
-No Pwright decision is selected in this lesson.
+No Playwright Rust decision is selected in this lesson.
 
-## Lesson 20: Compatibility inventory and candidate lessons for Pwright
+## Lesson 20: Compatibility inventory and candidate lessons for Playwright Rust
 
 ### Compatibility must be defined by observable behavior
 
@@ -2495,7 +2495,7 @@ tasks and compatibility specification, not in marketing language.
 
 ### Candidate lessons from Playwright
 
-The following are evidence-backed candidates to evaluate, not approved Pwright
+The following are evidence-backed candidates to evaluate, not approved Playwright Rust
 architecture decisions:
 
 1. Preserve the Browser -> BrowserContext -> Page -> Frame ownership model
@@ -2524,7 +2524,7 @@ architecture decisions:
 
 ### Applied design note: cleanup retry is not command retry
 
-The lifecycle lessons imply an important distinction for Pwright. Retrying a
+The lifecycle lessons imply an important distinction for Playwright Rust. Retrying a
 high-level read or a Locator observation can be part of its defined semantics;
 replaying an already-started resource cleanup may duplicate a consuming side
 effect. An owned Browser shutdown, for example, transfers unique process
@@ -2609,6 +2609,6 @@ the problem and its decisions before starting the rewrite.
 5. Which candidate lesson above needs an experiment before it can become a
    decision?
 
-No final Pwright architecture decision is selected by this course. The next
+No final Playwright Rust architecture decision is selected by this course. The next
 step is to turn the inventory and candidate lessons into explicit design options,
 tradeoffs, experiments, and acceptance criteria.

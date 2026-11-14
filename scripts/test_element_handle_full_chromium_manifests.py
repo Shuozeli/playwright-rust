@@ -43,7 +43,7 @@ def _manifest(api: str, *, preview: bool = False) -> dict[str, object]:
     )
     path = (
         ROOT
-        / "packages/pwright-python/tests/official"
+        / "packages/playwright-rust-python/tests/official"
         / f"{api}-element-handle-{suffix}"
     )
     return json.loads(path.read_text())

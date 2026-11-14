@@ -14,15 +14,15 @@ cargo tree \
   --edges normal \
   --prefix none \
   --format '{p}' \
-  | awk '/^pwright-/ { print $1 }' \
+  | awk '/^playwright-rust-/ { print $1 }' \
   | sort -u >"$tree_file"
 
 required_packages=(
-  pwright-v2-input-only-example
-  pwright-backend-cdp-input
-  pwright-input-model
-  pwright-cdp
-  pwright-core
+  playwright-rust-v2-input-only-example
+  playwright-rust-backend-cdp-input
+  playwright-rust-input-model
+  playwright-rust-cdp
+  playwright-rust-core
 )
 
 for package in "${required_packages[@]}"; do
@@ -41,9 +41,9 @@ while IFS= read -r package; do
     fi
   done
   if [[ "$allowed" != true ]]; then
-    echo "input-only dependency proof found forbidden Pwright package: $package" >&2
+    echo "input-only dependency proof found forbidden Playwright Rust package: $package" >&2
     exit 1
   fi
 done <"$tree_file"
 
-echo "input-only dependency proof passed (${#required_packages[@]} Pwright packages)"
+echo "input-only dependency proof passed (${#required_packages[@]} Playwright Rust packages)"

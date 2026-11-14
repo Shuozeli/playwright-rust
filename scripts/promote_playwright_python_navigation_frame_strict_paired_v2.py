@@ -42,7 +42,7 @@ ISOLATED_CASE_IDS_SHA256 = (
     "f0115e2aa61824cf677ca4a4c940ee772e119bb16cec138c3a28018dae8578b5"
 )
 WHEEL = (
-    BUILD_DIR / "wheel-abi128-v3/shuozeli_pwright-0.1.0-cp39-abi3-macosx_11_0_arm64.whl"
+    BUILD_DIR / "wheel-abi128-v3/shuozeli_playwright-rust-0.1.0-cp39-abi3-macosx_11_0_arm64.whl"
 )
 WHEEL_SHA256 = "b3bf0fab066e6513db8b5d4ba9bfa555b18c726097689c4a5418ed6c675a5d0f"
 PACKAGE_SHA256 = "506fb374098c906de43f2bb940ea53aae3be3390de48746b9dc87c18a7f1ff24"
@@ -69,7 +69,7 @@ UPSTREAM_COMMIT = "47a5d35ef4f815a2021349f86ae391f7c20c02d6"
 UPSTREAM_NAVIGATION_SHA256 = (
     "f04af8cbdee3dffb2c578d61d7685f02e5186ca565906323d71b6f92f96cd144"
 )
-MANIFEST = ROOT / "packages/pwright-python/tests/official/manifest.json"
+MANIFEST = ROOT / "packages/playwright-rust-python/tests/official/manifest.json"
 MANIFEST_SHA256 = "6d4f86fee517e300319cfa87014a54302980bdf8cf538fa21c1daff4219ea724"
 INVENTORY = ROOT / ".work/official-conformance/playwright-python-v1.58.0-profiled.jsonl"
 INVENTORY_SHA256 = "3dfb11b6ad7eb4736166ee2c4f7fa32cda78063324ad8314ce12f3e2d49b9d41"
@@ -108,9 +108,9 @@ def wheel_package_identity() -> None:
     members: dict[str, bytes] = {}
     with zipfile.ZipFile(WHEEL) as archive:
         for info in archive.infolist():
-            if not info.filename.startswith("pwright/") or info.is_dir():
+            if not info.filename.startswith("playwright_rust/") or info.is_dir():
                 continue
-            relative = info.filename.removeprefix("pwright/")
+            relative = info.filename.removeprefix("playwright_rust/")
             require(
                 relative
                 and not relative.startswith("/")
@@ -287,11 +287,11 @@ def report(targets: list[str]) -> tuple[dict[str, Any], dict[str, dict[str, Any]
         and payload.get("caseReportsSha256") == CASE_REPORTS_SHA256
         and payload.get("result") == str(REPORT)
         and payload.get("resultSha256") == REPORT_SHA256
-        and payload.get("pwrightPackageSha256") == PACKAGE_SHA256
-        and payload.get("pwrightArtifactSha256") == ARTIFACT_SHA256
-        and payload.get("pwrightPackage")
+        and payload.get("playwright_rustPackageSha256") == PACKAGE_SHA256
+        and payload.get("playwright_rustArtifactSha256") == ARTIFACT_SHA256
+        and payload.get("playwright_rustPackage")
         == str(
-            BUILD_DIR / "candidate-frame-v3-frozen/lib/python3.12/site-packages/pwright"
+            BUILD_DIR / "candidate-frame-v3-frozen/lib/python3.12/site-packages/playwright-rust"
         )
         and payload.get("fixtureBind") == "100.78.97.63"
         and payload.get("fixtureHost") == "macbookpro-yuacx.tail8f3b66.ts.net"
@@ -347,12 +347,12 @@ def source_pins(payload: dict[str, Any]) -> bytes:
         "frozenWheel": str(WHEEL),
         "frozenWheelSha256": WHEEL_SHA256,
         "wheelName": WHEEL.name,
-        "pwrightPackageSha256": payload["pwrightPackageSha256"],
-        "pwrightArtifactSha256": payload["pwrightArtifactSha256"],
+        "playwright_rustPackageSha256": payload["playwright_rustPackageSha256"],
+        "playwright_rustArtifactSha256": payload["playwright_rustArtifactSha256"],
         "playwrightPackageSha256": payload["playwrightPackageSha256"],
         "harnessInputs": payload["harnessInputs"],
         "toolingSources": payload["toolingSources"],
-        "pwrightRuntimeLibraries": payload["pwrightRuntimeLibraries"],
+        "playwright_rustRuntimeLibraries": payload["playwright_rustRuntimeLibraries"],
     }
     return (json.dumps(pins, indent=2, sort_keys=True) + "\n").encode()
 

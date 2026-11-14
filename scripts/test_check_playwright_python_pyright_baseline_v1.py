@@ -18,7 +18,7 @@ class PyrightBaselineGateTests(unittest.TestCase):
             "generalDiagnostics": [
                 {
                     "file": str(
-                        self.root / "packages/pwright-python/tests/official/example.py"
+                        self.root / "packages/playwright-rust-python/tests/official/example.py"
                     ),
                     "severity": "error",
                     "rule": "reportArgumentType",
@@ -38,7 +38,7 @@ class PyrightBaselineGateTests(unittest.TestCase):
         }
         self.baseline: dict[str, object] = {
             "schema": 1,
-            "kind": "pwright-python-pyright-debt-v1",
+            "kind": "playwright-rust-python-pyright-debt-v1",
             "pyrightVersion": "1.1.405",
             "typeCheckingMode": "strict",
             "pyrightConfigSha256": gate.PYRIGHT_CONFIG_SHA256,

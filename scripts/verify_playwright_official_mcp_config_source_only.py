@@ -1,6 +1,6 @@
 """Verify the eight pinned, upstream-private MCP sandbox-configuration tests.
 
-This source-only receipt says nothing about Pwright runtime or public API parity.
+This source-only receipt says nothing about Playwright Rust runtime or public API parity.
 """
 
 from __future__ import annotations
@@ -141,7 +141,7 @@ def verify_manifest() -> dict[str, Any]:
     _require(
         suite["id"] == _SUITE and suite["role"] == "implementation-internal-source-only"
         and suite["runner"] == _RUNNER and suite["config"] == _CONFIG and suite["args"] == _ARGS
-        and suite["sourceOnlyAdapter"] == "upstream-private-source-only-no-pwright-runtime"
+        and suite["sourceOnlyAdapter"] == "upstream-private-source-only-no-playwright-rust-runtime"
         and suite["requiresBrowser"] is False and suite["fixtureMode"] == "pinned-private-source-only-no-io"
         and suite["sourceOnlyCase"] == _CASE and suite["upstreamSourceSetSha256"] == _SOURCE_SHA256
         and suite["expectedInvocationIdsSha256"] == _IDS_SHA256
@@ -244,7 +244,7 @@ def verify(provenance_path: Path) -> dict[str, Any]:
         record["schema"] == 1 and record["kind"] == "pinned-upstream-private-mcp-config-source-only"
         and record["mode"] in {"candidate", "oracle"} and record["suite"] == _SUITE
         and record["suiteRole"] == "implementation-internal-source-only"
-        and record["adapter"] == "upstream-private-source-only-no-pwright-runtime"
+        and record["adapter"] == "upstream-private-source-only-no-playwright-rust-runtime"
         and record["requiresBrowser"] is False and record["projects"] == _PROJECTS
         and record["filters"] == _ARGS and record["workers"] == 1 and record["exitCode"] == 0,
         "provenance scope, selection, or exit code changed",

@@ -1,6 +1,6 @@
 """Promote one verified upstream-private Android glob row per strict Core lane.
 
-This source-only evidence never grants Pwright runtime attestation or public
+This source-only evidence never grants Playwright Rust runtime attestation or public
 API parity. Every other inventory row is preserved byte-for-byte.
 """
 

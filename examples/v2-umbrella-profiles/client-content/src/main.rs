@@ -1,5 +1,5 @@
-use pwright::client_content::PageScreenshotExt;
-use pwright::content::ScreenshotOptions;
+use playwright_rust::client_content::PageScreenshotExt;
+use playwright_rust::content::ScreenshotOptions;
 
 fn main() {
     let options = ScreenshotOptions::default();

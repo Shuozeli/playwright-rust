@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 function packages(feature) {
-  const result = spawnSync('cargo', ['tree', '--locked', '-p', 'pwright-node-host',
+  const result = spawnSync('cargo', ['tree', '--locked', '-p', 'playwright-rust-node-host',
     '--no-default-features', ...(feature ? ['--features', feature] : []),
     '--edges', 'normal', '--prefix', 'none', '--format', '{p}'], {
     cwd: root, encoding: 'utf8', timeout: 120000, maxBuffer: 4 * 1024 * 1024,
@@ -17,10 +17,10 @@ function packages(feature) {
 const base = packages(null);
 const selected = packages('drag-source');
 assert.deepEqual(packages('drag-runtime'), selected);
-assert.equal(base.includes('pwright-backend-cdp-drag'), false);
-assert.deepEqual(selected.filter(name => !base.includes(name)), ['pwright-backend-cdp-drag']);
+assert.equal(base.includes('playwright-rust-backend-cdp-drag'), false);
+assert.deepEqual(selected.filter(name => !base.includes(name)), ['playwright-rust-backend-cdp-drag']);
 assert.deepEqual(base.filter(name => !selected.includes(name)), []);
-for (const name of ['napi', 'napi-derive', 'pwright-node-addon']) {
+for (const name of ['napi', 'napi-derive', 'playwright-rust-node-addon']) {
   assert.equal(selected.includes(name), false, `source must not pull ${name}`);
 }
 console.log(`Host default/drag-source/drag-runtime closures: ${base.length}/${selected.length}/${selected.length}; exactly the drag leaf is opt-in, no Node-API dependency`);

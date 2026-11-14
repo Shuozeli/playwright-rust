@@ -1,0 +1,13 @@
+[package]
+name = "playwright-rust-codec-handshake"
+description = "Canonical binary codec for Playwright Rust client and server hello messages"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+playwright-rust-codec-binary = { workspace = true }
+playwright-rust-core = { workspace = true }
+playwright-rust-transport = { workspace = true }

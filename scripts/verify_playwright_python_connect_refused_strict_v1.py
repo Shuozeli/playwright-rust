@@ -54,7 +54,7 @@ _HOST = re.compile(r"[a-z0-9-]+(?:\.[a-z0-9-]+)*\.ts\.net\Z")
 _NONCE = re.compile(r"[0-9a-f]{32}\Z")
 _CAPTURE_PATHS = (
     "scripts/run_playwright_python_connect_refused_strict_v1.py",
-    "packages/pwright-python/tests/official/ws_connect_refused_guard_strict_v1/pwright_official_connect_refused_guard_v1.py",
+    "packages/playwright-rust-python/tests/official/ws_connect_refused_guard_strict_v1/playwright_rust_official_connect_refused_guard_v1.py",
 )
 _UPSTREAM_PATHS = frozenset(
     {
@@ -68,13 +68,13 @@ _UPSTREAM_PATHS = frozenset(
 )
 _SUPPORT_PATHS = frozenset(
     {
-        "packages/pwright-python/tests/official/shim/playwright/__init__.py",
-        "packages/pwright-python/tests/official/shim/playwright/async_api.py",
-        "packages/pwright-python/tests/official/shim/playwright/sync_api.py",
-        "packages/pwright-python/tests/official/shim/playwright/_public_types.py",
-        "packages/pwright-python/tests/official/shim/pwright_candidate_runtime.py",
-        "packages/pwright-python/tests/official/runtime/pwright_official_server_runtime.py",
-        "packages/pwright-python/tests/official/runtime/pwright_official_oracle_runtime.py",
+        "packages/playwright-rust-python/tests/official/shim/playwright/__init__.py",
+        "packages/playwright-rust-python/tests/official/shim/playwright/async_api.py",
+        "packages/playwright-rust-python/tests/official/shim/playwright/sync_api.py",
+        "packages/playwright-rust-python/tests/official/shim/playwright/_public_types.py",
+        "packages/playwright-rust-python/tests/official/shim/playwright_rust_candidate_runtime.py",
+        "packages/playwright-rust-python/tests/official/runtime/playwright_rust_official_server_runtime.py",
+        "packages/playwright-rust-python/tests/official/runtime/playwright_rust_official_oracle_runtime.py",
         "scripts/run_playwright_python_ws_transport_strict.py",
         "scripts/verify_playwright_python_ws_transport_strict.py",
     }
@@ -130,8 +130,8 @@ _EVIDENCE_KEYS = frozenset(
         "playwrightPackageSha256",
         "driverNode",
         "driverNodeSha256",
-        "pwrightPackage",
-        "pwrightPackageSha256",
+        "playwright_rustPackage",
+        "playwright_rustPackageSha256",
         "nativePath",
         "nativeSha256",
         "runtimeLibraries",
@@ -237,7 +237,7 @@ def _policy(raw: object, *, require_ready: bool = True) -> dict[str, Any]:
 
 
 def _method_probe(payload: dict[str, Any]) -> bool:
-    module = "pwright" if payload["mode"] == "candidate" else "playwright"
+    module = "playwright_rust" if payload["mode"] == "candidate" else "playwright"
     script = (
         f"from {module}.async_api import BrowserType as A; "
         f"from {module}.sync_api import BrowserType as S; "
@@ -260,8 +260,8 @@ def _candidate_feature_probe(payload: dict[str, Any], policy: dict[str, Any]) ->
     if payload["mode"] != "candidate":
         return True
     script = (
-        "from pwright import native_capabilities; "
-        "from pwright._native import selected_features; "
+        "from playwright_rust import native_capabilities; "
+        "from playwright_rust._native import selected_features; "
         f"print(int(native_capabilities()['abi'] == {policy['candidateAbi']} "
         f"and {policy['candidateRequiredFeature']!r} in selected_features()))"
     )
@@ -308,17 +308,17 @@ def _environment(payload: dict[str, Any]) -> None:
         "PYTHONPATH": ":".join(map(str, paths)),
         "PYTHONNOUSERSITE": "1",
         "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
-        "PWRIGHT_OFFICIAL_MODE": mode,
-        "PWRIGHT_OFFICIAL_LAUNCH_MODE": "owned",
-        "PWRIGHT_OFFICIAL_BROWSER_CHANNEL": "",
-        "PWRIGHT_OFFICIAL_UPSTREAM_TESTS": str(Path(payload["upstream"]) / "tests"),
-        "PWRIGHT_OFFICIAL_TAILSCALE_IP": payload["fixtureBind"],
-        "PWRIGHT_OFFICIAL_TAILSCALE_HOST": payload["fixtureHost"],
-        "PWRIGHT_PYTHON_REFUSED_V1_EXPECTED_TEST": payload["testId"],
-        "PWRIGHT_PYTHON_REFUSED_V1_UPSTREAM": payload["upstream"],
-        "PWRIGHT_PYTHON_REFUSED_V1_PORT": str(payload["fixturePort"]),
-        "PWRIGHT_PYTHON_REFUSED_V1_RECEIPT": payload["callReceipt"],
-        "PWRIGHT_PYTHON_REFUSED_V1_NONCE": payload["runNonce"],
+        "PLAYWRIGHT_RUST_OFFICIAL_MODE": mode,
+        "PLAYWRIGHT_RUST_OFFICIAL_LAUNCH_MODE": "owned",
+        "PLAYWRIGHT_RUST_OFFICIAL_BROWSER_CHANNEL": "",
+        "PLAYWRIGHT_RUST_OFFICIAL_UPSTREAM_TESTS": str(Path(payload["upstream"]) / "tests"),
+        "PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_IP": payload["fixtureBind"],
+        "PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_HOST": payload["fixtureHost"],
+        "PLAYWRIGHT_RUST_PYTHON_REFUSED_V1_EXPECTED_TEST": payload["testId"],
+        "PLAYWRIGHT_RUST_PYTHON_REFUSED_V1_UPSTREAM": payload["upstream"],
+        "PLAYWRIGHT_RUST_PYTHON_REFUSED_V1_PORT": str(payload["fixturePort"]),
+        "PLAYWRIGHT_RUST_PYTHON_REFUSED_V1_RECEIPT": payload["callReceipt"],
+        "PLAYWRIGHT_RUST_PYTHON_REFUSED_V1_NONCE": payload["runNonce"],
     }
     if payload["environment"] != expected:
         _fail("connect-refused v1 environment contains an override")
@@ -343,13 +343,13 @@ def _command(payload: dict[str, Any]) -> None:
         "-p",
         "pytest_timeout",
         "-p",
-        "pwright_official_server_runtime",
+        "playwright_rust_official_server_runtime",
         "-p",
-        "pwright_candidate_runtime"
+        "playwright_rust_candidate_runtime"
         if payload["mode"] == "candidate"
-        else "pwright_official_oracle_runtime",
+        else "playwright_rust_official_oracle_runtime",
         "-p",
-        "pwright_official_connect_refused_guard_v1",
+        "playwright_rust_official_connect_refused_guard_v1",
         f"--browser={engine}",
         "--timeout=20",
         "--timeout-method=signal",
@@ -520,7 +520,7 @@ def verify_evidence(policy: dict[str, Any], payload: dict[str, Any]) -> str:
         _fail("candidate wheel differs from frozen opt-in artifact")
     _runtime({**policy, "wheelSha256": policy["candidateWheelSha256"]}, payload)
     if payload["mode"] == "candidate" and (
-        payload["pwrightPackageSha256"] != policy["candidatePackageTreeSha256"]
+        payload["playwright_rustPackageSha256"] != policy["candidatePackageTreeSha256"]
         or payload["nativeSha256"] != policy["candidateNativeSha256"]
         or payload["runtimeLibraries"] != policy["candidateRuntimeLibraries"]
     ):

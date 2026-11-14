@@ -1,0 +1,19 @@
+[package]
+name = "playwright-rust-composition-chromium-touchscreen"
+description = "Optional Chromium Touchscreen Page binding with caller-owned retirement"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+playwright-rust-backend-cdp-input = { workspace = true }
+playwright-rust-backend-cdp-touchscreen = { workspace = true }
+playwright-rust-cap-touchscreen = { workspace = true }
+playwright-rust-cdp = { workspace = true }
+playwright-rust-core = { workspace = true }
+
+[dev-dependencies]
+playwright-rust-fake = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt"] }

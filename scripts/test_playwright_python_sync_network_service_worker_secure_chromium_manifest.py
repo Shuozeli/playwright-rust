@@ -13,11 +13,11 @@ ROOT = Path(__file__).parents[1]
 UPSTREAM = Path.home() / "projects/thirdparty/playwright-python"
 MANIFEST = (
     ROOT
-    / "packages/pwright-python/tests/official/"
+    / "packages/playwright-rust-python/tests/official/"
     "sync-network-service-worker-secure-chromium-oracle-v1-manifest.json"
 )
 ORIGINAL_SIX_CASE_MANIFEST = (
-    ROOT / "packages/pwright-python/tests/official/sync-network-full-v1-manifest.json"
+    ROOT / "packages/playwright-rust-python/tests/official/sync-network-full-v1-manifest.json"
 )
 INVENTORY = ROOT / ".work/official-conformance/playwright-python-v1.58.0-profiled.jsonl"
 SOURCE = "tests/sync/test_network.py"

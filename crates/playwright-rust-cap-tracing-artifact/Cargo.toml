@@ -1,0 +1,15 @@
+[package]
+name = "playwright-rust-cap-tracing-artifact"
+description = "Portable opt-in tracing-to-Artifact capability contract"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+playwright-rust-core = { workspace = true }
+
+[dev-dependencies]
+playwright-rust-cap-artifact = { workspace = true }
+playwright-rust-cap-tracing = { workspace = true }

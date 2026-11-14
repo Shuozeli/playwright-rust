@@ -1,4 +1,4 @@
-use pwright_backend_cdp_input::CdpInputCoordinator;
+use playwright_rust_backend_cdp_input::CdpInputCoordinator;
 
 fn main() {
     let coordinator = CdpInputCoordinator::new();

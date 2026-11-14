@@ -6,7 +6,7 @@ cd "$repo_dir"
 
 dependency_closure() {
   local features=$1
-  cargo tree --locked -p pwright-node-addon \
+  cargo tree --locked -p playwright-rust-node-addon \
     --no-default-features \
     --features "$features" \
     --edges normal --prefix none --format '{p}' \
@@ -25,10 +25,10 @@ added=$(comm -13 "$base_file" "$selected_file")
 removed=$(comm -23 "$base_file" "$selected_file")
 expected=$(cat <<'EOF'
 aho-corasick
-pwright-api-request-connector-http-proxy
-pwright-api-request-connector-proxy-bypass
-pwright-api-request-connector-socks5
-pwright-plugin-chromium-frame-lifecycle
+playwright-rust-api-request-connector-http-proxy
+playwright-rust-api-request-connector-proxy-bypass
+playwright-rust-api-request-connector-socks5
+playwright-rust-plugin-chromium-frame-lifecycle
 regex
 regex-automata
 regex-syntax
@@ -47,6 +47,6 @@ if [[ "$added" != "$expected" ]]; then
 fi
 
 CARGO_INCREMENTAL=0 cargo check --release --locked \
-  -p pwright-node-addon --no-default-features \
+  -p playwright-rust-node-addon --no-default-features \
   --features context-api-request,context-proxy,api-request-http-proxy,api-request-socks5-proxy,api-request-proxy-bypass
 echo 'Node Context API-request proxy dependency proof passed (exact explicit union)'

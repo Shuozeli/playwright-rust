@@ -1,4 +1,4 @@
-use pwright_composition_chromium_page_lifecycle::{
+use playwright_rust_composition_chromium_page_lifecycle::{
     ChromiumPageLifecycleProfile, NoopChromiumPageRetirement,
 };
 

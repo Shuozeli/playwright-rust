@@ -1,0 +1,17 @@
+[package]
+name = "playwright-rust-trace-sink-pull"
+description = "Optional bounded task-free pull sink for Playwright Rust trace chunks"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+playwright-rust-core = { workspace = true }
+playwright-rust-trace-model = { workspace = true }
+playwright-rust-tracing-service = { workspace = true }
+
+[dev-dependencies]
+playwright-rust-cap-tracing = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt"] }

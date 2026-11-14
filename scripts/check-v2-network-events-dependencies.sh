@@ -14,17 +14,17 @@ cargo tree \
   --edges normal \
   --prefix none \
   --format '{p}' \
-  | awk '/^pwright-/ { print $1 }' \
+  | awk '/^playwright-rust-/ { print $1 }' \
   | sort -u >"$tree_file"
 
 required_packages=(
-  pwright-v2-network-events-only-example
-  pwright-backend-cdp-network-events
-  pwright-browser-model
-  pwright-cap-network-events
-  pwright-cdp
-  pwright-core
-  pwright-network-model
+  playwright-rust-v2-network-events-only-example
+  playwright-rust-backend-cdp-network-events
+  playwright-rust-browser-model
+  playwright-rust-cap-network-events
+  playwright-rust-cdp
+  playwright-rust-core
+  playwright-rust-network-model
 )
 
 for package in "${required_packages[@]}"; do
@@ -43,9 +43,9 @@ while IFS= read -r package; do
     fi
   done
   if [[ "$allowed" != true ]]; then
-    echo "network-events-only dependency proof found forbidden Pwright package: $package" >&2
+    echo "network-events-only dependency proof found forbidden Playwright Rust package: $package" >&2
     exit 1
   fi
 done <"$tree_file"
 
-echo "network-events-only dependency proof passed (${#required_packages[@]} Pwright packages)"
+echo "network-events-only dependency proof passed (${#required_packages[@]} Playwright Rust packages)"

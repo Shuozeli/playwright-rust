@@ -6,7 +6,7 @@ cd "$repo_dir"
 
 dependency_closure() {
   local features=$1
-  local -a arguments=(--locked -p pwright-node-addon --no-default-features
+  local -a arguments=(--locked -p playwright-rust-node-addon --no-default-features
     --edges normal --prefix none --format '{p}')
   if [[ -n "$features" ]]; then
     arguments+=(--features "$features")
@@ -23,7 +23,7 @@ dependency_closure frame-navigation,large-evaluation-inputs,large-route-post-dat
 
 added=$(comm -13 "$base_file" "$selected_file")
 removed=$(comm -23 "$base_file" "$selected_file")
-expected='pwright-plugin-chromium-frame-lifecycle'
+expected='playwright-rust-plugin-chromium-frame-lifecycle'
 
 if [[ -n "$removed" || "$added" != "$expected" ]]; then
   printf 'Large Route POST profile changed the exact normal dependency closure.\nAdded:\n%s\nRemoved:\n%s\nExpected additions:\n%s\n' \
@@ -31,6 +31,6 @@ if [[ -n "$removed" || "$added" != "$expected" ]]; then
   exit 1
 fi
 
-CARGO_INCREMENTAL=0 cargo check --release --locked -p pwright-node-addon \
+CARGO_INCREMENTAL=0 cargo check --release --locked -p playwright-rust-node-addon \
   --no-default-features --features frame-navigation,large-evaluation-inputs,large-route-post-data
-echo 'Node large Route POST dependency proof passed (one Frame-lifecycle Pwright leaf)'
+echo 'Node large Route POST dependency proof passed (one Frame-lifecycle Playwright Rust leaf)'

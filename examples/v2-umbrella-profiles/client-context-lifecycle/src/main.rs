@@ -1,4 +1,4 @@
-use pwright::client_context_lifecycle::BrowserContextCloseExt;
+use playwright_rust::client_context_lifecycle::BrowserContextCloseExt;
 
 fn main() {
     println!(

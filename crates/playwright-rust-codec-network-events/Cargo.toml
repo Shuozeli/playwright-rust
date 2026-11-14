@@ -1,0 +1,18 @@
+[package]
+name = "playwright-rust-codec-network-events"
+description = "Canonical bounded globally ordered binary codec for Playwright Rust HTTP lifecycle events"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[features]
+default = []
+request-timing = ["playwright-rust-cap-network-events/request-timing"]
+
+[dependencies]
+playwright-rust-cap-network-events = { workspace = true }
+playwright-rust-codec-binary = { workspace = true }
+playwright-rust-core = { workspace = true }
+playwright-rust-transport = { workspace = true }

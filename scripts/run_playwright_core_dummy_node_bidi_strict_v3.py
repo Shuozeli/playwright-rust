@@ -419,7 +419,7 @@ def checked_process_and_profile(
     else:
         profile = Path(process.get("browserProfilePath", ""))
     prefix = (
-        "pwright-node-bidi-startup-"
+        "playwright-rust-node-bidi-startup-"
         if mode == "candidate"
         else f"playwright_{engine}dev_profile-"
     )
@@ -481,8 +481,8 @@ def run(mode: str, project: str, upstream: Path, result: Path) -> None:
     ]
     sandbox = base.sandbox_profile(allowed)
     base.probe_sandbox(sandbox)
-    candidate = ROOT / "packages/pwright" if mode == "candidate" else None
-    artifact = candidate / f"native/{PROFILE}/pwright.node" if candidate else None
+    candidate = ROOT / "packages/playwright-rust" if mode == "candidate" else None
+    artifact = candidate / f"native/{PROFILE}/playwright_rust.node" if candidate else None
     if candidate and (
         base.source_digest(candidate) != manifest["candidateSourceSha256"]
         or artifact is None
@@ -550,53 +550,53 @@ def run(mode: str, project: str, upstream: Path, result: Path) -> None:
     env = os.environ.copy()
     env.pop("CI", None)
     env["PWTEST_MODE"] = "default"
-    env["PWRIGHT_OFFICIAL_SERVER_IP"] = bind
-    env["PWRIGHT_OFFICIAL_SERVER_HOST"] = host
-    env["PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM"] = str(upstream)
+    env["PLAYWRIGHT_RUST_OFFICIAL_SERVER_IP"] = bind
+    env["PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST"] = host
+    env["PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM"] = str(upstream)
     for name, value in {
-        "PWRIGHT_BIDI_DUMMY_MODE": mode,
-        "PWRIGHT_BIDI_DUMMY_PROJECT": project,
-        "PWRIGHT_BIDI_DUMMY_ENGINE": engine,
-        "PWRIGHT_BIDI_DUMMY_RUN_ID": run_id,
-        "PWRIGHT_BIDI_DUMMY_MANIFEST": str(MANIFEST),
-        "PWRIGHT_BIDI_DUMMY_MANIFEST_SHA256": MANIFEST_SHA256,
-        "PWRIGHT_BIDI_DUMMY_LAUNCH_RECEIPT": str(paths["launchReceipt"]),
-        "PWRIGHT_BIDI_DUMMY_PROFILE_RECEIPT": str(paths["profileReceipt"]),
+        "PLAYWRIGHT_RUST_BIDI_DUMMY_MODE": mode,
+        "PLAYWRIGHT_RUST_BIDI_DUMMY_PROJECT": project,
+        "PLAYWRIGHT_RUST_BIDI_DUMMY_ENGINE": engine,
+        "PLAYWRIGHT_RUST_BIDI_DUMMY_RUN_ID": run_id,
+        "PLAYWRIGHT_RUST_BIDI_DUMMY_MANIFEST": str(MANIFEST),
+        "PLAYWRIGHT_RUST_BIDI_DUMMY_MANIFEST_SHA256": MANIFEST_SHA256,
+        "PLAYWRIGHT_RUST_BIDI_DUMMY_LAUNCH_RECEIPT": str(paths["launchReceipt"]),
+        "PLAYWRIGHT_RUST_BIDI_DUMMY_PROFILE_RECEIPT": str(paths["profileReceipt"]),
     }.items():
         env[name] = value
     if engine == "chromium":
         env.update(
             {
-                "PWRIGHT_DUMMY_PROCESS_ASSET": str(upstream / ASSET),
-                "PWRIGHT_DUMMY_PROCESS_RECEIPT": str(paths["processReceipt"]),
-                "PWRIGHT_DUMMY_REAL_NODE": str(node),
-                "PWRIGHT_DUMMY_STRICT_RUN_ID": run_id,
-                "PWRIGHT_DUMMY_HARNESS_PID": str(os.getpid()),
-                "PWRIGHT_DUMMY_LAUNCH_MODE": mode,
+                "PLAYWRIGHT_RUST_DUMMY_PROCESS_ASSET": str(upstream / ASSET),
+                "PLAYWRIGHT_RUST_DUMMY_PROCESS_RECEIPT": str(paths["processReceipt"]),
+                "PLAYWRIGHT_RUST_DUMMY_REAL_NODE": str(node),
+                "PLAYWRIGHT_RUST_DUMMY_STRICT_RUN_ID": run_id,
+                "PLAYWRIGHT_RUST_DUMMY_HARNESS_PID": str(os.getpid()),
+                "PLAYWRIGHT_RUST_DUMMY_LAUNCH_MODE": mode,
             }
         )
     else:
         env.update(
             {
-                "PWRIGHT_BIDI_FIREFOX_GUARD_ASSET": str(upstream / ASSET),
-                "PWRIGHT_BIDI_FIREFOX_GUARD_PROCESS_RECEIPT": str(
+                "PLAYWRIGHT_RUST_BIDI_FIREFOX_GUARD_ASSET": str(upstream / ASSET),
+                "PLAYWRIGHT_RUST_BIDI_FIREFOX_GUARD_PROCESS_RECEIPT": str(
                     paths["processReceipt"]
                 ),
-                "PWRIGHT_BIDI_FIREFOX_GUARD_REAL_NODE": str(node),
-                "PWRIGHT_BIDI_FIREFOX_GUARD_NODE_SHA256": node_sha256,
-                "PWRIGHT_BIDI_FIREFOX_GUARD_HARNESS_PID": str(os.getpid()),
+                "PLAYWRIGHT_RUST_BIDI_FIREFOX_GUARD_REAL_NODE": str(node),
+                "PLAYWRIGHT_RUST_BIDI_FIREFOX_GUARD_NODE_SHA256": node_sha256,
+                "PLAYWRIGHT_RUST_BIDI_FIREFOX_GUARD_HARNESS_PID": str(os.getpid()),
             }
         )
     env["PLAYWRIGHT_JSON_OUTPUT_FILE"] = str(result)
     env["PATH"] = f"{guard.parent}:/opt/homebrew/bin:/usr/bin:/bin"
     preloads = [SERVER_PRELOAD]
     if candidate:
-        env["PWRIGHT_NODE_CANDIDATE"] = str(candidate)
-        env["PWRIGHT_NATIVE_PROFILE"] = PROFILE
+        env["PLAYWRIGHT_RUST_NODE_CANDIDATE"] = str(candidate)
+        env["PLAYWRIGHT_RUST_NATIVE_PROFILE"] = PROFILE
         preloads.append(CANDIDATE_PRELOAD)
     else:
-        env.pop("PWRIGHT_NODE_CANDIDATE", None)
-        env.pop("PWRIGHT_NATIVE_PROFILE", None)
+        env.pop("PLAYWRIGHT_RUST_NODE_CANDIDATE", None)
+        env.pop("PLAYWRIGHT_RUST_NATIVE_PROFILE", None)
     preloads.append(PRELOAD)
     env["NODE_OPTIONS"] = " ".join(f"--require={preload}" for preload in preloads)
     command = [

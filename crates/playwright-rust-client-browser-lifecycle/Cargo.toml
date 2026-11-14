@@ -1,0 +1,16 @@
+[package]
+name = "playwright-rust-client-browser-lifecycle"
+description = "Opt-in owned Browser lifecycle extensions for playwright-rust-client"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+playwright-rust-cap-browser-lifecycle = { workspace = true }
+playwright-rust-client = { workspace = true }
+playwright-rust-core = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }

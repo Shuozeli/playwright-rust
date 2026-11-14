@@ -17,7 +17,7 @@ def fixture_snapshot(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     (package / "package.json").write_text('{"name":"archive-fixture"}\n')
     (package / "src").mkdir()
     (package / "src/index.cjs").write_text("module.exports = {};\n")
-    artifact = package / "native" / "profile" / "pwright.node"
+    artifact = package / "native" / "profile" / "playwright_rust.node"
     artifact.parent.mkdir(parents=True)
     artifact.write_bytes(b"test-native-artifact")
     outcome = tmp_path / "outcome"

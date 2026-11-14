@@ -67,7 +67,7 @@ PINNED_HARNESS = {
 }
 PROFILE = "playwright-server-connect-close-error"
 ARTIFACT_SHA256 = "39a8ecfdac8db8d0cf1eb0e100c3c17aaf59fdf9c4dbb4f9739602202f0843f1"
-SOURCE_PACKAGE = ROOT / "packages/pwright"
+SOURCE_PACKAGE = ROOT / "packages/playwright-rust"
 FROZEN_PARENT = (
     ROOT / ".work/official-conformance/results/core-server-connect-close-error-strict-v5"
 )
@@ -88,7 +88,7 @@ SOURCE_CONNECT_BEFORE = (
     "const error = await connect(`ws://localhost:${server.PORT}/ws`).catch(e => e);"
 )
 SOURCE_CONNECT_AFTER = (
-    "const error = await connect(`ws://${process.env.PWRIGHT_OFFICIAL_SERVER_HOST}:"
+    "const error = await connect(`ws://${process.env.PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST}:"
     "${server.PORT}/ws`).catch(e => e);"
 )
 PROJECTS = {
@@ -583,7 +583,7 @@ def verify_strict(strict_path: Path) -> dict[str, Any]:
         )
         if mode == "oracle":
             assert all(item["status"] == "expected" for item in selected)
-        assert ("[pwright-candidate]" in output["log"].read_text()) == (mode == "candidate")
+        assert ("[playwright-rust-candidate]" in output["log"].read_text()) == (mode == "candidate")
         checked_receipts(output["receipt"], mode, selected, host, bind)
         for item in selected:
             assert item["specId"] not in all_ids

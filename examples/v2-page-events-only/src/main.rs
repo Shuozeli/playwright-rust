@@ -1,4 +1,4 @@
-use pwright_backend_cdp_page_events::CdpPageEventAdapter;
+use playwright_rust_backend_cdp_page_events::CdpPageEventAdapter;
 
 fn main() {
     println!(

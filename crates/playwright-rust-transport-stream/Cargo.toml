@@ -1,0 +1,12 @@
+[package]
+name = "playwright-rust-transport-stream"
+description = "Canonical bounded binary stream envelopes for Playwright Rust wire frames"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+playwright-rust-core = { workspace = true }
+playwright-rust-transport = { workspace = true }

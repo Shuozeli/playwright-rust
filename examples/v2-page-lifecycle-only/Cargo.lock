@@ -578,39 +578,39 @@ dependencies = [
 ]
 
 [[package]]
-name = "pwright-backend-cdp-common"
+name = "playwright-rust-backend-cdp-common"
 version = "0.1.0"
 dependencies = [
- "pwright-cdp",
- "pwright-core",
+ "playwright-rust-cdp",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-backend-cdp-page-lifecycle"
+name = "playwright-rust-backend-cdp-page-lifecycle"
 version = "0.1.0"
 dependencies = [
- "pwright-backend-cdp-common",
- "pwright-cap-page-lifecycle",
- "pwright-cdp",
- "pwright-core",
+ "playwright-rust-backend-cdp-common",
+ "playwright-rust-cap-page-lifecycle",
+ "playwright-rust-cdp",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-cap-page-lifecycle"
+name = "playwright-rust-cap-page-lifecycle"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-cdp"
+name = "playwright-rust-cdp"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
  "dashmap",
  "futures-util",
- "pwright-core",
+ "playwright-rust-core",
  "serde",
  "serde_json",
  "thiserror",
@@ -622,14 +622,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "pwright-core"
+name = "playwright-rust-core"
 version = "0.1.0"
 
 [[package]]
-name = "pwright-v2-page-lifecycle-only-example"
+name = "playwright-rust-v2-page-lifecycle-only-example"
 version = "0.1.0"
 dependencies = [
- "pwright-backend-cdp-page-lifecycle",
+ "playwright-rust-backend-cdp-page-lifecycle",
 ]
 
 [[package]]

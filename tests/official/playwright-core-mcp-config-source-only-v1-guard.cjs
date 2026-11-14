@@ -1,7 +1,7 @@
 'use strict';
 
 // Preload before upstream runner/worker imports. This shard executes exactly
-// two fixture-free MCP configuration tests, not MCP or Pwright runtime tests.
+// two fixture-free MCP configuration tests, not MCP or Playwright Rust runtime tests.
 
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
@@ -66,7 +66,7 @@ function verifySuite(manifestPath, suiteId, upstream) {
   ].sort());
   if (suite.id !== SUITE || suite.role !== 'implementation-internal-source-only' ||
       suite.runner !== RUNNER || suite.config !== CONFIG ||
-      suite.sourceOnlyAdapter !== 'upstream-private-source-only-no-pwright-runtime' ||
+      suite.sourceOnlyAdapter !== 'upstream-private-source-only-no-playwright-rust-runtime' ||
       suite.requiresBrowser !== false || suite.fixtureMode !== 'pinned-private-source-only-no-io' ||
       suite.sourceOnlyCase !== CASE || suite.upstreamSourceSetSha256 !== SOURCE_SHA256 ||
       suite.expectedInvocationIdsSha256 !== IDS_SHA256 || suite.expectedTestsPerProject !== 2 ||
@@ -75,7 +75,7 @@ function verifySuite(manifestPath, suiteId, upstream) {
   assert.deepStrictEqual(suite.args, ARGS);
   assert.deepStrictEqual(suite.expectedProjectIds, PROJECTS);
   assert.deepStrictEqual(suite.expectedInvocations, INVOCATIONS.map(([line, projectId, specId]) => ({ line, projectId, specId })));
-  if (process.env.PWRIGHT_NODE_CANDIDATE || process.env.PWRIGHT_NATIVE_PROFILE ||
+  if (process.env.PLAYWRIGHT_RUST_NODE_CANDIDATE || process.env.PLAYWRIGHT_RUST_NATIVE_PROFILE ||
       process.env.CI || process.env.GITHUB_ACTIONS || process.env.GITLAB_CI ||
       (process.env.JENKINS_URL && process.env.BUILD_URL) || fs.existsSync(path.join(upstream, '.env')))
     throw new Error('MCP source-only lane forbids candidate runtime and environment overrides');
@@ -130,12 +130,12 @@ function verifySuite(manifestPath, suiteId, upstream) {
 }
 
 function activate() {
-  const installed = Symbol.for('pwright.coreMcpConfigSourceOnlyV1GuardInstalled');
+  const installed = Symbol.for('playwright.rust.coreMcpConfigSourceOnlyV1GuardInstalled');
   if (globalThis[installed]) return;
-  const manifest = process.env.PWRIGHT_CORE_SOURCE_ONLY_MANIFEST;
-  const suite = process.env.PWRIGHT_CORE_SOURCE_ONLY_SUITE;
-  const upstream = process.env.PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM;
-  const receipt = process.env.PWRIGHT_CORE_SOURCE_ONLY_GUARD_RECEIPT;
+  const manifest = process.env.PLAYWRIGHT_RUST_CORE_SOURCE_ONLY_MANIFEST;
+  const suite = process.env.PLAYWRIGHT_RUST_CORE_SOURCE_ONLY_SUITE;
+  const upstream = process.env.PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM;
+  const receipt = process.env.PLAYWRIGHT_RUST_CORE_SOURCE_ONLY_GUARD_RECEIPT;
   if (!manifest || !suite || !upstream || !receipt)
     throw new Error('MCP source-only guard environment is incomplete');
   const source = verifySuite(manifest, suite, upstream);
@@ -146,13 +146,13 @@ function activate() {
 
   // Reuse the already audited no-network/no-process hooks without activating
   // the older suite selector. Its exact bytes are pinned above.
-  const active = process.env.PWRIGHT_CORE_SOURCE_ONLY_ACTIVE;
-  delete process.env.PWRIGHT_CORE_SOURCE_ONLY_ACTIVE;
+  const active = process.env.PLAYWRIGHT_RUST_CORE_SOURCE_ONLY_ACTIVE;
+  delete process.env.PLAYWRIGHT_RUST_CORE_SOURCE_ONLY_ACTIVE;
   let shared;
   try {
     shared = require(SHARED_GUARD);
   } finally {
-    process.env.PWRIGHT_CORE_SOURCE_ONLY_ACTIVE = active;
+    process.env.PLAYWRIGHT_RUST_CORE_SOURCE_ONLY_ACTIVE = active;
   }
   shared.installNoIoGuard({ allowRunnerFork: !isWorker, workerScript: path.join(upstream, WORKER) });
   globalThis[installed] = true;
@@ -166,7 +166,7 @@ if (require.main === module) {
   if (process.argv[2] !== '--check' || process.argv.length !== 6)
     throw new Error('usage: MCP guard --check MANIFEST SUITE UPSTREAM');
   process.stdout.write(JSON.stringify(verifySuite(process.argv[3], process.argv[4], process.argv[5])) + '\n');
-} else if (process.env.PWRIGHT_CORE_SOURCE_ONLY_ACTIVE === '1') {
+} else if (process.env.PLAYWRIGHT_RUST_CORE_SOURCE_ONLY_ACTIVE === '1') {
   activate();
 }
 

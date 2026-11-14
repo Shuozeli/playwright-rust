@@ -577,48 +577,48 @@ dependencies = [
 ]
 
 [[package]]
-name = "pwright-backend-cdp-page-events"
+name = "playwright-rust-backend-cdp-page-events"
 version = "0.1.0"
 dependencies = [
- "pwright-backend-cdp-topology",
- "pwright-cap-page-events",
- "pwright-cdp",
- "pwright-core",
+ "playwright-rust-backend-cdp-topology",
+ "playwright-rust-cap-page-events",
+ "playwright-rust-cdp",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-backend-cdp-topology"
+name = "playwright-rust-backend-cdp-topology"
 version = "0.1.0"
 dependencies = [
- "pwright-browser-model",
- "pwright-cdp",
- "pwright-core",
+ "playwright-rust-browser-model",
+ "playwright-rust-cdp",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-browser-model"
+name = "playwright-rust-browser-model"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-cap-page-events"
+name = "playwright-rust-cap-page-events"
 version = "0.1.0"
 dependencies = [
- "pwright-browser-model",
- "pwright-core",
+ "playwright-rust-browser-model",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-cdp"
+name = "playwright-rust-cdp"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
  "dashmap",
  "futures-util",
- "pwright-core",
+ "playwright-rust-core",
  "serde",
  "serde_json",
  "thiserror",
@@ -630,88 +630,88 @@ dependencies = [
 ]
 
 [[package]]
-name = "pwright-codec-page-events"
+name = "playwright-rust-codec-page-events"
 version = "0.1.0"
 dependencies = [
- "pwright-cap-page-events",
- "pwright-core",
- "pwright-transport",
+ "playwright-rust-cap-page-events",
+ "playwright-rust-core",
+ "playwright-rust-transport",
 ]
 
 [[package]]
-name = "pwright-composition-chromium-page-events"
+name = "playwright-rust-composition-chromium-page-events"
 version = "0.1.0"
 dependencies = [
- "pwright-backend-cdp-page-events",
- "pwright-backend-cdp-topology",
- "pwright-cap-page-events",
- "pwright-cdp",
- "pwright-codec-page-events",
- "pwright-core",
- "pwright-runtime-control",
- "pwright-server-events",
- "pwright-server-wire",
- "pwright-transport",
+ "playwright-rust-backend-cdp-page-events",
+ "playwright-rust-backend-cdp-topology",
+ "playwright-rust-cap-page-events",
+ "playwright-rust-cdp",
+ "playwright-rust-codec-page-events",
+ "playwright-rust-core",
+ "playwright-rust-runtime-control",
+ "playwright-rust-server-events",
+ "playwright-rust-server-wire",
+ "playwright-rust-transport",
 ]
 
 [[package]]
-name = "pwright-connection-control"
+name = "playwright-rust-connection-control"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-core"
+name = "playwright-rust-core"
 version = "0.1.0"
 
 [[package]]
-name = "pwright-runtime"
+name = "playwright-rust-runtime"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-runtime-control"
+name = "playwright-rust-runtime-control"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
- "pwright-runtime",
- "pwright-server-wire",
- "pwright-transport",
+ "playwright-rust-core",
+ "playwright-rust-runtime",
+ "playwright-rust-server-wire",
+ "playwright-rust-transport",
 ]
 
 [[package]]
-name = "pwright-server-events"
+name = "playwright-rust-server-events"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
- "pwright-server-wire",
- "pwright-transport",
+ "playwright-rust-core",
+ "playwright-rust-server-wire",
+ "playwright-rust-transport",
 ]
 
 [[package]]
-name = "pwright-server-wire"
+name = "playwright-rust-server-wire"
 version = "0.1.0"
 dependencies = [
- "pwright-connection-control",
- "pwright-core",
- "pwright-transport",
+ "playwright-rust-connection-control",
+ "playwright-rust-core",
+ "playwright-rust-transport",
 ]
 
 [[package]]
-name = "pwright-transport"
+name = "playwright-rust-transport"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-v2-page-events-composition-only-example"
+name = "playwright-rust-v2-page-events-composition-only-example"
 version = "0.1.0"
 dependencies = [
- "pwright-composition-chromium-page-events",
+ "playwright-rust-composition-chromium-page-events",
 ]
 
 [[package]]

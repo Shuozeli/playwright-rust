@@ -1,10 +1,12 @@
-# Feature Comparison: Playwright vs PinchTab vs pwright
+<!-- agent-updated: 2026-11-14T05:28:56Z -->
 
-> pwright is a **Playwright-compatible** Rust CDP bridge. It covers the core browser control surface and exposes it as both a Rust library (with a Playwright-style Page/Locator API), a gRPC service, and a CLI. PinchTab is a full browser control plane with orchestration, profiles, security, and a dashboard. Playwright is the original, full-featured Microsoft framework handling everything from browser installation to high-level test assertions.
+# Feature Comparison: Playwright vs PinchTab vs playwright-rust
+
+> playwright-rust is a **Playwright-compatible** Rust CDP bridge. It covers the core browser control surface and exposes it as both a Rust library (with a Playwright-style Page/Locator API), a gRPC service, and a CLI. PinchTab is a full browser control plane with orchestration, profiles, security, and a dashboard. Playwright is the original, full-featured Microsoft framework handling everything from browser installation to high-level test assertions.
 
 ## At a Glance
 
-| Dimension | Playwright | PinchTab | pwright |
+| Dimension | Playwright | PinchTab | playwright-rust |
 |-----------|------------|----------|---------|
 | Language | TS/JS, Python, Java, .NET | Go | Rust |
 | Binary size | Large (Node/Py + Browsers) | ~12 MB | ~5.9 MB |
@@ -18,7 +20,7 @@
 
 ## Browser Actions
 
-| Action | Playwright | PinchTab | pwright | Notes |
+| Action | Playwright | PinchTab | playwright-rust | Notes |
 |--------|:----------:|:--------:|:-------:|-------|
 | Click (by selector) | ✅ | ✅ | ✅ | `locator("button").click()` |
 | Click (by ref) | ❌ | ✅ | ✅ | gRPC `ExecuteAction` |
@@ -42,7 +44,7 @@
 
 ## Navigation
 
-| Feature | Playwright | PinchTab | pwright | Notes |
+| Feature | Playwright | PinchTab | playwright-rust | Notes |
 |---------|:----------:|:--------:|:-------:|-------|
 | Navigate to URL | ✅ | ✅ | ✅ | `page.goto()` |
 | Reload | ✅ | ❌ | ✅ | `page.reload()` |
@@ -59,7 +61,7 @@
 
 ## Content Extraction
 
-| Feature | Playwright | PinchTab | pwright | Notes |
+| Feature | Playwright | PinchTab | playwright-rust | Notes |
 |---------|:----------:|:--------:|:-------:|-------|
 | Accessibility snapshot | ✅ | ✅ | ✅ | |
 | Screenshot (PNG/JPEG) | ✅ | ✅ | ✅ | `page.screenshot()` |
@@ -93,7 +95,7 @@
 
 ## Locator & Selector Engine
 
-| Feature | Playwright | PinchTab | pwright | Notes |
+| Feature | Playwright | PinchTab | playwright-rust | Notes |
 |---------|:----------:|:--------:|:-------:|-------|
 | CSS selector | ✅ | ✅ | ✅ | `page.locator()` |
 | By test ID | ✅ | ❌ | ✅ | `page.get_by_test_id()` |
@@ -112,7 +114,7 @@
 
 ## Input Devices
 
-| Feature | Playwright | PinchTab | pwright | Notes |
+| Feature | Playwright | PinchTab | playwright-rust | Notes |
 |---------|:----------:|:--------:|:-------:|-------|
 | Keyboard press | ✅ | ✅ | ✅ | `keyboard.press()` |
 | Keyboard down/up | ✅ | ❌ | ✅ | `keyboard.down()` / `keyboard.up()` |
@@ -129,7 +131,7 @@
 
 ## Tab Management
 
-| Feature | Playwright | PinchTab | pwright | Notes |
+| Feature | Playwright | PinchTab | playwright-rust | Notes |
 |---------|:----------:|:--------:|:-------:|-------|
 | Create tab (page) | ✅ | ✅ | ✅ | |
 | Close tab | ✅ | ✅ | ✅ | |
@@ -143,9 +145,9 @@
 
 ## CLI
 
-| Feature | Playwright | PinchTab | pwright | Notes |
+| Feature | Playwright | PinchTab | playwright-rust | Notes |
 |---------|:----------:|:--------:|:-------:|-------|
-| CLI tool | ✅ | ✅ | ✅ | `playwright-cli` / `pwright-cli` |
+| CLI tool | ✅ | ✅ | ✅ | `playwright-cli` / `playwright-rust-cli` |
 | Navigate command | ✅ | ✅ | ✅ | |
 | Snapshot command | ✅ | ✅ | ✅ | |
 | Screenshot command | ✅ | ✅ | ✅ | |
@@ -159,7 +161,7 @@
 
 ## Instance & Profile Management
 
-| Feature | Playwright | PinchTab | pwright | Notes |
+| Feature | Playwright | PinchTab | playwright-rust | Notes |
 |---------|:----------:|:--------:|:-------:|-------|
 | Browser orchestrator | partial | ✅ | ❌ | Playwright test worker scaling |
 | Profile persistence | ✅ | ✅ | ❌ | UserDataDir context |
@@ -171,7 +173,7 @@
 
 ## Security & Stealth
 
-| Feature | Playwright | PinchTab | pwright | Notes |
+| Feature | Playwright | PinchTab | playwright-rust | Notes |
 |---------|:----------:|:--------:|:-------:|-------|
 | Stealth mode | plugins | ✅ | ❌ | Playwright requires playwright-stealth |
 | IDPI (prompt defense) | ❌ | ✅ | ❌ | |
@@ -182,19 +184,19 @@
 
 ## Infrastructure
 
-| Feature | Playwright | PinchTab | pwright | Notes |
+| Feature | Playwright | PinchTab | playwright-rust | Notes |
 |---------|:----------:|:--------:|:-------:|-------|
 | Web dashboard | ✅ | ✅ | ❌ | Playwright UI Mode / HTML Report |
 | OpenAPI spec | ❌ | ✅ | ❌ | |
 | Docker support | ✅ | ✅ | ✅ | Docker integration tests + CI |
 | Unit-testable (mocking)| ✅ | ❌ | ✅ | `FakeCdpClient` + `MockCdpClient` |
-| Script runner | ❌ | ❌ | ✅ | Declarative YAML scripts (`pwright run`) |
+| Script runner | ❌ | ❌ | ✅ | Declarative YAML scripts (`playwright-rust run`) |
 
 ---
 
-## pwright vs Playwright Differences
+## playwright-rust vs Playwright Differences
 
-| Feature | Playwright | pwright |
+| Feature | Playwright | playwright-rust |
 |---------|:----------:|:-------:|
 | Language Binding | TS/JS, Python, Java, C# | Rust |
 | IPC / Transport Interface | Node server over JS interop | Native gRPC Protocol Buffers |
@@ -221,7 +223,7 @@ All previously identified parity gaps have been **implemented and verified**:
 
 ### Intentionally Out of Scope
 
-These are features from PinchTab or Playwright that pwright will **not** implement, as they fall outside pwright's role as a thin, embeddable browser bridge:
+These are features from PinchTab or Playwright that playwright-rust will **not** implement, as they fall outside playwright-rust's role as a thin, embeddable browser bridge:
 
 - **Human-like click/type** — PinchTab stealth concern (Bezier curves, variable delays)
 - **Tab locking / mutex** — orchestration-layer concern
@@ -229,7 +231,7 @@ These are features from PinchTab or Playwright that pwright will **not** impleme
 - **Multi-instance orchestrator / Profile CRUD / Allocation policies** — control plane scope
 - **Stealth mode / IDPI / API auth / Ad blocking** — security/anti-detection layer
 - **Web dashboard / OpenAPI spec** — operational tooling
-- **Browser lifecycle management** — pwright attaches to existing Chrome by design
+- **Browser lifecycle management** — playwright-rust attaches to existing Chrome by design
 
 ---
 
@@ -239,4 +241,4 @@ These are features from PinchTab or Playwright that pwright will **not** impleme
 
 **PinchTab** is a batteries-included browser automation platform with an operational focus — Chrome lifecycle tracking, profiles, security, stealth, multi-instance orchestration, and a custom built dashboard using REST APIs.
 
-**pwright** bridges the gap. It is a lightweight, **Playwright-compatible browser bridge** written in pure Rust. It mirrors Playwright's elegant API surface (`Page` → `Locator`) within a highly constrained (~5.9MB), dependency-free binary execution model. It communicates natively via cross-language gRPC or its CLI. It purposefully does not distribute browsers, handle Chromium lifecycles, or deal with orchestration—instead relying on attaching seamlessly to an already-running browser instance.
+**playwright-rust** bridges the gap. It is a lightweight, **Playwright-compatible browser bridge** written in pure Rust. It mirrors Playwright's elegant API surface (`Page` → `Locator`) within a highly constrained (~5.9MB), dependency-free binary execution model. It communicates natively via cross-language gRPC or its CLI. It purposefully does not distribute browsers, handle Chromium lifecycles, or deal with orchestration—instead relying on attaching seamlessly to an already-running browser instance.

@@ -53,9 +53,9 @@ FORBIDDEN_AMBIENT = (
     "PYTEST_ADDOPTS",
     "PYTEST_PLUGINS",
     "PLAYWRIGHT_BROWSERS_PATH",
-    "PWRIGHT_CDP_ENDPOINT",
-    "PWRIGHT_CDP_WS_URL",
-    "PWRIGHT_OFFICIAL_LAUNCH_MODE",
+    "PLAYWRIGHT_RUST_CDP_ENDPOINT",
+    "PLAYWRIGHT_RUST_CDP_WS_URL",
+    "PLAYWRIGHT_RUST_OFFICIAL_LAUNCH_MODE",
     "PWDEBUG",
 )
 
@@ -66,7 +66,7 @@ def _fail(message: str) -> NoReturn:
 
 def _clean_ambient() -> None:
     if any(key in os.environ for key in FORBIDDEN_AMBIENT) or any(
-        key.startswith(("DYLD_", "LD_", "PWTEST_", "PLAYWRIGHT_", "PWRIGHT_"))
+        key.startswith(("DYLD_", "LD_", "PWTEST_", "PLAYWRIGHT_", "PLAYWRIGHT_RUST_"))
         for key in os.environ
     ):
         _fail(
@@ -212,9 +212,9 @@ def _fresh_result(path: Path) -> tuple[Path, Path, Path]:
 def _artifact(mode: str, python: Path, site: Path, wheel: Path) -> dict[str, Any]:
     official = site / "playwright"
     driver = official / "driver/node"
-    package = site / "pwright"
+    package = site / "playwright_rust"
     native = package / "_native.abi3.so"
-    dylibs = site / "shuozeli_pwright.dylibs"
+    dylibs = site / "shuozeli_playwright_rust.dylibs"
     libraries = (
         {path.name: sha256_file(path) for path in sorted(dylibs.iterdir())}
         if mode == "candidate" and dylibs.is_dir()
@@ -230,8 +230,8 @@ def _artifact(mode: str, python: Path, site: Path, wheel: Path) -> dict[str, Any
         "playwrightPackageSha256": sha256_tree(official),
         "driverNode": str(driver),
         "driverNodeSha256": sha256_file(driver),
-        "pwrightPackage": str(package) if mode == "candidate" else None,
-        "pwrightPackageSha256": sha256_tree(package) if mode == "candidate" else None,
+        "playwright_rustPackage": str(package) if mode == "candidate" else None,
+        "playwright_rustPackageSha256": sha256_tree(package) if mode == "candidate" else None,
         "nativePath": str(native) if mode == "candidate" else None,
         "nativeSha256": sha256_file(native) if mode == "candidate" else None,
         "runtimeLibraries": libraries,
@@ -273,17 +273,17 @@ def run(args: argparse.Namespace) -> Path:
         "PYTHONPATH": ":".join(map(str, paths)),
         "PYTHONNOUSERSITE": "1",
         "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
-        "PWRIGHT_OFFICIAL_MODE": args.mode,
-        "PWRIGHT_OFFICIAL_LAUNCH_MODE": "owned",
-        "PWRIGHT_OFFICIAL_BROWSER_CHANNEL": "",
-        "PWRIGHT_OFFICIAL_UPSTREAM_TESTS": str(upstream / "tests"),
-        "PWRIGHT_OFFICIAL_TAILSCALE_IP": bind,
-        "PWRIGHT_OFFICIAL_TAILSCALE_HOST": host,
-        "PWRIGHT_PYTHON_WS_EXPECTED_TEST": test_id,
-        "PWRIGHT_PYTHON_WS_UPSTREAM": str(upstream),
-        "PWRIGHT_PYTHON_WS_PORT": str(port),
-        "PWRIGHT_PYTHON_WS_RECEIPT": str(receipt),
-        "PWRIGHT_PYTHON_WS_NONCE": nonce,
+        "PLAYWRIGHT_RUST_OFFICIAL_MODE": args.mode,
+        "PLAYWRIGHT_RUST_OFFICIAL_LAUNCH_MODE": "owned",
+        "PLAYWRIGHT_RUST_OFFICIAL_BROWSER_CHANNEL": "",
+        "PLAYWRIGHT_RUST_OFFICIAL_UPSTREAM_TESTS": str(upstream / "tests"),
+        "PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_IP": bind,
+        "PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_HOST": host,
+        "PLAYWRIGHT_RUST_PYTHON_WS_EXPECTED_TEST": test_id,
+        "PLAYWRIGHT_RUST_PYTHON_WS_UPSTREAM": str(upstream),
+        "PLAYWRIGHT_RUST_PYTHON_WS_PORT": str(port),
+        "PLAYWRIGHT_RUST_PYTHON_WS_RECEIPT": str(receipt),
+        "PLAYWRIGHT_RUST_PYTHON_WS_NONCE": nonce,
     }
     test_name = test_id.split("::", 1)[1].removesuffix("[chromium]")
     command = [
@@ -302,13 +302,13 @@ def run(args: argparse.Namespace) -> Path:
         "-p",
         "pytest_timeout",
         "-p",
-        "pwright_official_server_runtime",
+        "playwright_rust_official_server_runtime",
         "-p",
-        "pwright_candidate_runtime"
+        "playwright_rust_candidate_runtime"
         if args.mode == "candidate"
-        else "pwright_official_oracle_runtime",
+        else "playwright_rust_official_oracle_runtime",
         "-p",
-        "pwright_official_ws_guard",
+        "playwright_rust_official_ws_guard",
         "--browser=chromium",
         "--timeout=20",
         "--timeout-method=signal",

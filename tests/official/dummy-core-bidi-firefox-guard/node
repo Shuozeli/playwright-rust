@@ -97,14 +97,14 @@ def profile_data_from_args(arguments: list[str]) -> dict[str, object]:
 
 
 def main() -> int:
-    asset = Path(os.environ["PWRIGHT_BIDI_FIREFOX_GUARD_ASSET"])
-    receipt = Path(os.environ["PWRIGHT_BIDI_FIREFOX_GUARD_PROCESS_RECEIPT"])
-    real_node = Path(os.environ["PWRIGHT_BIDI_FIREFOX_GUARD_REAL_NODE"])
-    real_node_sha256 = os.environ["PWRIGHT_BIDI_FIREFOX_GUARD_NODE_SHA256"]
-    engine = os.environ["PWRIGHT_BIDI_DUMMY_ENGINE"]
-    project = os.environ["PWRIGHT_BIDI_DUMMY_PROJECT"]
-    mode = os.environ["PWRIGHT_BIDI_DUMMY_MODE"]
-    run_id = os.environ["PWRIGHT_BIDI_DUMMY_RUN_ID"]
+    asset = Path(os.environ["PLAYWRIGHT_RUST_BIDI_FIREFOX_GUARD_ASSET"])
+    receipt = Path(os.environ["PLAYWRIGHT_RUST_BIDI_FIREFOX_GUARD_PROCESS_RECEIPT"])
+    real_node = Path(os.environ["PLAYWRIGHT_RUST_BIDI_FIREFOX_GUARD_REAL_NODE"])
+    real_node_sha256 = os.environ["PLAYWRIGHT_RUST_BIDI_FIREFOX_GUARD_NODE_SHA256"]
+    engine = os.environ["PLAYWRIGHT_RUST_BIDI_DUMMY_ENGINE"]
+    project = os.environ["PLAYWRIGHT_RUST_BIDI_DUMMY_PROJECT"]
+    mode = os.environ["PLAYWRIGHT_RUST_BIDI_DUMMY_MODE"]
+    run_id = os.environ["PLAYWRIGHT_RUST_BIDI_DUMMY_RUN_ID"]
     if (
         engine != "firefox"
         or project
@@ -133,7 +133,7 @@ def main() -> int:
         raise ValueError("BiDi Firefox guard rejected an unpinned Node invocation")
     arguments = sys.argv[2:]
     profile_data = profile_data_from_args(arguments)
-    harness_pid = int(os.environ["PWRIGHT_BIDI_FIREFOX_GUARD_HARNESS_PID"])
+    harness_pid = int(os.environ["PLAYWRIGHT_RUST_BIDI_FIREFOX_GUARD_HARNESS_PID"])
     chain = ancestry(harness_pid)
     child = subprocess.Popen([str(real_node), *sys.argv[1:]])
     child_snapshot = process_snapshot(child.pid)
@@ -171,6 +171,6 @@ if __name__ == "__main__":
     try:
         raise SystemExit(main())
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
-        with Path(os.environ["PWRIGHT_BIDI_FIREFOX_GUARD_PROCESS_RECEIPT"]).open("a") as stream:
+        with Path(os.environ["PLAYWRIGHT_RUST_BIDI_FIREFOX_GUARD_PROCESS_RECEIPT"]).open("a") as stream:
             stream.write(json.dumps({"event": "guard-error", "message": str(error)}) + "\n")
         raise

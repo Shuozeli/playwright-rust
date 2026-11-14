@@ -1,0 +1,16 @@
+[package]
+name = "playwright-rust-runtime-tokio"
+description = "Optional Tokio deadline and cleanup adapters for the executor-independent Playwright Rust runtime"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+playwright-rust-runtime = { workspace = true }
+tokio = { version = "1", features = ["rt", "sync", "time"] }
+
+[dev-dependencies]
+playwright-rust-core = { workspace = true }
+tokio = { version = "1", features = ["macros", "rt", "test-util", "time"] }

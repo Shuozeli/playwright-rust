@@ -7,19 +7,19 @@ const net = require('node:net');
 const path = require('node:path');
 const { fileURLToPath } = require('node:url');
 
-const mode = process.env.PWRIGHT_CORE_SERVER_CONNECT_HTTP_401_V5_MODE;
-const upstream = process.env.PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM;
-const receipt = process.env.PWRIGHT_CORE_SERVER_CONNECT_HTTP_401_V5_RECEIPT;
-const fixtureHost = process.env.PWRIGHT_OFFICIAL_SERVER_HOST;
-const fixtureBind = process.env.PWRIGHT_OFFICIAL_SERVER_IP;
+const mode = process.env.PLAYWRIGHT_RUST_CORE_SERVER_CONNECT_HTTP_401_V5_MODE;
+const upstream = process.env.PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM;
+const receipt = process.env.PLAYWRIGHT_RUST_CORE_SERVER_CONNECT_HTTP_401_V5_RECEIPT;
+const fixtureHost = process.env.PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST;
+const fixtureBind = process.env.PLAYWRIGHT_RUST_OFFICIAL_SERVER_IP;
 if (!['candidate', 'oracle'].includes(mode) || !upstream || !receipt)
   throw new Error('strict HTTP-401 guard requires mode, upstream and receipt');
 if (!/^[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*\.ts\.net$/.test(fixtureHost || ''))
   throw new Error('strict HTTP-401 guard requires a full Tailscale MagicDNS host');
 if (!/^100\.(?:6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\.(?:[0-9]{1,3})\.(?:[0-9]{1,3})$/.test(fixtureBind || ''))
   throw new Error('strict HTTP-401 guard requires a Tailscale IPv4 bind');
-for (const key of ['PWRIGHT_CANDIDATE_CDP_ENDPOINT', 'PWRIGHT_ORACLE_CDP_ENDPOINT',
-  'PWRIGHT_CDP_ENDPOINT', 'PWRIGHT_CDP_WS_URL']) {
+for (const key of ['PLAYWRIGHT_RUST_CANDIDATE_CDP_ENDPOINT', 'PLAYWRIGHT_RUST_ORACLE_CDP_ENDPOINT',
+  'PLAYWRIGHT_RUST_CDP_ENDPOINT', 'PLAYWRIGHT_RUST_CDP_WS_URL']) {
   if (process.env[key]) throw new Error(`strict HTTP-401 guard forbids ${key}`);
 }
 
@@ -27,7 +27,7 @@ const sourceFile = path.join(path.resolve(upstream), 'tests/library/browsertype-
 const sourceSha256 = '9de4d9c8c71b8509887c81220f2eb0042e89e146c65d0311b020d191814ed2bc';
 const adaptedSha256 = 'b2bef73c0c226ced95ccc3110e97c3c6c49aa9b3f4e96f1e0820a254e014ded6';
 const before = 'const error = await connect(`ws://localhost:${server.PORT}/ws-401`).catch(e => e);';
-const after = 'const error = await connect(`ws://${process.env.PWRIGHT_OFFICIAL_SERVER_HOST}:${server.PORT}/ws-401`).catch(e => e);';
+const after = 'const error = await connect(`ws://${process.env.PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST}:${server.PORT}/ws-401`).catch(e => e);';
 const sha256 = text => crypto.createHash('sha256').update(text).digest('hex');
 const source = fs.readFileSync(sourceFile, 'utf8');
 if (sha256(source) !== sourceSha256 || source.split(before).length !== 2)
@@ -44,11 +44,11 @@ if (sha256(source.replace(before, after)) !== adaptedSha256)
 let ownerBound = null;
 if (mode === 'candidate') {
   require('./playwright-core-browser-type-owner-v2-preload.cjs');
-  const implementation = require(path.resolve(process.env.PWRIGHT_NODE_CANDIDATE || ''));
+  const implementation = require(path.resolve(process.env.PLAYWRIGHT_RUST_NODE_CANDIDATE || ''));
   ownerBound = ['chromium', 'firefox', 'webkit'].every(
     name => implementation[name]._playwright === implementation);
   if (!ownerBound) throw new Error('candidate BrowserType private fixture backpointer was not bound');
-} else if (process.env.PWRIGHT_NODE_CANDIDATE || process.env.PWRIGHT_NATIVE_PROFILE) {
+} else if (process.env.PLAYWRIGHT_RUST_NODE_CANDIDATE || process.env.PLAYWRIGHT_RUST_NATIVE_PROFILE) {
   throw new Error('strict oracle HTTP-401 guard forbids candidate selection');
 }
 

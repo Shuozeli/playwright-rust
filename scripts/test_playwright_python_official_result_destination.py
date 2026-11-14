@@ -216,8 +216,8 @@ class OfficialResultDestinationTests(unittest.TestCase):
                 "pythonExecutable": sys.executable,
                 "pythonVersion": "3.12.0",
                 "playwrightPackage": str(package),
-                "pwrightPackage": None,
-                "pwrightArtifact": None,
+                "playwright_rustPackage": None,
+                "playwright_rustArtifact": None,
             }
             with (
                 patch.object(sys, "argv", argv),

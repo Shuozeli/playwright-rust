@@ -317,7 +317,7 @@ def verify_inputs() -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
         "frozen candidate snapshot manifest",
     )
     sealed(
-        capture.FROZEN_SNAPSHOT / "native" / capture.PROFILE / "pwright.node",
+        capture.FROZEN_SNAPSHOT / "native" / capture.PROFILE / "playwright_rust.node",
         capture.ARTIFACT_SHA256,
         "frozen candidate addon",
     )

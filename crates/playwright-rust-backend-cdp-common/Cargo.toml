@@ -1,0 +1,12 @@
+[package]
+name = "playwright-rust-backend-cdp-common"
+description = "Shared command-free primitives for composable Playwright Rust CDP backend leaves"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+playwright-rust-cdp = { workspace = true }
+playwright-rust-core = { workspace = true }

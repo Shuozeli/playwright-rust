@@ -1,0 +1,38 @@
+[package]
+name = "playwright-rust-composition-chromium-network-events"
+description = "Caller-polled Chromium network lifecycle composition for Playwright Rust"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[features]
+default = []
+response-security-details = ["playwright-rust-backend-cdp-network-events/response-security-details"]
+request-timing = [
+    "playwright-rust-backend-cdp-network-events/request-timing",
+    "playwright-rust-cap-network-events/request-timing",
+    "playwright-rust-codec-network-events/request-timing",
+]
+
+[dependencies]
+playwright-rust-backend-cdp-network-events = { workspace = true }
+playwright-rust-cap-network-events = { workspace = true }
+playwright-rust-codec-network-events = { workspace = true }
+playwright-rust-core = { workspace = true }
+playwright-rust-runtime = { workspace = true }
+playwright-rust-runtime-control = { workspace = true }
+playwright-rust-server-events = { workspace = true }
+playwright-rust-server-wire = { workspace = true }
+playwright-rust-transport = { workspace = true }
+
+[dev-dependencies]
+playwright-rust-browser-model = { workspace = true }
+playwright-rust-cdp = { workspace = true }
+playwright-rust-codec-control = { workspace = true }
+playwright-rust-network-model = { workspace = true }
+playwright-rust-server-wire = { workspace = true }
+playwright-rust-transport-memory = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt"] }

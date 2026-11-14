@@ -23,11 +23,11 @@ from playwright_python_official_provenance import file_sha256, tree_sha256
 from run_playwright_official_conformance import _tailscale_runtime
 
 ROOT = Path(__file__).resolve().parents[1]
-OFFICIAL = ROOT / "packages/pwright-python/tests/official"
+OFFICIAL = ROOT / "packages/playwright-rust-python/tests/official"
 MANIFEST = OFFICIAL / "dummy-node-launch-diagnostic-manifest.json"
 MANIFEST_SHA256 = "7f191e7c75bf0decd1a19f065f54a96bff5d5dd57bd43db6513fe242bae9c50b"
 GUARD_DIR = OFFICIAL / "dummy_guard"
-GUARD_PLUGIN = GUARD_DIR / "pwright_official_dummy_guard.py"
+GUARD_PLUGIN = GUARD_DIR / "playwright_rust_official_dummy_guard.py"
 NODE_WRAPPER = GUARD_DIR / "node"
 ASSET = "tests/assets/dummy_bad_browser_executable.js"
 COMMIT = "47a5d35ef4f815a2021349f86ae391f7c20c02d6"
@@ -37,8 +37,8 @@ PYTHON_SOURCES = (
     "scripts/official_result_destination.py",
     "scripts/playwright_python_official_provenance.py",
     "scripts/run_playwright_official_conformance.py",
-    "packages/pwright-python/tests/official/dummy_guard/pwright_official_dummy_guard.py",
-    "packages/pwright-python/tests/official/dummy_guard/node",
+    "packages/playwright-rust-python/tests/official/dummy_guard/playwright_rust_official_dummy_guard.py",
+    "packages/playwright-rust-python/tests/official/dummy_guard/node",
 )
 FORBIDDEN_AMBIENT = (
     "CI",
@@ -52,9 +52,9 @@ FORBIDDEN_AMBIENT = (
     "PYTEST_PLUGINS",
     "HEADFUL",
     "PLAYWRIGHT_BROWSERS_PATH",
-    "PWRIGHT_CDP_ENDPOINT",
-    "PWRIGHT_CDP_WS_URL",
-    "PWRIGHT_OFFICIAL_LAUNCH_MODE",
+    "PLAYWRIGHT_RUST_CDP_ENDPOINT",
+    "PLAYWRIGHT_RUST_CDP_WS_URL",
+    "PLAYWRIGHT_RUST_OFFICIAL_LAUNCH_MODE",
     "PWDEBUG",
 )
 
@@ -149,7 +149,7 @@ def _runtime_sources(manifest: dict[str, object], oracle: Path, node: Path) -> N
     trees = cast(dict[str, str], manifest["runtimeTrees"])
     paths = {
         "oracle": oracle,
-        "candidate": ROOT / "packages/pwright-python/python/pwright",
+        "candidate": ROOT / "packages/playwright-rust-python/python/playwright_rust",
         "shim": OFFICIAL / "shim",
         "runtime": OFFICIAL / "runtime",
     }
@@ -190,7 +190,7 @@ def _python_paths(mode: str, upstream: Path) -> list[Path]:
     if mode == "candidate":
         return [
             OFFICIAL / "shim",
-            ROOT / "packages/pwright-python/python",
+            ROOT / "packages/playwright-rust-python/python",
             upstream,
             OFFICIAL / "runtime",
             GUARD_DIR,
@@ -236,7 +236,7 @@ def _receipt(path: Path, expected: list[dict[str, object]]) -> None:
 
 def run(args: argparse.Namespace) -> None:
     if any(key in os.environ for key in FORBIDDEN_AMBIENT) or any(
-        key.startswith(("DYLD_", "LD_", "PWTEST_", "PLAYWRIGHT_", "PWRIGHT_"))
+        key.startswith(("DYLD_", "LD_", "PWTEST_", "PLAYWRIGHT_", "PLAYWRIGHT_RUST_"))
         for key in os.environ
     ):
         raise ValueError(
@@ -311,17 +311,17 @@ def run(args: argparse.Namespace) -> None:
             "PYTHONPATH": os.pathsep.join(
                 str(path) for path in _python_paths(args.mode, upstream)
             ),
-            "PWRIGHT_OFFICIAL_MODE": args.mode,
-            "PWRIGHT_OFFICIAL_LAUNCH_MODE": "owned",
-            "PWRIGHT_OFFICIAL_BROWSER_CHANNEL": "",
-            "PWRIGHT_OFFICIAL_UPSTREAM_TESTS": str(upstream / "tests"),
-            "PWRIGHT_OFFICIAL_TAILSCALE_IP": bind,
-            "PWRIGHT_OFFICIAL_TAILSCALE_HOST": host,
-            "PWRIGHT_PYTHON_DUMMY_UPSTREAM": str(upstream),
-            "PWRIGHT_PYTHON_DUMMY_API": args.api,
-            "PWRIGHT_PYTHON_DUMMY_LAUNCH_RECEIPT": str(public_receipt),
-            "PWRIGHT_PYTHON_DUMMY_PROCESS_RECEIPT": str(process_receipt),
-            "PWRIGHT_PYTHON_DUMMY_REAL_NODE": str(node),
+            "PLAYWRIGHT_RUST_OFFICIAL_MODE": args.mode,
+            "PLAYWRIGHT_RUST_OFFICIAL_LAUNCH_MODE": "owned",
+            "PLAYWRIGHT_RUST_OFFICIAL_BROWSER_CHANNEL": "",
+            "PLAYWRIGHT_RUST_OFFICIAL_UPSTREAM_TESTS": str(upstream / "tests"),
+            "PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_IP": bind,
+            "PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_HOST": host,
+            "PLAYWRIGHT_RUST_PYTHON_DUMMY_UPSTREAM": str(upstream),
+            "PLAYWRIGHT_RUST_PYTHON_DUMMY_API": args.api,
+            "PLAYWRIGHT_RUST_PYTHON_DUMMY_LAUNCH_RECEIPT": str(public_receipt),
+            "PLAYWRIGHT_RUST_PYTHON_DUMMY_PROCESS_RECEIPT": str(process_receipt),
+            "PLAYWRIGHT_RUST_PYTHON_DUMMY_REAL_NODE": str(node),
         }
     )
     command = [
@@ -340,17 +340,17 @@ def run(args: argparse.Namespace) -> None:
         "-p",
         "pytest_timeout",
         "-p",
-        "pwright_official_server_runtime",
+        "playwright_rust_official_server_runtime",
     ]
     command.extend(
-        ["-p", "pwright_candidate_runtime"]
+        ["-p", "playwright_rust_candidate_runtime"]
         if args.mode == "candidate"
-        else ["-p", "pwright_official_oracle_runtime"]
+        else ["-p", "playwright_rust_official_oracle_runtime"]
     )
     command.extend(
         [
             "-p",
-            "pwright_official_dummy_guard",
+            "playwright_rust_official_dummy_guard",
             "--browser=chromium",
             "--timeout=20",
             "--timeout-method=signal",

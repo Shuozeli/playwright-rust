@@ -11,7 +11,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).parents[1]
 UPSTREAM = Path.home() / "projects/thirdparty/playwright-python"
-OFFICIAL = ROOT / "packages/pwright-python/tests/official"
+OFFICIAL = ROOT / "packages/playwright-rust-python/tests/official"
 MANIFEST = OFFICIAL / "response-security-chromium-sync-async-v1-manifest.json"
 SYNC_SOURCE = OFFICIAL / "sync-network-full-v1-manifest.json"
 ASYNC_SOURCE = OFFICIAL / "async-network-full-chromium-v1-manifest.json"

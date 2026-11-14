@@ -14,33 +14,33 @@ cargo tree \
   --edges normal \
   --prefix none \
   --format '{p}' \
-  | awk '/^pwright-/ { print $1 }' \
+  | awk '/^playwright-rust-/ { print $1 }' \
   | sort -u >"$tree_file"
 
 required_packages=(
-  pwright-v2-locator-screenshot-only-example
-  pwright-composition-chromium-locator-screenshot
-  pwright-backend-cdp-common
-  pwright-backend-cdp-content
-  pwright-backend-cdp-locator-screenshot
-  pwright-backend-cdp-selector-geometry
-  pwright-backend-cdp-selector-runtime
-  pwright-browser-backend
-  pwright-cap-content
-  pwright-cap-locator-screenshot
-  pwright-cdp
-  pwright-codec-binary
-  pwright-codec-common
-  pwright-codec-locator-screenshot
-  pwright-codec-screenshot
-  pwright-codec-selector
-  pwright-connection-control
-  pwright-core
-  pwright-screenshot-model
-  pwright-selector-model
-  pwright-server-locator-screenshot
-  pwright-server-wire
-  pwright-transport
+  playwright-rust-v2-locator-screenshot-only-example
+  playwright-rust-composition-chromium-locator-screenshot
+  playwright-rust-backend-cdp-common
+  playwright-rust-backend-cdp-content
+  playwright-rust-backend-cdp-locator-screenshot
+  playwright-rust-backend-cdp-selector-geometry
+  playwright-rust-backend-cdp-selector-runtime
+  playwright-rust-browser-backend
+  playwright-rust-cap-content
+  playwright-rust-cap-locator-screenshot
+  playwright-rust-cdp
+  playwright-rust-codec-binary
+  playwright-rust-codec-common
+  playwright-rust-codec-locator-screenshot
+  playwright-rust-codec-screenshot
+  playwright-rust-codec-selector
+  playwright-rust-connection-control
+  playwright-rust-core
+  playwright-rust-screenshot-model
+  playwright-rust-selector-model
+  playwright-rust-server-locator-screenshot
+  playwright-rust-server-wire
+  playwright-rust-transport
 )
 
 for package in "${required_packages[@]}"; do
@@ -59,9 +59,9 @@ while IFS= read -r package; do
     fi
   done
   if [[ "$allowed" != true ]]; then
-    echo "Locator-screenshot dependency proof found forbidden Pwright package: $package" >&2
+    echo "Locator-screenshot dependency proof found forbidden Playwright Rust package: $package" >&2
     exit 1
   fi
 done <"$tree_file"
 
-echo "Locator-screenshot dependency proof passed (${#required_packages[@]} Pwright packages)"
+echo "Locator-screenshot dependency proof passed (${#required_packages[@]} Playwright Rust packages)"

@@ -22,7 +22,7 @@ class PairedSnapshotTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.temporary = tempfile.TemporaryDirectory(
-            prefix="pwright-core-snapshot-test-"
+            prefix="playwright-rust-core-snapshot-test-"
         )
         cls.bundle = Path(cls.temporary.name) / "bundle"
         cls.report = snapshot.pack_bundle(snapshot.coverage.ROOT, cls.bundle)
@@ -52,7 +52,7 @@ class PairedSnapshotTests(unittest.TestCase):
 
     def test_copied_bundle_verifies_at_another_absolute_path(self) -> None:
         # Arrange
-        with tempfile.TemporaryDirectory(prefix="pwright-core-relocated-") as parent:
+        with tempfile.TemporaryDirectory(prefix="playwright-rust-core-relocated-") as parent:
             relocated = Path(parent) / "relocated"
             shutil.copytree(self.bundle, relocated)
 
@@ -64,7 +64,7 @@ class PairedSnapshotTests(unittest.TestCase):
 
     def test_verifier_runs_from_clean_directory_without_original_repo(self) -> None:
         # Arrange
-        with tempfile.TemporaryDirectory(prefix="pwright-core-clean-") as parent:
+        with tempfile.TemporaryDirectory(prefix="playwright-rust-core-clean-") as parent:
             clean = Path(parent)
             scripts = clean / "scripts"
             scripts.mkdir()
@@ -103,7 +103,7 @@ class PairedSnapshotTests(unittest.TestCase):
         # Arrange
         relative = snapshot.OFFICIAL / snapshot.coverage.DEFAULT_MANIFEST.name
         target = self.bundle / relative
-        with tempfile.TemporaryDirectory(prefix="pwright-core-link-") as parent:
+        with tempfile.TemporaryDirectory(prefix="playwright-rust-core-link-") as parent:
             saved = Path(parent) / "manifest.json"
             shutil.copyfile(target, saved)
             target.unlink()
@@ -208,7 +208,7 @@ class PairedSnapshotTests(unittest.TestCase):
     def test_archive_verifies_when_relocated(self) -> None:
         # Arrange
         with tempfile.TemporaryDirectory(
-            prefix="pwright-core-relocated-archive-"
+            prefix="playwright-rust-core-relocated-archive-"
         ) as parent:
             relocated = Path(parent) / "relocated.tar.gz"
             shutil.copyfile(self.archive, relocated)
@@ -222,7 +222,7 @@ class PairedSnapshotTests(unittest.TestCase):
     def test_archive_verifier_runs_without_original_repo(self) -> None:
         # Arrange
         with tempfile.TemporaryDirectory(
-            prefix="pwright-core-archive-clean-"
+            prefix="playwright-rust-core-archive-clean-"
         ) as parent:
             clean = Path(parent)
             scripts = clean / "scripts"

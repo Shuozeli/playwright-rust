@@ -26,17 +26,17 @@ from run_playwright_python_official_conformance import (
 )
 
 ROOT = Path(__file__).parents[1]
-SHIM = ROOT / "packages/pwright-python/tests/official/shim/playwright"
+SHIM = ROOT / "packages/playwright-rust-python/tests/official/shim/playwright"
 ORACLE_RUNTIME = (
     ROOT
-    / "packages/pwright-python/tests/official/runtime/pwright_official_oracle_runtime.py"
+    / "packages/playwright-rust-python/tests/official/runtime/playwright_rust_official_oracle_runtime.py"
 )
 
 
 class PythonOfficialOwnedLaunchTests(unittest.TestCase):
     def test_adapter_default_and_owned_endpoint_selection(self) -> None:
         # Arrange
-        inherited = {"PWRIGHT_CDP_ENDPOINT": "http://127.0.0.1:9333"}
+        inherited = {"PLAYWRIGHT_RUST_CDP_ENDPOINT": "http://127.0.0.1:9333"}
 
         # Act
         adapter = _select_launch_endpoint("cdp-adapter", None)
@@ -44,8 +44,8 @@ class PythonOfficialOwnedLaunchTests(unittest.TestCase):
 
         # Assert
         self.assertEqual(adapter, "http://127.0.0.1:9222")
-        self.assertEqual(inherited["PWRIGHT_OFFICIAL_LAUNCH_MODE"], "owned")
-        self.assertNotIn("PWRIGHT_CDP_ENDPOINT", inherited)
+        self.assertEqual(inherited["PLAYWRIGHT_RUST_OFFICIAL_LAUNCH_MODE"], "owned")
+        self.assertNotIn("PLAYWRIGHT_RUST_CDP_ENDPOINT", inherited)
         with self.assertRaisesRegex(ValueError, "cannot be combined"):
             _select_launch_endpoint("owned", "http://127.0.0.1:9222")
         with self.assertRaisesRegex(ValueError, "must use http"):
@@ -60,8 +60,8 @@ class PythonOfficialOwnedLaunchTests(unittest.TestCase):
         _configure_launch_environment(environment, "cdp-adapter", endpoint)
 
         # Assert
-        self.assertEqual(environment["PWRIGHT_CDP_ENDPOINT"], endpoint)
-        self.assertEqual(environment["PWRIGHT_OFFICIAL_LAUNCH_MODE"], "cdp-adapter")
+        self.assertEqual(environment["PLAYWRIGHT_RUST_CDP_ENDPOINT"], endpoint)
+        self.assertEqual(environment["PLAYWRIGHT_RUST_OFFICIAL_LAUNCH_MODE"], "cdp-adapter")
 
     def test_owned_bootstrap_is_rejected_before_browser_or_fixture_start(self) -> None:
         # Arrange
@@ -94,7 +94,7 @@ class PythonOfficialOwnedLaunchTests(unittest.TestCase):
         # Arrange
         with TemporaryDirectory() as directory:
             root = Path(directory)
-            package = root / "pwright"
+            package = root / "playwright_rust"
             package.mkdir()
             (package / "__init__.py").write_text("")
             for name in ("async_api", "sync_api"):
@@ -114,7 +114,7 @@ class PythonOfficialOwnedLaunchTests(unittest.TestCase):
         # Arrange
         with TemporaryDirectory() as directory:
             root = Path(directory)
-            package = root / "pwright"
+            package = root / "playwright_rust"
             package.mkdir()
             (package / "__init__.py").write_text("")
             for name in ("async_api", "sync_api"):
@@ -190,7 +190,7 @@ class PythonOfficialOwnedLaunchTests(unittest.TestCase):
                     def original_launch(_self: object) -> None:
                         return None
 
-                    candidate = ModuleType(f"pwright.{api_name}")
+                    candidate = ModuleType(f"playwright_rust.{api_name}")
                     browser_type = type(
                         "BrowserType",
                         (),
@@ -205,28 +205,28 @@ class PythonOfficialOwnedLaunchTests(unittest.TestCase):
                         return type(name, (), {})
 
                     candidate.__getattr__ = missing_type
-                    pwright = ModuleType("pwright")
-                    pwright.__path__ = []
-                    vars(pwright)["Error"] = RuntimeError
-                    vars(pwright)["TimeoutError"] = TimeoutError
-                    vars(pwright)["UnsupportedError"] = RuntimeError
+                    playwright_rust = ModuleType("playwright_rust")
+                    playwright_rust.__path__ = []
+                    vars(playwright_rust)["Error"] = RuntimeError
+                    vars(playwright_rust)["TimeoutError"] = TimeoutError
+                    vars(playwright_rust)["UnsupportedError"] = RuntimeError
                     playwright = ModuleType("playwright")
                     playwright.__path__ = [str(SHIM)]
                     modules = {
-                        "pwright": pwright,
-                        f"pwright.{api_name}": candidate,
+                        "playwright_rust": playwright_rust,
+                        f"playwright_rust.{api_name}": candidate,
                         "playwright": playwright,
                     }
                     with (
                         patch.dict(sys.modules, modules),
                         patch.dict(
-                            os.environ, {"PWRIGHT_OFFICIAL_LAUNCH_MODE": launch_mode}
+                            os.environ, {"PLAYWRIGHT_RUST_OFFICIAL_LAUNCH_MODE": launch_mode}
                         ),
                     ):
                         # Act
                         if not has_launch:
                             with self.assertRaisesRegex(
-                                RuntimeError, "requires pwright"
+                                RuntimeError, "requires playwright_rust"
                             ):
                                 importlib.import_module(f"playwright.{api_name}")
                             self.assertFalse(hasattr(browser_type, "launch"))
@@ -243,7 +243,7 @@ class PythonOfficialOwnedLaunchTests(unittest.TestCase):
                             with (
                                 patch.dict(
                                     os.environ,
-                                    {"PWRIGHT_OFFICIAL_LAUNCH_MODE": "owned"},
+                                    {"PLAYWRIGHT_RUST_OFFICIAL_LAUNCH_MODE": "owned"},
                                 ),
                                 self.assertRaisesRegex(
                                     RuntimeError, "disabled in owned"
@@ -310,8 +310,8 @@ class PythonOfficialOwnedLaunchTests(unittest.TestCase):
                     patch.dict(
                         os.environ,
                         {
-                            "PWRIGHT_OFFICIAL_LAUNCH_MODE": launch_mode,
-                            "PWRIGHT_CDP_ENDPOINT": "http://127.0.0.1:9222",
+                            "PLAYWRIGHT_RUST_OFFICIAL_LAUNCH_MODE": launch_mode,
+                            "PLAYWRIGHT_RUST_CDP_ENDPOINT": "http://127.0.0.1:9222",
                         },
                     ),
                 ):
@@ -327,7 +327,7 @@ class PythonOfficialOwnedLaunchTests(unittest.TestCase):
                         self.assertIsNot(vars(async_type)["launch"], async_original)
                         self.assertIsNot(vars(sync_type)["launch"], sync_original)
                         with patch.dict(
-                            os.environ, {"PWRIGHT_OFFICIAL_LAUNCH_MODE": "owned"}
+                            os.environ, {"PLAYWRIGHT_RUST_OFFICIAL_LAUNCH_MODE": "owned"}
                         ):
                             with self.assertRaisesRegex(
                                 RuntimeError, "already installed"
@@ -411,8 +411,8 @@ class PythonOfficialOwnedLaunchTests(unittest.TestCase):
             patch.dict(
                 os.environ,
                 {
-                    "PWRIGHT_OFFICIAL_LAUNCH_MODE": "cdp-adapter",
-                    "PWRIGHT_CDP_ENDPOINT": "http://127.0.0.1:9222",
+                    "PLAYWRIGHT_RUST_OFFICIAL_LAUNCH_MODE": "cdp-adapter",
+                    "PLAYWRIGHT_RUST_CDP_ENDPOINT": "http://127.0.0.1:9222",
                 },
             ),
         ):

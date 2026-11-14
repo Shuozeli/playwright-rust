@@ -1,4 +1,4 @@
-use pwright::client_page_creation::BrowserContextNewPageExt;
+use playwright_rust::client_page_creation::BrowserContextNewPageExt;
 
 fn main() {
     println!(

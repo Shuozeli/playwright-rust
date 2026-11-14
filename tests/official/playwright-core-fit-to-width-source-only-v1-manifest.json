@@ -10,7 +10,7 @@
       "runner": "tests/playwright-test/stable-test-runner/node_modules/@playwright/test/cli.js",
       "config": "tests/playwright-test/playwright.config.ts",
       "args": ["tests/playwright-test/fit-to-width.spec.ts"],
-      "sourceOnlyAdapter": "upstream-private-source-only-no-pwright-runtime",
+      "sourceOnlyAdapter": "upstream-private-source-only-no-playwright-rust-runtime",
       "requiresBrowser": false,
       "fixtureMode": "pinned-private-source-only-no-io",
       "sourceOnlyCase": "private-fit-to-width-v1",

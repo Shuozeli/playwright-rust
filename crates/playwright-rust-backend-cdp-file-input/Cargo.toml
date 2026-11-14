@@ -1,0 +1,37 @@
+[package]
+name = "playwright-rust-backend-cdp-file-input"
+description = "Optional Chromium file-input payload mutation over exact resolved elements"
+version.workspace = true
+edition.workspace = true
+license = "MIT AND Apache-2.0"
+repository.workspace = true
+homepage.workspace = true
+
+[features]
+default = []
+large-commands = ["playwright-rust-cdp/large-commands"]
+retained-preflight = []
+retained-target-marking = ["playwright-rust-backend-cdp-locator-resolution/retained-reference"]
+retained-serialized-payload-mutation = ["large-commands"]
+
+[dependencies]
+base64.workspace = true
+playwright-rust-core.workspace = true
+playwright-rust-cdp.workspace = true
+playwright-rust-backend-cdp-locator-resolution.workspace = true
+playwright-rust-file-input-model.workspace = true
+playwright-rust-file-input-source.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+
+[dev-dependencies]
+anyhow.workspace = true
+playwright-rust-browser-provider.workspace = true
+playwright-rust-provider-cdp.workspace = true
+playwright-rust-composition-chromium-locator-resolution.workspace = true
+playwright-rust-runtime.workspace = true
+playwright-rust-fake.workspace = true
+playwright-rust-selector-model.workspace = true
+playwright-rust-file-input-fs.workspace = true
+playwright-rust-file-input-tokio.workspace = true
+tokio = { workspace = true, features = ["macros", "rt", "sync"] }

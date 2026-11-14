@@ -155,13 +155,13 @@ def main() -> None:
         "PWTEST_MODE",
         "PWPAGE_IMPL",
         "PWTEST_USE_BIDI_EXPECTATIONS",
-        "PWRIGHT_CANDIDATE_CDP_ENDPOINT",
-        "PWRIGHT_ORACLE_CDP_ENDPOINT",
-        "PWRIGHT_NATIVE_PROFILE",
-        "PWRIGHT_NODE_CANDIDATE",
-        "PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM",
-        "PWRIGHT_OFFICIAL_SERVER_HOST",
-        "PWRIGHT_CORE_CDP_DEFAULT_UA_V2_GUARD_RECEIPT",
+        "PLAYWRIGHT_RUST_CANDIDATE_CDP_ENDPOINT",
+        "PLAYWRIGHT_RUST_ORACLE_CDP_ENDPOINT",
+        "PLAYWRIGHT_RUST_NATIVE_PROFILE",
+        "PLAYWRIGHT_RUST_NODE_CANDIDATE",
+        "PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM",
+        "PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST",
+        "PLAYWRIGHT_RUST_CORE_CDP_DEFAULT_UA_V2_GUARD_RECEIPT",
     )
     if any(os.environ.get(key) for key in forbidden):
         parser.error(
@@ -172,7 +172,7 @@ def main() -> None:
             r"[0-9a-f]{64}", args.candidate_artifact_sha256
         ):
             parser.error("candidate requires a pinned artifact SHA-256")
-        artifact = ROOT / "packages/pwright/native" / PROFILE / "pwright.node"
+        artifact = ROOT / "packages/playwright-rust/native" / PROFILE / "playwright_rust.node"
         if not artifact.is_file() or sha256(artifact) != args.candidate_artifact_sha256:
             parser.error(f"opt-in {PROFILE} artifact is missing or SHA-256 differs")
     elif args.candidate_artifact_sha256 is not None:
@@ -197,7 +197,7 @@ def main() -> None:
     }
     env = os.environ.copy()
     env["NODE_OPTIONS"] = f"--require={PRELOAD}"
-    env["PWRIGHT_CORE_CDP_DEFAULT_UA_V2_GUARD_RECEIPT"] = str(receipt)
+    env["PLAYWRIGHT_RUST_CORE_CDP_DEFAULT_UA_V2_GUARD_RECEIPT"] = str(receipt)
     cmd = [
         "uv",
         "run",
@@ -235,9 +235,9 @@ def main() -> None:
     records = [json.loads(line) for line in receipt.read_text().splitlines() if line]
     assert records and any(record.get("workerIndex") == "0" for record in records)
     if args.mode == "candidate":
-        assert "[pwright-candidate]" in log
+        assert "[playwright-rust-candidate]" in log
     else:
-        assert "[pwright-candidate]" not in log
+        assert "[playwright-rust-candidate]" not in log
     strict = {
         "schema": 2,
         "scope": SCOPE,

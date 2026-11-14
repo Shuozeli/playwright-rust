@@ -1,0 +1,22 @@
+[package]
+name = "playwright-rust-server-browser-events"
+description = "One-shot server publisher for Playwright Rust Browser terminal events"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+playwright-rust-cap-browser-events = { workspace = true }
+playwright-rust-codec-browser-events = { workspace = true }
+playwright-rust-core = { workspace = true }
+playwright-rust-runtime = { workspace = true }
+playwright-rust-runtime-control = { workspace = true }
+playwright-rust-server-wire = { workspace = true }
+playwright-rust-transport = { workspace = true }
+
+[dev-dependencies]
+playwright-rust-codec-control = { workspace = true }
+playwright-rust-transport-memory = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt"] }

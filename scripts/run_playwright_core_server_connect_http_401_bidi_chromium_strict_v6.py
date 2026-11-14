@@ -88,7 +88,7 @@ PROFILE = "playwright-server-connect-ws-error"
 ARTIFACT_SHA256 = "cbdcb780b8c8f04dfb51ddc867b13a4964c8696aeac0e2a4737f113554fdc1d0"
 CANDIDATE_SOURCE_SHA256 = "1bf7e4d67e226a1666af2abff31db4960781a641bf28d3b392d4c0834c0c95b4"
 SNAPSHOT_MANIFEST_SHA256 = "ea5b9a1a2437575a82e5c85ae4cdcee1c1e2238a5e6c8cadd7d93e0a0550037b"
-SOURCE_PACKAGE = ROOT / "packages/pwright"
+SOURCE_PACKAGE = ROOT / "packages/playwright-rust"
 SNAPSHOT_PARENT = ROOT / ".work/official-conformance/results/core-server-connect-http-401-strict-v5"
 SNAPSHOT_PACKAGE = SNAPSHOT_PARENT / "candidate-package-snapshot-v1"
 SNAPSHOT_MANIFEST = SNAPSHOT_PARENT / "candidate-package-snapshot-v1.files.json"
@@ -176,7 +176,7 @@ def check_browserless_source_and_manifest() -> None:
     source = (UPSTREAM / SOURCE).read_text()
     before = "const error = await connect(`ws://localhost:${server.PORT}/ws-401`).catch(e => e);"
     after = (
-        "const error = await connect(`ws://${process.env.PWRIGHT_OFFICIAL_SERVER_HOST}"
+        "const error = await connect(`ws://${process.env.PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST}"
         ":${server.PORT}/ws-401`).catch(e => e);"
     )
     assert source.count(before) == 1
@@ -328,15 +328,15 @@ def run(mode: str) -> dict[str, Any]:
         "PWTEST_MODE",
         "PWPAGE_IMPL",
         "PWTEST_USE_BIDI_EXPECTATIONS",
-        "PWRIGHT_CANDIDATE_CDP_ENDPOINT",
-        "PWRIGHT_ORACLE_CDP_ENDPOINT",
-        "PWRIGHT_CDP_ENDPOINT",
-        "PWRIGHT_CDP_WS_URL",
-        "PWRIGHT_NATIVE_PROFILE",
-        "PWRIGHT_NODE_CANDIDATE",
-        "PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM",
-        "PWRIGHT_OFFICIAL_SERVER_IP",
-        "PWRIGHT_OFFICIAL_SERVER_HOST",
+        "PLAYWRIGHT_RUST_CANDIDATE_CDP_ENDPOINT",
+        "PLAYWRIGHT_RUST_ORACLE_CDP_ENDPOINT",
+        "PLAYWRIGHT_RUST_CDP_ENDPOINT",
+        "PLAYWRIGHT_RUST_CDP_WS_URL",
+        "PLAYWRIGHT_RUST_NATIVE_PROFILE",
+        "PLAYWRIGHT_RUST_NODE_CANDIDATE",
+        "PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM",
+        "PLAYWRIGHT_RUST_OFFICIAL_SERVER_IP",
+        "PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST",
     )
     if any(os.environ.get(key) for key in forbidden):
         raise ValueError("strict Bidi HTTP-401 capture rejects inherited runtime overrides")
@@ -370,8 +370,8 @@ def run(mode: str) -> dict[str, Any]:
         env["TAILSCALE_IP"] = preflight["fixtureBind"]
         env["TAILSCALE_HOST"] = preflight["fixtureHost"]
         env["NODE_OPTIONS"] = f"--require={GUARD}"
-        env["PWRIGHT_CORE_SERVER_CONNECT_HTTP_401_V5_MODE"] = mode
-        env["PWRIGHT_CORE_SERVER_CONNECT_HTTP_401_V5_RECEIPT"] = str(output["receipt"])
+        env["PLAYWRIGHT_RUST_CORE_SERVER_CONNECT_HTTP_401_V5_MODE"] = mode
+        env["PLAYWRIGHT_RUST_CORE_SERVER_CONNECT_HTTP_401_V5_RECEIPT"] = str(output["receipt"])
         command = [
             "uv",
             "run",
@@ -416,7 +416,7 @@ def run(mode: str) -> dict[str, Any]:
         )
         if mode == "oracle":
             assert all(item["status"] == "expected" for item in selected)
-        assert ("[pwright-candidate]" in output["log"].read_text()) == (mode == "candidate")
+        assert ("[playwright-rust-candidate]" in output["log"].read_text()) == (mode == "candidate")
         provenance = json.loads(output["provenance"].read_text())
         assert (provenance["fixtureHost"], provenance["fixtureBind"]) == (
             preflight["fixtureHost"],

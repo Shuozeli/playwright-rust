@@ -87,7 +87,7 @@ def verify_capture_snapshot() -> None:
 
 def verify_pair_from_snapshot() -> dict[str, Any]:
     original_artifact = promotion.ARTIFACT_PATH
-    promotion.ARTIFACT_PATH = capture.SNAPSHOT_PACKAGE / "native" / capture.PROFILE / "pwright.node"
+    promotion.ARTIFACT_PATH = capture.SNAPSHOT_PACKAGE / "native" / capture.PROFILE / "playwright_rust.node"
     try:
         receipt = promotion.verify_existing()
     finally:

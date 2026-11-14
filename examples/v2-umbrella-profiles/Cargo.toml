@@ -39,4 +39,4 @@ edition = "2024"
 publish = false
 
 [workspace.dependencies]
-pwright = { path = "../../crates/pwright", default-features = false }
+playwright-rust = { path = "../../crates/playwright-rust", default-features = false }

@@ -29,7 +29,7 @@ def identity(mode: str) -> tuple[dict[str, object], dict[str, object]]:
         "fixtureBind": envelope["bindIp"],
         "fixtureHost": envelope["magicDnsHost"],
         "candidateProfile": v2.PROFILE if mode == "candidate" else None,
-        "candidate": str(v2.ROOT / "packages/pwright") if mode == "candidate" else None,
+        "candidate": str(v2.ROOT / "packages/playwright-rust") if mode == "candidate" else None,
     }
     return raw, envelope
 
@@ -71,9 +71,9 @@ def test_oracle_cannot_inherit_owner_preload() -> None:
     "environment",
     [
         {"NODE_OPTIONS": "--require=/untracked.cjs"},
-        {"PWRIGHT_CANDIDATE_CDP_ENDPOINT": "http://127.0.0.1:9222"},
-        {"PWRIGHT_CORE_BROWSER_TYPE_OWNER_RECEIPT": "/untracked/receipt"},
-        {"PWRIGHT_OFFICIAL_RUNSERVER_EXPECT_BIND": "127.0.0.1"},
+        {"PLAYWRIGHT_RUST_CANDIDATE_CDP_ENDPOINT": "http://127.0.0.1:9222"},
+        {"PLAYWRIGHT_RUST_CORE_BROWSER_TYPE_OWNER_RECEIPT": "/untracked/receipt"},
+        {"PLAYWRIGHT_RUST_OFFICIAL_RUNSERVER_EXPECT_BIND": "127.0.0.1"},
     ],
 )
 def test_ambient_execution_override_is_rejected(environment: dict[str, str]) -> None:

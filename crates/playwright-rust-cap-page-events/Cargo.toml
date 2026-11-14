@@ -1,0 +1,12 @@
+[package]
+name = "playwright-rust-cap-page-events"
+description = "Portable Playwright-aligned Page event contracts for Playwright Rust"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+playwright-rust-core = { workspace = true }
+playwright-rust-browser-model = { workspace = true }

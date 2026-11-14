@@ -246,7 +246,7 @@ def check_source_and_manifest() -> None:
     ):
         marker = f"test('{title}', async ({{ connect, server }}) => {{"
         before = f"const e = await connect(`ws://localhost:${{server.PORT}}{path}`, {{"
-        after = before.replace("ws://localhost", "ws://${process.env.PWRIGHT_OFFICIAL_SERVER_HOST}")
+        after = before.replace("ws://localhost", "ws://${process.env.PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST}")
         assertion = (
             f"expect(e.message).toContain('browserType.connect: Timeout {timeout}ms exceeded');"
         )
@@ -776,7 +776,7 @@ def verify_strict(strict_path: Path) -> dict[str, Any]:
     checked_receipts(records, mode=mode, selected=selected, host=host, bind=bind)
     log = output["log"].read_text()
     require(
-        ("[pwright-candidate]" in log) == (mode == "candidate"),
+        ("[playwright-rust-candidate]" in log) == (mode == "candidate"),
         "candidate import log marker differs",
     )
     return strict

@@ -6,7 +6,7 @@ cd "$repo_dir"
 
 dependency_closure() {
   local features=$1
-  cargo tree --locked -p pwright-node-addon \
+  cargo tree --locked -p playwright-rust-node-addon \
     --features "$features" \
     --edges normal --prefix none --format '{p}' \
     | awk '{ print $1 }' \
@@ -22,7 +22,7 @@ dependency_closure api-request-proxy-bypass >"$selected_file"
 
 added=$(comm -13 "$base_file" "$selected_file")
 removed=$(comm -23 "$base_file" "$selected_file")
-expected='pwright-api-request-connector-proxy-bypass'
+expected='playwright-rust-api-request-connector-proxy-bypass'
 
 if [[ -n "$removed" ]]; then
   printf 'Proxy-bypass profile removed base dependencies:\n%s\n' "$removed" >&2
@@ -35,10 +35,10 @@ if [[ "$added" != "$expected" ]]; then
   exit 1
 fi
 
-CARGO_INCREMENTAL=0 cargo check --release --locked -p pwright-node-addon \
+CARGO_INCREMENTAL=0 cargo check --release --locked -p playwright-rust-node-addon \
   --features api-request-proxy-bypass
-CARGO_INCREMENTAL=0 cargo check --release --locked -p pwright-node-addon \
+CARGO_INCREMENTAL=0 cargo check --release --locked -p playwright-rust-node-addon \
   --features api-request-http-proxy,api-request-proxy-bypass
-CARGO_INCREMENTAL=0 cargo check --release --locked -p pwright-node-addon \
+CARGO_INCREMENTAL=0 cargo check --release --locked -p playwright-rust-node-addon \
   --features api-request-socks5-proxy,api-request-proxy-bypass
-echo 'Node proxy-bypass dependency proof passed (exactly one Pwright leaf)'
+echo 'Node proxy-bypass dependency proof passed (exactly one Playwright Rust leaf)'

@@ -78,13 +78,13 @@ def _sample(tmp_path: Path, mode: str, api: str) -> tuple[dict, dict, Path, Path
     artifact_site = (
         site if mode == "candidate" else tmp_path / "candidate-artifact-site"
     )
-    package = artifact_site / "pwright"
+    package = artifact_site / "playwright_rust"
     native = _write(package / "_native.abi3.so", b"native abi119\n")
     _write(package / "__init__.py", "candidate public package\n")
     policy["candidatePackageTreeSha256"] = tree_sha256(package)
     policy["candidateNativeSha256"] = file_sha256(native)
     dylib = _write(
-        artifact_site / "shuozeli_pwright.dylibs/libssl-test.dylib", b"ssl\n"
+        artifact_site / "shuozeli_playwright_rust.dylibs/libssl-test.dylib", b"ssl\n"
     )
     policy["candidateRuntimeLibraries"] = {dylib.name: file_sha256(dylib)}
 
@@ -100,7 +100,7 @@ def _sample(tmp_path: Path, mode: str, api: str) -> tuple[dict, dict, Path, Path
     sidecar = result.with_suffix(".provenance.json")
     public = result.with_suffix(".public-launch.jsonl")
     process = result.with_suffix(".dummy-process.jsonl")
-    guard = tooling / "packages/pwright-python/tests/official/dummy_guard_strict"
+    guard = tooling / "packages/playwright-rust-python/tests/official/dummy_guard_strict"
     nonce = "0123456789abcdef0123456789abcdef"
     common = {
         "api": api,
@@ -160,7 +160,7 @@ def _sample(tmp_path: Path, mode: str, api: str) -> tuple[dict, dict, Path, Path
         ]
         + [f"(allow process-exec (literal {json.dumps(path)}))" for path in allowed]
     )
-    official_tooling = tooling / "packages/pwright-python/tests/official"
+    official_tooling = tooling / "packages/playwright-rust-python/tests/official"
     python_paths = (
         [official_tooling / "shim", upstream, official_tooling / "runtime", guard]
         if mode == "candidate"
@@ -171,18 +171,18 @@ def _sample(tmp_path: Path, mode: str, api: str) -> tuple[dict, dict, Path, Path
         "PYTHONPATH": ":".join(map(str, python_paths)),
         "PYTHONNOUSERSITE": "1",
         "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
-        "PWRIGHT_OFFICIAL_MODE": mode,
-        "PWRIGHT_OFFICIAL_LAUNCH_MODE": "owned",
-        "PWRIGHT_OFFICIAL_BROWSER_CHANNEL": "",
-        "PWRIGHT_OFFICIAL_UPSTREAM_TESTS": str(upstream / "tests"),
-        "PWRIGHT_OFFICIAL_TAILSCALE_IP": "100.64.0.1",
-        "PWRIGHT_OFFICIAL_TAILSCALE_HOST": "test.tail8f3b66.ts.net",
-        "PWRIGHT_PYTHON_DUMMY_UPSTREAM": str(upstream),
-        "PWRIGHT_PYTHON_DUMMY_API": api,
-        "PWRIGHT_PYTHON_DUMMY_LAUNCH_RECEIPT": str(public),
-        "PWRIGHT_PYTHON_DUMMY_PROCESS_RECEIPT": str(process),
-        "PWRIGHT_PYTHON_DUMMY_REAL_NODE": str(node),
-        "PWRIGHT_PYTHON_DUMMY_NONCE": nonce,
+        "PLAYWRIGHT_RUST_OFFICIAL_MODE": mode,
+        "PLAYWRIGHT_RUST_OFFICIAL_LAUNCH_MODE": "owned",
+        "PLAYWRIGHT_RUST_OFFICIAL_BROWSER_CHANNEL": "",
+        "PLAYWRIGHT_RUST_OFFICIAL_UPSTREAM_TESTS": str(upstream / "tests"),
+        "PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_IP": "100.64.0.1",
+        "PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_HOST": "test.tail8f3b66.ts.net",
+        "PLAYWRIGHT_RUST_PYTHON_DUMMY_UPSTREAM": str(upstream),
+        "PLAYWRIGHT_RUST_PYTHON_DUMMY_API": api,
+        "PLAYWRIGHT_RUST_PYTHON_DUMMY_LAUNCH_RECEIPT": str(public),
+        "PLAYWRIGHT_RUST_PYTHON_DUMMY_PROCESS_RECEIPT": str(process),
+        "PLAYWRIGHT_RUST_PYTHON_DUMMY_REAL_NODE": str(node),
+        "PLAYWRIGHT_RUST_PYTHON_DUMMY_NONCE": nonce,
     }
     command = [
         "/usr/bin/sandbox-exec",
@@ -200,13 +200,13 @@ def _sample(tmp_path: Path, mode: str, api: str) -> tuple[dict, dict, Path, Path
         "-p",
         "pytest_timeout",
         "-p",
-        "pwright_official_server_runtime",
+        "playwright_rust_official_server_runtime",
         "-p",
-        "pwright_candidate_runtime"
+        "playwright_rust_candidate_runtime"
         if mode == "candidate"
-        else "pwright_official_oracle_runtime",
+        else "playwright_rust_official_oracle_runtime",
         "-p",
-        "pwright_official_dummy_guard",
+        "playwright_rust_official_dummy_guard",
         "--browser=chromium",
         "--timeout=20",
         "--timeout-method=signal",
@@ -232,8 +232,8 @@ def _sample(tmp_path: Path, mode: str, api: str) -> tuple[dict, dict, Path, Path
         "wheelSha256": file_sha256(wheel),
         "playwrightPackage": str(official),
         "playwrightPackageSha256": policy["oraclePackageTreeSha256"],
-        "pwrightPackage": str(package) if mode == "candidate" else None,
-        "pwrightPackageSha256": (
+        "playwright_rustPackage": str(package) if mode == "candidate" else None,
+        "playwright_rustPackageSha256": (
             policy["candidatePackageTreeSha256"] if mode == "candidate" else None
         ),
         "nativePath": str(native) if mode == "candidate" else None,
@@ -359,7 +359,7 @@ def test_generic_ledger_verifier_refuses_historical_diagnostic(
 
 def _move_process_receipt_to_public_path(payload: dict) -> None:
     payload["processReceipt"] = payload["publicReceipt"]
-    payload["environment"]["PWRIGHT_PYTHON_DUMMY_PROCESS_RECEIPT"] = payload[
+    payload["environment"]["PLAYWRIGHT_RUST_PYTHON_DUMMY_PROCESS_RECEIPT"] = payload[
         "publicReceipt"
     ]
 
@@ -383,7 +383,7 @@ def _move_process_receipt_to_public_path(payload: dict) -> None:
         (lambda p: p.update(nativeSha256="0" * 64), "native"),
         (
             lambda p: p["environment"].update(
-                PWRIGHT_CDP_ENDPOINT="http://127.0.0.1:9222"
+                PLAYWRIGHT_RUST_CDP_ENDPOINT="http://127.0.0.1:9222"
             ),
             "environment",
         ),
@@ -479,7 +479,7 @@ def test_changed_support_plugin_is_rejected(tmp_path: Path) -> None:
         tmp_path, "candidate", "async"
     )
     _write(
-        tooling / "packages/pwright-python/tests/official/shim/plugin.py",
+        tooling / "packages/playwright-rust-python/tests/official/shim/plugin.py",
         "a changed shim can fake a public launch\n",
     )
 
@@ -496,5 +496,5 @@ def test_changed_support_plugin_is_rejected(tmp_path: Path) -> None:
 
     # Assert
     assert policy["supportTrees"][
-        "packages/pwright-python/tests/official/shim"
-    ] != tree_sha256(tooling / "packages/pwright-python/tests/official/shim")
+        "packages/playwright-rust-python/tests/official/shim"
+    ] != tree_sha256(tooling / "packages/playwright-rust-python/tests/official/shim")

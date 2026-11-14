@@ -73,12 +73,12 @@ def ancestry(harness_pid: int) -> list[dict[str, object]]:
 
 
 def main() -> int:
-    asset = Path(os.environ["PWRIGHT_OTHER_DUMMY_ASSET"])
-    receipt = Path(os.environ["PWRIGHT_OTHER_DUMMY_PROCESS_RECEIPT"])
-    real_node = Path(os.environ["PWRIGHT_OTHER_DUMMY_REAL_NODE"])
-    engine = os.environ["PWRIGHT_OTHER_DUMMY_ENGINE"]
-    mode = os.environ["PWRIGHT_OTHER_DUMMY_MODE"]
-    run_id = os.environ["PWRIGHT_OTHER_DUMMY_RUN_ID"]
+    asset = Path(os.environ["PLAYWRIGHT_RUST_OTHER_DUMMY_ASSET"])
+    receipt = Path(os.environ["PLAYWRIGHT_RUST_OTHER_DUMMY_PROCESS_RECEIPT"])
+    real_node = Path(os.environ["PLAYWRIGHT_RUST_OTHER_DUMMY_REAL_NODE"])
+    engine = os.environ["PLAYWRIGHT_RUST_OTHER_DUMMY_ENGINE"]
+    mode = os.environ["PLAYWRIGHT_RUST_OTHER_DUMMY_MODE"]
+    run_id = os.environ["PLAYWRIGHT_RUST_OTHER_DUMMY_RUN_ID"]
     if (
         engine not in ("firefox", "webkit")
         or mode not in ("candidate", "oracle")
@@ -114,7 +114,7 @@ def main() -> int:
         if any(arg.startswith("--user-data-dir") or arg == "-profile" for arg in arguments):
             raise ValueError("WebKit nonpersistent dummy launch acquired an unexpected profile flag")
         profile_data = None
-    chain = ancestry(int(os.environ["PWRIGHT_OTHER_DUMMY_HARNESS_PID"]))
+    chain = ancestry(int(os.environ["PLAYWRIGHT_RUST_OTHER_DUMMY_HARNESS_PID"]))
     child = subprocess.Popen([str(real_node), *sys.argv[1:]])
     child_snapshot = process_snapshot(child.pid)
     result = child.wait()
@@ -137,7 +137,7 @@ def main() -> int:
         "childReaped": child.returncode == result,
         "childSnapshot": child_snapshot,
         "ancestry": chain,
-        "harnessPid": int(os.environ["PWRIGHT_OTHER_DUMMY_HARNESS_PID"]),
+        "harnessPid": int(os.environ["PLAYWRIGHT_RUST_OTHER_DUMMY_HARNESS_PID"]),
         "browserArguments": arguments,
         "browserProfile": profile_data,
     }
@@ -150,6 +150,6 @@ if __name__ == "__main__":
     try:
         raise SystemExit(main())
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
-        with Path(os.environ["PWRIGHT_OTHER_DUMMY_PROCESS_RECEIPT"]).open("a") as stream:
+        with Path(os.environ["PLAYWRIGHT_RUST_OTHER_DUMMY_PROCESS_RECEIPT"]).open("a") as stream:
             stream.write(json.dumps({"event": "guard-error", "message": str(error)}) + "\n")
         raise

@@ -1,4 +1,4 @@
-use pwright_backend_cdp_page_lifecycle::CdpPageCloseLimits;
+use playwright_rust_backend_cdp_page_lifecycle::CdpPageCloseLimits;
 
 fn main() {
     let limits = CdpPageCloseLimits::new(256, 20);

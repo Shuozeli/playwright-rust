@@ -1,4 +1,4 @@
-<!-- agent-updated: 2026-10-12T01:26:00Z -->
+<!-- agent-updated: 2026-11-14T05:28:56Z -->
 
 # Playwright-compatible Python FFI design
 
@@ -84,7 +84,7 @@ An incorrectly built three-capability wheel was quarantined: Maturin CLI
 ABI 113 exposes async/sync `ElementHandle.scroll_into_view_if_needed()` through
 a narrow opt-in `element-handle-scroll-into-view` addon feature. Its dependency
 edges are the foundational `handles` binding and the same-named host feature;
-the Pwright package closure is unchanged from `handles`. PyO3 passes the exact
+the Playwright Rust package closure is unchanged from `handles`. PyO3 passes the exact
 retained Handle and one integer timeout to the host, without a Python DOM
 observer, selector recipe or scroll implementation. The host owns repeated
 stable/layout/intersection observations and the final same-node scroll commit.
@@ -345,7 +345,7 @@ async. All four unchanged sync Chromium rows pass in the candidate.
 The independent Playwright 1.58.0 oracle passes SSL and subresource, but Chrome
 154 reports `domainLookupStart=0` for ordinary navigation and redirect. The
 pinned assertion accepts only `-1` or a positive value, so those two oracle
-rows remain diagnostic-only even though Pwright's existing normalization makes
+rows remain diagnostic-only even though Playwright Rust's existing normalization makes
 the candidate green. Only the common SSL/subresource selection is promoted.
 Candidate/oracle paired report SHA-256 values are
 `9638463eed022460b7286e2c41bbe4ac94c0f2790de81f453332e39c5be03b24`
@@ -408,7 +408,7 @@ to 1,187 passed / eight skipped / 5,331 not run, SHA-256
 
 The two `Page.pause` tests remain explicitly unrun because the visible,
 dedicated CDP Chrome is headed while upstream's fixture declares headless.
-Pwright therefore keeps rejecting the absent headed Inspector capability. Two
+Playwright Rust therefore keeps rejecting the absent headed Inspector capability. Two
 repaired wheels reproduce after CycloneDX normalization, and the installed
 wheel passes 250/250 units plus all dependency, release, formatting, lint,
 strict-type and Python 3.9 gates. Full Python and Core JS/TS execution remains
@@ -637,7 +637,7 @@ reproduce after CycloneDX normalization.
 
 NODE-378/379 adds `file-chooser-native-paths` as a strict opt-in refinement of
 `file-chooser-events`; the dependency proof shows an identical 108-package
-Pwright closure. Rust owns native path normalization, event backend-node
+Playwright Rust closure. Rust owns native path normalization, event backend-node
 identity, utility-world resolution, `RemoteObject` validation,
 `DOM.setFileInputFiles` dispatch and object-group cleanup. The direct-upload
 future transfers already-started work to the bounded cleanup executor when a
@@ -798,7 +798,7 @@ one failure, with SHA-256 values
 and
 `91735e70b44f159ff211e00fac93d658d779c35f7ed18d651fdf7784eb58ee6f`.
 The shared JavaScript-URL popup row expects `dialog.page is None`; official
-Playwright 1.58.0 and Pwright both expose the popup Page on Chrome 154. It is
+Playwright 1.58.0 and Playwright Rust both expose the popup Page on Chrome 154. It is
 therefore preserved as source/oracle drift and remains `not-run`, not a
 candidate pass, failure or skip. The explicit 11-row candidate and oracle
 selections pass 11/11, with hashes
@@ -852,7 +852,7 @@ to 891 passed, zero failed, seven skipped and 5,628 not run, SHA-256
 ## ABI 94 Playwright error inheritance checkpoint (2026-10-05)
 
 NODE-350 changes only the Python exception hierarchy at the native boundary.
-Rust remains the source of `PWRIGHT_INVALID_ARGUMENT` classification and the
+Rust remains the source of `PLAYWRIGHT_RUST_INVALID_ARGUMENT` classification and the
 bounded diagnostic. The exported `InvalidArgumentError` now derives from the
 public Playwright-shaped `Error`, so official callers catch protocol/domain
 validation through the same base class as upstream. Python-side argument and
@@ -1767,7 +1767,7 @@ run, SHA-256
 
 ## ABI 79 persistent-Context plain-HAR replay checkpoint (2026-10-04)
 
-NODE-323 adds an independently selectable `pwright-har-replay` policy crate
+NODE-323 adds an independently selectable `playwright-rust-har-replay` policy crate
 over the existing Page-route host feature. The crate contains no filesystem,
 CDP, runtime or language-binding dependency. It parses bounded plain HAR,
 matches exact URL/method and optional POST data, chooses the first entry with
@@ -1815,7 +1815,7 @@ their byte-identical native extension SHA-256 is
 
 ## Goal
 
-Ship a typed `pwright` Python package whose public shape follows Playwright
+Ship a typed `playwright-rust` Python package whose public shape follows Playwright
 Python while browser behavior, protocol I/O, ownership and resource accounting
 remain in Rust. The package must let users install the smallest capability set
 they need instead of pulling a Node driver, bundled browser, or a monolithic
@@ -1945,7 +1945,7 @@ timeout classification was already correct; Python adds Playwright-shaped
 resource ownership. Candidate and independent oracle pass 3/3.
 NODE-289 keeps ABI 55 and completes the applicable Chromium rows in unchanged
 async `test_asyncio.py`. The TaskGroup row already passes. For the remaining
-discrepancy, Rust still classifies `PWRIGHT_JAVASCRIPT`; a thin Python public
+discrepancy, Rust still classifies `PLAYWRIGHT_RUST_JAVASCRIPT`; a thin Python public
 boundary rebuilds the same exception type with the `Page.evaluate:` API name
 and preserves code, name and stack. Candidate and independent oracle pass the
 two newly selected rows 2/2. Firefox/WebKit expansions remain provider gaps.
@@ -1974,9 +1974,9 @@ official sync rows pass and the tranche advances to 16 passed / nine failed.
 
 ```text
 user code
-  -> pwright.async_api / pwright.sync_api       Python adaptation only
-  -> pwright._native                            PyO3 ABI boundary
-  -> pwright-node-host                          reusable Rust session host
+  -> playwright_rust.async_api / playwright_rust.sync_api       Python adaptation only
+  -> playwright_rust._native                            PyO3 ABI boundary
+  -> playwright-rust-node-host                          reusable Rust session host
   -> selected Rust capability/plugin closure   browser semantics
   -> transport/provider                         Chromium CDP first
 ```
@@ -2000,21 +2000,21 @@ Rust owns:
   reservations, cancellation, close barriers and resource metrics.
 
 No `Py<PyAny>`, coroutine, callback, Python exception, or GIL-bound value may be
-stored in `pwright-node-host`. The PyO3 crate may retain Python objects only in
+stored in `playwright-rust-node-host`. The PyO3 crate may retain Python objects only in
 an explicitly bounded delivery registry and must drop them on the Python
 runtime side.
 
 ## Repository layout
 
 ```text
-crates/pwright-python-addon/
+crates/playwright-rust-python-addon/
   Cargo.toml                 cdylib, feature forwarding, no default capability
   src/lib.rs                 ABI, error mapping, native environment/session
 
-packages/pwright-python/
+packages/playwright-rust-python/
   pyproject.toml             pinned PEP 517 build requirements
   README.md                  supported surface and reproducible commands
-  python/pwright/
+  python/playwright_rust/
     __init__.py
     _abi.py                  native ABI validation
     _errors.py               public exception taxonomy
@@ -2027,13 +2027,13 @@ packages/pwright-python/
     smoke/                   wheel-load and child-process teardown tests
 ```
 
-The distribution name is `shuozeli-pwright`; the import name is `pwright`.
+The distribution name is `shuozeli-playwright-rust`; the import name is `playwright-rust`.
 This avoids shadowing the upstream `playwright` distribution while allowing
-mechanical migration from `playwright.async_api` to `pwright.async_api` and
-from `playwright.sync_api` to `pwright.sync_api`.
+mechanical migration from `playwright.async_api` to `playwright_rust.async_api` and
+from `playwright.sync_api` to `playwright_rust.sync_api`.
 
 Maturin uses the mixed Rust/Python layout with
-`module-name = "pwright._native"` and an explicit Cargo manifest path. The
+`module-name = "playwright_rust._native"` and an explicit Cargo manifest path. The
 native module targets PyO3 `abi3-py39`, so one platform wheel supports CPython
 3.9 and newer. Build-system and differential dependencies are exact pins.
 
@@ -2163,8 +2163,8 @@ rejected at import instead of being used through a partially compatible ABI.
 
 ### Slice PY-001: load and ownership
 
-- `from pwright.async_api import async_playwright`
-- `from pwright.sync_api import sync_playwright`
+- `from playwright_rust.async_api import async_playwright`
+- `from playwright_rust.sync_api import sync_playwright`
 - async and sync context-manager/start/stop shapes
 - `Playwright.chromium`; `firefox` and `webkit` report a typed unsupported
   error on operations rather than masquerading as Chromium
@@ -2199,7 +2199,7 @@ than returning incomplete placeholders.
 
 - `chromium.launch_persistent_context(user_data_dir, ...)` returns the exact
   default Context created by the launched browser.
-- Rust accepts an empty caller-owned directory or a profile carrying Pwright's
+- Rust accepts an empty caller-owned directory or a profile carrying Playwright Rust's
   marker; it never adopts nonempty unmarked state.
 - Rust selects the explicit executable/channel or an already-installed Chrome,
   launches on an ephemeral loopback CDP port, owns the process lease and
@@ -2292,7 +2292,7 @@ Environment stop performs this barrier:
 8. stop/join the sync thread, if present.
 
 Borrowed CDP attachment never closes the browser process. `Browser.close()`
-means detach this Pwright session; owned browser-process shutdown will require
+means detach this Playwright Rust session; owned browser-process shutdown will require
 a separate launch provider and ownership token.
 
 ## Bounded resources
@@ -2328,20 +2328,20 @@ values directly to Python classes and attaches `.code`:
 
 | Rust code | Python class |
 |---|---|
-| `PWRIGHT_INVALID_ARGUMENT` | `InvalidArgumentError` (`Error`); `ValueError` at Python signature boundary |
-| `PWRIGHT_RESOURCE_EXHAUSTED` | `ResourceExhaustedError` |
-| `PWRIGHT_TIMEOUT` | `TimeoutError` |
-| `PWRIGHT_TARGET_CLOSED` | `TargetClosedError` |
-| `PWRIGHT_UNSUPPORTED` | `NotImplementedError` |
-| `PWRIGHT_JAVASCRIPT` | `Error` with bounded JS name/stack metadata |
-| `PWRIGHT_BACKEND` | `Error` |
+| `PLAYWRIGHT_RUST_INVALID_ARGUMENT` | `InvalidArgumentError` (`Error`); `ValueError` at Python signature boundary |
+| `PLAYWRIGHT_RUST_RESOURCE_EXHAUSTED` | `ResourceExhaustedError` |
+| `PLAYWRIGHT_RUST_TIMEOUT` | `TimeoutError` |
+| `PLAYWRIGHT_RUST_TARGET_CLOSED` | `TargetClosedError` |
+| `PLAYWRIGHT_RUST_UNSUPPORTED` | `NotImplementedError` |
+| `PLAYWRIGHT_RUST_JAVASCRIPT` | `Error` with bounded JS name/stack metadata |
+| `PLAYWRIGHT_RUST_BACKEND` | `Error` |
 
 Python must never recover a class by parsing an error message. Diagnostics and
 JS stacks remain byte-bounded before crossing the FFI.
 
 ## Feature composition
 
-`pwright-python-addon` has `default = []`. Each Cargo feature forwards to the
+`playwright-rust-python-addon` has `default = []`. Each Cargo feature forwards to the
 same host leaf and has an exact dependency allowlist test:
 
 - `handles`
@@ -2371,7 +2371,7 @@ relevant rows pass:
 | Gate | Required evidence |
 |---|---|
 | format/lint | `cargo fmt --check`, Ruff format/check, Pyright strict package surface |
-| base Rust | release `cargo check` and strict `cargo clippy` for `pwright-python-addon`; exact shared-host unit gates for Rust behavior |
+| base Rust | release `cargo check` and strict `cargo clippy` for `playwright-rust-python-addon`; exact shared-host unit gates for Rust behavior |
 | feature isolation | one release check per selected feature and exact dependency closure scripts |
 | reproducible wheel | exact build pins, locked Rust graph, wheel built twice from clean trees with explained metadata-only differences or matching payload hashes |
 | load/ABI | clean-venv wheel install; source tree absent; child-process import; exact ABI/profile assertions |
@@ -2384,7 +2384,7 @@ relevant rows pass:
 
 Real-browser runs follow the repository rule: start and verify `chrome-cdp`,
 use `http://127.0.0.1:9222` only for the loopback CDP control endpoint, clear
-unrelated test tabs, and isolate each run's `.pwright` state.
+unrelated test tabs, and isolate each run's `.playwright-rust` state.
 
 ## Differential case format
 
@@ -2394,7 +2394,7 @@ The Python runner records only stable, normalized observations:
 {
   "case": "attach/enumerate/default-context",
   "oracle": "playwright==1.58.0",
-  "candidate": "shuozeli-pwright local wheel",
+  "candidate": "shuozeli-playwright-rust local wheel",
   "oracle_result": {"status": "ok", "value": {}},
   "candidate_result": {"status": "ok", "value": {}},
   "classification": "match"
@@ -2432,8 +2432,8 @@ success, failure, cancellation and interpreter/process teardown.
 
 ## Base-slice verification checkpoint (2026-09-22)
 
-Implemented files are `crates/pwright-python-addon` and
-`packages/pwright-python`. The selected artifact is profile `base`, currently
+Implemented files are `crates/playwright-rust-python-addon` and
+`packages/playwright-rust-python`. The selected artifact is profile `base`, currently
 native ABI `3`, CPython ABI `abi3-py39`, with no optional capability feature
 selected.
 The implemented public slice is async/sync lifecycle, Chromium CDP attachment,
@@ -2448,16 +2448,16 @@ Green gates on macOS arm64, Python 3.12.14 and dedicated Chrome
 153.0.8010.53:
 
 - release `cargo check` and strict `cargo clippy` for
-  `pwright-python-addon`;
+  `playwright-rust-python-addon`;
 - exact `FfiBudget::run_sync` release unit gate with `--lib`;
-- exact base dependency proof: 108 Pwright packages, with file-input and Frame
+- exact base dependency proof: 108 Playwright Rust packages, with file-input and Frame
   lifecycle leaves absent;
 - Ruff format/lint and Pyright strict: zero errors or warnings;
 - two release wheels have identical native/Python/metadata payloads. Maturin's
   CycloneDX `serialNumber` and `metadata.timestamp`, plus their RECORD hash,
   are the only normalized build-identity differences;
 - clean `/tmp` venv install from the wheel and child-process import resolved
-  `pwright/_native.abi3.so`, ABI `3`, profile `base`;
+  `playwright-rust/_native.abi3.so`, ABI `3`, profile `base`;
 - five wheel-installed unit cases pass;
 - the same attach/enumerate/goto/title/content/detach observations match upstream
   `playwright==1.58.0` through both async and sync APIs, including stable
@@ -2557,7 +2557,7 @@ This remains a partial execution checkpoint, not a full-conformance claim.
 ABI 10 adds the default-off `api-request` leaf and selects wheel profile
 `wait-for-url+set-content+emulate-media+timeout-settings+network-events+api-request`.
 The PyO3 module converts bounded tuples, bytes and structured cookies only. The
-shared Rust `pwright-api-request` owner performs HTTP/HTTPS, redirects,
+shared Rust `playwright-rust-api-request` owner performs HTTP/HTTPS, redirects,
 reset-only retries, Basic credentials, cookie matching, response retention,
 timeouts and cancellation. Async and sync Python facades provide the public
 Playwright shape, JSON conversion and awaited storage-state file I/O; they do
@@ -2570,7 +2570,7 @@ across the three upstream browser-name parameters. Oracle runs are separated
 as required by the upstream greenlet and pytest-asyncio loop models and pass
 138/138 async plus 93/93 sync. The candidate-only fixture adapter replaces
 only the upstream sync test server's greenlet-coupled request waiter with a
-thread-safe equivalent for Pwright's dedicated bounded loop thread; test
+thread-safe equivalent for Playwright Rust's dedicated bounded loop thread; test
 bodies and assertions are unchanged. The three-browser stop-idempotency and
 pending-request cancellation rows also pass 6/6 candidate and 6/6 oracle. The
 cumulative 6,526-record candidate ledger is 320 passed, 62 failed, one skipped
@@ -2711,7 +2711,7 @@ and `91c5fcc4319f29eb1092d6565f608b55d21ee24cd827426e5baae0f6b593c668`;
 their payloads match after normalizing only CycloneDX serial/timestamp fields.
 The installed wheel passes 13/13 local tests, strict Pyright/Ruff and selected
 strict Clippy. Rust wait-for-function tests pass 6/6, and the dependency proof
-keeps the 108-package Pwright closure unchanged for Handle selection.
+keeps the 108-package Playwright Rust closure unchanged for Handle selection.
 
 ## ABI 14 Page binding checkpoint (2026-09-27)
 
@@ -2784,7 +2784,7 @@ it owns no CDP observer, error queue or polling loop.
 
 The executable dependency proof records the exact package boundary:
 `page-events` adds only the existing
-`pwright-plugin-chromium-frame-lifecycle` package to the feature-cold
+`playwright-rust-plugin-chromium-frame-lifecycle` package to the feature-cold
 108-package closure, while `page-errors` adds no package beyond the
 `page-events` closure.
 
@@ -2828,8 +2828,8 @@ method, resource type, aggregate headers and POST data are capped at 4 KiB,
 64 KiB, 64 bytes, 64 bytes, 64 KiB and 256 KiB respectively. The delivery
 queue is fixed at 64, glob scratch allocation is fallible, and Page shutdown
 cancels the single Browser route watcher before native teardown. The executable
-dependency proof keeps the feature-cold closure at 108 Pwright packages:
-`page-events` adds exactly `pwright-plugin-chromium-frame-lifecycle`, while
+dependency proof keeps the feature-cold closure at 108 Playwright Rust packages:
+`page-events` adds exactly `playwright-rust-plugin-chromium-frame-lifecycle`, while
 `page-routes` adds no package beyond that closure.
 
 Four focused Rust AAA tests cover Playwright-shaped glob/path matching,
@@ -2924,9 +2924,9 @@ started drag attempts button release even if target movement fails. `trial`
 performs the resolution and geometry phase without input. This slice does not
 yet implement every upstream stable/actionable/hit-target retry or force rule.
 
-The dependency proof keeps the feature-cold Python closure at 108 Pwright
+The dependency proof keeps the feature-cold Python closure at 108 Playwright Rust
 packages and shows exactly one `drag-and-drop` addition:
-`pwright-backend-cdp-drag`. Three Rust AAA tests cover center-point selection,
+`playwright-rust-backend-cdp-drag`. Three Rust AAA tests cover center-point selection,
 explicit relative positions and invalid fractional/excessive steps. The host
 library passes 469 release tests with ten explicit real-browser ignores. The
 installed final wheel passes 15/15 local tests, strict Ruff and Pyright pass,
@@ -2981,7 +2981,7 @@ typed FFI request into the Rust lifecycle command service.
 
 Four Rust AAA tests cover descriptor preservation, exact prompt dispatch,
 capacity exhaustion and duplicate-session suppression. The dependency proof
-keeps the feature-cold Python closure at 108 Pwright packages and shows that
+keeps the feature-cold Python closure at 108 Playwright Rust packages and shows that
 `page-dialogs` adds no package beyond `page-events`. The installed final wheel
 passes 15/15 local tests, strict Ruff and Pyright pass, Rust formatting and
 selected strict Clippy pass, and the final wheel recollects all 6,526 upstream
@@ -3032,8 +3032,8 @@ opaque `NativeResponseBody` and `Response.body()` asks Rust for the bytes; it
 does not maintain a parallel response-body registry. Session retirement,
 terminal receipts and Page teardown remove pending calls and retained bodies.
 
-The full dependency proof keeps the feature-cold Python closure at 108 Pwright
-packages and adds no Pwright package for `page-routes` beyond the existing
+The full dependency proof keeps the feature-cold Python closure at 108 Playwright Rust
+packages and adds no Playwright Rust package for `page-routes` beyond the existing
 `page-events` closure. Targeted Rust AAA tests cover fulfill validation, exact
 body correlation and retained-byte charging. Strict selected-feature Clippy,
 Rust formatting, Ruff and Pyright pass. The installed wheel passes 17/17 local
@@ -3112,7 +3112,7 @@ one persistent-context row and 6,093 unexecuted candidate rows remain.
 
 ABI 22 adds `persistent-context` as a separate Python-addon/host launch
 feature. `ChromiumPersistentProfile::open_or_initialize` admits only an empty
-directory or an existing Pwright-marked profile. The provider supplies the
+directory or an existing Playwright Rust-marked profile. The provider supplies the
 installed executable and ephemeral loopback CDP endpoint; the host stores the
 connection and process lease as one noncloneable shutdown unit. Closing the
 default Context consumes that unit before joining transport I/O and performs a
@@ -3124,10 +3124,10 @@ external default-Context settings snapshot. The snapshot is cleared during
 teardown, so resource metrics return to zero. Focused Rust AAA tests cover
 unmarked-profile rejection, pre-publication base-URL stability and lease
 release. The dependency proof keeps the feature-cold Python closure at 108
-Pwright packages; `persistent-context` adds exactly
-`pwright-cap-browser-lifecycle`, `pwright-codec-browser-lifecycle`,
-`pwright-composition-chromium-launch`, `pwright-provider-chromium`, and
-`pwright-server-browser-lifecycle`.
+Playwright Rust packages; `persistent-context` adds exactly
+`playwright-rust-cap-browser-lifecycle`, `playwright-rust-codec-browser-lifecycle`,
+`playwright-rust-composition-chromium-launch`, `playwright-rust-provider-chromium`, and
+`playwright-rust-server-browser-lifecycle`.
 
 The fixed unchanged-upstream manifest passes 1/1 in the final repaired-wheel
 candidate and 1/1 in the independent official oracle. Both canonical lanes
@@ -3163,11 +3163,11 @@ headful, rejects headed pause explicitly, and uses a drop-restoring
 cover default and custom timeout reset/restoration, including guard drop.
 The typed internal-text selector parser preserves the JSON string and exact or
 substring match mode. The dependency proof keeps the feature-cold closure at
-108 Pwright packages; `page-pause` adds no package.
+108 Playwright Rust packages; `page-pause` adds no package.
 
 The fixed unchanged-upstream manifest passes 2/2 in the installed final-wheel
 candidate and 2/2 in the independent official oracle on the same task-owned
-headless Chrome launched through Pwright. Candidate report SHA-256 is
+headless Chrome launched through Playwright Rust. Candidate report SHA-256 is
 `7ffe205309fc5864bf6c9acae98c4e05a1b3d99be3e72fd3569a0090e718ad2c`;
 oracle report SHA-256 is
 `1c5d32e8553abefefa9fa7b52b6a3cc6d3df0a7adedf21f80cc667e09cd69ff5`.
@@ -3197,11 +3197,11 @@ checkpoint is not a full-suite pass.
 
 ## ABI 24 Page request-GC checkpoint (2026-09-27)
 
-ABI 24 selects `pwright-node-host/request-gc` through one matching addon
+ABI 24 selects `playwright-rust-node-host/request-gc` through one matching addon
 feature. The leaf already owns Page/session lookup, bounded command admission
 and the exact empty `HeapProfiler.collectGarbage` payload. PyO3 validates and
 copies only the bounded Page ID; async and sync Python facades are one-hop
-adapters. The dependency proof remains at 108 feature-cold Pwright packages.
+adapters. The dependency proof remains at 108 feature-cold Playwright Rust packages.
 
 `page-request-gc-manifest.json` pins the unchanged async and sync upstream files
 and their exact `test_should_work` functions. Candidate and independent oracle
@@ -3230,7 +3230,7 @@ checkpoint is not a full-suite pass.
 ## ABI 25 Page-error history checkpoint (2026-09-27)
 
 ABI 25 keeps the public history behind the already selectable
-`pwright-node-host/page-errors` leaf. Rust owns Page lookup, recording, eviction,
+`playwright-rust-node-host/page-errors` leaf. Rust owns Page lookup, recording, eviction,
 snapshotting and teardown. Python forwards only the bounded Page ID and converts
 the returned `(name, message, stack)` values into public `Error` objects; it
 retains no history, event queue or protocol state.
@@ -3269,7 +3269,7 @@ checkpoint is not a full-suite pass.
 
 ## ABI 26 console-message history checkpoint (2026-09-27)
 
-ABI 26 selects `pwright-node-host/console-history` independently from
+ABI 26 selects `playwright-rust-node-host/console-history` independently from
 `console-events`. Both leaves reuse the same Chromium `Runtime.consoleAPICalled`
 observation and conversion, but history-only installation does not publish
 callbacks or create a Python event queue. Rust owns Page lookup, admission,
@@ -3318,7 +3318,7 @@ checkpoint is not a full-suite pass.
 
 ## ABI 27 request-history checkpoint (2026-09-27)
 
-ABI 27 selects `pwright-node-host/request-history` independently while reusing
+ABI 27 selects `playwright-rust-node-host/request-history` independently while reusing
 the exact `network-events` package closure and its four normalized lifecycle
 tags. BrowserContext-scoped activation subscribes existing and future Pages;
 an owned empty Context synchronizes its exact topology before activation so
@@ -3368,7 +3368,7 @@ checkpoint is not a full-suite pass.
 
 ## ABI 28 device-descriptor checkpoint (2026-09-27)
 
-ABI 28 selects `pwright-node-host/device-emulation` independently. The Rust
+ABI 28 selects `playwright-rust-node-host/device-emulation` independently. The Rust
 host embeds all 143 Playwright v1.58.0 descriptors as immutable package data;
 the embedded JSON is semantically equal to upstream
 `deviceDescriptorsSource.json`, whose raw SHA-256 is
@@ -3414,7 +3414,7 @@ explicitly incomplete; this is not a full-suite pass.
 
 ## ABI 29 response-listener checkpoint (2026-09-27)
 
-ABI 29 selects `pwright-node-host/response-events` independently over the
+ABI 29 selects `playwright-rust-node-host/response-events` independently over the
 existing `network-events` composition. Rust activates the response tag at
 BrowserContext scope before the Context is published, admits at most 16 live
 Contexts and 256 queued notices, and charges retained response values to the
@@ -3514,7 +3514,7 @@ JS/TS execution remain explicitly incomplete.
 ## ABI 30 collection selector evaluation checkpoint (2026-09-27)
 
 ABI 30 pins the complete unchanged `tests/sync/test_selectors_misc.py` source
-in `packages/pwright-python/tests/official/sync-selectors-misc-manifest.json`
+in `packages/playwright-rust-python/tests/official/sync-selectors-misc-manifest.json`
 at SHA-256
 `940c7576586bc22381f260de40349d8ac3632ddb05ff0415b1af5ed3beeaf532`.
 The exact Chromium invocation passes 1/1 in the final installed-wheel
@@ -3567,7 +3567,7 @@ this is not a full-suite pass.
 
 NODE-249 changes no native ABI or capability graph. It pins the complete
 unchanged `tests/async/test_selectors_misc.py` source in
-`packages/pwright-python/tests/official/async-selectors-misc-manifest.json` at
+`packages/playwright-rust-python/tests/official/async-selectors-misc-manifest.json` at
 SHA-256
 `44746147b5adaf40bdd879468b34d9fb2d31b4c64d3a397c9c94a47961b41b0f`
 and executes the exact Chromium expansion through the already-installed ABI 30
@@ -3589,7 +3589,7 @@ Core JS/TS corpus.
 
 NODE-250 pins the complete unchanged `tests/async/test_selectors_misc.py`
 source in
-`packages/pwright-python/tests/official/selector-registration-manifest.json`
+`packages/playwright-rust-python/tests/official/selector-registration-manifest.json`
 at SHA-256
 `44746147b5adaf40bdd879468b34d9fb2d31b4c64d3a397c9c94a47961b41b0f`
 and selects exactly the Chromium duplicate-registration row. Although the file
@@ -3611,7 +3611,7 @@ and `content_script`, admits at most 64 engines, 64-byte names, 1 MiB per
 source and 8 MiB aggregate retained bytes, and releases all ownership on
 environment stop. Python has no registry. For `path=`, it reads at most the
 source ceiling plus one rejection byte before crossing the native boundary.
-The leaf reuses the feature-cold 108-package Pwright closure and adds no package
+The leaf reuses the feature-cold 108-package Playwright Rust closure and adds no package
 edge. Registering an engine is implemented; executing its JavaScript during
 selector resolution is not yet implemented or claimed.
 
@@ -3729,9 +3729,9 @@ execution remain unfinished.
 ## ABI 33 layout-selector checkpoint (2026-09-27)
 
 NODE-253 keeps the ABI at 33 and adds the optional feature edge
-`pwright-python-addon/layout-selectors ->
-pwright-node-host/layout-selectors + locator-evaluation`. The feature adds no
-Pwright package: the feature-cold dependency proof remains 108 packages.
+`playwright-rust-python-addon/layout-selectors ->
+playwright-rust-node-host/layout-selectors + locator-evaluation`. The feature adds no
+Playwright Rust package: the feature-cold dependency proof remains 108 packages.
 Python continues to call the ABI-stable internal
 `registered_selector_match_count` method, whose implementation now accepts
 either a registered-engine program or a layout program. The public facade does
@@ -3820,7 +3820,7 @@ suite parity remain explicit gaps.
 
 ## ABI 34 Locator execution and count expectation checkpoint (2026-09-28)
 
-NODE-255 adds one native export and no Cargo feature, Pwright package or
+NODE-255 adds one native export and no Cargo feature, Playwright Rust package or
 dependency edge. `HostLocator::expect_count` performs typed collection-size
 reads, compares expected or negated values, owns one total deadline, retries
 navigation/context-replacement races, and sleeps for bounded 10 ms intervals.
@@ -3906,7 +3906,7 @@ SHA-256
 `2356b169e48248f6609fcbd097d9f3205dd87ad2b26ec45a89eb7149a84b7d6e`.
 
 NODE-266 advances to ABI 40 and exposes the existing `HostLocator::highlight`
-through a separate `locator-highlight` feature. The feature adds no Pwright
+through a separate `locator-highlight` feature. The feature adds no Playwright Rust
 package to the 108-package base closure. Python forwards only the optional
 bounded description; Rust owns selector resolution, overlay installation and
 replacement. Targeted async/sync highlight rows pass, then the complete files
@@ -3938,7 +3938,7 @@ NODE-267 advances to ABI 41. The separately selectable `locator-dom-actions`
 feature owns the static event-dispatch and text-selection programs, strict
 Locator resolution, bounded event type/initializer ingress and timeout
 execution in Rust; Python exposes only async/sync `dispatch_event` and
-`select_text` adapters. Its Pwright package closure remains the same 108
+`select_text` adapters. Its Playwright Rust package closure remains the same 108
 packages as the base addon. `Locator.evaluate_handle` is not a second DOM-
 action capability: it resolves a temporary element handle in Rust and composes
 the existing bounded Handle evaluation/publication owner, including a bounded
@@ -4119,7 +4119,7 @@ creation release ordinary Context ownership idempotently.
 A third leaf forwards bounded persistent Chromium arguments into the existing
 provider request: 256 switches, 65,536 UTF-8 bytes per value and 1,048,576
 bytes total. Profile, page-opening and remote-debugging switches remain under
-Pwright's authority. The conformance runtime's explicit secure-HTTP-fixture
+Playwright Rust's authority. The conformance runtime's explicit secure-HTTP-fixture
 mode adds only the exact dynamic Tailscale fixture origin so the unchanged
 upstream localhost-trust test has equivalent secure-context semantics.
 
@@ -4441,7 +4441,7 @@ Bounds are enforced twice where allocation crosses languages: 1,024 cookies,
 16 KiB ordinary fields, 4 MiB cookie batches/results, 256 filter URLs, 64 KiB
 per URL, 1 MiB URL batches, 16 KiB regex sources and one 10 MiB FFI allowance.
 The leaf adds no persistent cookie store, Page lane, task, timer, transport,
-browser process or dependency edge. The dependency proof remains 108 Pwright
+browser process or dependency edge. The dependency proof remains 108 Playwright Rust
 packages.
 
 Release validation passes 130 CDP tests, 962 all-feature host tests with 26
@@ -4513,7 +4513,7 @@ The default selection consumes one of the existing 16 policy slots and its
 actual bytes from the existing 64 KiB budget, leaving at most 15 later selected
 owned Contexts. No task, queue, timer, session registry, transport, process
 allowance or dependency is added. Dependency proof confirms that the new leaf
-has exactly the persistent-launch Pwright package closure.
+has exactly the persistent-launch Playwright Rust package closure.
 
 The persistent-launch tuple is now `(base_url, locale, ignore_https_errors,
 device, executable_path, channel, timeout_ms)`. Async and sync
@@ -4563,7 +4563,7 @@ Contexts still require their existing explicit registry entry, and attached
 the existing 16 policy slots, leaving at most 15 later selected owned Contexts.
 No task, queue, timer, session registry, transport, process allowance or
 dependency is added. Dependency proof confirms that the new leaf has exactly
-the persistent-launch Pwright package closure.
+the persistent-launch Playwright Rust package closure.
 
 The persistent-launch tuple is now `(base_url, locale, ignore_https_errors,
 executable_path, channel, timeout_ms)`. Async and sync
@@ -4677,7 +4677,7 @@ selectable `persistent-context-locale` feature composes `persistent-context`
 and `context-locale`, passing the optional locale into host construction before
 the initial topology snapshot. The existing default Context receives the same
 bounded policy as later owned Contexts; attached external Contexts do not.
-Dependency proof shows no Pwright package beyond the persistent launch closure.
+Dependency proof shows no Playwright Rust package beyond the persistent launch closure.
 
 The ABI persistent-launch options tuple is now `(base_url, locale,
 executable_path, channel, timeout_ms)`. Python's async and sync
@@ -4768,7 +4768,7 @@ provisional wheels and red duplicate-override attempts remain diagnostic only.
 NODE-305 advances the package/native handshake to ABI 64. The independently
 selectable `worker-console-argument-handles` feature composes
 `worker-console-events` and `worker-handle-evaluation`; executable dependency
-proof shows that it adds no Pwright package beyond the latter feature's
+proof shows that it adds no Playwright Rust package beyond the latter feature's
 closure. Python accepts the previous 11-field notice for unselected builds and
 the selected 12-field notice that appends ordered Handle descriptors.
 
@@ -4832,7 +4832,7 @@ and Core JS/TS parity remain open.
 
 NODE-304 advances the package/native handshake to ABI 63. The independently
 selectable `worker-handle-evaluation` feature composes `worker-events` and
-`handles`; executable dependency proof shows its Pwright package closure is
+`handles`; executable dependency proof shows its Playwright Rust package closure is
 identical to Page events plus Handles. Selecting neither prerequisite leaves
 the base wheel and the other Worker leaves unchanged.
 
@@ -4959,7 +4959,7 @@ neither report is final evidence. Full Python and Core parity remain open.
 NODE-302 keeps ABI 62: `worker-error-events` adds no native export or public
 descriptor. It is independently selectable over `worker-events` plus
 `page-errors`, and the executable dependency proof shows that it adds no
-Pwright package beyond the existing `page-events` closure. Unselected
+Playwright Rust package beyond the existing `page-events` closure. Unselected
 `page-errors` retains its prior Frame/Page-only behavior.
 
 The selected Rust observer keeps the existing ownership order. It first maps
@@ -5007,7 +5007,7 @@ NODE-301 advances the native handshake to ABI 62 because it exports
 `NativeSession.next_worker_console_notice`. The optional
 `worker-console-events` feature composes `worker-events` and `console-events`;
 it does not widen either prerequisite when unselected. Dependency proof shows
-the selected leaf adds no Pwright package beyond the existing `page-events`
+the selected leaf adds no Playwright Rust package beyond the existing `page-events`
 closure.
 
 The Rust observer forwards every topology event to the existing Worker owner
@@ -5099,7 +5099,7 @@ NODE-299 does not change the Rust/native descriptor ABI. It adds the missing
 sync scheduling adapter around ABI 61. The owner thread has a small asyncio
 dispatcher compatible with official Playwright's `_dispatcher_fiber` contract;
 `greenlet` suspends child facade calls while the submitted browser coroutine
-continues on the existing Pwright loop thread. Root-greenlet calls keep the
+continues on the existing Playwright Rust loop thread. Root-greenlet calls keep the
 ordinary blocking path. Native/browser ownership, CDP routing, event queues and
 all capability logic stay in Rust. Concurrent suspended calls remain covered
 by the existing 32-call admission semaphore.
@@ -5107,7 +5107,7 @@ by the existing 32-call admission semaphore.
 The dispatcher publishes a running loop so official caller-side helpers can
 use `asyncio.create_task`, advances helper work without polling native state,
 and wakes an exact greenlet only from its completed concurrent future. Stop
-clears the loop marker, cancels remaining helper tasks, joins the Pwright loop
+clears the loop marker, cancels remaining helper tasks, joins the Playwright Rust loop
 thread and closes caller state. `greenlet>=3.1.1,<4` is an explicit wheel
 dependency. AAA tests cover helper-loop pumping, two genuinely overlapping
 background coroutines and marker cleanup; installed-wheel units pass 127/127,
@@ -5273,7 +5273,7 @@ Live console interest is also native bounded state: at most 16 Page and 16
 BrowserContext subscription entries, each with a checked listener count and at
 most 32 uniquely tokened action waiters. Persistent listeners are active
 immediately. A real-browser regression schedules a delayed `console.log`,
-registers `page.on("console")`, performs no further Pwright command and still
+registers `page.on("console")`, performs no further Playwright Rust command and still
 receives the message. Action waiters begin pending; ordinary commands activate
 them at their command boundary, while `goto` and `reload` activate them on the
 next main-frame `Page.frameNavigated` observation. Per-waiter tokens make
@@ -5348,7 +5348,7 @@ Compile-time assertions prove that it covers two conservative metadata URL
 copies plus the maximum selected console or Page-error payload and descriptor
 overhead. The profile remains composable: `console-events` and
 `console-history` may be selected independently, and the dependency proof
-shows that event publication adds no Pwright package beyond `page-events`.
+shows that event publication adds no Playwright Rust package beyond `page-events`.
 
 The complete release extension build, all-feature strict Clippy, the
 108-package dependency proof, Ruff format/lint, strict Pyright and 112/112
@@ -5417,7 +5417,7 @@ The candidate baseline passes nine and fails 16, SHA-256
 
 The repr repair lives entirely in the public facades. Page reads its current
 URL; BrowserContext, Browser and BrowserType format already-owned metadata.
-Because Pwright does not download or bundle a browser,
+Because Playwright Rust does not download or bundle a browser,
 `BrowserType.executable_path` is empty. The official shim's `_impl_obj`
 property exists only to run an unchanged upstream assertion that constructs
 its expected value through private implementation state.
@@ -5467,7 +5467,7 @@ must start with the originating `Page.evaluate:` public API name.
 The independent oracle's first attempt is retained as red infrastructure
 evidence, SHA-256
 `a5ea2c01f248e1fafa01df574c8cef8627fa02724d0911735b9c4f0d18536dae`:
-without a Pwright marker Page, fixture setup cannot create a Context through
+without a Playwright Rust marker Page, fixture setup cannot create a Context through
 the dedicated-CDP launch adapter. Restoring the marker makes both unchanged
 oracle rows pass, SHA-256
 `6328485903ac03a3226871803ca6380c99f6e2369a9c94b6f98c529a28abbb0f`.
@@ -5477,7 +5477,7 @@ prefix assertion, SHA-256
 
 The repair mirrors Playwright's public-call boundary without moving browser
 semantics into Python. Rust continues to classify the browser exception as
-`JavascriptError` with stable code `PWRIGHT_JAVASCRIPT`. Python constructs the
+`JavascriptError` with stable code `PLAYWRIGHT_RUST_JAVASCRIPT`. Python constructs the
 same exception type with the public API prefix, carries any explicit public
 name and browser stack, suppresses internal exception chaining, and avoids a
 second prefix if an outer boundary has already shaped the message. Cancellation
@@ -5711,7 +5711,7 @@ invocations remain open.
 ## ABI 52 bounded Response completion checkpoint (2026-10-03)
 
 NODE-284 advances the native handshake to ABI 52 and selects the independent
-`response-finished` feature on top of `response-events`. It adds no Pwright
+`response-finished` feature on top of `response-events`. It adds no Playwright Rust
 package beyond the response-event closure and does not require the separately
 selectable request-history capability.
 
@@ -5771,7 +5771,7 @@ invocations remain open.
 
 NODE-283 advances the native handshake to ABI 51. The wheel selects the
 independent `wait-for-timeout` feature, which adds no package to the
-108-package Pwright closure. The Rust host reserves 4 KiB of leaf storage and
+108-package Playwright Rust closure. The Rust host reserves 4 KiB of leaf storage and
 at most sixteen 512-byte operation leases. Every operation selects between
 session stop, transport disconnect and its Tokio timer, so shutdown cancels
 outstanding waits without an unbounded Python timer/task registry.
@@ -6095,7 +6095,7 @@ invocations remain open.
 ## ABI 48 Page PDF checkpoint (2026-09-28)
 
 NODE-276 advances the native handshake to ABI 48 and adds the independently
-selectable `page-pdf` feature. `pwright-node-host` resolves the exact Page and
+selectable `page-pdf` feature. `playwright-rust-node-host` resolves the exact Page and
 CDP session, reuses the finite per-Page capture queue, dispatches the exact
 default `Page.printToPDF` `ReturnAsStream` command, runs a bounded `IO.read`
 loop, decodes raw/base64 chunks and always issues `IO.close`. It reserves the
@@ -6103,7 +6103,7 @@ loop, decodes raw/base64 chunks and always issues `IO.close`. It reserves the
 and admits at most two concurrent output owners. The PyO3 layer optionally
 persists the bounded bytes to the normalized path; async/sync Python only
 reject uninstalled keyword options and forward Page/path values. The feature
-adds no Pwright package to the 108-package base closure.
+adds no Playwright Rust package to the 108-package base closure.
 
 The unchanged sync source SHA-256 is
 `38c95f81587739897da1e364e0f18e6964a7db327775d0deccc7b76c49684520`.
@@ -6381,7 +6381,7 @@ The independent oracle passes the same rows, report SHA-256 values
 and
 `9d709ae09e8795e64ff300ec18ffff7e8216d09c1df46aaee08d6889f4f00327`.
 
-No Cargo feature, Pwright package or dependency edge is added. Final repaired
+No Cargo feature, Playwright Rust package or dependency edge is added. Final repaired
 wheel SHA-256 values are
 `d95c176835f2e557d7ff6780e398ae0e8db372a8edb9fa608b113de3c20afa11`
 and

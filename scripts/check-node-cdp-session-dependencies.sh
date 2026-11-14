@@ -9,9 +9,9 @@ selected_file=$(mktemp)
 browser_file=$(mktemp)
 trap 'rm -f "$base_file" "$selected_file" "$browser_file"' EXIT
 
-cargo tree --offline --locked -p pwright-node-addon --no-default-features \
+cargo tree --offline --locked -p playwright-rust-node-addon --no-default-features \
   --edges normal --prefix none --format '{p}' | sort -u >"$base_file"
-cargo tree --offline --locked -p pwright-node-addon --no-default-features \
+cargo tree --offline --locked -p playwright-rust-node-addon --no-default-features \
   --features cdp-session --edges normal --prefix none --format '{p}' \
   | sort -u >"$selected_file"
 
@@ -20,7 +20,7 @@ if ! diff -u "$base_file" "$selected_file"; then
   exit 1
 fi
 
-cargo tree --offline --locked -p pwright-node-addon --no-default-features \
+cargo tree --offline --locked -p playwright-rust-node-addon --no-default-features \
   --features browser-cdp-session --edges normal --prefix none --format '{p}' \
   | sort -u >"$browser_file"
 if ! diff -u "$base_file" "$browser_file"; then
@@ -29,7 +29,7 @@ if ! diff -u "$base_file" "$browser_file"; then
 fi
 
 CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 cargo check --offline --release --locked \
-  -p pwright-node-addon --no-default-features --features cdp-session
+  -p playwright-rust-node-addon --no-default-features --features cdp-session
 CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 cargo check --offline --release --locked \
-  -p pwright-node-addon --no-default-features --features browser-cdp-session
+  -p playwright-rust-node-addon --no-default-features --features browser-cdp-session
 printf 'Node cdp-session and browser-cdp-session dependency proofs passed (zero added packages).\n'

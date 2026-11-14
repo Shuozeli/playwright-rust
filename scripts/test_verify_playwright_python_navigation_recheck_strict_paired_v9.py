@@ -337,7 +337,7 @@ def test_exact_recheck_metadata_is_accepted() -> None:
         ("resultSha256", "0" * 64),
         ("caseReportsSha256", "0" * 64),
         ("isolatedCaseCount", 79),
-        ("pwrightArtifactSha256", "0" * 64),
+        ("playwright_rustArtifactSha256", "0" * 64),
         ("exitCode", 0),
     ),
 )

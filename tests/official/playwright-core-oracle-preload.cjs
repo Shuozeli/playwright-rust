@@ -3,10 +3,10 @@
 const Module = require('node:module');
 const path = require('node:path');
 
-const endpoint = process.env.PWRIGHT_ORACLE_CDP_ENDPOINT;
-const upstream = process.env.PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM;
-if (!endpoint) throw new Error('PWRIGHT_ORACLE_CDP_ENDPOINT is required');
-if (!upstream) throw new Error('PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM is required');
+const endpoint = process.env.PLAYWRIGHT_RUST_ORACLE_CDP_ENDPOINT;
+const upstream = process.env.PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM;
+if (!endpoint) throw new Error('PLAYWRIGHT_RUST_ORACLE_CDP_ENDPOINT is required');
+if (!upstream) throw new Error('PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM is required');
 
 const testModeSource = path.join(path.resolve(upstream), 'tests', 'config', 'testMode.ts');
 const originalLoad = Module._load;

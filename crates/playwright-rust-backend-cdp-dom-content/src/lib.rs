@@ -1,0 +1,86 @@
+//! Chromium CDP adapter for portable, read-only Frame DOM serialization.
+//!
+//! This backend leaf attaches to an existing target-local CDP client and
+//! caller-provisioned utility execution context. It does not install public
+//! JavaScript evaluation, screenshots, navigation, a runtime, a browser
+//! provider, Node.js, or browser acquisition.
+
+mod dom_content;
+
+pub use dom_content::{
+    CdpDomContentProductionProfile, CdpDomContentService, CdpDomContentServiceFactory,
+};
+
+use playwright_rust_backend_cdp_common::classify_cdp_failure;
+use playwright_rust_browser_backend::{
+    BackendDescriptor, BackendFeatureDescriptor, BackendFeatureId, BackendId,
+    BackendImplementation, BackendProtocolId, BrowserBackend, BrowserEngine,
+};
+use playwright_rust_cap_dom_content::{
+    DOM_CONTENT_CAPABILITY_ID, FRAME_CONTENT_COMMAND_ID, FRAME_TITLE_COMMAND_ID,
+};
+use playwright_rust_core::ProtocolVersion;
+
+pub const CHROMIUM_CDP_DOM_CONTENT_BACKEND_ID: BackendId =
+    BackendId::new("playwright.rust.backend.chromium-cdp.dom-content");
+pub const CHROMIUM_CDP_PROTOCOL_ID: BackendProtocolId = BackendProtocolId::new("cdp");
+pub const CDP_FRAME_CONTENT_FEATURE: BackendFeatureId = BackendFeatureId::new("frame.content");
+pub const CDP_FRAME_TITLE_FEATURE: BackendFeatureId = BackendFeatureId::new("frame.title");
+pub const CHROMIUM_CDP_DOM_CONTENT_FEATURES: &[BackendFeatureDescriptor] = &[
+    BackendFeatureDescriptor::new(
+        CDP_FRAME_CONTENT_FEATURE,
+        DOM_CONTENT_CAPABILITY_ID,
+        ProtocolVersion::new(1, 0),
+        FRAME_CONTENT_COMMAND_ID,
+        BackendImplementation::Emulated,
+    ),
+    BackendFeatureDescriptor::new(
+        CDP_FRAME_TITLE_FEATURE,
+        DOM_CONTENT_CAPABILITY_ID,
+        ProtocolVersion::new(1, 1),
+        FRAME_TITLE_COMMAND_ID,
+        BackendImplementation::Emulated,
+    ),
+];
+
+pub enum ChromiumCdpDomContentBackend {}
+
+impl BrowserBackend for ChromiumCdpDomContentBackend {
+    const DESCRIPTOR: BackendDescriptor = BackendDescriptor::new(
+        CHROMIUM_CDP_DOM_CONTENT_BACKEND_ID,
+        "Chromium CDP read-only DOM content",
+        BrowserEngine::Chromium,
+        CHROMIUM_CDP_PROTOCOL_ID,
+        CHROMIUM_CDP_DOM_CONTENT_FEATURES,
+    );
+}
+
+#[cfg(test)]
+mod tests {
+    use playwright_rust_browser_backend::{BackendImplementation, BrowserBackend};
+
+    use super::ChromiumCdpDomContentBackend;
+
+    #[test]
+    fn descriptor_contains_only_fixed_dom_reads() {
+        // Arrange
+        let descriptor = ChromiumCdpDomContentBackend::DESCRIPTOR;
+
+        // Act
+        let features = descriptor
+            .features
+            .iter()
+            .map(|feature| (feature.id.as_str(), feature.implementation))
+            .collect::<Vec<_>>();
+
+        // Assert
+        assert_eq!(
+            features,
+            [
+                ("frame.content", BackendImplementation::Emulated),
+                ("frame.title", BackendImplementation::Emulated)
+            ]
+        );
+        assert!(descriptor.event_features.is_empty());
+    }
+}

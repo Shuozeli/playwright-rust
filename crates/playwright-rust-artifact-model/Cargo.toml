@@ -1,0 +1,11 @@
+[package]
+name = "playwright-rust-artifact-model"
+description = "Core-only bounded Artifact and Stream state for Playwright Rust"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+playwright-rust-core = { workspace = true }

@@ -1,0 +1,33 @@
+[package]
+name = "playwright-rust-network-model"
+description = "Backend-neutral bounded HTTP lifecycle values for Playwright Rust"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[features]
+default = []
+extra-headers = []
+network-raw-headers = []
+request-timing = []
+
+[dependencies]
+playwright-rust-core = { workspace = true }
+
+[dev-dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[[example]]
+name = "extra_headers_oracle"
+required-features = ["extra-headers"]
+
+[[example]]
+name = "header_settings_oracle"
+required-features = ["extra-headers"]
+
+[[example]]
+name = "header_overlap_oracle"
+required-features = ["extra-headers"]

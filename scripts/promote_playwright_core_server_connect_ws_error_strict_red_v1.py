@@ -150,7 +150,7 @@ def check_harness() -> None:
         sealed(ROOT / relative, expected)
     sealed(capture.SNAPSHOT_MANIFEST, SNAPSHOT_MANIFEST_SHA256)
     sealed(
-        capture.SOURCE_PACKAGE / "native" / capture.PROFILE / "pwright.node",
+        capture.SOURCE_PACKAGE / "native" / capture.PROFILE / "playwright_rust.node",
         ARTIFACT_SHA256,
     )
     source = (capture.UPSTREAM / capture.SOURCE).read_text()
@@ -229,7 +229,7 @@ def official_outcomes(lane: str) -> tuple[dict[str, Any], dict[str, dict[str, An
         )
         if lane == "candidate":
             require(
-                "browserType.connect is not supported by the current Pwright native profile"
+                "browserType.connect is not supported by the current Playwright Rust native profile"
                 in item["errors"][0]
                 and "<ws connecting> ws://does-not-exist.problem-domain:10987/"
                 in item["errors"][0],

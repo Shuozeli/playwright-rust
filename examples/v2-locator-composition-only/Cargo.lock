@@ -578,64 +578,64 @@ dependencies = [
 ]
 
 [[package]]
-name = "pwright-backend-cdp-common"
+name = "playwright-rust-backend-cdp-common"
 version = "0.1.0"
 dependencies = [
- "pwright-cdp",
- "pwright-core",
+ "playwright-rust-cdp",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-backend-cdp-input"
+name = "playwright-rust-backend-cdp-input"
 version = "0.1.0"
 dependencies = [
- "pwright-cdp",
- "pwright-core",
- "pwright-input-model",
+ "playwright-rust-cdp",
+ "playwright-rust-core",
+ "playwright-rust-input-model",
  "tokio",
 ]
 
 [[package]]
-name = "pwright-backend-cdp-locator"
+name = "playwright-rust-backend-cdp-locator"
 version = "0.1.0"
 dependencies = [
- "pwright-backend-cdp-common",
- "pwright-backend-cdp-input",
- "pwright-backend-cdp-selector-runtime",
- "pwright-cap-locator",
- "pwright-cdp",
- "pwright-core",
+ "playwright-rust-backend-cdp-common",
+ "playwright-rust-backend-cdp-input",
+ "playwright-rust-backend-cdp-selector-runtime",
+ "playwright-rust-cap-locator",
+ "playwright-rust-cdp",
+ "playwright-rust-core",
  "serde_json",
  "tokio",
 ]
 
 [[package]]
-name = "pwright-backend-cdp-selector-runtime"
+name = "playwright-rust-backend-cdp-selector-runtime"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
- "pwright-selector-model",
+ "playwright-rust-core",
+ "playwright-rust-selector-model",
  "serde_json",
 ]
 
 [[package]]
-name = "pwright-cap-locator"
+name = "playwright-rust-cap-locator"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
- "pwright-input-model",
- "pwright-selector-model",
+ "playwright-rust-core",
+ "playwright-rust-input-model",
+ "playwright-rust-selector-model",
 ]
 
 [[package]]
-name = "pwright-cdp"
+name = "playwright-rust-cdp"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
  "dashmap",
  "futures-util",
- "pwright-core",
+ "playwright-rust-core",
  "serde",
  "serde_json",
  "thiserror",
@@ -647,96 +647,96 @@ dependencies = [
 ]
 
 [[package]]
-name = "pwright-codec-binary"
+name = "playwright-rust-codec-binary"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-codec-common"
+name = "playwright-rust-codec-common"
 version = "0.1.0"
 dependencies = [
- "pwright-codec-binary",
- "pwright-core",
+ "playwright-rust-codec-binary",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-codec-locator"
+name = "playwright-rust-codec-locator"
 version = "0.1.0"
 dependencies = [
- "pwright-cap-locator",
- "pwright-codec-binary",
- "pwright-codec-common",
- "pwright-core",
- "pwright-transport",
+ "playwright-rust-cap-locator",
+ "playwright-rust-codec-binary",
+ "playwright-rust-codec-common",
+ "playwright-rust-core",
+ "playwright-rust-transport",
 ]
 
 [[package]]
-name = "pwright-composition-chromium-locator"
+name = "playwright-rust-composition-chromium-locator"
 version = "0.1.0"
 dependencies = [
- "pwright-backend-cdp-input",
- "pwright-backend-cdp-locator",
- "pwright-cap-locator",
- "pwright-cdp",
- "pwright-codec-locator",
- "pwright-core",
- "pwright-server-locator",
- "pwright-transport",
+ "playwright-rust-backend-cdp-input",
+ "playwright-rust-backend-cdp-locator",
+ "playwright-rust-cap-locator",
+ "playwright-rust-cdp",
+ "playwright-rust-codec-locator",
+ "playwright-rust-core",
+ "playwright-rust-server-locator",
+ "playwright-rust-transport",
 ]
 
 [[package]]
-name = "pwright-connection-control"
+name = "playwright-rust-connection-control"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-core"
+name = "playwright-rust-core"
 version = "0.1.0"
 
 [[package]]
-name = "pwright-input-model"
+name = "playwright-rust-input-model"
 version = "0.1.0"
 
 [[package]]
-name = "pwright-selector-model"
+name = "playwright-rust-selector-model"
 version = "0.1.0"
 
 [[package]]
-name = "pwright-server-locator"
+name = "playwright-rust-server-locator"
 version = "0.1.0"
 dependencies = [
- "pwright-cap-locator",
- "pwright-codec-locator",
- "pwright-core",
- "pwright-server-wire",
- "pwright-transport",
+ "playwright-rust-cap-locator",
+ "playwright-rust-codec-locator",
+ "playwright-rust-core",
+ "playwright-rust-server-wire",
+ "playwright-rust-transport",
 ]
 
 [[package]]
-name = "pwright-server-wire"
+name = "playwright-rust-server-wire"
 version = "0.1.0"
 dependencies = [
- "pwright-connection-control",
- "pwright-core",
- "pwright-transport",
+ "playwright-rust-connection-control",
+ "playwright-rust-core",
+ "playwright-rust-transport",
 ]
 
 [[package]]
-name = "pwright-transport"
+name = "playwright-rust-transport"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-v2-locator-composition-only-example"
+name = "playwright-rust-v2-locator-composition-only-example"
 version = "0.1.0"
 dependencies = [
- "pwright-composition-chromium-locator",
+ "playwright-rust-composition-chromium-locator",
 ]
 
 [[package]]

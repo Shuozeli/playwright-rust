@@ -10,8 +10,8 @@ target/
 __pycache__/
 *.py[cod]
 
-# Session state (created by pwright CLI)
-.pwright/
+# Session state (created by playwright-rust CLI)
+.playwright-rust/
 
 # IDE / editor
 .idea/
@@ -32,7 +32,7 @@ Thumbs.db
 
 # Node (test harness)
 node_modules/
-packages/pwright/native/
+packages/playwright-rust/native/
 # Private integration scripts
 examples/scripts-dragb-private/
 docs/dragb-integration-report.md

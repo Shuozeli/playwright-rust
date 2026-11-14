@@ -1,0 +1,42 @@
+[package]
+name = "playwright-rust-composition-chromium-handle-evaluation"
+description = "Pluggable Chromium retained-Handle evaluation composition"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[features]
+native-creation = ["dep:serde_json"]
+frame-value = []
+handle-value = []
+retained-reference = []
+
+[dependencies]
+playwright-rust-backend-cdp-common = { workspace = true }
+playwright-rust-backend-cdp-evaluation = { workspace = true }
+playwright-rust-backend-cdp-handle-evaluation = { workspace = true }
+playwright-rust-cap-handle-evaluation = { workspace = true }
+playwright-rust-cap-handle-lifecycle = { workspace = true }
+playwright-rust-cdp = { workspace = true }
+playwright-rust-codec-handle-evaluation = { workspace = true }
+playwright-rust-composition-chromium-handle-lifecycle = { workspace = true }
+playwright-rust-core = { workspace = true }
+playwright-rust-runtime = { workspace = true }
+playwright-rust-server-handle-evaluation = { workspace = true }
+playwright-rust-transport = { workspace = true }
+serde_json = { workspace = true, optional = true }
+
+[dev-dependencies]
+playwright-rust-browser-model = { workspace = true }
+playwright-rust-browser-provider = { workspace = true }
+playwright-rust-codec-control = { workspace = true }
+playwright-rust-fake = { workspace = true }
+playwright-rust-plugin-ordered-handle-delivery = { workspace = true }
+playwright-rust-provider-cdp = { workspace = true }
+playwright-rust-runtime-control = { workspace = true }
+playwright-rust-server-wire = { workspace = true }
+playwright-rust-transport-memory = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt", "time"] }

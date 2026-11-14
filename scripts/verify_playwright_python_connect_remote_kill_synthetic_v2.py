@@ -15,7 +15,7 @@ import verify_playwright_python_connect_remote_kill_synthetic_v1 as prior
 
 ROOT = prior.ROOT
 RESULT_PARENT = prior.RESULT_PARENT
-MANIFEST = ROOT / "packages/pwright-python/tests/official/connect_remote_kill_synthetic_v2/manifest.json"
+MANIFEST = ROOT / "packages/playwright-rust-python/tests/official/connect_remote_kill_synthetic_v2/manifest.json"
 BUILD_WHEEL = ROOT / ".work/official-conformance/builds/python-remote-terminal-fix-oct20" / prior.WHEEL_NAME
 PREDECESSOR = RESULT_PARENT / "python-connect-remote-kill-synthetic-v1-oct20-final"
 PREDECESSOR_SHA256 = "6d75f73094c46e7127ee87cc7319bd4e1edadde2986dc4505601aadb37590a59"
@@ -25,11 +25,11 @@ RESULT_PREFIX = "python-connect-remote-kill-synthetic-v2-terminal-fix-"
 CASE_IDS = prior.CASE_IDS
 CANDIDATE_REPEATS = 5
 SOURCE_HASHES = {
-    "packages/pwright-python/python/pwright/__init__.py": "ee807562416e961ed784e9b480f0685703e71ca288fd6652ed05bc6365908cb7",
-    "packages/pwright-python/python/pwright/async_api.py": "270493c6d5b4bd1956d85d7b040af23fbb5a1792a88e9084cac3a253925972e2",
-    "packages/pwright-python/python/pwright/sync_api.py": "8da383a74361e56b9ab6c24a791e30aa65ebdd921f03c316dd799897e3198f52",
-    "crates/pwright-node-addon/src/remote_browser.rs": "e5167167e3d58b09cfbbcded9d20b5573150947913877e52a8dad20087d153c8",
-    "crates/pwright-playwright-server-client-core/src/lib.rs": "eaaa55a8d424efcc7d8e5db25e22ab4295f63910f809ad1bb2095cd5eb0ad349",
+    "packages/playwright-rust-python/python/playwright_rust/__init__.py": "ee807562416e961ed784e9b480f0685703e71ca288fd6652ed05bc6365908cb7",
+    "packages/playwright-rust-python/python/playwright_rust/async_api.py": "270493c6d5b4bd1956d85d7b040af23fbb5a1792a88e9084cac3a253925972e2",
+    "packages/playwright-rust-python/python/playwright_rust/sync_api.py": "8da383a74361e56b9ab6c24a791e30aa65ebdd921f03c316dd799897e3198f52",
+    "crates/playwright-rust-node-addon/src/remote_browser.rs": "e5167167e3d58b09cfbbcded9d20b5573150947913877e52a8dad20087d153c8",
+    "crates/playwright-rust-playwright-server-client-core/src/lib.rs": "eaaa55a8d424efcc7d8e5db25e22ab4295f63910f809ad1bb2095cd5eb0ad349",
 }
 HARNESS_INPUTS = tuple(dict.fromkeys((
     *prior.HARNESS_INPUTS,
@@ -98,7 +98,7 @@ def verify_wheel_install(wheel: Path, site_packages: Path) -> dict[str, str]:
     installed: dict[str, str] = {}
     with zipfile.ZipFile(wheel) as archive:
         for name in archive.namelist():
-            if not name.startswith(("pwright/", "pwright.libs/")) or name.endswith("/"):
+            if not name.startswith(("playwright_rust/", "playwright_rust.libs/")) or name.endswith("/"):
                 continue
             target = site_packages / name
             prior.require(target.is_file() and not target.is_symlink(),
@@ -108,13 +108,13 @@ def verify_wheel_install(wheel: Path, site_packages: Path) -> dict[str, str]:
                           f"installed fixed wheel differs from archive: {name}")
             installed[name] = digest
         for source_relative, digest in SOURCE_HASHES.items():
-            if not source_relative.startswith("packages/pwright-python/python/pwright/"):
+            if not source_relative.startswith("packages/playwright-rust-python/python/playwright_rust/"):
                 continue
-            archive_name = source_relative.removeprefix("packages/pwright-python/python/")
+            archive_name = source_relative.removeprefix("packages/playwright-rust-python/python/")
             prior.require(archive_name in installed and installed[archive_name] == digest,
                           f"fixed wheel Python source mismatch: {archive_name}")
     prior.require(all(name in installed for name in (
-        "pwright/_native.abi3.so", "pwright/async_api.py", "pwright/sync_api.py")),
+        "playwright_rust/_native.abi3.so", "playwright_rust/async_api.py", "playwright_rust/sync_api.py")),
         "fixed wheel missing required API/native artifacts")
     return installed
 
@@ -130,10 +130,10 @@ def verify_tooling(result_dir: Path, wheel: Path) -> dict[str, str]:
         if name != "python":
             prior.require(f"{name}=={version}" in frozen,
                           f"tooling version changed: {name}")
-    prior.require(f"shuozeli-pwright @ file://{wheel}" in frozen,
+    prior.require(f"shuozeli-playwright-rust @ file://{wheel}" in frozen,
                   "installed candidate wheel source changed")
     log = install_log.read_text()
-    prior.require("playwright==1.58.0" in log and "shuozeli-pwright==0.1.0" in log,
+    prior.require("playwright==1.58.0" in log and "shuozeli-playwright-rust==0.1.0" in log,
                   "tooling installation log changed")
     return {"install.log": prior.sha256(install_log),
             "tooling-freeze.txt": prior.sha256(freeze)}
@@ -173,20 +173,20 @@ def verify_directory(result_dir: Path) -> dict[str, Any]:
             f"{label} pytest command changed")
         env = provenance.get("environment")
         prior.require(isinstance(env, dict), f"{label} environment absent")
-        bind = str(env.get("PWRIGHT_OFFICIAL_TAILSCALE_IP", ""))
-        host = str(env.get("PWRIGHT_OFFICIAL_TAILSCALE_HOST", ""))
+        bind = str(env.get("PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_IP", ""))
+        host = str(env.get("PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_HOST", ""))
         prior.require(ipaddress.ip_address(bind) in ipaddress.ip_network("100.64.0.0/10")
                       and host.endswith(".ts.net"), f"{label} Tailscale address changed")
-        prior.require(env.get("PWRIGHT_PYTHON_CLOSE_EVENTS_MODE") == mode
-                      and env.get("PWRIGHT_PYTHON_CLOSE_EVENTS_ENGINE_FILTER") == "chromium"
-                      and env.get("PWRIGHT_PYTHON_CLOSE_EVENTS_RECEIPT") == str(receipt_path)
-                      and env.get("PWRIGHT_PYTHON_CLOSE_EVENTS_SERVER") == str(prior.SERVER)
-                      and env.get("PWRIGHT_PYTHON_CLOSE_EVENTS_UPSTREAM") == str(prior.UPSTREAM)
-                      and env.get("PWRIGHT_PYTHON_CLOSE_EVENTS_CORE_UPSTREAM") == str(prior.CORE),
+        prior.require(env.get("PLAYWRIGHT_RUST_PYTHON_CLOSE_EVENTS_MODE") == mode
+                      and env.get("PLAYWRIGHT_RUST_PYTHON_CLOSE_EVENTS_ENGINE_FILTER") == "chromium"
+                      and env.get("PLAYWRIGHT_RUST_PYTHON_CLOSE_EVENTS_RECEIPT") == str(receipt_path)
+                      and env.get("PLAYWRIGHT_RUST_PYTHON_CLOSE_EVENTS_SERVER") == str(prior.SERVER)
+                      and env.get("PLAYWRIGHT_RUST_PYTHON_CLOSE_EVENTS_UPSTREAM") == str(prior.UPSTREAM)
+                      and env.get("PLAYWRIGHT_RUST_PYTHON_CLOSE_EVENTS_CORE_UPSTREAM") == str(prior.CORE),
                       f"{label} fixture environment changed")
-        prior.require(env.get("PWRIGHT_OFFICIAL_LAUNCH_MODE") == "owned"
-                      and env.get("PWRIGHT_CDP_ENDPOINT") is None
-                      and env.get("PWRIGHT_CDP_WS_URL") is None,
+        prior.require(env.get("PLAYWRIGHT_RUST_OFFICIAL_LAUNCH_MODE") == "owned"
+                      and env.get("PLAYWRIGHT_RUST_CDP_ENDPOINT") is None
+                      and env.get("PLAYWRIGHT_RUST_CDP_WS_URL") is None,
                       f"{label} inherited browser/CDP setting")
         paths = str(env.get("PYTHONPATH", "")).split(":")
         expected_paths = [str(prior.SHIM), str(prior.RUNTIME), str(prior.PLUGIN_DIR),

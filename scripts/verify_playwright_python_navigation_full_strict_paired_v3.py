@@ -29,17 +29,17 @@ BUILD = WORK / "builds/python-frame-navigation-postfix-oct20.6zcD6U"
 BASE_DIR = WORK / "outcomes/python-navigation-frame-chromium-strict-paired-v2"
 OUTPUT_DIR = WORK / "outcomes/python-navigation-full-chromium-strict-paired-v3"
 INVENTORY = WORK / "playwright-python-v1.58.0-profiled.jsonl"
-MANIFEST = ROOT / "packages/pwright-python/tests/official/manifest.json"
+MANIFEST = ROOT / "packages/playwright-rust-python/tests/official/manifest.json"
 UPSTREAM = Path("/Users/cyuan/projects/thirdparty/playwright-python")
 NAVIGATION_SOURCE = UPSTREAM / "tests/async/test_navigation.py"
 SOURCE_PINS = OUTPUT_DIR / "source-pins.json"
 RESULT = BUILD / "results/navigation-candidate-full-abi128-v5.xml"
 PROVENANCE = RESULT.with_suffix(".provenance.json")
 CANDIDATE_VENV = BUILD / "candidate-abi128-v5-full-nav"
-CANDIDATE_PACKAGE = CANDIDATE_VENV / "lib/python3.12/site-packages/pwright"
+CANDIDATE_PACKAGE = CANDIDATE_VENV / "lib/python3.12/site-packages/playwright-rust"
 CANDIDATE_ARTIFACT = CANDIDATE_PACKAGE / "_native.abi3.so"
 PYTHON_EXECUTABLE = CANDIDATE_VENV / "bin/python"
-WHEEL = BUILD / "wheel-abi128-v5/shuozeli_pwright-0.1.0-cp39-abi3-macosx_11_0_arm64.whl"
+WHEEL = BUILD / "wheel-abi128-v5/shuozeli_playwright-rust-0.1.0-cp39-abi3-macosx_11_0_arm64.whl"
 BASE_VERIFIER = (
     ROOT / "scripts/verify_playwright_python_navigation_frame_strict_paired_v2.py"
 )
@@ -89,10 +89,10 @@ RESULT_SHA256 = "8082a55316d549b02a5c21fc1311224b5e6eda6476978e65a94f4d5d78e4d19
 PROVENANCE_SHA256 = "9098f4ee457aabacae159351b42c6abc60cad40d254dd4380088aa7b1a9c90b6"
 CASE_REPORTS_SHA256 = "b996b2202b06122b6eae4c70d0c1ba7a862e437886e350d4e1f537d2b6c3d440"
 ISOLATED_IDS_SHA256 = "4b9f37f3a3857ddf59e9b5766255f84dfe83d3d5af76285208e176088f656696"
-PWRIGHT_ARTIFACT_SHA256 = (
+PLAYWRIGHT_RUST_ARTIFACT_SHA256 = (
     "9a659567aaed311d3a947199944fbcda6724ab4d6c349e2534181cbab5241124"
 )
-PWRIGHT_PACKAGE_SHA256 = (
+PLAYWRIGHT_RUST_PACKAGE_SHA256 = (
     "0070c191a57572e533940f56fb41761a51926a80f694cd0017c6cd5f6b672513"
 )
 SOURCE_PINS_SHA256 = "28dd1eb8e6d3539b5b716297a7ceb4e0aeb969877c05ff5c482634b700568226"
@@ -442,10 +442,10 @@ def check_report_metadata(payload: dict[str, Any]) -> None:
         and payload.get("secureHttpFixture") is False
         and payload.get("exitCode") == 1
         and payload.get("pythonExecutable") == str(PYTHON_EXECUTABLE)
-        and payload.get("pwrightPackage") == str(CANDIDATE_PACKAGE)
-        and payload.get("pwrightArtifact") == str(CANDIDATE_ARTIFACT)
-        and payload.get("pwrightArtifactSha256") == PWRIGHT_ARTIFACT_SHA256
-        and payload.get("pwrightPackageSha256") == PWRIGHT_PACKAGE_SHA256,
+        and payload.get("playwright_rustPackage") == str(CANDIDATE_PACKAGE)
+        and payload.get("playwright_rustArtifact") == str(CANDIDATE_ARTIFACT)
+        and payload.get("playwright_rustArtifactSha256") == PLAYWRIGHT_RUST_ARTIFACT_SHA256
+        and payload.get("playwright_rustPackageSha256") == PLAYWRIGHT_RUST_PACKAGE_SHA256,
         "full-80 provenance identity or execution scope differs",
     )
 
@@ -475,7 +475,7 @@ def _verify_report(
 
 def _verify_wheel(provenance: dict[str, Any]) -> None:
     wheel_raw = sealed(WHEEL, WHEEL_SHA256, "frozen ABI128-v5 wheel")
-    package = provenance.get("pwrightPackage")
+    package = provenance.get("playwright_rustPackage")
     require(isinstance(package, str), "report installed package path missing")
     package_path = Path(package)
     require(
@@ -484,11 +484,11 @@ def _verify_wheel(provenance: dict[str, Any]) -> None:
     )
     try:
         with zipfile.ZipFile(io.BytesIO(wheel_raw)) as archive:
-            native = archive.read("pwright/_native.abi3.so")
+            native = archive.read("playwright_rust/_native.abi3.so")
             files = [
                 item
                 for item in archive.infolist()
-                if item.filename.startswith("pwright/") and not item.is_dir()
+                if item.filename.startswith("playwright_rust/") and not item.is_dir()
             ]
             require(bool(files), "frozen wheel has no Python package")
             names = [item.filename for item in files]
@@ -498,7 +498,7 @@ def _verify_wheel(provenance: dict[str, Any]) -> None:
             )
             digest = hashlib.sha256()
             for item in files:
-                relative = Path(item.filename.removeprefix("pwright/"))
+                relative = Path(item.filename.removeprefix("playwright_rust/"))
                 require(
                     relative.parts
                     and all(part not in {"..", "."} for part in relative.parts),
@@ -514,7 +514,7 @@ def _verify_wheel(provenance: dict[str, Any]) -> None:
                     f"wheel/installed package file differs: {item.filename}",
                 )
             for item in sorted(files, key=lambda value: value.filename):
-                relative = item.filename.removeprefix("pwright/")
+                relative = item.filename.removeprefix("playwright_rust/")
                 name = relative.encode()
                 raw = archive.read(item)
                 digest.update(len(name).to_bytes(8, "big"))
@@ -522,20 +522,20 @@ def _verify_wheel(provenance: dict[str, Any]) -> None:
                 digest.update(len(raw).to_bytes(8, "big"))
                 digest.update(raw)
             require(
-                digest.hexdigest() == PWRIGHT_PACKAGE_SHA256,
+                digest.hexdigest() == PLAYWRIGHT_RUST_PACKAGE_SHA256,
                 "wheel package SHA differs",
             )
             require(
-                b"NATIVE_ABI_VERSION = 128" in archive.read("pwright/_abi.py"),
+                b"NATIVE_ABI_VERSION = 128" in archive.read("playwright_rust/_abi.py"),
                 "wheel ABI is not 128",
             )
     except (OSError, KeyError, zipfile.BadZipFile) as error:
         raise FullNavigationValidationError(
             "frozen wheel has no valid native artifact"
         ) from error
-    require(sha256(native) == PWRIGHT_ARTIFACT_SHA256, "wheel/native artifact differs")
+    require(sha256(native) == PLAYWRIGHT_RUST_ARTIFACT_SHA256, "wheel/native artifact differs")
     require(
-        provenance.get("pwrightArtifactSha256") == sha256(native),
+        provenance.get("playwright_rustArtifactSha256") == sha256(native),
         "report/wheel native artifact differs",
     )
 
@@ -543,7 +543,7 @@ def _verify_wheel(provenance: dict[str, Any]) -> None:
 def check_source_pins(source_pins: dict[str, Any], provenance: dict[str, Any]) -> None:
     """Require the exact ABI128-v5 wheel/report identity and 80-case scope."""
     require(type(source_pins.get("schema")) is int, "v3 source-pin schema type differs")
-    for field in ("harnessInputs", "toolingSources", "pwrightRuntimeLibraries"):
+    for field in ("harnessInputs", "toolingSources", "playwright_rustRuntimeLibraries"):
         require(
             isinstance(provenance.get(field), list) and bool(provenance[field]),
             f"full-80 report {field} is missing",
@@ -567,12 +567,12 @@ def check_source_pins(source_pins: dict[str, Any], provenance: dict[str, Any]) -
         "frozenWheelSha256": WHEEL_SHA256,
         "wheelName": WHEEL.name,
         "installedNativeAbi": 128,
-        "pwrightArtifactSha256": PWRIGHT_ARTIFACT_SHA256,
-        "pwrightPackageSha256": PWRIGHT_PACKAGE_SHA256,
+        "playwright_rustArtifactSha256": PLAYWRIGHT_RUST_ARTIFACT_SHA256,
+        "playwright_rustPackageSha256": PLAYWRIGHT_RUST_PACKAGE_SHA256,
         "playwrightPackageSha256": package_sha,
         "harnessInputs": provenance["harnessInputs"],
         "toolingSources": provenance["toolingSources"],
-        "pwrightRuntimeLibraries": provenance["pwrightRuntimeLibraries"],
+        "playwright_rustRuntimeLibraries": provenance["playwright_rustRuntimeLibraries"],
     }
     require(source_pins == expected, "v3 source-pin identity differs")
 

@@ -6,12 +6,12 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { fileURLToPath } = require('node:url');
 
-const mode = process.env.PWRIGHT_CORE_WAITERS_SYNTHETIC_MODE;
-const upstream = process.env.PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM;
-const receipt = process.env.PWRIGHT_CORE_WAITERS_SYNTHETIC_RECEIPT;
-const fixture = process.env.PWRIGHT_CORE_WAITERS_SYNTHETIC_SERVER;
-const host = process.env.PWRIGHT_OFFICIAL_SERVER_HOST;
-const bind = process.env.PWRIGHT_OFFICIAL_SERVER_IP;
+const mode = process.env.PLAYWRIGHT_RUST_CORE_WAITERS_SYNTHETIC_MODE;
+const upstream = process.env.PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM;
+const receipt = process.env.PLAYWRIGHT_RUST_CORE_WAITERS_SYNTHETIC_RECEIPT;
+const fixture = process.env.PLAYWRIGHT_RUST_CORE_WAITERS_SYNTHETIC_SERVER;
+const host = process.env.PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST;
+const bind = process.env.PLAYWRIGHT_RUST_OFFICIAL_SERVER_IP;
 if (!['candidate', 'oracle'].includes(mode) || !upstream || !receipt || !fixture)
   throw new Error('synthetic waiters preload requires mode, sources and receipt');
 if (!/^[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*\.ts\.net$/.test(host || ''))
@@ -20,8 +20,8 @@ if (!/^100\.(?:6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\.(?:[0-9]{1,3})\.(?:[0-9]{1
   throw new Error('synthetic waiters fixture requires Tailscale IPv4 bind');
 if (!path.isAbsolute(fixture) || !fs.statSync(fixture).isFile())
   throw new Error('synthetic waiters server must be an absolute regular file');
-for (const key of ['PWRIGHT_CANDIDATE_CDP_ENDPOINT', 'PWRIGHT_ORACLE_CDP_ENDPOINT',
-  'PWRIGHT_CDP_ENDPOINT', 'PWRIGHT_CDP_WS_URL']) {
+for (const key of ['PLAYWRIGHT_RUST_CANDIDATE_CDP_ENDPOINT', 'PLAYWRIGHT_RUST_ORACLE_CDP_ENDPOINT',
+  'PLAYWRIGHT_RUST_CDP_ENDPOINT', 'PLAYWRIGHT_RUST_CDP_WS_URL']) {
   if (process.env[key]) throw new Error(`synthetic waiters fixture forbids ${key}`);
 }
 const argv = process.argv;
@@ -51,7 +51,7 @@ for (const snippet of [
   if (!sourceText.includes(snippet)) throw new Error(`selected upstream assertion drifted: ${snippet}`);
 }
 const before = "const command = ['node', path.join(__dirname, '..', '..', 'packages', 'playwright-core', 'cli.js'), 'run-server'];";
-const after = "const command = ['node', process.env.PWRIGHT_CORE_WAITERS_SYNTHETIC_SERVER!];";
+const after = "const command = ['node', process.env.PLAYWRIGHT_RUST_CORE_WAITERS_SYNTHETIC_SERVER!];";
 if (fixtureText.split(before).length !== 2)
   throw new Error('upstream run-server launcher changed or appears more than once');
 const adaptedFixture = fixtureText.replace(before, after);
@@ -59,14 +59,14 @@ const adaptedFixtureSha256 = sha256(adaptedFixture);
 
 let ownerBound = null;
 if (mode === 'candidate') {
-  if (process.env.PWRIGHT_NATIVE_PROFILE !== 'playwright-server-connect-session')
+  if (process.env.PLAYWRIGHT_RUST_NATIVE_PROFILE !== 'playwright-server-connect-session')
     throw new Error('synthetic waiters candidate requires the remote-session profile');
   require('./playwright-core-browser-type-owner-v2-preload.cjs');
-  const candidate = require(path.resolve(process.env.PWRIGHT_NODE_CANDIDATE || ''));
+  const candidate = require(path.resolve(process.env.PLAYWRIGHT_RUST_NODE_CANDIDATE || ''));
   ownerBound = ['chromium', 'firefox', 'webkit'].every(name => candidate[name]._playwright === candidate);
   if (!ownerBound) throw new Error('candidate BrowserType fixture backpointer is missing');
-} else if (process.env.PWRIGHT_NODE_CANDIDATE || process.env.PWRIGHT_NATIVE_PROFILE) {
-  throw new Error('synthetic waiters oracle must not load Pwright');
+} else if (process.env.PLAYWRIGHT_RUST_NODE_CANDIDATE || process.env.PLAYWRIGHT_RUST_NATIVE_PROFILE) {
+  throw new Error('synthetic waiters oracle must not load Playwright Rust');
 }
 
 function record(kind, extra = {}) {

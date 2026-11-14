@@ -14,27 +14,27 @@ cargo tree \
   --edges normal \
   --prefix none \
   --format '{p}' \
-  | awk '/^pwright-/ { print $1 }' \
+  | awk '/^playwright-rust-/ { print $1 }' \
   | sort -u >"$tree_file"
 
 required_packages=(
-  pwright-v2-context-lifecycle-composition-only-example
-  pwright-backend-cdp-common
-  pwright-backend-cdp-context-lifecycle
-  pwright-backend-cdp-topology
-  pwright-browser-model
-  pwright-cap-context-lifecycle
-  pwright-cdp
-  pwright-codec-binary
-  pwright-codec-common
-  pwright-codec-context-lifecycle
-  pwright-composition-chromium-context-lifecycle
-  pwright-connection-control
-  pwright-core
-  pwright-runtime
-  pwright-server-context-lifecycle
-  pwright-server-wire
-  pwright-transport
+  playwright-rust-v2-context-lifecycle-composition-only-example
+  playwright-rust-backend-cdp-common
+  playwright-rust-backend-cdp-context-lifecycle
+  playwright-rust-backend-cdp-topology
+  playwright-rust-browser-model
+  playwright-rust-cap-context-lifecycle
+  playwright-rust-cdp
+  playwright-rust-codec-binary
+  playwright-rust-codec-common
+  playwright-rust-codec-context-lifecycle
+  playwright-rust-composition-chromium-context-lifecycle
+  playwright-rust-connection-control
+  playwright-rust-core
+  playwright-rust-runtime
+  playwright-rust-server-context-lifecycle
+  playwright-rust-server-wire
+  playwright-rust-transport
 )
 
 for package in "${required_packages[@]}"; do
@@ -53,9 +53,9 @@ while IFS= read -r package; do
     fi
   done
   if [[ "$allowed" != true ]]; then
-    echo "Context-lifecycle composition proof found forbidden Pwright package: $package" >&2
+    echo "Context-lifecycle composition proof found forbidden Playwright Rust package: $package" >&2
     exit 1
   fi
 done <"$tree_file"
 
-echo "Context-lifecycle composition dependency proof passed (${#required_packages[@]} Pwright packages)"
+echo "Context-lifecycle composition dependency proof passed (${#required_packages[@]} Playwright Rust packages)"

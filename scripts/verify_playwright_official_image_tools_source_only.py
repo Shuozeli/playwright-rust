@@ -1,7 +1,7 @@
 """Independently verify the pinned upstream-private image-tools pass receipt.
 
 This is deliberately separate from the runner and from the historical Core
-source-only verifier. A valid receipt is not Pwright runtime or public-API
+source-only verifier. A valid receipt is not Playwright Rust runtime or public-API
 parity evidence.
 """
 
@@ -115,7 +115,7 @@ def _verify_manifest(record: dict[str, Any]) -> dict[str, Any]:
         and suite.get("id") == _SUITE
         and suite.get("role") == "implementation-internal-source-only"
         and suite.get("sourceOnlyCase") == _CASE
-        and suite.get("sourceOnlyAdapter") == "upstream-private-source-only-no-pwright-runtime"
+        and suite.get("sourceOnlyAdapter") == "upstream-private-source-only-no-playwright-rust-runtime"
         and "candidateAdapter" not in suite
         and suite.get("fixtureMode") == "pinned-private-source-only-no-io"
         and suite.get("requiresBrowser") is False
@@ -257,7 +257,7 @@ def verify(provenance_path: Path) -> dict[str, Any]:
         and record.get("mode") in {"candidate", "oracle"}
         and record.get("suite") == _SUITE
         and record.get("suiteRole") == "implementation-internal-source-only"
-        and record.get("adapter") == "upstream-private-source-only-no-pwright-runtime"
+        and record.get("adapter") == "upstream-private-source-only-no-playwright-rust-runtime"
         and record.get("requiresBrowser") is False
         and record.get("project") == "image_tools"
         and record.get("filters") == _ARGS

@@ -16,13 +16,13 @@ ROOT = Path(__file__).parents[1].resolve()
 UPSTREAM = Path("/Users/cyuan/projects/thirdparty/playwright-python")
 CORE = Path("/Users/cyuan/projects/thirdparty/playwright-v1.58.0")
 RESULT_PARENT = ROOT / ".work/official-conformance/results"
-PLUGIN_DIR = ROOT / "packages/pwright-python/tests/official/connect_lifecycle_synthetic_v1"
+PLUGIN_DIR = ROOT / "packages/playwright-rust-python/tests/official/connect_lifecycle_synthetic_v1"
 MANIFEST = PLUGIN_DIR / "manifest.json"
 SERVER = PLUGIN_DIR / "server.cjs"
-PLUGIN = PLUGIN_DIR / "pwright_python_connect_lifecycle_synthetic_v1.py"
-RUNTIME = ROOT / "packages/pwright-python/tests/official/runtime"
-SHIM = ROOT / "packages/pwright-python/tests/official/shim"
-WHEEL_NAME = "shuozeli_pwright-0.1.0-cp39-abi3-macosx_11_0_arm64.whl"
+PLUGIN = PLUGIN_DIR / "playwright_rust_python_connect_lifecycle_synthetic_v1.py"
+RUNTIME = ROOT / "packages/playwright-rust-python/tests/official/runtime"
+SHIM = ROOT / "packages/playwright-rust-python/tests/official/shim"
+WHEEL_NAME = "shuozeli_playwright-rust-0.1.0-cp39-abi3-macosx_11_0_arm64.whl"
 WHEEL_SHA256 = "3d8b4aa56f2a9cfe0777daf8b40bb258cbd5025756f7e59aba4d151aaf0f2349"
 UPSTREAM_COMMIT = "47a5d35ef4f815a2021349f86ae391f7c20c02d6"
 CORE_COMMIT = "961381ec73a9fa2661d92504eab1a6bd6eaffc75"
@@ -72,9 +72,9 @@ HARNESS_INPUTS = (
     MANIFEST,
     PLUGIN,
     SERVER,
-    RUNTIME / "pwright_official_server_runtime.py",
-    RUNTIME / "pwright_official_oracle_runtime.py",
-    SHIM / "pwright_candidate_runtime.py",
+    RUNTIME / "playwright_rust_official_server_runtime.py",
+    RUNTIME / "playwright_rust_official_oracle_runtime.py",
+    SHIM / "playwright_rust_candidate_runtime.py",
     SHIM / "playwright/async_api.py",
     SHIM / "playwright/sync_api.py",
     ROOT / "scripts/run_playwright_python_connect_lifecycle_synthetic_v1.py",
@@ -185,7 +185,7 @@ def _verify_wheel_install(wheel: Path, site_packages: Path) -> dict[str, str]:
     with zipfile.ZipFile(wheel) as archive:
         for name in archive.namelist():
             if not (
-                name.startswith("pwright/") or name.startswith("pwright.libs/")
+                name.startswith("playwright_rust/") or name.startswith("playwright_rust.libs/")
             ) or name.endswith("/"):
                 continue
             target = site_packages / name
@@ -200,7 +200,7 @@ def _verify_wheel_install(wheel: Path, site_packages: Path) -> dict[str, str]:
             )
             installed[name] = digest
     _require(
-        "pwright/_native.abi3.so" in installed and "pwright/async_api.py" in installed,
+        "playwright_rust/_native.abi3.so" in installed and "playwright_rust/async_api.py" in installed,
         "selected wheel lacks remote facade or native addon",
     )
     return installed
@@ -347,7 +347,7 @@ def _receipt(
         _require(
             paths.get("publicApiPath") == str((SHIM / "playwright/async_api.py").resolve())
             and paths.get("candidatePackagePath")
-            == str((site_packages / "pwright/__init__.py").resolve()),
+            == str((site_packages / "playwright_rust/__init__.py").resolve()),
             "candidate did not import frozen wheel through public shim",
         )
     _require(
@@ -442,7 +442,7 @@ def verify_directory(result_dir: Path) -> dict[str, Any]:
     _require(wheel.is_file() and not wheel.is_symlink(), "frozen wheel missing")
     site_packages = result_dir / "venv/lib/python3.12/site-packages"
     installed = _verify_wheel_install(wheel, site_packages)
-    native = site_packages / "pwright/_native.abi3.so"
+    native = site_packages / "playwright_rust/_native.abi3.so"
     oracle_tree = _package_tree_sha256(site_packages / "playwright")
     tooling_freeze = result_dir / "tooling-freeze.txt"
     _require(
@@ -467,8 +467,8 @@ def verify_directory(result_dir: Path) -> dict[str, Any]:
         [
             str(python),
             "-c",
-            "import json, pwright; "
-            "print(json.dumps(pwright.native_capabilities(), sort_keys=True))",
+            "import json, playwright_rust; "
+            "print(json.dumps(playwright_rust.native_capabilities(), sort_keys=True))",
         ],
         text=True,
     )
@@ -522,21 +522,21 @@ def verify_directory(result_dir: Path) -> dict[str, Any]:
             environment = provenance.get("environment")
             _require(
                 isinstance(environment, dict)
-                and environment.get("PWRIGHT_OFFICIAL_LAUNCH_MODE") == "owned"
-                and environment.get("PWRIGHT_PYTHON_LIFECYCLE_MODE") == mode
-                and environment.get("PWRIGHT_PYTHON_LIFECYCLE_ENGINE_FILTER") == engine
-                and environment.get("PWRIGHT_PYTHON_LIFECYCLE_RECEIPT") == str(receipt)
-                and environment.get("PWRIGHT_PYTHON_LIFECYCLE_SERVER") == str(SERVER)
-                and environment.get("PWRIGHT_PYTHON_LIFECYCLE_UPSTREAM") == str(UPSTREAM)
-                and environment.get("PWRIGHT_PYTHON_LIFECYCLE_CORE_UPSTREAM") == str(CORE),
+                and environment.get("PLAYWRIGHT_RUST_OFFICIAL_LAUNCH_MODE") == "owned"
+                and environment.get("PLAYWRIGHT_RUST_PYTHON_LIFECYCLE_MODE") == mode
+                and environment.get("PLAYWRIGHT_RUST_PYTHON_LIFECYCLE_ENGINE_FILTER") == engine
+                and environment.get("PLAYWRIGHT_RUST_PYTHON_LIFECYCLE_RECEIPT") == str(receipt)
+                and environment.get("PLAYWRIGHT_RUST_PYTHON_LIFECYCLE_SERVER") == str(SERVER)
+                and environment.get("PLAYWRIGHT_RUST_PYTHON_LIFECYCLE_UPSTREAM") == str(UPSTREAM)
+                and environment.get("PLAYWRIGHT_RUST_PYTHON_LIFECYCLE_CORE_UPSTREAM") == str(CORE),
                 "synthetic fixture environment changed",
             )
             if bind is None:
-                bind = environment.get("PWRIGHT_OFFICIAL_TAILSCALE_IP")
-                host = environment.get("PWRIGHT_OFFICIAL_TAILSCALE_HOST")
+                bind = environment.get("PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_IP")
+                host = environment.get("PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_HOST")
             _require(
-                environment.get("PWRIGHT_OFFICIAL_TAILSCALE_IP") == bind
-                and environment.get("PWRIGHT_OFFICIAL_TAILSCALE_HOST") == host
+                environment.get("PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_IP") == bind
+                and environment.get("PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_HOST") == host
                 and isinstance(bind, str)
                 and bind.startswith("100.")
                 and isinstance(host, str)

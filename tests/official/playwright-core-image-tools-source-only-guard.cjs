@@ -52,8 +52,8 @@ function verifySuite(manifestPath, suiteId, upstream) {
     throw new Error('image-tools source-only suite has an unapproved runner, fixture, or source selection');
   if (process.env.IMAGE_TOOLS_FIXTURES)
     throw new Error('image-tools source-only suite forbids custom IMAGE_TOOLS_FIXTURES');
-  if (process.env.PWRIGHT_NODE_CANDIDATE || process.env.PWRIGHT_NATIVE_PROFILE)
-    throw new Error('image-tools source-only suite forbids loading the Pwright candidate runtime');
+  if (process.env.PLAYWRIGHT_RUST_NODE_CANDIDATE || process.env.PLAYWRIGHT_RUST_NATIVE_PROFILE)
+    throw new Error('image-tools source-only suite forbids loading the Playwright Rust candidate runtime');
   if (fs.existsSync(path.join(upstream, '.env')))
     throw new Error('image-tools source-only suite forbids upstream .env overrides');
   if (process.env.GITHUB_ACTIONS || process.env.GITLAB_CI ||
@@ -150,7 +150,7 @@ function installNoIoGuard({ allowRunnerFork = false, workerScript = '' } = {}) {
       if (modulePath !== workerScript || Array.isArray(argsOrOptions) ||
           !forkOptions || forkOptions.detached !== false ||
           !Array.isArray(forkOptions.stdio) || forkOptions.stdio[3] !== 'ipc' ||
-          !forkOptions.env || forkOptions.env.PWRIGHT_CORE_SOURCE_ONLY_ACTIVE !== '1' ||
+          !forkOptions.env || forkOptions.env.PLAYWRIGHT_RUST_CORE_SOURCE_ONLY_ACTIVE !== '1' ||
           forkOptions.env.NODE_OPTIONS !== process.env.NODE_OPTIONS)
         throw new Error('image-tools source-only runner forbids unpinned child_process.fork');
       return originalFork.call(this, modulePath, argsOrOptions);
@@ -173,18 +173,18 @@ function installNoIoGuard({ allowRunnerFork = false, workerScript = '' } = {}) {
 }
 
 function activate() {
-  const installed = Symbol.for('pwright.coreImageToolsSourceOnlyGuardInstalled');
+  const installed = Symbol.for('playwright.rust.coreImageToolsSourceOnlyGuardInstalled');
   if (globalThis[installed]) return;
-  const manifest = process.env.PWRIGHT_CORE_SOURCE_ONLY_MANIFEST;
-  const suite = process.env.PWRIGHT_CORE_SOURCE_ONLY_SUITE;
-  const upstream = process.env.PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM;
-  const receipt = process.env.PWRIGHT_CORE_SOURCE_ONLY_GUARD_RECEIPT;
+  const manifest = process.env.PLAYWRIGHT_RUST_CORE_SOURCE_ONLY_MANIFEST;
+  const suite = process.env.PLAYWRIGHT_RUST_CORE_SOURCE_ONLY_SUITE;
+  const upstream = process.env.PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM;
+  const receipt = process.env.PLAYWRIGHT_RUST_CORE_SOURCE_ONLY_GUARD_RECEIPT;
   if (!manifest || !suite || !upstream || !receipt)
     throw new Error('image-tools source-only guard environment is incomplete');
   const verified = verifySuite(manifest, suite, upstream);
   const workerScript = path.join(upstream, WORKER);
   const isWorker = !workerThreads.isMainThread || typeof process.send === 'function' ||
-      process.env.PWRIGHT_CORE_SOURCE_ONLY_TEST_WORKER === '1';
+      process.env.PLAYWRIGHT_RUST_CORE_SOURCE_ONLY_TEST_WORKER === '1';
   const runnerScript = path.join(upstream, RUNNER);
   // Node preloads run before argv[1] is populated on supported Node releases.
   if (process.argv[1] && path.resolve(process.argv[1]) !== (isWorker ? workerScript : runnerScript))
@@ -202,7 +202,7 @@ if (require.main === module) {
   if (process.argv[2] !== '--check' || process.argv.length !== 6)
     throw new Error('usage: guard --check MANIFEST SUITE UPSTREAM');
   process.stdout.write(JSON.stringify(verifySuite(process.argv[3], process.argv[4], process.argv[5])) + '\n');
-} else if (process.env.PWRIGHT_CORE_SOURCE_ONLY_ACTIVE === '1') {
+} else if (process.env.PLAYWRIGHT_RUST_CORE_SOURCE_ONLY_ACTIVE === '1') {
   activate();
 }
 

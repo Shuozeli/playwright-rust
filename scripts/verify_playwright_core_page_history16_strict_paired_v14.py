@@ -28,9 +28,9 @@ UPSTREAM = SOURCE.parents[2]
 PROMOTER = ROOT / "scripts/promote_playwright_core_page_history16_strict_paired_v14.py"
 PACKAGE = WORK / "builds/core-history16-candidate-snapshot-20261020-v1/candidate"
 PACKAGE_MANIFEST = PACKAGE.parent / "candidate-manifest.json"
-ARTIFACT = PACKAGE / "native/official-conformance-page-check/pwright.node"
+ARTIFACT = PACKAGE / "native/official-conformance-page-check/playwright_rust.node"
 LIVE_ARTIFACT = (
-    ROOT / "packages/pwright/native/official-conformance-page-check/pwright.node"
+    ROOT / "packages/playwright-rust/native/official-conformance-page-check/playwright_rust.node"
 )
 COUNT = 48_477
 TARGET_COUNT = 16
@@ -233,7 +233,7 @@ def verify_package() -> None:
         and manifest["profile"] == CANDIDATE_PROFILE
         and manifest["candidateSourceSha256"] == CANDIDATE_SOURCE_SHA256
         and manifest["artifactSha256"] == CANDIDATE_ARTIFACT_SHA256
-        and manifest["sourcePackage"] == str(ROOT / "packages/pwright")
+        and manifest["sourcePackage"] == str(ROOT / "packages/playwright-rust")
         and manifest["snapshotPackage"] == str(PACKAGE)
         and isinstance(manifest["files"], list)
         and len(manifest["files"]) == 68,
@@ -362,7 +362,7 @@ def verify_provenance(lane: str, data: bytes) -> None:
     )
     if lane == "candidate":
         require(
-            value.get("candidate") == str(ROOT / "packages/pwright")
+            value.get("candidate") == str(ROOT / "packages/playwright-rust")
             and value.get("candidateArtifact") == str(LIVE_ARTIFACT)
             and value.get("candidateProfile") == CANDIDATE_PROFILE
             and value.get("candidateArtifactSha256") == CANDIDATE_ARTIFACT_SHA256

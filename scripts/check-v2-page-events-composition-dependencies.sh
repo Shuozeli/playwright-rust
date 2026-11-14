@@ -14,25 +14,25 @@ cargo tree \
   --edges normal \
   --prefix none \
   --format '{p}' \
-  | awk '/^pwright-/ { print $1 }' \
+  | awk '/^playwright-rust-/ { print $1 }' \
   | sort -u >"$tree_file"
 
 required_packages=(
-  pwright-v2-page-events-composition-only-example
-  pwright-backend-cdp-page-events
-  pwright-backend-cdp-topology
-  pwright-browser-model
-  pwright-cap-page-events
-  pwright-cdp
-  pwright-codec-page-events
-  pwright-composition-chromium-page-events
-  pwright-connection-control
-  pwright-core
-  pwright-runtime
-  pwright-runtime-control
-  pwright-server-events
-  pwright-server-wire
-  pwright-transport
+  playwright-rust-v2-page-events-composition-only-example
+  playwright-rust-backend-cdp-page-events
+  playwright-rust-backend-cdp-topology
+  playwright-rust-browser-model
+  playwright-rust-cap-page-events
+  playwright-rust-cdp
+  playwright-rust-codec-page-events
+  playwright-rust-composition-chromium-page-events
+  playwright-rust-connection-control
+  playwright-rust-core
+  playwright-rust-runtime
+  playwright-rust-runtime-control
+  playwright-rust-server-events
+  playwright-rust-server-wire
+  playwright-rust-transport
 )
 
 for package in "${required_packages[@]}"; do
@@ -51,9 +51,9 @@ while IFS= read -r package; do
     fi
   done
   if [[ "$allowed" != true ]]; then
-    echo "Page-events composition proof found forbidden Pwright package: $package" >&2
+    echo "Page-events composition proof found forbidden Playwright Rust package: $package" >&2
     exit 1
   fi
 done <"$tree_file"
 
-echo "Page-events composition dependency proof passed (${#required_packages[@]} Pwright packages)"
+echo "Page-events composition dependency proof passed (${#required_packages[@]} Playwright Rust packages)"

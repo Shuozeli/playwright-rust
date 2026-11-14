@@ -1,0 +1,16 @@
+[package]
+name = "playwright-rust-runtime"
+description = "Executor-independent in-process dispatcher for Playwright Rust capabilities"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[features]
+default = []
+lifetime-handoff = []
+disposal-reservations = []
+
+[dependencies]
+playwright-rust-core = { workspace = true }

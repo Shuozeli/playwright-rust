@@ -28,11 +28,11 @@ TESTS = (
     / "scripts/test_verify_playwright_core_server_connect_headers_post_refactor_v2.py"
 )
 INPUT_FILES = (*base.INPUT_FILES, Path(__file__).resolve(), VERIFIER, TESTS)
-ADDON_ENVIRONMENT = ROOT / "crates/pwright-node-addon/src/environment.rs"
+ADDON_ENVIRONMENT = ROOT / "crates/playwright-rust-node-addon/src/environment.rs"
 ADDON_ENVIRONMENT_SHA256 = (
     "53379d2dd4ed44f25050c9acb1d0ae64cea0b14e3d302f116a96e37456884995"
 )
-ADDON_LIB = ROOT / "crates/pwright-node-addon/src/lib.rs"
+ADDON_LIB = ROOT / "crates/playwright-rust-node-addon/src/lib.rs"
 ADDON_LIB_SHA256 = "45dafc4f07e89fb5ae413a5fbb6e73334d09e3487f3be3b6345c05552b8bbaca"
 CANDIDATE_INDEX_SHA256 = (
     "510bec0e66c277d53bef5620b57b47068013ac82425f7374c18ed9d72dcf133f"
@@ -116,7 +116,7 @@ def write_v2_sidecar(destination: Path, value: dict) -> None:
 def configure(*, check_live: bool = True) -> None:
     if check_live:
         check_abi_sources()
-        artifact = base.SOURCE_PACKAGE / "native" / base.PROFILE / "pwright.node"
+        artifact = base.SOURCE_PACKAGE / "native" / base.PROFILE / "playwright_rust.node"
         assert base.sha256(artifact) == ARTIFACT_SHA256
         assert probe_artifact_abi(artifact) == {
             "enabled": True,

@@ -8,9 +8,9 @@ base_file=$(mktemp)
 selected_file=$(mktemp)
 trap 'rm -f "$base_file" "$selected_file"' EXIT
 
-cargo tree --offline --locked -p pwright-node-addon --no-default-features \
+cargo tree --offline --locked -p playwright-rust-node-addon --no-default-features \
   --edges normal --prefix none --format '{p}' | sort -u >"$base_file"
-cargo tree --offline --locked -p pwright-node-addon --no-default-features \
+cargo tree --offline --locked -p playwright-rust-node-addon --no-default-features \
   --features cdp-handshake-headers --edges normal --prefix none --format '{p}' \
   | sort -u >"$selected_file"
 
@@ -20,7 +20,7 @@ if ! diff -u "$base_file" "$selected_file"; then
 fi
 
 CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 cargo check --offline --release --locked \
-  -p pwright-node-addon --no-default-features
+  -p playwright-rust-node-addon --no-default-features
 CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 cargo check --offline --release --locked \
-  -p pwright-node-addon --no-default-features --features cdp-handshake-headers
+  -p playwright-rust-node-addon --no-default-features --features cdp-handshake-headers
 printf 'Node cdp-handshake-headers dependency proof passed (zero added packages).\n'

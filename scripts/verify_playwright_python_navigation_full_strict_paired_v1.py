@@ -27,11 +27,11 @@ RESULTS = BUILD / "results"
 BASE_DIR = WORK / "outcomes/python-upstream-skip-callable-fixtures-strict-paired-v2"
 OUTPUT_DIR = WORK / "outcomes/python-navigation-full-chromium-strict-paired-v1"
 INVENTORY = WORK / "playwright-python-v1.58.0-profiled.jsonl"
-MANIFEST = ROOT / "packages/pwright-python/tests/official/manifest.json"
+MANIFEST = ROOT / "packages/playwright-rust-python/tests/official/manifest.json"
 UPSTREAM = Path("/Users/cyuan/projects/thirdparty/playwright-python")
 NAVIGATION_SOURCE = UPSTREAM / "tests/async/test_navigation.py"
 SOURCE_PINS = BUILD / "source-pins.json"
-FROZEN_WHEEL = BUILD / "frozen/shuozeli_pwright-0.1.0-cp39-abi3-macosx_11_0_arm64.whl"
+FROZEN_WHEEL = BUILD / "frozen/shuozeli_playwright-rust-0.1.0-cp39-abi3-macosx_11_0_arm64.whl"
 PROMOTER = (
     ROOT / "scripts/promote_playwright_python_navigation_full_strict_paired_v1.py"
 )

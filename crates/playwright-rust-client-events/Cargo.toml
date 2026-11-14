@@ -1,0 +1,13 @@
+[package]
+name = "playwright-rust-client-events"
+description = "Opt-in typed event queues and subscription edge tracking for Playwright Rust clients"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+playwright-rust-client-wire = { workspace = true }
+playwright-rust-core = { workspace = true }
+playwright-rust-transport = { workspace = true }

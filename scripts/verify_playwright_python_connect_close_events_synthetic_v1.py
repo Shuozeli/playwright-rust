@@ -17,14 +17,14 @@ ROOT = Path(__file__).resolve().parents[1]
 UPSTREAM = Path("/Users/cyuan/projects/thirdparty/playwright-python")
 CORE = Path("/Users/cyuan/projects/thirdparty/playwright-v1.58.0")
 RESULT_PARENT = ROOT / ".work/official-conformance/results"
-PLUGIN_DIR = ROOT / "packages/pwright-python/tests/official/connect_close_events_synthetic_v1"
+PLUGIN_DIR = ROOT / "packages/playwright-rust-python/tests/official/connect_close_events_synthetic_v1"
 MANIFEST = PLUGIN_DIR / "manifest.json"
 SERVER = PLUGIN_DIR / "server.cjs"
-PLUGIN = PLUGIN_DIR / "pwright_python_connect_close_events_synthetic_v1.py"
+PLUGIN = PLUGIN_DIR / "playwright_rust_python_connect_close_events_synthetic_v1.py"
 SOURCE_PROBE = PLUGIN_DIR / "source_probe.py"
-RUNTIME = ROOT / "packages/pwright-python/tests/official/runtime"
-SHIM = ROOT / "packages/pwright-python/tests/official/shim"
-WHEEL_NAME = "shuozeli_pwright-0.1.0-cp39-abi3-macosx_11_0_arm64.whl"
+RUNTIME = ROOT / "packages/playwright-rust-python/tests/official/runtime"
+SHIM = ROOT / "packages/playwright-rust-python/tests/official/shim"
+WHEEL_NAME = "shuozeli_playwright-rust-0.1.0-cp39-abi3-macosx_11_0_arm64.whl"
 WHEEL_SHA256 = "c065171eb151fca881927500670ece4d05f749697deaed69e5cc0c64bf8ffdcb"
 UPSTREAM_COMMIT = "47a5d35ef4f815a2021349f86ae391f7c20c02d6"
 CORE_COMMIT = "961381ec73a9fa2661d92504eab1a6bd6eaffc75"
@@ -52,9 +52,9 @@ HARNESS_INPUTS = (
     SERVER,
     PLUGIN,
     SOURCE_PROBE,
-    RUNTIME / "pwright_official_server_runtime.py",
-    RUNTIME / "pwright_official_oracle_runtime.py",
-    SHIM / "pwright_candidate_runtime.py",
+    RUNTIME / "playwright_rust_official_server_runtime.py",
+    RUNTIME / "playwright_rust_official_oracle_runtime.py",
+    SHIM / "playwright_rust_candidate_runtime.py",
     SHIM / "playwright/sync_api.py",
     ROOT / "scripts/run_playwright_python_connect_close_events_synthetic_v1.py",
     Path(__file__).resolve(),
@@ -142,7 +142,7 @@ def _installed_wheel(wheel: Path, site_packages: Path) -> dict[str, str]:
     with zipfile.ZipFile(wheel) as archive:
         for name in archive.namelist():
             if not (
-                name.startswith("pwright/") or name.startswith("pwright.libs/")
+                name.startswith("playwright_rust/") or name.startswith("playwright_rust.libs/")
             ) or name.endswith("/"):
                 continue
             target = site_packages / name
@@ -151,7 +151,7 @@ def _installed_wheel(wheel: Path, site_packages: Path) -> dict[str, str]:
             _require(sha256(target) == digest, f"wheel install differs: {name}")
             installed[name] = digest
     _require(
-        "pwright/_native.abi3.so" in installed and "pwright/sync_api.py" in installed,
+        "playwright_rust/_native.abi3.so" in installed and "playwright_rust/sync_api.py" in installed,
         "selected wheel lacks Python remote binding",
     )
     return installed
@@ -286,7 +286,7 @@ def _receipt(path: Path, mode: str, bind: str, host: str, site_packages: Path) -
         _require(
             runtime.get("publicApiPath") == str((SHIM / "playwright/sync_api.py").resolve())
             and runtime.get("candidatePackagePath")
-            == str((site_packages / "pwright/__init__.py").resolve()),
+            == str((site_packages / "playwright_rust/__init__.py").resolve()),
             "candidate did not import frozen wheel through public shim",
         )
     return {kind: len(items) for kind, items in kinds.items() if items}
@@ -325,9 +325,9 @@ def verify_directory(result_dir: Path) -> dict[str, Any]:
             == str(UPSTREAM / CASE_BODY.split("::", 1)[0]) + "::" + CASE_BODY.split("::", 1)[1]
             and command.count("-p") == 3
             and (
-                "pwright_candidate_runtime"
+                "playwright_rust_candidate_runtime"
                 if mode == "candidate"
-                else "pwright_official_oracle_runtime"
+                else "playwright_rust_official_oracle_runtime"
             )
             in command,
             f"{mode} pytest command changed",
@@ -336,12 +336,12 @@ def verify_directory(result_dir: Path) -> dict[str, Any]:
         if not isinstance(raw_env, dict):
             raise ValueError(f"{mode} environment absent")
         env = cast(dict[str, object], raw_env)
-        bind = str(env.get("PWRIGHT_OFFICIAL_TAILSCALE_IP", ""))
-        host = str(env.get("PWRIGHT_OFFICIAL_TAILSCALE_HOST", ""))
+        bind = str(env.get("PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_IP", ""))
+        host = str(env.get("PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_HOST", ""))
         _require(
             ipaddress.ip_address(bind) in ipaddress.ip_network("100.64.0.0/10")
             and host.endswith(".ts.net")
-            and env.get("PWRIGHT_PYTHON_CLOSE_EVENTS_MODE") == mode,
+            and env.get("PLAYWRIGHT_RUST_PYTHON_CLOSE_EVENTS_MODE") == mode,
             f"{mode} fixture address or mode changed",
         )
         files = {

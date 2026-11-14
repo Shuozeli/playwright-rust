@@ -19,7 +19,7 @@ from verify_playwright_python_connect_refused_strict_v1 import (
 from verify_playwright_python_ws_transport_strict import sha256_file
 
 ROOT = Path(__file__).resolve().parents[1]
-OFFICIAL = ROOT / "packages/pwright-python/tests/official"
+OFFICIAL = ROOT / "packages/playwright-rust-python/tests/official"
 POLICY = OFFICIAL / "upstream-skip-callable-fixtures-strict-v2-manifest.json"
 GUARD = OFFICIAL / "upstream_skip_guard_strict_v1"
 RUNNER = (
@@ -99,8 +99,8 @@ _ARTIFACT_KEYS = frozenset(
         "playwrightPackageSha256",
         "driverNode",
         "driverNodeSha256",
-        "pwrightPackage",
-        "pwrightPackageSha256",
+        "playwright_rustPackage",
+        "playwright_rustPackageSha256",
         "nativePath",
         "nativeSha256",
         "runtimeLibraries",
@@ -317,16 +317,16 @@ def environment(
         "PYTHONPATH": ":".join(map(str, paths)),
         "PYTHONNOUSERSITE": "1",
         "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
-        "PWRIGHT_OFFICIAL_MODE": mode,
-        "PWRIGHT_OFFICIAL_LAUNCH_MODE": "owned",
-        "PWRIGHT_OFFICIAL_BROWSER_CHANNEL": "",
-        "PWRIGHT_OFFICIAL_UPSTREAM_TESTS": str(upstream / "tests"),
-        "PWRIGHT_OFFICIAL_TAILSCALE_IP": bind,
-        "PWRIGHT_OFFICIAL_TAILSCALE_HOST": host,
-        "PWRIGHT_PYTHON_SKIP_V1_EXPECTED_TEST": test_id,
-        "PWRIGHT_PYTHON_SKIP_V1_UPSTREAM": str(upstream),
-        "PWRIGHT_PYTHON_SKIP_V1_RECEIPT": str(receipt),
-        "PWRIGHT_PYTHON_SKIP_V1_NONCE": nonce,
+        "PLAYWRIGHT_RUST_OFFICIAL_MODE": mode,
+        "PLAYWRIGHT_RUST_OFFICIAL_LAUNCH_MODE": "owned",
+        "PLAYWRIGHT_RUST_OFFICIAL_BROWSER_CHANNEL": "",
+        "PLAYWRIGHT_RUST_OFFICIAL_UPSTREAM_TESTS": str(upstream / "tests"),
+        "PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_IP": bind,
+        "PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_HOST": host,
+        "PLAYWRIGHT_RUST_PYTHON_SKIP_V1_EXPECTED_TEST": test_id,
+        "PLAYWRIGHT_RUST_PYTHON_SKIP_V1_UPSTREAM": str(upstream),
+        "PLAYWRIGHT_RUST_PYTHON_SKIP_V1_RECEIPT": str(receipt),
+        "PLAYWRIGHT_RUST_PYTHON_SKIP_V1_NONCE": nonce,
     }
 
 
@@ -340,9 +340,9 @@ def identity_probe(
         "import json,pathlib,playwright; "
         "root=str(pathlib.Path(playwright.__file__).resolve()); "
         "p=None; "
-        "exec('import pwright; p=str(pathlib.Path(pwright.__file__).resolve())') "
+        "exec('import playwright_rust; p=str(pathlib.Path(playwright_rust.__file__).resolve())') "
         "if " + repr(mode == "candidate") + " else None; "
-        "print(json.dumps({'playwright':root,'pwright':p}))"
+        "print(json.dumps({'playwright':root,'playwright_rust':p}))"
     )
     completed = subprocess.run(
         [
@@ -366,8 +366,8 @@ def identity_probe(
             if mode == "candidate"
             else (Path(artifact["playwrightPackage"]) / "__init__.py").resolve()
         ),
-        "pwright": (
-            str((Path(artifact["pwrightPackage"]) / "__init__.py").resolve())
+        "playwright_rust": (
+            str((Path(artifact["playwright_rustPackage"]) / "__init__.py").resolve())
             if mode == "candidate"
             else None
         ),
@@ -404,13 +404,13 @@ def command(
         "-p",
         "pytest_timeout",
         "-p",
-        "pwright_official_server_runtime",
+        "playwright_rust_official_server_runtime",
         "-p",
-        "pwright_candidate_runtime"
+        "playwright_rust_candidate_runtime"
         if mode == "candidate"
-        else "pwright_official_oracle_runtime",
+        else "playwright_rust_official_oracle_runtime",
         "-p",
-        "pwright_official_upstream_skip_guard_v1",
+        "playwright_rust_official_upstream_skip_guard_v1",
         f"--browser={engine}",
         "--timeout=20",
         "--timeout-method=signal",
@@ -563,7 +563,7 @@ def verify_provenance(path: Path) -> dict[str, Any]:
         _fail("skip runtime import identity differs")
     _digest_file(RUNNER, payload["runnerSha256"], "skip capture runner")
     _digest_file(
-        GUARD / "pwright_official_upstream_skip_guard_v1.py",
+        GUARD / "playwright_rust_official_upstream_skip_guard_v1.py",
         payload["guardSha256"],
         "skip pre-body guard",
     )

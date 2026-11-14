@@ -1,4 +1,4 @@
-use pwright::chromium_locator::{
+use playwright_rust::chromium_locator::{
     CdpLocatorProductionProfile, ChromiumLocatorProfile, FrameLimits, LocatorCodecLimits,
     ObjectId, ResourceScope,
 };

@@ -6,11 +6,11 @@ const { promises: dns } = require('node:dns');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const bind = process.env.PWRIGHT_OFFICIAL_SERVER_IP;
-const host = process.env.PWRIGHT_OFFICIAL_SERVER_HOST;
-const upstream = process.env.PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM;
-const receipt = process.env.PWRIGHT_CORE_WAITERS_SYNTHETIC_RECEIPT;
-const mode = process.env.PWRIGHT_CORE_WAITERS_SYNTHETIC_MODE;
+const bind = process.env.PLAYWRIGHT_RUST_OFFICIAL_SERVER_IP;
+const host = process.env.PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST;
+const upstream = process.env.PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM;
+const receipt = process.env.PLAYWRIGHT_RUST_CORE_WAITERS_SYNTHETIC_RECEIPT;
+const mode = process.env.PLAYWRIGHT_RUST_CORE_WAITERS_SYNTHETIC_MODE;
 if (!bind || !host || !upstream || !receipt || !['candidate', 'oracle'].includes(mode))
   throw new Error('synthetic waiters server requires pinned lane and Tailscale address');
 const { WebSocketServer } = require(require.resolve('ws', { paths: [path.resolve(upstream)] }));

@@ -117,16 +117,16 @@ def main() -> None:
         "PWTEST_MODE",
         "PWPAGE_IMPL",
         "PWTEST_USE_BIDI_EXPECTATIONS",
-        "PWRIGHT_NODE_CANDIDATE",
-        "PWRIGHT_NATIVE_PROFILE",
-        "PWRIGHT_CORE_BROWSER_TYPE_OWNER_RECEIPT",
-        "PWRIGHT_CANDIDATE_CDP_ENDPOINT",
-        "PWRIGHT_ORACLE_CDP_ENDPOINT",
+        "PLAYWRIGHT_RUST_NODE_CANDIDATE",
+        "PLAYWRIGHT_RUST_NATIVE_PROFILE",
+        "PLAYWRIGHT_RUST_CORE_BROWSER_TYPE_OWNER_RECEIPT",
+        "PLAYWRIGHT_RUST_CANDIDATE_CDP_ENDPOINT",
+        "PLAYWRIGHT_RUST_ORACLE_CDP_ENDPOINT",
     ):
         if os.environ.get(key):
             parser.error(f"strict BrowserType run rejects inherited {key}")
     check_source()
-    artifact = ROOT / "packages/pwright/native" / PROFILE / "pwright.node"
+    artifact = ROOT / "packages/playwright-rust/native" / PROFILE / "playwright_rust.node"
     if args.mode == "candidate":
         assert sha256(artifact) == ARTIFACT_SHA256
     result = args.result.resolve()
@@ -153,8 +153,8 @@ def main() -> None:
     if args.mode == "candidate":
         receipt.open("x").close()
         env["NODE_OPTIONS"] = f"--require={PRELOAD}"
-        env["PWRIGHT_CORE_BROWSER_TYPE_OWNER_RECEIPT"] = str(receipt)
-        env["PWRIGHT_NODE_CANDIDATE"] = str(ROOT / "packages/pwright")
+        env["PLAYWRIGHT_RUST_CORE_BROWSER_TYPE_OWNER_RECEIPT"] = str(receipt)
+        env["PLAYWRIGHT_RUST_NODE_CANDIDATE"] = str(ROOT / "packages/playwright-rust")
     command = [
         "uv",
         "run",
@@ -188,10 +188,10 @@ def main() -> None:
         workers = {record["workerIndex"] for record in records if record["workerIndex"] is not None}
         assert workers == {str(row["workerIndex"]) for row in selected}
         assert all(
-            record["candidate"] == str(ROOT / "packages/pwright") and record["ownerBound"] is True
+            record["candidate"] == str(ROOT / "packages/playwright-rust") and record["ownerBound"] is True
             for record in records
         )
-        assert "[pwright-candidate]" in log
+        assert "[playwright-rust-candidate]" in log
     else:
         assert not receipt.exists()
     strict = {

@@ -57,7 +57,7 @@ RESULT_PARENT = (
     ROOT
     / ".work/official-conformance/results/core-server-connect-ws-error-other-engines-strict-v3"
 )
-SOURCE_PACKAGE = ROOT / "packages/pwright"
+SOURCE_PACKAGE = ROOT / "packages/playwright-rust"
 SNAPSHOT_PACKAGE = RESULT_PARENT / "candidate-package-snapshot-v3"
 SNAPSHOT_MANIFEST = RESULT_PARENT / "candidate-package-snapshot-v3.files.json"
 SCOPE = "unchanged-core-ws-dns-error-firefox-webkit-four-cases-diagnostic-only-v3"
@@ -243,22 +243,22 @@ def run(mode: str) -> dict[str, Any]:
         "PWTEST_MODE",
         "PWPAGE_IMPL",
         "PWTEST_USE_BIDI_EXPECTATIONS",
-        "PWRIGHT_CANDIDATE_CDP_ENDPOINT",
-        "PWRIGHT_ORACLE_CDP_ENDPOINT",
-        "PWRIGHT_CDP_ENDPOINT",
-        "PWRIGHT_CDP_WS_URL",
-        "PWRIGHT_NATIVE_PROFILE",
-        "PWRIGHT_NODE_CANDIDATE",
-        "PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM",
-        "PWRIGHT_OFFICIAL_SERVER_IP",
-        "PWRIGHT_OFFICIAL_SERVER_HOST",
+        "PLAYWRIGHT_RUST_CANDIDATE_CDP_ENDPOINT",
+        "PLAYWRIGHT_RUST_ORACLE_CDP_ENDPOINT",
+        "PLAYWRIGHT_RUST_CDP_ENDPOINT",
+        "PLAYWRIGHT_RUST_CDP_WS_URL",
+        "PLAYWRIGHT_RUST_NATIVE_PROFILE",
+        "PLAYWRIGHT_RUST_NODE_CANDIDATE",
+        "PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM",
+        "PLAYWRIGHT_RUST_OFFICIAL_SERVER_IP",
+        "PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST",
     )
     if any(os.environ.get(key) for key in forbidden):
         raise ValueError(
             "strict Server-connect diagnostic rejects inherited runtime overrides"
         )
     check_browserless_source_and_manifest()
-    artifact = SOURCE_PACKAGE / "native" / PROFILE / "pwright.node"
+    artifact = SOURCE_PACKAGE / "native" / PROFILE / "playwright_rust.node"
     if mode == "candidate" and (
         not artifact.is_file() or sha256(artifact) != ARTIFACT_SHA256
     ):
@@ -290,8 +290,8 @@ def run(mode: str) -> dict[str, Any]:
         paths["receipt"].open("x").close()
         env = os.environ.copy()
         env["NODE_OPTIONS"] = f"--require={GUARD}"
-        env["PWRIGHT_CORE_SERVER_CONNECT_WS_ERROR_MODE"] = mode
-        env["PWRIGHT_CORE_SERVER_CONNECT_WS_ERROR_RECEIPT"] = str(paths["receipt"])
+        env["PLAYWRIGHT_RUST_CORE_SERVER_CONNECT_WS_ERROR_MODE"] = mode
+        env["PLAYWRIGHT_RUST_CORE_SERVER_CONNECT_WS_ERROR_RECEIPT"] = str(paths["receipt"])
         command = [
             "uv",
             "run",
@@ -334,7 +334,7 @@ def run(mode: str) -> dict[str, Any]:
         )
         if mode == "oracle":
             assert all(item["status"] == "expected" for item in selected)
-        assert ("[pwright-candidate]" in paths["log"].read_text()) == (
+        assert ("[playwright-rust-candidate]" in paths["log"].read_text()) == (
             mode == "candidate"
         )
         runs.append(

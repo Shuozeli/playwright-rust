@@ -12,7 +12,7 @@ ROOT = Path(__file__).parents[1]
 SOURCE = "tests/sync/test_page_add_locator_handler.py"
 MANIFEST = (
     ROOT
-    / "packages/pwright-python/tests/official/"
+    / "packages/playwright-rust-python/tests/official/"
     "sync-page-add-locator-handler-full-chromium-v1-manifest.json"
 )
 UPSTREAM = Path.home() / "projects/thirdparty/playwright-python"

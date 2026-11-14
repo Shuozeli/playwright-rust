@@ -1,0 +1,23 @@
+[package]
+name = "playwright-rust-backend-cdp-handle-evaluation"
+description = "Isolated Chromium CDP retained JavaScript Handle evaluation adapter for Playwright Rust"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+base64 = { workspace = true }
+playwright-rust-backend-cdp-common = { workspace = true }
+playwright-rust-backend-cdp-evaluation = { workspace = true }
+playwright-rust-browser-model = { workspace = true }
+playwright-rust-cap-evaluation = { workspace = true }
+playwright-rust-cap-handle-evaluation = { workspace = true }
+playwright-rust-cdp = { workspace = true }
+playwright-rust-core = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+playwright-rust-fake = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt"] }

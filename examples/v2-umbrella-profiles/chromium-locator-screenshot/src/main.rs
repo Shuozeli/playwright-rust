@@ -1,4 +1,4 @@
-use pwright::chromium_locator_screenshot::{
+use playwright_rust::chromium_locator_screenshot::{
     CdpScreenshotProductionProfile, ChromiumLocatorScreenshotProfile, FrameLimits,
     LocatorScreenshotCodecLimits, ProtocolVersion,
 };

@@ -25,7 +25,7 @@ WORK = ROOT / ".work/official-conformance"
 BASE_DIR = prior.OUTPUT_DIR
 OUTPUT_DIR = WORK / "outcomes/python-sync-network6-chromium-strict-paired-v10"
 INVENTORY = prior.INVENTORY
-MANIFEST = ROOT / "packages/pwright-python/tests/official/sync-network-full-v1-manifest.json"
+MANIFEST = ROOT / "packages/playwright-rust-python/tests/official/sync-network-full-v1-manifest.json"
 UPSTREAM = prior.UPSTREAM
 NETWORK_SOURCE = UPSTREAM / "tests/sync/test_network.py"
 SOURCE_PINS = OUTPUT_DIR / "source-pins.json"
@@ -146,10 +146,10 @@ def output_name(mode: str) -> str:
 def archive_fingerprint(root: Path | None = None) -> dict[str, Any]:
     """Fingerprint every file and directory, including ignored cache entries."""
     sources = {
-        "pwright": (root / "pwright" if root else ROOT / "packages/pwright-python/python/pwright"),
-        "shuozeli_pwright.dylibs": (root / "shuozeli_pwright.dylibs" if root else ROOT / "packages/pwright-python/python/shuozeli_pwright.dylibs"),
-        "harness/shim": (root / "harness/shim" if root else ROOT / "packages/pwright-python/tests/official/shim"),
-        "harness/runtime": (root / "harness/runtime" if root else ROOT / "packages/pwright-python/tests/official/runtime"),
+        "playwright_rust": (root / "playwright_rust" if root else ROOT / "packages/playwright-rust-python/python/playwright_rust"),
+        "shuozeli_playwright_rust.dylibs": (root / "shuozeli_playwright_rust.dylibs" if root else ROOT / "packages/playwright-rust-python/python/shuozeli_playwright_rust.dylibs"),
+        "harness/shim": (root / "harness/shim" if root else ROOT / "packages/playwright-rust-python/tests/official/shim"),
+        "harness/runtime": (root / "harness/runtime" if root else ROOT / "packages/playwright-rust-python/tests/official/runtime"),
     }
     entries: list[dict[str, object]] = []
     files = 0
@@ -257,7 +257,7 @@ def _reports(archive_root: Path | None = None) -> tuple[dict[str, dict[str, Any]
                 payload,
                 provenance_path=provenance,
                 harness_root=archive_root / "harness" if archive_root else None,
-                package_root=archive_root / "pwright" if archive_root and mode == "candidate" else None,
+                package_root=archive_root / "playwright_rust" if archive_root and mode == "candidate" else None,
             )
         except (OSError, ValueError, subprocess.CalledProcessError) as error:
             raise SyncNetwork6ValidationError(f"{key} source-bound provenance failed: {error}") from error
@@ -295,12 +295,12 @@ def _reports(archive_root: Path | None = None) -> tuple[dict[str, dict[str, Any]
         }
         require(all(payload.get(field) == value for field, value in expected.items()), f"{key} provenance identity differs")
         if mode == "candidate":
-            require(payload.get("playwrightPackageSha256") == "e3a7333b66af39f60b8fc68ea8ff177604a914ac2380a99f17ad596451c886e9" and payload.get("pwrightPackageSha256") == "ae49b06f267c68194edfe268a3f1ca19debbd9bb8895286acd9871f789dfa482" and payload.get("pwrightArtifactSha256") == "0e97fef9a014a3ec3c86d22b377e5a265e4a5cea093379960f5d60ab0d846b09", "candidate runtime identity differs")
+            require(payload.get("playwrightPackageSha256") == "e3a7333b66af39f60b8fc68ea8ff177604a914ac2380a99f17ad596451c886e9" and payload.get("playwright_rustPackageSha256") == "ae49b06f267c68194edfe268a3f1ca19debbd9bb8895286acd9871f789dfa482" and payload.get("playwright_rustArtifactSha256") == "0e97fef9a014a3ec3c86d22b377e5a265e4a5cea093379960f5d60ab0d846b09", "candidate runtime identity differs")
         else:
-            require(payload.get("playwrightPackageSha256") == "d7655707035107f13a81db0e1d52d839c2bf42bf2008478fba610299cd6da149" and payload.get("pwrightPackage") is None and payload.get("pwrightArtifact") is None, "Oracle runtime identity differs")
+            require(payload.get("playwrightPackageSha256") == "d7655707035107f13a81db0e1d52d839c2bf42bf2008478fba610299cd6da149" and payload.get("playwright_rustPackage") is None and payload.get("playwright_rustArtifact") is None, "Oracle runtime identity differs")
         payloads[key] = payload
         results[key] = _junit_cases(raw, key, selections)
-    require(payloads["candidateInfrastructureInvalid"]["pwrightPackageSha256"] == payloads["candidateQualified"]["pwrightPackageSha256"] and payloads["candidateInfrastructureInvalid"]["pwrightArtifactSha256"] == payloads["candidateQualified"]["pwrightArtifactSha256"], "candidate retry runtime changed")
+    require(payloads["candidateInfrastructureInvalid"]["playwright_rustPackageSha256"] == payloads["candidateQualified"]["playwright_rustPackageSha256"] and payloads["candidateInfrastructureInvalid"]["playwright_rustArtifactSha256"] == payloads["candidateQualified"]["playwright_rustArtifactSha256"], "candidate retry runtime changed")
     return payloads, results
 
 
@@ -331,13 +331,13 @@ def source_pins_expected(payloads: dict[str, dict[str, Any]]) -> dict[str, Any]:
         "baseReceiptSha256": BASE_RECEIPT_SHA256,
         "archiveFingerprint": ARCHIVE_FINGERPRINT,
         "reports": {key: {"resultSha256": REPORT_SHA256[key], "provenanceSha256": PROVENANCE_SHA256[key]} for key in REPORTS},
-        "candidatePackageSha256": payloads["candidateQualified"]["pwrightPackageSha256"],
-        "candidateArtifactSha256": payloads["candidateQualified"]["pwrightArtifactSha256"],
+        "candidatePackageSha256": payloads["candidateQualified"]["playwright_rustPackageSha256"],
+        "candidateArtifactSha256": payloads["candidateQualified"]["playwright_rustArtifactSha256"],
         "candidateShimSha256": payloads["candidateQualified"]["playwrightPackageSha256"],
         "oraclePlaywrightSha256": payloads["oracleQualified"]["playwrightPackageSha256"],
         "harnessInputs": payloads["candidateQualified"]["harnessInputs"],
         "toolingSources": payloads["candidateQualified"]["toolingSources"],
-        "pwrightRuntimeLibraries": payloads["candidateQualified"]["pwrightRuntimeLibraries"],
+        "playwright_rustRuntimeLibraries": payloads["candidateQualified"]["playwright_rustRuntimeLibraries"],
     }
 
 
@@ -415,9 +415,9 @@ def receipt_expected(summaries: dict[str, dict[str, Any]], classification: dict[
         "baseReceiptSha256": BASE_RECEIPT_SHA256,
         "archive": {
             "root": str(OUTPUT_DIR / "archive"),
-            "candidatePackage": "archive/pwright",
-            "candidateNativeArtifact": "archive/pwright/_native.abi3.so",
-            "candidateRuntimeLibraries": "archive/shuozeli_pwright.dylibs",
+            "candidatePackage": "archive/playwright_rust",
+            "candidateNativeArtifact": "archive/playwright_rust/_native.abi3.so",
+            "candidateRuntimeLibraries": "archive/shuozeli_playwright_rust.dylibs",
             "officialHarness": "archive/harness",
             "candidatePackageSha256": "ae49b06f267c68194edfe268a3f1ca19debbd9bb8895286acd9871f789dfa482",
             "candidateNativeArtifactSha256": "0e97fef9a014a3ec3c86d22b377e5a265e4a5cea093379960f5d60ab0d846b09",
@@ -436,7 +436,7 @@ def verify_bundle(output_dir: Path = OUTPUT_DIR) -> dict[str, Any]:
     require({path.name for path in output_dir.iterdir()} == expected_files, "v10 output file set differs")
     require(all((output_dir / name).is_file() and not (output_dir / name).is_symlink() for name in expected_files - {"archive"}), "v10 output file missing or linked")
     archive = output_dir / "archive"
-    require(archive.is_dir() and not archive.is_symlink() and {path.name for path in archive.iterdir()} == {"pwright", "shuozeli_pwright.dylibs", "harness"}, "v10 archive shape differs")
+    require(archive.is_dir() and not archive.is_symlink() and {path.name for path in archive.iterdir()} == {"playwright_rust", "shuozeli_playwright_rust.dylibs", "harness"}, "v10 archive shape differs")
     require({path.name for path in (archive / "harness").iterdir()} == {"shim", "runtime"}, "v10 harness archive shape differs")
     require(archive_fingerprint(archive) == ARCHIVE_FINGERPRINT, "v10 archive file fingerprint differs")
     inventory, base_lines = _base()

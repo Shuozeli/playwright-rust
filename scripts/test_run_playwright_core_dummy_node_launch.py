@@ -23,8 +23,8 @@ class DummyNodeLaunchPolicyTests(unittest.TestCase):
     def test_strict_manifest_pins_current_source_and_artifact(self) -> None:
         # Arrange
         manifest = json.loads(dummy.STRICT_MANIFEST.read_text())
-        candidate = dummy.ROOT / "packages/pwright"
-        artifact = candidate / "native/playwright-trace/pwright.node"
+        candidate = dummy.ROOT / "packages/playwright-rust"
+        artifact = candidate / "native/playwright-trace/playwright_rust.node"
 
         # Act
         selected = dummy.pinned_manifest(UPSTREAM, dummy.STRICT_MANIFEST)
@@ -62,7 +62,7 @@ class DummyNodeLaunchPolicyTests(unittest.TestCase):
         # Arrange
         with TemporaryDirectory() as directory:
             receipt = Path(directory) / "process.jsonl"
-            profile = Path(directory) / "pwright-node-removed"
+            profile = Path(directory) / "playwright-rust-node-removed"
             node = Path("/opt/homebrew/bin/node")
             uid = os.getuid()
             event = {
@@ -268,7 +268,7 @@ class DummyNodeLaunchPolicyTests(unittest.TestCase):
         for inherited in (
             {"NODE_OPTIONS": "--require=/tmp/bypass.cjs"},
             {"NODE_PATH": "/tmp/bypass"},
-            {"PWRIGHT_CANDIDATE_CDP_ENDPOINT": "http://127.0.0.1:9222"},
+            {"PLAYWRIGHT_RUST_CANDIDATE_CDP_ENDPOINT": "http://127.0.0.1:9222"},
             {"PWTEST_MODE": "service"},
             {"CRPATH": "/Applications/Google Chrome.app"},
         ):

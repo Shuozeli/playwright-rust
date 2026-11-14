@@ -1,0 +1,12 @@
+[package]
+name = "playwright-rust-cap-artifact"
+description = "Portable opt-in Artifact and Stream capability contracts for Playwright Rust"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+playwright-rust-artifact-model = { workspace = true }
+playwright-rust-core = { workspace = true }

@@ -1,0 +1,13 @@
+[package]
+name = "playwright-rust-client-handle-lifecycle"
+description = "Opt-in explicit handle lifecycle methods for Playwright Rust clients"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+playwright-rust-cap-handle-lifecycle = { workspace = true }
+playwright-rust-client = { workspace = true }
+playwright-rust-core = { workspace = true }

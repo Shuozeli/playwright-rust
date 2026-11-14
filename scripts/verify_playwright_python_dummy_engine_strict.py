@@ -33,7 +33,7 @@ from verify_playwright_python_dummy_node_strict import (
 )
 
 POLICY = (
-    ROOT / "packages/pwright-python/tests/official/"
+    ROOT / "packages/playwright-rust-python/tests/official/"
     "dummy-node-launch-abi121-nonchromium-strict-v1-manifest.json"
 )
 POLICY_SHA256 = "230664760771fb6890de4875f18dddbd89b8b42e6bf9f841b31723ef914bebf6"
@@ -43,8 +43,8 @@ _NONCE = re.compile(r"^[0-9a-f]{32}$")
 _SIDECAR_FIELDS = _SIDECAR_KEYS | {"browser"}
 _CAPTURE_PATHS = {
     "scripts/run_playwright_python_dummy_engine_strict.py",
-    "packages/pwright-python/tests/official/dummy_engine_guard_strict/pwright_official_dummy_engine_guard.py",
-    "packages/pwright-python/tests/official/dummy_engine_guard_strict/node",
+    "packages/playwright-rust-python/tests/official/dummy_engine_guard_strict/playwright_rust_official_dummy_engine_guard.py",
+    "packages/playwright-rust-python/tests/official/dummy_engine_guard_strict/node",
 }
 _SUPPORT_PATHS = {
     "scripts/run_playwright_python_dummy_node_strict.py",
@@ -150,8 +150,8 @@ def _policy(raw: object) -> dict[str, Any]:
         _digest(digest, label)
     support_trees = _object(policy["supportTrees"], "supportTrees")
     if set(support_trees) != {
-        "packages/pwright-python/tests/official/shim",
-        "packages/pwright-python/tests/official/runtime",
+        "packages/playwright-rust-python/tests/official/shim",
+        "packages/playwright-rust-python/tests/official/runtime",
     }:
         _fail("non-Chromium support tree set differs")
     for label, digest in support_trees.items():
@@ -188,14 +188,14 @@ def _tooling(policy: dict[str, Any], payload: dict[str, Any], root: Path) -> Pat
         if not path.resolve().is_relative_to(root.resolve()):
             _fail("non-Chromium support tree escapes root")
         _tree(path, digest, f"support tree {relative}")
-    guard = root / "packages/pwright-python/tests/official/dummy_engine_guard_strict"
+    guard = root / "packages/playwright-rust-python/tests/official/dummy_engine_guard_strict"
     if not (guard / "node").stat().st_mode & 0o111:
         _fail("non-Chromium Node wrapper is not executable")
     return guard
 
 
 def _environment(payload: dict[str, Any], root: Path, guard: Path, upstream: Path) -> None:
-    official = root / "packages/pwright-python/tests/official"
+    official = root / "packages/playwright-rust-python/tests/official"
     python_paths = (
         [official / "shim", upstream, official / "runtime", guard]
         if payload["mode"] == "candidate"
@@ -206,19 +206,19 @@ def _environment(payload: dict[str, Any], root: Path, guard: Path, upstream: Pat
         "PYTHONPATH": ":".join(map(str, python_paths)),
         "PYTHONNOUSERSITE": "1",
         "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
-        "PWRIGHT_OFFICIAL_MODE": payload["mode"],
-        "PWRIGHT_OFFICIAL_LAUNCH_MODE": "owned",
-        "PWRIGHT_OFFICIAL_BROWSER_CHANNEL": "",
-        "PWRIGHT_OFFICIAL_UPSTREAM_TESTS": str(upstream / "tests"),
-        "PWRIGHT_OFFICIAL_TAILSCALE_IP": payload["fixtureBind"],
-        "PWRIGHT_OFFICIAL_TAILSCALE_HOST": payload["fixtureHost"],
-        "PWRIGHT_PYTHON_DUMMY_UPSTREAM": str(upstream),
-        "PWRIGHT_PYTHON_DUMMY_API": payload["api"],
-        "PWRIGHT_PYTHON_DUMMY_BROWSER": payload["browser"],
-        "PWRIGHT_PYTHON_DUMMY_LAUNCH_RECEIPT": payload["publicReceipt"],
-        "PWRIGHT_PYTHON_DUMMY_PROCESS_RECEIPT": payload["processReceipt"],
-        "PWRIGHT_PYTHON_DUMMY_REAL_NODE": payload["systemNode"],
-        "PWRIGHT_PYTHON_DUMMY_NONCE": payload["runNonce"],
+        "PLAYWRIGHT_RUST_OFFICIAL_MODE": payload["mode"],
+        "PLAYWRIGHT_RUST_OFFICIAL_LAUNCH_MODE": "owned",
+        "PLAYWRIGHT_RUST_OFFICIAL_BROWSER_CHANNEL": "",
+        "PLAYWRIGHT_RUST_OFFICIAL_UPSTREAM_TESTS": str(upstream / "tests"),
+        "PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_IP": payload["fixtureBind"],
+        "PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_HOST": payload["fixtureHost"],
+        "PLAYWRIGHT_RUST_PYTHON_DUMMY_UPSTREAM": str(upstream),
+        "PLAYWRIGHT_RUST_PYTHON_DUMMY_API": payload["api"],
+        "PLAYWRIGHT_RUST_PYTHON_DUMMY_BROWSER": payload["browser"],
+        "PLAYWRIGHT_RUST_PYTHON_DUMMY_LAUNCH_RECEIPT": payload["publicReceipt"],
+        "PLAYWRIGHT_RUST_PYTHON_DUMMY_PROCESS_RECEIPT": payload["processReceipt"],
+        "PLAYWRIGHT_RUST_PYTHON_DUMMY_REAL_NODE": payload["systemNode"],
+        "PLAYWRIGHT_RUST_PYTHON_DUMMY_NONCE": payload["runNonce"],
     }
     if payload["environment"] != expected:
         _fail("non-Chromium scrubbed environment differs")
@@ -242,15 +242,15 @@ def _command(payload: dict[str, Any], upstream: Path) -> None:
         "-p",
         "pytest_timeout",
         "-p",
-        "pwright_official_server_runtime",
+        "playwright_rust_official_server_runtime",
         "-p",
         (
-            "pwright_candidate_runtime"
+            "playwright_rust_candidate_runtime"
             if payload["mode"] == "candidate"
-            else "pwright_official_oracle_runtime"
+            else "playwright_rust_official_oracle_runtime"
         ),
         "-p",
-        "pwright_official_dummy_engine_guard",
+        "playwright_rust_official_dummy_engine_guard",
         f"--browser={payload['browser']}",
         "--timeout=20",
         "--timeout-method=signal",

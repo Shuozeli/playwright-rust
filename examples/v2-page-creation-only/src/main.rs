@@ -1,4 +1,4 @@
-use pwright_backend_cdp_page_creation::CdpPageCreationLimits;
+use playwright_rust_backend_cdp_page_creation::CdpPageCreationLimits;
 
 fn main() {
     let limits = CdpPageCreationLimits::new(256).with_cleanup_confirmation_attempts(20);

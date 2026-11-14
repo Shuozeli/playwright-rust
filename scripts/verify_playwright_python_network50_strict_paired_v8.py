@@ -29,7 +29,7 @@ OUTPUT_DIR = WORK / "outcomes/python-network50-chromium-strict-paired-v8"
 INVENTORY = prior.INVENTORY
 MANIFEST = (
     ROOT
-    / "packages/pwright-python/tests/official/async-network-full-chromium-v1-manifest.json"
+    / "packages/playwright-rust-python/tests/official/async-network-full-chromium-v1-manifest.json"
 )
 UPSTREAM = prior.UPSTREAM
 NETWORK_SOURCE = UPSTREAM / "tests/async/test_network.py"
@@ -88,7 +88,7 @@ BASE_HASHES = {
 }
 ISOLATED_IDS_SHA256 = "ae1750052439df99b85bbd7388b9d2b8a2180cfe5d892027b1ff7ac8ffbd393c"
 ORACLE_PACKAGE = Path(
-    "/Users/cyuan/projects/shuozeli/applications/pwright/.work/official-conformance/"
+    "/Users/cyuan/projects/shuozeli/applications/playwright_rust/.work/official-conformance/"
     "builds/python-navigation-full-abi127-oct20.bB5H3w/oracle/lib/python3.12/site-packages/playwright"
 )
 ORACLE_PYTHON = ORACLE_PACKAGE.parents[3] / "bin/python"
@@ -308,23 +308,23 @@ def check_report_metadata(
         expected.update(
             pythonExecutable=str(abi130.PYTHON_EXECUTABLE),
             playwrightPackage=str(
-                ROOT / "packages/pwright-python/tests/official/shim/playwright"
+                ROOT / "packages/playwright-rust-python/tests/official/shim/playwright"
             ),
             playwrightPackageSha256=abi130.PLAYWRIGHT_PACKAGE_SHA256,
-            pwrightPackage=str(abi130.CANDIDATE_PACKAGE),
-            pwrightPackageSha256=abi130.PWRIGHT_PACKAGE_SHA256,
-            pwrightArtifact=str(abi130.CANDIDATE_ARTIFACT),
-            pwrightArtifactSha256=abi130.PWRIGHT_ARTIFACT_SHA256,
+            playwright_rustPackage=str(abi130.CANDIDATE_PACKAGE),
+            playwright_rustPackageSha256=abi130.PLAYWRIGHT_RUST_PACKAGE_SHA256,
+            playwright_rustArtifact=str(abi130.CANDIDATE_ARTIFACT),
+            playwright_rustArtifactSha256=abi130.PLAYWRIGHT_RUST_ARTIFACT_SHA256,
         )
     else:
         expected.update(
             pythonExecutable=str(ORACLE_PYTHON),
             playwrightPackage=str(ORACLE_PACKAGE),
             playwrightPackageSha256=ORACLE_PACKAGE_SHA256,
-            pwrightPackage=None,
-            pwrightPackageSha256=None,
-            pwrightArtifact=None,
-            pwrightArtifactSha256=None,
+            playwright_rustPackage=None,
+            playwright_rustPackageSha256=None,
+            playwright_rustArtifact=None,
+            playwright_rustArtifactSha256=None,
         )
     require(
         all(payload.get(key) == value for key, value in expected.items()),
@@ -478,8 +478,8 @@ def source_pins_expected(provenance: dict[str, dict[str, Any]]) -> dict[str, Any
                 f"{mode} {field} missing",
             )
     require(
-        isinstance(provenance["candidate"].get("pwrightRuntimeLibraries"), list)
-        and bool(provenance["candidate"]["pwrightRuntimeLibraries"]),
+        isinstance(provenance["candidate"].get("playwright_rustRuntimeLibraries"), list)
+        and bool(provenance["candidate"]["playwright_rustRuntimeLibraries"]),
         "candidate runtime libraries missing",
     )
     return {
@@ -493,8 +493,8 @@ def source_pins_expected(provenance: dict[str, dict[str, Any]]) -> dict[str, Any
         "candidateFrozenWheel": str(abi130.WHEEL),
         "candidateFrozenWheelSha256": abi130.WHEEL_SHA256,
         "candidateNativeAbi": 130,
-        "candidatePackageSha256": abi130.PWRIGHT_PACKAGE_SHA256,
-        "candidateArtifactSha256": abi130.PWRIGHT_ARTIFACT_SHA256,
+        "candidatePackageSha256": abi130.PLAYWRIGHT_RUST_PACKAGE_SHA256,
+        "candidateArtifactSha256": abi130.PLAYWRIGHT_RUST_ARTIFACT_SHA256,
         "candidatePlaywrightPackageSha256": abi130.PLAYWRIGHT_PACKAGE_SHA256,
         "oraclePlaywrightPackageSha256": ORACLE_PACKAGE_SHA256,
         "reports": {
@@ -509,7 +509,7 @@ def source_pins_expected(provenance: dict[str, dict[str, Any]]) -> dict[str, Any
             }
             for mode in MODES
         },
-        "candidateRuntimeLibraries": provenance["candidate"]["pwrightRuntimeLibraries"],
+        "candidateRuntimeLibraries": provenance["candidate"]["playwright_rustRuntimeLibraries"],
     }
 
 

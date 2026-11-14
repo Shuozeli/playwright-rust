@@ -1,0 +1,19 @@
+[package]
+name = "playwright-rust-process-metrics"
+description = "Optional bounded OS process-memory attribution for Playwright Rust diagnostics"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+playwright-rust-core = { workspace = true, optional = true }
+
+[features]
+default = []
+ledger = ["dep:playwright-rust-core"]
+
+[[bin]]
+name = "playwright-rust-process-metrics"
+path = "src/main.rs"

@@ -1,4 +1,4 @@
-use pwright::chromium_evaluation::{
+use playwright_rust::chromium_evaluation::{
     CdpEvaluationLimits, CdpEvaluationProductionProfile, ChromiumEvaluationProfile,
     EvaluationCodecLimits, EvaluationValueLimits, FrameLimits, ObjectId, ProtocolVersion,
     ResourceScope,

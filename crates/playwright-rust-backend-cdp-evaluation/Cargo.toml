@@ -1,0 +1,21 @@
+[package]
+name = "playwright-rust-backend-cdp-evaluation"
+description = "Chromium CDP adapter for the optional Playwright Rust value-evaluation capability"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+base64 = { workspace = true }
+playwright-rust-backend-cdp-common = { workspace = true }
+playwright-rust-browser-backend = { workspace = true }
+playwright-rust-cap-evaluation = { workspace = true }
+playwright-rust-cdp = { workspace = true }
+playwright-rust-core = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+playwright-rust-fake = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt"] }

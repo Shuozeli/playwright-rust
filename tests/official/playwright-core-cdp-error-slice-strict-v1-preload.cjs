@@ -8,9 +8,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { fileURLToPath } = require('node:url');
 
-const upstream = process.env.PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM;
-const fixtureHost = process.env.PWRIGHT_OFFICIAL_SERVER_HOST;
-const receipt = process.env.PWRIGHT_CORE_CDP_ERROR_SLICE_GUARD_RECEIPT;
+const upstream = process.env.PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM;
+const fixtureHost = process.env.PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST;
+const receipt = process.env.PLAYWRIGHT_RUST_CORE_CDP_ERROR_SLICE_GUARD_RECEIPT;
 if (!upstream || !fixtureHost || !receipt)
   throw new Error('strict CDP error slice requires upstream, host, and receipt');
 if (!/^[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*\.ts\.net$/.test(fixtureHost))

@@ -50,7 +50,7 @@ def main() -> None:
     parser.add_argument("path", nargs="*", type=Path)
     args = parser.parse_args()
     paths = args.path or [
-        root / "packages/pwright-python/python",
+        root / "packages/playwright-rust-python/python",
         root / "scripts/playwright_python_official_provenance.py",
         root / "scripts/run_playwright_python_official_conformance.py",
         root / "scripts/verify_playwright_python_official_provenance.py",

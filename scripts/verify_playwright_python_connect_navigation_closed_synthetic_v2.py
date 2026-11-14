@@ -19,21 +19,21 @@ CORE = Path("/Users/cyuan/projects/thirdparty/playwright-v1.58.0")
 RESULT_PARENT = ROOT / ".work/official-conformance/results"
 PLUGIN_DIR = (
     ROOT
-    / "packages/pwright-python/tests/official/connect_navigation_closed_synthetic_v1"
+    / "packages/playwright-rust-python/tests/official/connect_navigation_closed_synthetic_v1"
 )
 MANIFEST = (
     ROOT
-    / "packages/pwright-python/tests/official/connect_navigation_closed_synthetic_v2/manifest.json"
+    / "packages/playwright-rust-python/tests/official/connect_navigation_closed_synthetic_v2/manifest.json"
 )
 SERVER = PLUGIN_DIR / "server.cjs"
-PLUGIN = PLUGIN_DIR / "pwright_python_connect_navigation_closed_synthetic_v1.py"
-RUNTIME = ROOT / "packages/pwright-python/tests/official/runtime"
-SHIM = ROOT / "packages/pwright-python/tests/official/shim"
-WHEEL_NAME = "shuozeli_pwright-0.1.0-cp39-abi3-macosx_11_0_arm64.whl"
+PLUGIN = PLUGIN_DIR / "playwright_rust_python_connect_navigation_closed_synthetic_v1.py"
+RUNTIME = ROOT / "packages/playwright-rust-python/tests/official/runtime"
+SHIM = ROOT / "packages/playwright-rust-python/tests/official/shim"
+WHEEL_NAME = "shuozeli_playwright-rust-0.1.0-cp39-abi3-macosx_11_0_arm64.whl"
 WHEEL_SHA256 = "32c414d3eb2a45417c4a3ba79705be96179dc2ec2dd20896cd0cda7d8169e3e8"
 FIXTURE_HASHES = {
     "server.cjs": "aed2dff558ba8fea0dc177f5409e51c01e90375b69a6f60210cc288c897d2f39",
-    "pwright_python_connect_navigation_closed_synthetic_v1.py": (
+    "playwright_rust_python_connect_navigation_closed_synthetic_v1.py": (
         "2ba90f2bc4ca5bc862f42e571fce0b1dd6fbd96e9360fd9c1afec6fad175bbfc"
     ),
 }
@@ -79,9 +79,9 @@ HARNESS_INPUTS = (
     MANIFEST,
     SERVER,
     PLUGIN,
-    RUNTIME / "pwright_official_server_runtime.py",
-    RUNTIME / "pwright_official_oracle_runtime.py",
-    SHIM / "pwright_candidate_runtime.py",
+    RUNTIME / "playwright_rust_official_server_runtime.py",
+    RUNTIME / "playwright_rust_official_oracle_runtime.py",
+    SHIM / "playwright_rust_candidate_runtime.py",
     SHIM / "playwright/async_api.py",
     ROOT / "scripts/run_playwright_python_connect_navigation_closed_synthetic_v2.py",
     ROOT
@@ -205,7 +205,7 @@ def _installed_wheel(wheel: Path, site_packages: Path) -> dict[str, str]:
     with zipfile.ZipFile(wheel) as archive:
         for name in archive.namelist():
             if not (
-                name.startswith("pwright/") or name.startswith("pwright.libs/")
+                name.startswith("playwright_rust/") or name.startswith("playwright_rust.libs/")
             ) or name.endswith("/"):
                 continue
             target = site_packages / name
@@ -217,7 +217,7 @@ def _installed_wheel(wheel: Path, site_packages: Path) -> dict[str, str]:
             _require(sha256(target) == digest, f"wheel install differs: {name}")
             installed[name] = digest
     _require(
-        "pwright/_native.abi3.so" in installed and "pwright/async_api.py" in installed,
+        "playwright_rust/_native.abi3.so" in installed and "playwright_rust/async_api.py" in installed,
         "selected wheel lacks the ABI125 async remote binding",
     )
     return installed
@@ -281,7 +281,7 @@ def _receipt(
 
     runtime = one("runtime-import")
     official_path = str((site / "playwright/async_api/__init__.py").resolve())
-    candidate_path = str((site / "pwright/__init__.py").resolve())
+    candidate_path = str((site / "playwright_rust/__init__.py").resolve())
     _require(
         runtime.get("publicApiPath")
         == (
@@ -404,8 +404,8 @@ def verify_directory(result_dir: Path) -> dict[str, object]:
                 "lane provenance identity or exit changed",
             )
             env = cast(dict[str, str], provenance.get("environment"))
-            bind = env.get("PWRIGHT_OFFICIAL_TAILSCALE_IP", "")
-            host = env.get("PWRIGHT_OFFICIAL_TAILSCALE_HOST", "")
+            bind = env.get("PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_IP", "")
+            host = env.get("PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_HOST", "")
             _require(
                 ipaddress.ip_address(bind) in ipaddress.ip_network("100.64.0.0/10")
                 and host.endswith(".ts.net")
@@ -415,21 +415,21 @@ def verify_directory(result_dir: Path) -> dict[str, object]:
             )
             addresses.add((bind, host))
             _require(
-                env.get("PWRIGHT_PYTHON_NAV_CLOSED_MODE") == mode
-                and env.get("PWRIGHT_PYTHON_NAV_CLOSED_ENGINE") == engine
-                and env.get("PWRIGHT_OFFICIAL_LAUNCH_MODE") == "owned"
-                and env.get("PWRIGHT_PYTHON_NAV_CLOSED_RECEIPT")
+                env.get("PLAYWRIGHT_RUST_PYTHON_NAV_CLOSED_MODE") == mode
+                and env.get("PLAYWRIGHT_RUST_PYTHON_NAV_CLOSED_ENGINE") == engine
+                and env.get("PLAYWRIGHT_RUST_OFFICIAL_LAUNCH_MODE") == "owned"
+                and env.get("PLAYWRIGHT_RUST_PYTHON_NAV_CLOSED_RECEIPT")
                 == str(result_dir / f"{prefix}.receipt.jsonl")
-                and env.get("PWRIGHT_PYTHON_NAV_CLOSED_SERVER") == str(SERVER)
-                and env.get("PWRIGHT_PYTHON_NAV_CLOSED_UPSTREAM") == str(UPSTREAM)
-                and env.get("PWRIGHT_PYTHON_NAV_CLOSED_CORE_UPSTREAM") == str(CORE),
+                and env.get("PLAYWRIGHT_RUST_PYTHON_NAV_CLOSED_SERVER") == str(SERVER)
+                and env.get("PLAYWRIGHT_RUST_PYTHON_NAV_CLOSED_UPSTREAM") == str(UPSTREAM)
+                and env.get("PLAYWRIGHT_RUST_PYTHON_NAV_CLOSED_CORE_UPSTREAM") == str(CORE),
                 "lane environment changed",
             )
             command = cast(list[str], provenance.get("command"))
             _require(
                 command[:3] == [str(result_dir / "venv/bin/python"), "-m", "pytest"]
                 and "-p" in command
-                and "pwright_python_connect_navigation_closed_synthetic_v1" in command
+                and "playwright_rust_python_connect_navigation_closed_synthetic_v1" in command
                 and f"--browser={engine}" in command
                 and command[-1]
                 == str(UPSTREAM / CASE_BODY.split("::", 1)[0])

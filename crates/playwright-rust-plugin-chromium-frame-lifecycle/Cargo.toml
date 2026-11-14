@@ -1,0 +1,17 @@
+[package]
+name = "playwright-rust-plugin-chromium-frame-lifecycle"
+description = "Optional bounded Chromium Frame lifecycle and navigation-wait observation plugin"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+playwright-rust-backend-cdp-navigation = { workspace = true, features = ["frame-lifecycle"] }
+playwright-rust-backend-cdp-topology = { workspace = true }
+playwright-rust-cap-navigation = { workspace = true }
+playwright-rust-cdp = { workspace = true }
+playwright-rust-core = { workspace = true }
+playwright-rust-plugin-chromium-frame-observer = { workspace = true }
+tokio = { workspace = true, features = ["sync"] }

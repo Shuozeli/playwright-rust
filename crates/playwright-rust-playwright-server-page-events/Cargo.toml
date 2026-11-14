@@ -1,0 +1,15 @@
+[package]
+name = "playwright-rust-playwright-server-page-events"
+description = "Opt-in bounded Playwright Server Page event projection"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[features]
+default = []
+
+[dependencies]
+playwright-rust-playwright-server-client-core = { path = "../playwright-rust-playwright-server-client-core" }
+serde_json = { workspace = true }

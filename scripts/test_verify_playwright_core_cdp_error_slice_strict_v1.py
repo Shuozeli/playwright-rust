@@ -80,7 +80,7 @@ def _synthetic(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mode: str = "ora
         + "\n"
     )
     log = result.with_suffix(".log")
-    log.write_text("[pwright-candidate] selected\n" if mode == "candidate" else "oracle selected\n")
+    log.write_text("[playwright-rust-candidate] selected\n" if mode == "candidate" else "oracle selected\n")
     inputs = {
         str(path.relative_to(capture.ROOT)): capture.sha256(path)
         for path in (
@@ -227,9 +227,9 @@ def test_preload_rewrites_only_same_port_ws_host(tmp_path: Path) -> None:
     environment = {
         **os.environ,
         "NODE_OPTIONS": f"--require={capture.PRELOAD}",
-        "PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM": str(capture.UPSTREAM),
-        "PWRIGHT_OFFICIAL_SERVER_HOST": HOST,
-        "PWRIGHT_CORE_CDP_ERROR_SLICE_GUARD_RECEIPT": str(receipt),
+        "PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM": str(capture.UPSTREAM),
+        "PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST": HOST,
+        "PLAYWRIGHT_RUST_CORE_CDP_ERROR_SLICE_GUARD_RECEIPT": str(receipt),
     }
     expression = (
         "const fs=require('node:fs');const crypto=require('node:crypto');"
@@ -269,9 +269,9 @@ def test_preload_rejects_upstream_source_drift(tmp_path: Path) -> None:
     environment = {
         **os.environ,
         "NODE_OPTIONS": f"--require={capture.PRELOAD}",
-        "PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM": str(shadow),
-        "PWRIGHT_OFFICIAL_SERVER_HOST": HOST,
-        "PWRIGHT_CORE_CDP_ERROR_SLICE_GUARD_RECEIPT": str(receipt),
+        "PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM": str(shadow),
+        "PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST": HOST,
+        "PLAYWRIGHT_RUST_CORE_CDP_ERROR_SLICE_GUARD_RECEIPT": str(receipt),
     }
 
     # Act

@@ -1,5 +1,5 @@
 [package]
-name = "pwright-v2-network-events-composition-only-example"
+name = "playwright-rust-v2-network-events-composition-only-example"
 version = "0.1.0"
 edition = "2024"
 publish = false
@@ -7,4 +7,4 @@ publish = false
 [workspace]
 
 [dependencies]
-pwright-composition-chromium-network-events = { path = "../../crates/pwright-composition-chromium-network-events" }
+playwright-rust-composition-chromium-network-events = { path = "../../crates/playwright-rust-composition-chromium-network-events" }

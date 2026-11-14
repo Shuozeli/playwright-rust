@@ -32,10 +32,10 @@ RESULT = BUILD / "results/navigation-candidate-full80-abi131.xml"
 PROVENANCE = RESULT.with_suffix(".provenance.json")
 FOCUSED_RESULT = BUILD / "results/frame-events-candidate-focused-abi131.xml"
 FOCUSED_PROVENANCE = FOCUSED_RESULT.with_suffix(".provenance.json")
-WHEEL = BUILD / "wheel/shuozeli_pwright-0.1.0-cp39-abi3-macosx_11_0_arm64.whl"
+WHEEL = BUILD / "wheel/shuozeli_playwright-rust-0.1.0-cp39-abi3-macosx_11_0_arm64.whl"
 CANDIDATE_VENV = BUILD / "candidate-abi131"
 PYTHON_EXECUTABLE = CANDIDATE_VENV / "bin/python"
-CANDIDATE_PACKAGE = CANDIDATE_VENV / "lib/python3.12/site-packages/pwright"
+CANDIDATE_PACKAGE = CANDIDATE_VENV / "lib/python3.12/site-packages/playwright-rust"
 CANDIDATE_ARTIFACT = CANDIDATE_PACKAGE / "_native.abi3.so"
 INVENTORY = prior.INVENTORY
 MANIFEST = prior.MANIFEST
@@ -84,10 +84,10 @@ BASE_HASHES = {
     ),
 }
 WHEEL_SHA256 = "950d4ac52f654e2c9584a85e76d8f83816f8ca2403a33393394baae078e23e00"
-PWRIGHT_ARTIFACT_SHA256 = (
+PLAYWRIGHT_RUST_ARTIFACT_SHA256 = (
     "e536e6d604f0cd47faa16000819c644c52574c84af0080769c04674bc39de2fb"
 )
-PWRIGHT_PACKAGE_SHA256 = (
+PLAYWRIGHT_RUST_PACKAGE_SHA256 = (
     "294e0a59fa399a848036d5e5cbab6025e2a95c2da3c174b943a5bbd56f62260a"
 )
 PLAYWRIGHT_PACKAGE_SHA256 = (
@@ -299,10 +299,10 @@ def check_report_metadata(payload: dict[str, Any]) -> None:
         "manifestCases": False,
         "secureHttpFixture": False,
         "pythonExecutable": str(PYTHON_EXECUTABLE),
-        "pwrightPackage": str(CANDIDATE_PACKAGE),
-        "pwrightArtifact": str(CANDIDATE_ARTIFACT),
-        "pwrightArtifactSha256": PWRIGHT_ARTIFACT_SHA256,
-        "pwrightPackageSha256": PWRIGHT_PACKAGE_SHA256,
+        "playwright_rustPackage": str(CANDIDATE_PACKAGE),
+        "playwright_rustArtifact": str(CANDIDATE_ARTIFACT),
+        "playwright_rustArtifactSha256": PLAYWRIGHT_RUST_ARTIFACT_SHA256,
+        "playwright_rustPackageSha256": PLAYWRIGHT_RUST_PACKAGE_SHA256,
         "playwrightPackageSha256": PLAYWRIGHT_PACKAGE_SHA256,
     }
     require(
@@ -425,8 +425,8 @@ def _verify_focused() -> None:
         and payload.get("result") == str(FOCUSED_RESULT)
         and payload.get("resultSha256") == FOCUSED_RESULT_SHA256
         and payload.get("selections") == [FOCUSED_TARGET_ID]
-        and payload.get("pwrightArtifactSha256") == PWRIGHT_ARTIFACT_SHA256
-        and payload.get("pwrightPackageSha256") == PWRIGHT_PACKAGE_SHA256
+        and payload.get("playwright_rustArtifactSha256") == PLAYWRIGHT_RUST_ARTIFACT_SHA256
+        and payload.get("playwright_rustPackageSha256") == PLAYWRIGHT_RUST_PACKAGE_SHA256
         and payload.get("exitCode") == 0,
         "focused ABI131 source-bound identity differs",
     )
@@ -454,7 +454,7 @@ def _verify_wheel(provenance: dict[str, Any]) -> None:
             files = [
                 item
                 for item in archive.infolist()
-                if item.filename.startswith("pwright/") and not item.is_dir()
+                if item.filename.startswith("playwright_rust/") and not item.is_dir()
             ]
             require(
                 bool(files) and len(files) == len({item.filename for item in files}),
@@ -462,7 +462,7 @@ def _verify_wheel(provenance: dict[str, Any]) -> None:
             )
             digest = hashlib.sha256()
             for item in sorted(files, key=lambda value: value.filename):
-                relative = Path(item.filename.removeprefix("pwright/"))
+                relative = Path(item.filename.removeprefix("playwright_rust/"))
                 require(
                     relative.parts
                     and not relative.is_absolute()
@@ -482,26 +482,26 @@ def _verify_wheel(provenance: dict[str, Any]) -> None:
                 digest.update(name)
                 digest.update(len(raw).to_bytes(8, "big"))
                 digest.update(raw)
-            native = archive.read("pwright/_native.abi3.so")
+            native = archive.read("playwright_rust/_native.abi3.so")
             require(
-                b"NATIVE_ABI_VERSION = 131" in archive.read("pwright/_abi.py"),
+                b"NATIVE_ABI_VERSION = 131" in archive.read("playwright_rust/_abi.py"),
                 "wheel ABI is not 131",
             )
     except (OSError, KeyError, zipfile.BadZipFile) as error:
         raise FullNavigationV7ValidationError(
             "frozen ABI131 wheel is invalid"
         ) from error
-    require(digest.hexdigest() == PWRIGHT_PACKAGE_SHA256, "wheel package SHA differs")
-    require(sha256(native) == PWRIGHT_ARTIFACT_SHA256, "wheel native artifact differs")
+    require(digest.hexdigest() == PLAYWRIGHT_RUST_PACKAGE_SHA256, "wheel package SHA differs")
+    require(sha256(native) == PLAYWRIGHT_RUST_ARTIFACT_SHA256, "wheel native artifact differs")
     require(
-        provenance.get("pwrightPackageSha256") == digest.hexdigest()
-        and provenance.get("pwrightArtifactSha256") == sha256(native),
+        provenance.get("playwright_rustPackageSha256") == digest.hexdigest()
+        and provenance.get("playwright_rustArtifactSha256") == sha256(native),
         "report/wheel package or artifact differs",
     )
 
 
 def source_pins_expected(provenance: dict[str, Any]) -> dict[str, Any]:
-    for field in ("harnessInputs", "toolingSources", "pwrightRuntimeLibraries"):
+    for field in ("harnessInputs", "toolingSources", "playwright_rustRuntimeLibraries"):
         require(
             isinstance(provenance.get(field), list) and bool(provenance[field]),
             f"full-80 report {field} is missing",
@@ -518,8 +518,8 @@ def source_pins_expected(provenance: dict[str, Any]) -> dict[str, Any]:
         "frozenWheel": str(WHEEL),
         "frozenWheelSha256": WHEEL_SHA256,
         "wheelName": WHEEL.name,
-        "pwrightPackageSha256": PWRIGHT_PACKAGE_SHA256,
-        "pwrightArtifactSha256": PWRIGHT_ARTIFACT_SHA256,
+        "playwright_rustPackageSha256": PLAYWRIGHT_RUST_PACKAGE_SHA256,
+        "playwright_rustArtifactSha256": PLAYWRIGHT_RUST_ARTIFACT_SHA256,
         "playwrightPackageSha256": PLAYWRIGHT_PACKAGE_SHA256,
         "focusedResult": str(FOCUSED_RESULT),
         "focusedResultSha256": FOCUSED_RESULT_SHA256,
@@ -528,7 +528,7 @@ def source_pins_expected(provenance: dict[str, Any]) -> dict[str, Any]:
         "focusedTargetId": FOCUSED_TARGET_ID,
         "harnessInputs": provenance["harnessInputs"],
         "toolingSources": provenance["toolingSources"],
-        "pwrightRuntimeLibraries": provenance["pwrightRuntimeLibraries"],
+        "playwright_rustRuntimeLibraries": provenance["playwright_rustRuntimeLibraries"],
     }
 
 

@@ -14,25 +14,25 @@ function cargo(args) {
   return result.stdout;
 }
 const closures = {
-  cap: ['pwright-cap-keyboard', 'pwright-core', 'pwright-input-model'],
-  client: ['pwright-browser-model', 'pwright-cap-keyboard', 'pwright-client', 'pwright-client-keyboard', 'pwright-core', 'pwright-input-model'],
-  codec: ['pwright-cap-keyboard', 'pwright-codec-binary', 'pwright-codec-common', 'pwright-codec-keyboard', 'pwright-core', 'pwright-input-model', 'pwright-transport'],
-  server: ['pwright-cap-keyboard', 'pwright-codec-binary', 'pwright-codec-common', 'pwright-codec-keyboard', 'pwright-connection-control', 'pwright-core', 'pwright-input-model', 'pwright-server-keyboard', 'pwright-server-wire', 'pwright-transport'],
+  cap: ['playwright-rust-cap-keyboard', 'playwright-rust-core', 'playwright-rust-input-model'],
+  client: ['playwright-rust-browser-model', 'playwright-rust-cap-keyboard', 'playwright-rust-client', 'playwright-rust-client-keyboard', 'playwright-rust-core', 'playwright-rust-input-model'],
+  codec: ['playwright-rust-cap-keyboard', 'playwright-rust-codec-binary', 'playwright-rust-codec-common', 'playwright-rust-codec-keyboard', 'playwright-rust-core', 'playwright-rust-input-model', 'playwright-rust-transport'],
+  server: ['playwright-rust-cap-keyboard', 'playwright-rust-codec-binary', 'playwright-rust-codec-common', 'playwright-rust-codec-keyboard', 'playwright-rust-connection-control', 'playwright-rust-core', 'playwright-rust-input-model', 'playwright-rust-server-keyboard', 'playwright-rust-server-wire', 'playwright-rust-transport'],
 };
 for (const [kind, expected] of Object.entries(closures)) {
-  const tree = cargo(['tree', '--locked', '-p', `pwright-${kind}-keyboard`, '--edges', 'normal', '--prefix', 'none', '--format', '{p}']);
-  const actual = [...new Set(tree.split('\n').filter(line => line.startsWith('pwright-')).map(line => line.split(' ')[0]))].sort();
+  const tree = cargo(['tree', '--locked', '-p', `playwright-rust-${kind}-keyboard`, '--edges', 'normal', '--prefix', 'none', '--format', '{p}']);
+  const actual = [...new Set(tree.split('\n').filter(line => line.startsWith('playwright-rust-')).map(line => line.split(' ')[0]))].sort();
   const allPackages = new Set(tree.split('\n').map(line => line.split(' ')[0]));
-  for (const forbidden of ['tokio', 'napi', 'napi-derive', 'serde_yaml', 'pwright-schema-gen'])
+  for (const forbidden of ['tokio', 'napi', 'napi-derive', 'serde_yaml', 'playwright-rust-schema-gen'])
     assert.equal(allPackages.has(forbidden), false, `${kind} keyboard must not require ${forbidden}`);
   assert.deepEqual(actual, expected, `${kind} keyboard dependency boundary changed`);
-  console.log(`Keyboard ${kind} normal closure: ${actual.length} Pwright packages`);
+  console.log(`Keyboard ${kind} normal closure: ${actual.length} Playwright Rust packages`);
 }
 
 // Inventory top-level canonical capability schemas, not frozen old baselines.
 // Full YAML/model validation and output freshness belong to the generator below.
 const owners = new Map();
-for (const directory of readdirSync(join(root, 'crates')).filter(name => name.startsWith('pwright-cap-'))) {
+for (const directory of readdirSync(join(root, 'crates')).filter(name => name.startsWith('playwright-rust-cap-'))) {
   const schemaDirectory = join(root, 'crates', directory, 'schema');
   let entries;
   try { entries = readdirSync(schemaDirectory); }
@@ -56,14 +56,14 @@ for (const directory of readdirSync(join(root, 'crates')).filter(name => name.st
   }
 }
 for (const [offset, name] of ['down', 'up', 'press', 'insert-text', 'type'].entries())
-  assert.equal(owners.get(String(851969 + offset)), `pwright.keyboard/keyboard.${name}`);
+  assert.equal(owners.get(String(851969 + offset)), `playwright.rust.keyboard/keyboard.${name}`);
 console.log('Keyboard method range ownership verified against canonical capability schemas');
 
-cargo(['run', '--release', '--locked', '-p', 'pwright-schema-gen', '--',
-  '--input', 'crates/pwright-cap-keyboard/schema/keyboard.yml',
-  '--output', 'crates/pwright-codec-keyboard/src/generated_schema.rs',
-  '--capability-output', 'crates/pwright-cap-keyboard/src/generated_capability.rs',
-  '--server-output', 'crates/pwright-server-keyboard/src/generated_server.rs',
-  '--reference-output', 'crates/pwright-cap-keyboard/schema/protocol-reference.md',
-  '--import', 'crates/pwright-codec-common/schema/common.yml', '--check']);
+cargo(['run', '--release', '--locked', '-p', 'playwright-rust-schema-gen', '--',
+  '--input', 'crates/playwright-rust-cap-keyboard/schema/keyboard.yml',
+  '--output', 'crates/playwright-rust-codec-keyboard/src/generated_schema.rs',
+  '--capability-output', 'crates/playwright-rust-cap-keyboard/src/generated_capability.rs',
+  '--server-output', 'crates/playwright-rust-server-keyboard/src/generated_server.rs',
+  '--reference-output', 'crates/playwright-rust-cap-keyboard/schema/protocol-reference.md',
+  '--import', 'crates/playwright-rust-codec-common/schema/common.yml', '--check']);
 console.log('Keyboard schema, capability, codec model, server chain and reference are fresh');

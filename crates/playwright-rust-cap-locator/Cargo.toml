@@ -1,0 +1,17 @@
+[package]
+name = "playwright-rust-cap-locator"
+description = "Portable selector and locator-action contracts for Playwright Rust"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[features]
+default = []
+select-option-timeout-progress = []
+
+[dependencies]
+playwright-rust-core = { workspace = true }
+playwright-rust-input-model = { workspace = true }
+playwright-rust-selector-model = { workspace = true }

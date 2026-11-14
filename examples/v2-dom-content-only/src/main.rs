@@ -1,4 +1,4 @@
-use pwright_composition_chromium_dom_content::{
+use playwright_rust_composition_chromium_dom_content::{
     CdpDomContentProductionProfile, ChromiumDomContentProfile, DomContentCodecLimits, FrameLimits,
     ObjectId, ProtocolVersion, ResourceScope,
 };

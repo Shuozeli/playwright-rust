@@ -284,10 +284,10 @@ def check_report_metadata(payload: dict[str, Any]) -> None:
         "secureHttpFixture": False,
         "pythonExecutable": str(abi131.PYTHON_EXECUTABLE),
         "playwrightPackageSha256": abi131.PLAYWRIGHT_PACKAGE_SHA256,
-        "pwrightPackage": str(abi131.CANDIDATE_PACKAGE),
-        "pwrightPackageSha256": abi131.PWRIGHT_PACKAGE_SHA256,
-        "pwrightArtifact": str(abi131.CANDIDATE_ARTIFACT),
-        "pwrightArtifactSha256": abi131.PWRIGHT_ARTIFACT_SHA256,
+        "playwright_rustPackage": str(abi131.CANDIDATE_PACKAGE),
+        "playwright_rustPackageSha256": abi131.PLAYWRIGHT_RUST_PACKAGE_SHA256,
+        "playwright_rustArtifact": str(abi131.CANDIDATE_ARTIFACT),
+        "playwright_rustArtifactSha256": abi131.PLAYWRIGHT_RUST_ARTIFACT_SHA256,
         "result": str(RESULT),
         "resultSha256": REPORT_SHA256,
         "caseReports": str(Path(f"{RESULT}.cases")),
@@ -394,7 +394,7 @@ def _report(
 
 
 def source_pins_expected(provenance: dict[str, Any]) -> dict[str, Any]:
-    for field in ("harnessInputs", "toolingSources", "pwrightRuntimeLibraries"):
+    for field in ("harnessInputs", "toolingSources", "playwright_rustRuntimeLibraries"):
         require(
             isinstance(provenance.get(field), list) and bool(provenance[field]),
             f"recheck {field} missing",
@@ -411,8 +411,8 @@ def source_pins_expected(provenance: dict[str, Any]) -> dict[str, Any]:
         "frozenWheelSha256": abi131.WHEEL_SHA256,
         "installedNativeAbi": 131,
         "playwrightPackageSha256": abi131.PLAYWRIGHT_PACKAGE_SHA256,
-        "pwrightPackageSha256": abi131.PWRIGHT_PACKAGE_SHA256,
-        "pwrightArtifactSha256": abi131.PWRIGHT_ARTIFACT_SHA256,
+        "playwright_rustPackageSha256": abi131.PLAYWRIGHT_RUST_PACKAGE_SHA256,
+        "playwright_rustArtifactSha256": abi131.PLAYWRIGHT_RUST_ARTIFACT_SHA256,
         "report": str(RESULT),
         "reportSha256": REPORT_SHA256,
         "provenance": str(PROVENANCE),
@@ -420,7 +420,7 @@ def source_pins_expected(provenance: dict[str, Any]) -> dict[str, Any]:
         "historicalSyntheticErrorTestIds": list(HISTORICAL_SYNTHETIC_ERROR_IDS),
         "harnessInputs": provenance["harnessInputs"],
         "toolingSources": provenance["toolingSources"],
-        "pwrightRuntimeLibraries": provenance["pwrightRuntimeLibraries"],
+        "playwright_rustRuntimeLibraries": provenance["playwright_rustRuntimeLibraries"],
     }
 
 

@@ -111,8 +111,8 @@ def capture(result_dir: Path) -> dict[str, object]:
             receipt.open("x").close()
             env = os.environ.copy()
             env["NODE_OPTIONS"] = f"--require={PRELOAD}"
-            env["PWRIGHT_CORE_SERVER_REDIRECT_TIMEOUT_V1_MODE"] = mode
-            env["PWRIGHT_CORE_SERVER_REDIRECT_TIMEOUT_V1_RECEIPT"] = str(receipt)
+            env["PLAYWRIGHT_RUST_CORE_SERVER_REDIRECT_TIMEOUT_V1_MODE"] = mode
+            env["PLAYWRIGHT_RUST_CORE_SERVER_REDIRECT_TIMEOUT_V1_RECEIPT"] = str(receipt)
             command = [
                 "uv",
                 "run",

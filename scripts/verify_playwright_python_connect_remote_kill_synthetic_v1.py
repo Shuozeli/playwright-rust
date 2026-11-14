@@ -17,15 +17,15 @@ ROOT = Path(__file__).resolve().parents[1]
 UPSTREAM = Path("/Users/cyuan/projects/thirdparty/playwright-python")
 CORE = Path("/Users/cyuan/projects/thirdparty/playwright-v1.58.0")
 RESULT_PARENT = ROOT / ".work/official-conformance/results"
-PLUGIN_DIR = ROOT / "packages/pwright-python/tests/official/connect_remote_kill_synthetic_v1"
-LEGACY_DIR = ROOT / "packages/pwright-python/tests/official/connect_close_events_synthetic_v1"
-RUNTIME = ROOT / "packages/pwright-python/tests/official/runtime"
-SHIM = ROOT / "packages/pwright-python/tests/official/shim"
+PLUGIN_DIR = ROOT / "packages/playwright-rust-python/tests/official/connect_remote_kill_synthetic_v1"
+LEGACY_DIR = ROOT / "packages/playwright-rust-python/tests/official/connect_close_events_synthetic_v1"
+RUNTIME = ROOT / "packages/playwright-rust-python/tests/official/runtime"
+SHIM = ROOT / "packages/playwright-rust-python/tests/official/shim"
 MANIFEST = PLUGIN_DIR / "manifest.json"
-PLUGIN = PLUGIN_DIR / "pwright_python_connect_remote_kill_synthetic_v1.py"
+PLUGIN = PLUGIN_DIR / "playwright_rust_python_connect_remote_kill_synthetic_v1.py"
 SERVER = LEGACY_DIR / "server.cjs"
-LEGACY_PLUGIN = LEGACY_DIR / "pwright_python_connect_close_events_synthetic_v1.py"
-WHEEL_NAME = "shuozeli_pwright-0.1.0-cp39-abi3-macosx_11_0_arm64.whl"
+LEGACY_PLUGIN = LEGACY_DIR / "playwright_rust_python_connect_close_events_synthetic_v1.py"
+WHEEL_NAME = "shuozeli_playwright-rust-0.1.0-cp39-abi3-macosx_11_0_arm64.whl"
 WHEEL_SHA256 = "32c414d3eb2a45417c4a3ba79705be96179dc2ec2dd20896cd0cda7d8169e3e8"
 UPSTREAM_COMMIT = "47a5d35ef4f815a2021349f86ae391f7c20c02d6"
 CORE_COMMIT = "961381ec73a9fa2661d92504eab1a6bd6eaffc75"
@@ -46,7 +46,7 @@ SOURCE_HASHES = {
 }
 FIXTURE_HASHES = {
     "server.cjs": "cd23662f9da812f1189e1f4c0e70378bf3e0aec3ef613bc93dc135e60db60062",
-    "pwright_python_connect_close_events_synthetic_v1.py": "efef316ef9bca8948eb87c48d538b41a35256696eaa8d23b09bf9059728e4490",
+    "playwright_rust_python_connect_close_events_synthetic_v1.py": "efef316ef9bca8948eb87c48d538b41a35256696eaa8d23b09bf9059728e4490",
 }
 TOOLING = {
     "python": "3.12", "playwright": "1.58.0", "pytest": "8.4.2",
@@ -68,9 +68,9 @@ LEDGERS = {
 }
 HARNESS_INPUTS = (
     MANIFEST, PLUGIN, SERVER, LEGACY_PLUGIN,
-    RUNTIME / "pwright_official_server_runtime.py",
-    RUNTIME / "pwright_official_oracle_runtime.py",
-    SHIM / "pwright_candidate_runtime.py",
+    RUNTIME / "playwright_rust_official_server_runtime.py",
+    RUNTIME / "playwright_rust_official_oracle_runtime.py",
+    SHIM / "playwright_rust_candidate_runtime.py",
     SHIM / "playwright/async_api.py",
     SHIM / "playwright/sync_api.py",
     ROOT / "scripts/run_playwright_python_connect_remote_kill_synthetic_v1.py",
@@ -157,9 +157,9 @@ def expected_command(python: Path, xml: Path, mode: str) -> list[str]:
     command = [
         str(python), "-m", "pytest", "-q", "--tb=short", "--override-ini", "addopts=",
         "--import-mode=importlib", "-c", str(UPSTREAM / "pyproject.toml"),
-        "-p", "pwright_official_server_runtime",
-        "-p", "pwright_python_connect_remote_kill_synthetic_v1",
-        "-p", "pwright_candidate_runtime" if mode == "candidate" else "pwright_official_oracle_runtime",
+        "-p", "playwright_rust_official_server_runtime",
+        "-p", "playwright_rust_python_connect_remote_kill_synthetic_v1",
+        "-p", "playwright_rust_candidate_runtime" if mode == "candidate" else "playwright_rust_official_oracle_runtime",
         "--browser=chromium", "--timeout=30", "--timeout-method=signal", f"--junitxml={xml}",
     ]
     return command + [str(UPSTREAM / case.split("::", 1)[0]) + "::" + case.split("::", 1)[1] for case in CASE_IDS]
@@ -211,7 +211,7 @@ def receipt(path: Path, mode: str, outcomes: dict[str, str], bind: str, host: st
         require(imported.get("candidatePackagePath") is None and str(imported.get("publicApiPath", "")).startswith(str(site_packages / "playwright/")), "oracle sync API was not independent official Playwright")
         require(str(imported_async.get("publicApiPath", "")).startswith(str(site_packages / "playwright/")), "oracle async API was not independent official Playwright")
     else:
-        require(imported.get("candidatePackagePath") == str((site_packages / "pwright/__init__.py").resolve()), "candidate did not import frozen wheel")
+        require(imported.get("candidatePackagePath") == str((site_packages / "playwright_rust/__init__.py").resolve()), "candidate did not import frozen wheel")
         require(imported.get("publicApiPath") == str((SHIM / "playwright/sync_api.py").resolve()), "candidate sync API shim changed")
         require(imported_async.get("publicApiPath") == str((SHIM / "playwright/async_api.py").resolve()), "candidate async API shim changed")
     created = kinds["fixture-created"]
@@ -250,14 +250,14 @@ def verify_wheel_install(wheel: Path, site_packages: Path) -> dict[str, str]:
     installed: dict[str, str] = {}
     with zipfile.ZipFile(wheel) as archive:
         for name in archive.namelist():
-            if not name.startswith(("pwright/", "pwright.libs/")) or name.endswith("/"):
+            if not name.startswith(("playwright_rust/", "playwright_rust.libs/")) or name.endswith("/"):
                 continue
             target = site_packages / name
             require(target.is_file() and not target.is_symlink(), f"wheel install file missing: {name}")
             digest = hashlib.sha256(archive.read(name)).hexdigest()
             require(sha256(target) == digest, f"installed wheel differs from archive: {name}")
             installed[name] = digest
-    require(all(name in installed for name in ("pwright/_native.abi3.so", "pwright/async_api.py", "pwright/sync_api.py")), "selected wheel lacks remote Python API")
+    require(all(name in installed for name in ("playwright_rust/_native.abi3.so", "playwright_rust/async_api.py", "playwright_rust/sync_api.py")), "selected wheel lacks remote Python API")
     return installed
 
 
@@ -281,11 +281,11 @@ def verify_directory(result_dir: Path) -> dict[str, Any]:
         environment = provenance.get("environment")
         require(isinstance(environment, dict), f"{mode} environment absent")
         env = environment
-        bind = str(env.get("PWRIGHT_OFFICIAL_TAILSCALE_IP", ""))
-        host = str(env.get("PWRIGHT_OFFICIAL_TAILSCALE_HOST", ""))
+        bind = str(env.get("PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_IP", ""))
+        host = str(env.get("PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_HOST", ""))
         require(ipaddress.ip_address(bind) in ipaddress.ip_network("100.64.0.0/10") and host.endswith(".ts.net"), f"{mode} Tailscale bind/host changed")
-        require(env.get("PWRIGHT_PYTHON_CLOSE_EVENTS_MODE") == mode and env.get("PWRIGHT_PYTHON_CLOSE_EVENTS_ENGINE_FILTER") == "chromium" and env.get("PWRIGHT_PYTHON_CLOSE_EVENTS_RECEIPT") == str(receipt_path) and env.get("PWRIGHT_PYTHON_CLOSE_EVENTS_SERVER") == str(SERVER) and env.get("PWRIGHT_PYTHON_CLOSE_EVENTS_UPSTREAM") == str(UPSTREAM), f"{mode} fixture environment changed")
-        require(env.get("PWRIGHT_OFFICIAL_LAUNCH_MODE") == "owned" and env.get("PWRIGHT_CDP_ENDPOINT") is None and env.get("PWRIGHT_CDP_WS_URL") is None, f"{mode} inherited browser/CDP setting")
+        require(env.get("PLAYWRIGHT_RUST_PYTHON_CLOSE_EVENTS_MODE") == mode and env.get("PLAYWRIGHT_RUST_PYTHON_CLOSE_EVENTS_ENGINE_FILTER") == "chromium" and env.get("PLAYWRIGHT_RUST_PYTHON_CLOSE_EVENTS_RECEIPT") == str(receipt_path) and env.get("PLAYWRIGHT_RUST_PYTHON_CLOSE_EVENTS_SERVER") == str(SERVER) and env.get("PLAYWRIGHT_RUST_PYTHON_CLOSE_EVENTS_UPSTREAM") == str(UPSTREAM), f"{mode} fixture environment changed")
+        require(env.get("PLAYWRIGHT_RUST_OFFICIAL_LAUNCH_MODE") == "owned" and env.get("PLAYWRIGHT_RUST_CDP_ENDPOINT") is None and env.get("PLAYWRIGHT_RUST_CDP_WS_URL") is None, f"{mode} inherited browser/CDP setting")
         py_paths = str(env.get("PYTHONPATH", "")).split(":")
         expected_paths = [str(SHIM), str(RUNTIME), str(PLUGIN_DIR), str(LEGACY_DIR)] if mode == "candidate" else [str(RUNTIME), str(PLUGIN_DIR), str(LEGACY_DIR)]
         require(py_paths == expected_paths, f"{mode} import isolation changed")

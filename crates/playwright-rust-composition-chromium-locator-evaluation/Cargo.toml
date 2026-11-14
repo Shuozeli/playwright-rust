@@ -1,0 +1,35 @@
+[package]
+name = "playwright-rust-composition-chromium-locator-evaluation"
+description = "Group-owned Locator element adoption and single-use value evaluation"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+playwright-rust-backend-cdp-evaluation = { workspace = true }
+playwright-rust-backend-cdp-handle-evaluation = { workspace = true }
+playwright-rust-cap-evaluation = { workspace = true }
+playwright-rust-cap-handle-evaluation = { workspace = true }
+playwright-rust-cdp = { workspace = true }
+playwright-rust-composition-chromium-locator-resolution = { workspace = true }
+playwright-rust-core = { workspace = true }
+playwright-rust-runtime = { workspace = true }
+playwright-rust-selector-model = { workspace = true }
+playwright-rust-backend-cdp-selector-runtime = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+anyhow = { workspace = true }
+playwright-rust-browser-model = { workspace = true }
+playwright-rust-backend-cdp = { workspace = true }
+playwright-rust-codec-evaluation = { workspace = true }
+playwright-rust-codec-locator = { workspace = true }
+playwright-rust-composition-chromium = { workspace = true }
+playwright-rust-server-wire = { workspace = true }
+playwright-rust-transport = { workspace = true }
+playwright-rust-browser-provider = { workspace = true }
+playwright-rust-fake = { workspace = true }
+playwright-rust-provider-cdp = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt", "sync", "time"] }

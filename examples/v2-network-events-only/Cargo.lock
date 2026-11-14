@@ -578,42 +578,42 @@ dependencies = [
 ]
 
 [[package]]
-name = "pwright-backend-cdp-network-events"
+name = "playwright-rust-backend-cdp-network-events"
 version = "0.1.0"
 dependencies = [
- "pwright-browser-model",
- "pwright-cap-network-events",
- "pwright-cdp",
- "pwright-core",
- "pwright-network-model",
+ "playwright-rust-browser-model",
+ "playwright-rust-cap-network-events",
+ "playwright-rust-cdp",
+ "playwright-rust-core",
+ "playwright-rust-network-model",
  "serde_json",
 ]
 
 [[package]]
-name = "pwright-browser-model"
+name = "playwright-rust-browser-model"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-cap-network-events"
+name = "playwright-rust-cap-network-events"
 version = "0.1.0"
 dependencies = [
- "pwright-browser-model",
- "pwright-core",
- "pwright-network-model",
+ "playwright-rust-browser-model",
+ "playwright-rust-core",
+ "playwright-rust-network-model",
 ]
 
 [[package]]
-name = "pwright-cdp"
+name = "playwright-rust-cdp"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
  "dashmap",
  "futures-util",
- "pwright-core",
+ "playwright-rust-core",
  "serde",
  "serde_json",
  "thiserror",
@@ -625,21 +625,21 @@ dependencies = [
 ]
 
 [[package]]
-name = "pwright-core"
+name = "playwright-rust-core"
 version = "0.1.0"
 
 [[package]]
-name = "pwright-network-model"
+name = "playwright-rust-network-model"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-v2-network-events-only-example"
+name = "playwright-rust-v2-network-events-only-example"
 version = "0.1.0"
 dependencies = [
- "pwright-backend-cdp-network-events",
+ "playwright-rust-backend-cdp-network-events",
 ]
 
 [[package]]

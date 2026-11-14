@@ -1,8 +1,10 @@
-# Design: CDP Protocol Codegen Crate (`pwright-cdp-gen`)
+<!-- agent-updated: 2026-11-14T05:28:56Z -->
+
+# Design: CDP Protocol Codegen Crate (`playwright-rust-cdp-gen`)
 
 ## Problem
 
-`pwright-cdp` hand-writes CDP domain wrappers in `domains/*.rs`. Each wrapper:
+`playwright-rust-cdp` hand-writes CDP domain wrappers in `domains/*.rs`. Each wrapper:
 - Manually constructs `serde_json::json!({...})` for command params
 - Manually extracts fields from `serde_json::Value` responses
 - Has no compile-time guarantee that params/returns match the protocol spec
@@ -61,7 +63,7 @@ protocol.json
 
 ## CDP Coverage Today
 
-pwright uses 9 of 55 domains, ~44 of ~300+ available commands:
+playwright-rust uses 9 of 55 domains, ~44 of ~300+ available commands:
 
 | Domain | Commands Used | Total Available | Coverage |
 |--------|--------------|-----------------|----------|
@@ -84,7 +86,7 @@ Only a handful have typed structs: `TargetInfo`, `Cookie`, `RawAXNode`.
 |-------|-------|--------|
 | 1 | Parser + codegen for types/enums | Done |
 | 2 | Codegen for command params + return types | Done |
-| 3 | Migrate pwright-cdp domains to use generated types | Done |
+| 3 | Migrate playwright-rust-cdp domains to use generated types | Done |
 | 4 | Codegen for event types | Done (structs generated, dispatcher not yet) |
 | 5 | Add new domains (Emulation, Console, Log) via config | Not started |
 | 6 | Codegen unit tests (serialization round-trips) | Not started |
@@ -92,7 +94,7 @@ Only a handful have typed structs: `TargetInfo`, `Cookie`, `RawAXNode`.
 **Note:** Phases 1-4 are complete. Domain selection is currently hardcoded in
 `codegen.rs::DOMAINS` (9 domains), not yet configurable via CLI flag or config file.
 
-## Proposed Crate: `pwright-cdp-gen`
+## Proposed Crate: `playwright-rust-cdp-gen`
 
 ### What It Generates
 
@@ -156,7 +158,7 @@ impl CdpSession {
 ### Implementation (completed)
 
 The codegen is a standalone binary (`cdp-gen`) that reads protocol JSON and
-writes `.rs` files to `pwright-cdp/src/generated/`. No build-time dependency
+writes `.rs` files to `playwright-rust-cdp/src/generated/`. No build-time dependency
 -- generated code is committed to git. The codegen runs manually when updating
 the protocol.
 
@@ -170,7 +172,7 @@ the protocol.
 ### Crate Structure
 
 ```
-crates/pwright-cdp-gen/
+crates/playwright-rust-cdp-gen/
   Cargo.toml
   proto/cdp/
     chrome_protocol.json    # Live protocol from Chrome /json/protocol
@@ -183,14 +185,14 @@ crates/pwright-cdp-gen/
     protocol.rs       # Protocol JSON schema types (Domain, Command, Type, Property, etc.)
 ```
 
-### Relationship to `pwright-cdp`
+### Relationship to `playwright-rust-cdp`
 
 ```
-pwright-cdp-gen (standalone binary, dev tool)
+playwright-rust-cdp-gen (standalone binary, dev tool)
   reads:  proto/cdp/chrome_protocol.json + http_endpoints.json
-  writes: pwright-cdp/src/generated/*.rs (committed to git)
+  writes: playwright-rust-cdp/src/generated/*.rs (committed to git)
 
-pwright-cdp (library, no dependency on cdp-gen)
+playwright-rust-cdp (library, no dependency on cdp-gen)
   src/generated/     # Generated types, enums, params, returns, events
   src/domains/       # Hand-written methods using generated types
 ```
@@ -239,7 +241,7 @@ pwright-cdp (library, no dependency on cdp-gen)
 |-------|-------|--------|
 | 1 | Parser + codegen for types/enums | Done |
 | 2 | Codegen for command params + return types | Done |
-| 3 | Migrate pwright-cdp domains to use generated types | Done |
+| 3 | Migrate playwright-rust-cdp domains to use generated types | Done |
 | 4 | Codegen for event types | Done (structs generated, dispatcher not yet) |
 | 5 | Add new domains (Emulation, Console, Log) via config | Not started |
 | 6 | Codegen unit tests (serialization round-trips) | Not started |

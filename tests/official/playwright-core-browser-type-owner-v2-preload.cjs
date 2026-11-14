@@ -6,17 +6,17 @@
 const path = require('node:path');
 const fs = require('node:fs');
 
-const candidate = process.env.PWRIGHT_NODE_CANDIDATE;
+const candidate = process.env.PLAYWRIGHT_RUST_NODE_CANDIDATE;
 if (!candidate)
-  throw new Error('PWRIGHT_NODE_CANDIDATE is required');
+  throw new Error('PLAYWRIGHT_RUST_NODE_CANDIDATE is required');
 
 const implementation = require(path.resolve(candidate));
 for (const name of ['chromium', 'firefox', 'webkit']) {
   const browserType = implementation[name];
   if (!browserType || typeof browserType.executablePath !== 'function')
-    throw new Error(`Pwright candidate is missing ${name}.executablePath`);
+    throw new Error(`Playwright Rust candidate is missing ${name}.executablePath`);
   if (Object.hasOwn(browserType, '_playwright'))
-    throw new Error(`Pwright candidate already owns ${name}._playwright`);
+    throw new Error(`Playwright Rust candidate already owns ${name}._playwright`);
   Object.defineProperty(browserType, '_playwright', {
     configurable: false,
     enumerable: false,
@@ -25,7 +25,7 @@ for (const name of ['chromium', 'firefox', 'webkit']) {
   });
 }
 
-const receipt = process.env.PWRIGHT_CORE_BROWSER_TYPE_OWNER_RECEIPT;
+const receipt = process.env.PLAYWRIGHT_RUST_CORE_BROWSER_TYPE_OWNER_RECEIPT;
 if (receipt) {
   fs.appendFileSync(receipt, JSON.stringify({
     pid: process.pid,

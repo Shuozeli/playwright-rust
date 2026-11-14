@@ -97,7 +97,7 @@ def test_mutated_evidence_is_rejected(
             ] = "/wrong"
         receipt.write_text("".join(json.dumps(row) + "\n" for row in records))
     else:
-        log.write_text(log.read_text().replace("[pwright-candidate]", "[removed]"))
+        log.write_text(log.read_text().replace("[playwright-rust-candidate]", "[removed]"))
 
     # Act / Assert
     with pytest.raises((AssertionError, ValueError, KeyError, TypeError)):

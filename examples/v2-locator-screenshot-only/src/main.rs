@@ -1,5 +1,5 @@
-use pwright_backend_cdp_selector_geometry::CdpSelectorGeometryProductionProfile;
-use pwright_composition_chromium_locator_screenshot::{
+use playwright_rust_backend_cdp_selector_geometry::CdpSelectorGeometryProductionProfile;
+use playwright_rust_composition_chromium_locator_screenshot::{
     CdpScreenshotProductionProfile, ChromiumLocatorScreenshotProfile, FrameLimits,
     LocatorScreenshotCodecLimits, ProtocolVersion, ResourceScope,
 };

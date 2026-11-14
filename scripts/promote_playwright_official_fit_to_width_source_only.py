@@ -1,7 +1,7 @@
 """Promote exactly two verified upstream-private fit-to-width rows per Core lane.
 
 The candidate and oracle receipts run upstream reporter code without loading
-Pwright. This promotion never grants public API parity or candidate runtime
+Playwright Rust. This promotion never grants public API parity or candidate runtime
 attestation.
 """
 

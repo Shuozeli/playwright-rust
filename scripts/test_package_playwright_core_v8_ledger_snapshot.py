@@ -217,7 +217,7 @@ class LedgerReplayTests(unittest.TestCase):
 
 class ArchiveSafetyTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.temporary = tempfile.TemporaryDirectory(prefix="pwright-core-v8-safety-")
+        self.temporary = tempfile.TemporaryDirectory(prefix="playwright-rust-core-v8-safety-")
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
 

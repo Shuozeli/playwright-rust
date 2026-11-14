@@ -255,7 +255,7 @@ def run(args: argparse.Namespace) -> None:
     if not runner.is_file():
         raise ValueError("pinned Core test runner is missing")
     candidate = args.candidate.resolve() if args.mode == "candidate" else None
-    artifact = candidate / "native/owned-launch/pwright.node" if candidate else None
+    artifact = candidate / "native/owned-launch/playwright_rust.node" if candidate else None
     if candidate and (
         not (candidate / "package.json").is_file() or not artifact.is_file()
     ):
@@ -265,9 +265,9 @@ def run(args: argparse.Namespace) -> None:
 
     env = os.environ.copy()
     for name in (
-        "PWRIGHT_CANDIDATE_CDP_ENDPOINT",
-        "PWRIGHT_ORACLE_CDP_ENDPOINT",
-        "PWRIGHT_CDP_ENDPOINT",
+        "PLAYWRIGHT_RUST_CANDIDATE_CDP_ENDPOINT",
+        "PLAYWRIGHT_RUST_ORACLE_CDP_ENDPOINT",
+        "PLAYWRIGHT_RUST_CDP_ENDPOINT",
     ):
         env.pop(name, None)
     if env.get("PWTEST_MODE", "default") != "default" or env.get("PWTEST_CHANNEL"):
@@ -282,19 +282,19 @@ def run(args: argparse.Namespace) -> None:
     env.pop("CI", None)
     env["PWTEST_MODE"] = "default"
     env["CRPATH"] = str(executable)
-    env["PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM"] = str(upstream)
-    env["PWRIGHT_OFFICIAL_OWNED_LAUNCH_MODE"] = args.mode
-    env["PWRIGHT_OFFICIAL_OWNED_LAUNCH_RECEIPT"] = str(receipt)
+    env["PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM"] = str(upstream)
+    env["PLAYWRIGHT_RUST_OFFICIAL_OWNED_LAUNCH_MODE"] = args.mode
+    env["PLAYWRIGHT_RUST_OFFICIAL_OWNED_LAUNCH_RECEIPT"] = str(receipt)
     env["PLAYWRIGHT_JSON_OUTPUT_FILE"] = str(result)
     harness = [ROOT / CANDIDATE_PRELOAD] if candidate else []
     harness.append(ROOT / LOCAL_SOURCES[1])
     env["NODE_OPTIONS"] = " ".join(f"--require={item}" for item in harness)
     if candidate:
-        env["PWRIGHT_NODE_CANDIDATE"] = str(candidate)
-        env["PWRIGHT_NATIVE_PROFILE"] = PROFILE
+        env["PLAYWRIGHT_RUST_NODE_CANDIDATE"] = str(candidate)
+        env["PLAYWRIGHT_RUST_NATIVE_PROFILE"] = PROFILE
     else:
-        env.pop("PWRIGHT_NODE_CANDIDATE", None)
-        env.pop("PWRIGHT_NATIVE_PROFILE", None)
+        env.pop("PLAYWRIGHT_RUST_NODE_CANDIDATE", None)
+        env.pop("PLAYWRIGHT_RUST_NATIVE_PROFILE", None)
 
     selected_command = command(upstream)
     completed = subprocess.run(selected_command, cwd=upstream, env=env, check=False)
@@ -411,7 +411,7 @@ def verify(sidecar: Path) -> None:
     ):
         raise ValueError("owned Core executable identity changed")
     candidate = Path(cast(str, value["candidate"])) if mode == "candidate" else None
-    artifact = candidate / "native/owned-launch/pwright.node" if candidate else None
+    artifact = candidate / "native/owned-launch/playwright_rust.node" if candidate else None
     if candidate:
         if (
             value["candidateProfile"] != PROFILE
@@ -472,7 +472,7 @@ def main() -> None:
         selected.add_argument("--result", type=Path, required=True)
         if mode == "candidate":
             selected.add_argument(
-                "--candidate", type=Path, default=ROOT / "packages/pwright"
+                "--candidate", type=Path, default=ROOT / "packages/playwright-rust"
             )
     inspect = commands.add_parser("verify")
     inspect.add_argument("provenance", type=Path)

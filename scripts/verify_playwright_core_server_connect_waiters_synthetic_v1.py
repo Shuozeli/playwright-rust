@@ -33,10 +33,10 @@ SERVER = (
     ROOT
     / "tests/official/playwright-core-server-connect-waiters-synthetic-v1-server.cjs"
 )
-SOURCE_PACKAGE = ROOT / "packages/pwright"
+SOURCE_PACKAGE = ROOT / "packages/playwright-rust"
 ARTIFACT_SOURCE = (
     ROOT
-    / ".work/official-conformance/artifacts/playwright-server-connect-http-header-order-v1-20261012/pwright.node"
+    / ".work/official-conformance/artifacts/playwright-server-connect-http-header-order-v1-20261012/playwright_rust.node"
 )
 ARTIFACT_SHA256 = "0f1c8b1c6140206bdb4692d88ff1d1b9fb235b883739f176f720c3b59361523e"
 SOURCE_PACKAGE_SHA256 = (
@@ -470,7 +470,7 @@ def verify_lane(
             "candidate selected addon differs from frozen package",
         )
         _require(
-            "[pwright-candidate]" in log.read_text(), "candidate did not load Pwright"
+            "[playwright-rust-candidate]" in log.read_text(), "candidate did not load Playwright Rust"
         )
     else:
         _require(
@@ -478,8 +478,8 @@ def verify_lane(
             "oracle loaded candidate",
         )
         _require(
-            "[pwright-candidate]" not in log.read_text(),
-            "oracle log contains Pwright adapter",
+            "[playwright-rust-candidate]" not in log.read_text(),
+            "oracle log contains Playwright Rust adapter",
         )
     selected = _selected_tests(report, mode)
     _require(
@@ -526,7 +526,7 @@ def verify_directory(result_dir: Path) -> dict[str, Any]:
         "candidate source overlay differs from pinned package source",
     )
     _require(
-        sha256(overlay / "native" / PROFILE / "pwright.node") == ARTIFACT_SHA256,
+        sha256(overlay / "native" / PROFILE / "playwright_rust.node") == ARTIFACT_SHA256,
         "candidate source overlay addon differs from pinned artifact",
     )
     verify_snapshot(

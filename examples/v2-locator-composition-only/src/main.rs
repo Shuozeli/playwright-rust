@@ -1,4 +1,4 @@
-use pwright_composition_chromium_locator::{ChromiumLocatorProfile, ChromiumLocatorTrack};
+use playwright_rust_composition_chromium_locator::{ChromiumLocatorProfile, ChromiumLocatorTrack};
 
 fn main() {
     println!(

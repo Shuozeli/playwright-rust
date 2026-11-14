@@ -8,14 +8,14 @@ const fs = require('node:fs');
 const Module = require('node:module');
 const path = require('node:path');
 
-const mode = process.env.PWRIGHT_DUMMY_LAUNCH_MODE;
-const upstream = process.env.PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM;
-const manifestPath = process.env.PWRIGHT_DUMMY_LAUNCH_MANIFEST;
-const manifestSha256 = process.env.PWRIGHT_DUMMY_LAUNCH_MANIFEST_SHA256;
-const receipt = process.env.PWRIGHT_DUMMY_LAUNCH_RECEIPT;
-const strictRunId = process.env.PWRIGHT_DUMMY_STRICT_RUN_ID;
-const candidateProfile = process.env.PWRIGHT_NATIVE_PROFILE;
-const candidate = process.env.PWRIGHT_NODE_CANDIDATE;
+const mode = process.env.PLAYWRIGHT_RUST_DUMMY_LAUNCH_MODE;
+const upstream = process.env.PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM;
+const manifestPath = process.env.PLAYWRIGHT_RUST_DUMMY_LAUNCH_MANIFEST;
+const manifestSha256 = process.env.PLAYWRIGHT_RUST_DUMMY_LAUNCH_MANIFEST_SHA256;
+const receipt = process.env.PLAYWRIGHT_RUST_DUMMY_LAUNCH_RECEIPT;
+const strictRunId = process.env.PLAYWRIGHT_RUST_DUMMY_STRICT_RUN_ID;
+const candidateProfile = process.env.PLAYWRIGHT_RUST_NATIVE_PROFILE;
+const candidate = process.env.PLAYWRIGHT_RUST_NODE_CANDIDATE;
 const assetRelative = 'tests/assets/dummy_bad_browser_executable.js';
 const assetSha256 = '9928a78e7de42f29dfc61783a2f31673b387d7d6ea27cda5bc4472e4338c1f7f';
 
@@ -28,8 +28,8 @@ function assertEnvironment() {
       !manifestPath || !path.isAbsolute(manifestPath) || !manifestSha256 ||
       !receipt || !path.isAbsolute(receipt))
     throw new Error('dummy-node Core launch needs pinned mode, upstream, manifest and receipt');
-  for (const name of ['PWRIGHT_CANDIDATE_CDP_ENDPOINT', 'PWRIGHT_ORACLE_CDP_ENDPOINT',
-    'PWRIGHT_CDP_ENDPOINT', 'PWRIGHT_CDP_WS_URL', 'CRPATH', 'NODE_PATH']) {
+  for (const name of ['PLAYWRIGHT_RUST_CANDIDATE_CDP_ENDPOINT', 'PLAYWRIGHT_RUST_ORACLE_CDP_ENDPOINT',
+    'PLAYWRIGHT_RUST_CDP_ENDPOINT', 'PLAYWRIGHT_RUST_CDP_WS_URL', 'CRPATH', 'NODE_PATH']) {
     if (process.env[name]) throw new Error(`dummy-node Core launch forbids ${name}`);
   }
   if (process.env.PWTEST_MODE !== 'default' || process.env.PWTEST_CHANNEL ||
@@ -96,7 +96,7 @@ function record(event, executable, runtime) {
   }) + '\n');
 }
 
-Module._load = function pwrightDummyNodeLaunchLoad(request, parent, isMain) {
+Module._load = function playwrightRustDummyNodeLaunchLoad(request, parent, isMain) {
   if (request !== 'playwright-core' || parent?.filename !== testModeSource)
     return originalLoad(request, parent, isMain);
   assertEnvironment();
@@ -106,7 +106,7 @@ Module._load = function pwrightDummyNodeLaunchLoad(request, parent, isMain) {
     throw new Error('dummy-node Core launch requires public chromium.launch');
   const runtime = { profile: null, artifactSha256: null, inherited: null };
   if (strictRunId && mode === 'candidate') {
-    const artifact = path.join(candidate, 'native', candidateProfile, 'pwright.node');
+    const artifact = path.join(candidate, 'native', candidateProfile, 'playwright_rust.node');
     if (implementation.compatibility?.nativeProfile !== candidateProfile ||
         Object.prototype.hasOwnProperty.call(implementation.chromium, 'launch') ||
         Object.getPrototypeOf(implementation.chromium)?.launch !== implementation.chromium.launch ||

@@ -334,7 +334,7 @@ def verify_inputs() -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
         "candidate snapshot manifest",
     )
     sealed(
-        capture.SOURCE_PACKAGE / "native" / capture.PROFILE / "pwright.node",
+        capture.SOURCE_PACKAGE / "native" / capture.PROFILE / "playwright_rust.node",
         capture.ARTIFACT_SHA256,
         "candidate addon",
     )

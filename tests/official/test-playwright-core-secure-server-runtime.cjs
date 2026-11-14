@@ -28,7 +28,7 @@ const pinnedServerFixturesSource = [
 ].join('\n');
 
 function withFixture(testServerSource, serverFixturesSource, assertFixture) {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'pwright-core-secure-preload-test-'));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'playwright-rust-core-secure-preload-test-'));
   try {
     const upstream = path.join(directory, 'upstream');
     const testServer = path.join(upstream, 'tests', 'config', 'testserver', 'index.ts');
@@ -56,11 +56,11 @@ function runPreloaded(fixture, program, file = fixture.testServer) {
     env: {
       ...process.env,
       NODE_OPTIONS: '',
-      PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM: fixture.upstream,
-      PWRIGHT_OFFICIAL_SERVER_IP: '100.64.0.1',
-      PWRIGHT_OFFICIAL_SERVER_HOST: 'host.tailnet.ts.net',
-      PWRIGHT_OFFICIAL_SECURE_TLS_CERT: fixture.certificate,
-      PWRIGHT_OFFICIAL_SECURE_TLS_KEY: fixture.privateKey,
+      PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM: fixture.upstream,
+      PLAYWRIGHT_RUST_OFFICIAL_SERVER_IP: '100.64.0.1',
+      PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST: 'host.tailnet.ts.net',
+      PLAYWRIGHT_RUST_OFFICIAL_SECURE_TLS_CERT: fixture.certificate,
+      PLAYWRIGHT_RUST_OFFICIAL_SECURE_TLS_KEY: fixture.privateKey,
     },
   });
 }
@@ -87,14 +87,14 @@ test('secure preload composes with common preload across sync and async reads', 
     assert.equal(testServerVersions.length, 4);
     assert.equal(serverFixtureVersions.length, 4);
     for (const source of testServerVersions) {
-      assert.match(source, /PWRIGHT_OFFICIAL_SECURE_TLS_KEY/);
-      assert.match(source, /PWRIGHT_OFFICIAL_SECURE_TLS_CERT/);
+      assert.match(source, /PLAYWRIGHT_RUST_OFFICIAL_SECURE_TLS_KEY/);
+      assert.match(source, /PLAYWRIGHT_RUST_OFFICIAL_SECURE_TLS_CERT/);
       assert.doesNotMatch(source, /passphrase: 'aaaa'/);
     }
     for (const source of serverFixtureVersions) {
       assert.match(source, /TestServer\.createHTTPS\(assetsPath, port, loopback\)/);
       assert.match(source, /CROSS_PROCESS_PREFIX', \{ value: httpsServer\.PREFIX \}/);
-      assert.match(source, /loopback: \[process\.env\.PWRIGHT_OFFICIAL_SERVER_HOST/);
+      assert.match(source, /loopback: \[process\.env\.PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST/);
     }
   });
 });

@@ -29,9 +29,9 @@ ARTIFACT_ROOT = (
     ROOT
     / ".work/official-conformance/artifacts/core-server-connect-version-mismatch-v3-final-20261020"
 )
-ADDON = ARTIFACT_ROOT / "pwright.node"
+ADDON = ARTIFACT_ROOT / "playwright_rust.node"
 CANDIDATE = ARTIFACT_ROOT / "candidate-package"
-CANDIDATE_ARTIFACT = CANDIDATE / "native" / PROFILE / "pwright.node"
+CANDIDATE_ARTIFACT = CANDIDATE / "native" / PROFILE / "playwright_rust.node"
 RESULT_ROOT = (
     ROOT
     / ".work/official-conformance/results/core-server-connect-version-mismatch-url-owner-v3"
@@ -107,10 +107,10 @@ def _snapshot_source_digest() -> str:
 
 def check_artifact_snapshot() -> dict[str, str]:
     """Fail closed if any copied package source or either addon has drifted."""
-    _exact_children(ARTIFACT_ROOT, {"pwright.node", "candidate-package"})
+    _exact_children(ARTIFACT_ROOT, {"playwright_rust.node", "candidate-package"})
     _exact_children(CANDIDATE, {"package.json", "src", "native"})
     _exact_children(CANDIDATE / "native", {PROFILE})
-    _exact_children(CANDIDATE / "native" / PROFILE, {"pwright.node"})
+    _exact_children(CANDIDATE / "native" / PROFILE, {"playwright_rust.node"})
     for path in (ADDON, CANDIDATE_ARTIFACT):
         if path.is_symlink() or not path.is_file():
             raise ValueError(f"snapshot addon missing or linked: {path}")
@@ -146,8 +146,8 @@ def check_ambient(environment: dict[str, str]) -> None:
     base.check_ambient(environment)
     if (
         environment.get("NODE_PATH", "").strip()
-        or any(key.startswith("PWRIGHT_OFFICIAL_") for key in environment)
-        or environment.get("PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM", "").strip()
+        or any(key.startswith("PLAYWRIGHT_RUST_OFFICIAL_") for key in environment)
+        or environment.get("PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM", "").strip()
     ):
         raise ValueError("ambient Node or official-runner overrides are forbidden")
 
@@ -368,14 +368,14 @@ def run(mode: str, upstream: Path, result: Path) -> int:
             "TAILSCALE_IP": bind,
             "TAILSCALE_HOST": host,
             "NODE_OPTIONS": node_options(mode),
-            "PWRIGHT_OFFICIAL_RUNSERVER_URL_SUITE": SUITE,
-            "PWRIGHT_OFFICIAL_RUNSERVER_EXPECT_BIND": bind,
-            "PWRIGHT_OFFICIAL_RUNSERVER_EXPECT_HOST": host,
-            "PWRIGHT_OFFICIAL_RUNSERVER_RECEIPT": str(receipt_path(result)),
+            "PLAYWRIGHT_RUST_OFFICIAL_RUNSERVER_URL_SUITE": SUITE,
+            "PLAYWRIGHT_RUST_OFFICIAL_RUNSERVER_EXPECT_BIND": bind,
+            "PLAYWRIGHT_RUST_OFFICIAL_RUNSERVER_EXPECT_HOST": host,
+            "PLAYWRIGHT_RUST_OFFICIAL_RUNSERVER_RECEIPT": str(receipt_path(result)),
         }
     )
     if mode == "candidate":
-        env["PWRIGHT_CORE_BROWSER_TYPE_OWNER_RECEIPT"] = str(owner_receipt_path(result))
+        env["PLAYWRIGHT_RUST_CORE_BROWSER_TYPE_OWNER_RECEIPT"] = str(owner_receipt_path(result))
     command = [
         sys.executable,
         str(base.base.RUNNER),

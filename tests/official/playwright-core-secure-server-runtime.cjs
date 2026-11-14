@@ -6,10 +6,10 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const upstream = process.env.PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM;
-const host = process.env.PWRIGHT_OFFICIAL_SERVER_HOST;
-const certificate = process.env.PWRIGHT_OFFICIAL_SECURE_TLS_CERT;
-const privateKey = process.env.PWRIGHT_OFFICIAL_SECURE_TLS_KEY;
+const upstream = process.env.PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM;
+const host = process.env.PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST;
+const certificate = process.env.PLAYWRIGHT_RUST_OFFICIAL_SECURE_TLS_CERT;
+const privateKey = process.env.PLAYWRIGHT_RUST_OFFICIAL_SECURE_TLS_KEY;
 if (!upstream || !host || !certificate || !privateKey)
   throw new Error('secure official Core fixture requires upstream, MagicDNS host, and task-owned TLS files');
 if (!path.isAbsolute(certificate) || !path.isAbsolute(privateKey))
@@ -34,8 +34,8 @@ const originalCertOptions = [
 const secureCertOptions = [
   '  static async certOptions() {',
   '    return {',
-  '      key: await fs.promises.readFile(process.env.PWRIGHT_OFFICIAL_SECURE_TLS_KEY!),',
-  '      cert: await fs.promises.readFile(process.env.PWRIGHT_OFFICIAL_SECURE_TLS_CERT!),',
+  '      key: await fs.promises.readFile(process.env.PLAYWRIGHT_RUST_OFFICIAL_SECURE_TLS_KEY!),',
+  '      cert: await fs.promises.readFile(process.env.PLAYWRIGHT_RUST_OFFICIAL_SECURE_TLS_CERT!),',
   '    };',
   '  }',
 ].join('\n');
@@ -76,12 +76,12 @@ function rewriteSecureFixtureSource(file, value) {
 }
 
 const originalReadFileSync = fs.readFileSync;
-fs.readFileSync = function pwrightOfficialSecureReadFileSync(file, ...args) {
+fs.readFileSync = function playwrightRustOfficialSecureReadFileSync(file, ...args) {
   return rewriteSecureFixtureSource(file, originalReadFileSync.call(this, file, ...args));
 };
 
 const originalReadFile = fs.readFile;
-fs.readFile = function pwrightOfficialSecureReadFile(file, ...args) {
+fs.readFile = function playwrightRustOfficialSecureReadFile(file, ...args) {
   const callback = args.at(-1);
   if (typeof callback !== 'function') return originalReadFile.call(this, file, ...args);
   args[args.length - 1] = (error, value) => {
@@ -92,7 +92,7 @@ fs.readFile = function pwrightOfficialSecureReadFile(file, ...args) {
 };
 
 const originalPromiseReadFile = fs.promises.readFile.bind(fs.promises);
-fs.promises.readFile = async function pwrightOfficialSecurePromiseReadFile(file, ...args) {
+fs.promises.readFile = async function playwrightRustOfficialSecurePromiseReadFile(file, ...args) {
   return rewriteSecureFixtureSource(file, await originalPromiseReadFile(file, ...args));
 };
 

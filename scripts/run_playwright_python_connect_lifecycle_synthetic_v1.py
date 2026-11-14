@@ -31,8 +31,8 @@ from verify_playwright_python_connect_lifecycle_synthetic_v1 import (
     verify_sources,
 )
 
-RUNTIME = ROOT / "packages/pwright-python/tests/official/runtime"
-SHIM = ROOT / "packages/pwright-python/tests/official/shim"
+RUNTIME = ROOT / "packages/playwright-rust-python/tests/official/runtime"
+SHIM = ROOT / "packages/playwright-rust-python/tests/official/shim"
 FORBIDDEN_INHERITED = (
     "CI",
     "NODE_OPTIONS",
@@ -42,12 +42,12 @@ FORBIDDEN_INHERITED = (
     "PYTHONUSERBASE",
     "PYTEST_ADDOPTS",
     "PYTEST_PLUGINS",
-    "PWRIGHT_CDP_ENDPOINT",
-    "PWRIGHT_CDP_WS_URL",
-    "PWRIGHT_OFFICIAL_SERVER_PREFIX",
-    "PWRIGHT_PYTHON_LIFECYCLE_MODE",
-    "PWRIGHT_PYTHON_LIFECYCLE_RECEIPT",
-    "PWRIGHT_PYTHON_LIFECYCLE_SERVER",
+    "PLAYWRIGHT_RUST_CDP_ENDPOINT",
+    "PLAYWRIGHT_RUST_CDP_WS_URL",
+    "PLAYWRIGHT_RUST_OFFICIAL_SERVER_PREFIX",
+    "PLAYWRIGHT_RUST_PYTHON_LIFECYCLE_MODE",
+    "PLAYWRIGHT_RUST_PYTHON_LIFECYCLE_RECEIPT",
+    "PLAYWRIGHT_RUST_PYTHON_LIFECYCLE_SERVER",
 )
 TEST_BODIES = (
     "tests/async/test_browsertype_connect.py::test_browser_type_disconnected_event_should_have_browser_as_argument",
@@ -116,16 +116,16 @@ def _run_pytest(
                 if mode == "candidate"
                 else [str(RUNTIME), str(PLUGIN_DIR)]
             ),
-            "PWRIGHT_OFFICIAL_LAUNCH_MODE": "owned",
-            "PWRIGHT_OFFICIAL_BROWSER_CHANNEL": "",
-            "PWRIGHT_OFFICIAL_TAILSCALE_IP": bind,
-            "PWRIGHT_OFFICIAL_TAILSCALE_HOST": host,
-            "PWRIGHT_PYTHON_LIFECYCLE_MODE": mode,
-            "PWRIGHT_PYTHON_LIFECYCLE_ENGINE_FILTER": engine,
-            "PWRIGHT_PYTHON_LIFECYCLE_RECEIPT": str(receipt),
-            "PWRIGHT_PYTHON_LIFECYCLE_SERVER": str(SERVER),
-            "PWRIGHT_PYTHON_LIFECYCLE_UPSTREAM": str(UPSTREAM),
-            "PWRIGHT_PYTHON_LIFECYCLE_CORE_UPSTREAM": str(CORE),
+            "PLAYWRIGHT_RUST_OFFICIAL_LAUNCH_MODE": "owned",
+            "PLAYWRIGHT_RUST_OFFICIAL_BROWSER_CHANNEL": "",
+            "PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_IP": bind,
+            "PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_HOST": host,
+            "PLAYWRIGHT_RUST_PYTHON_LIFECYCLE_MODE": mode,
+            "PLAYWRIGHT_RUST_PYTHON_LIFECYCLE_ENGINE_FILTER": engine,
+            "PLAYWRIGHT_RUST_PYTHON_LIFECYCLE_RECEIPT": str(receipt),
+            "PLAYWRIGHT_RUST_PYTHON_LIFECYCLE_SERVER": str(SERVER),
+            "PLAYWRIGHT_RUST_PYTHON_LIFECYCLE_UPSTREAM": str(UPSTREAM),
+            "PLAYWRIGHT_RUST_PYTHON_LIFECYCLE_CORE_UPSTREAM": str(CORE),
         }
     )
     command = [
@@ -140,14 +140,14 @@ def _run_pytest(
         "-c",
         str(UPSTREAM / "pyproject.toml"),
         "-p",
-        "pwright_official_server_runtime",
+        "playwright_rust_official_server_runtime",
         "-p",
-        "pwright_python_connect_lifecycle_synthetic_v1",
+        "playwright_rust_python_connect_lifecycle_synthetic_v1",
     ]
     if mode == "candidate":
-        command.extend(["-p", "pwright_candidate_runtime"])
+        command.extend(["-p", "playwright_rust_candidate_runtime"])
     else:
-        command.extend(["-p", "pwright_official_oracle_runtime"])
+        command.extend(["-p", "playwright_rust_official_oracle_runtime"])
     command.extend(
         [
             f"--browser={engine}",
@@ -195,15 +195,15 @@ def _run_pytest(
             key: env[key]
             for key in (
                 "PYTHONPATH",
-                "PWRIGHT_OFFICIAL_LAUNCH_MODE",
-                "PWRIGHT_OFFICIAL_TAILSCALE_IP",
-                "PWRIGHT_OFFICIAL_TAILSCALE_HOST",
-                "PWRIGHT_PYTHON_LIFECYCLE_MODE",
-                "PWRIGHT_PYTHON_LIFECYCLE_ENGINE_FILTER",
-                "PWRIGHT_PYTHON_LIFECYCLE_RECEIPT",
-                "PWRIGHT_PYTHON_LIFECYCLE_SERVER",
-                "PWRIGHT_PYTHON_LIFECYCLE_UPSTREAM",
-                "PWRIGHT_PYTHON_LIFECYCLE_CORE_UPSTREAM",
+                "PLAYWRIGHT_RUST_OFFICIAL_LAUNCH_MODE",
+                "PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_IP",
+                "PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_HOST",
+                "PLAYWRIGHT_RUST_PYTHON_LIFECYCLE_MODE",
+                "PLAYWRIGHT_RUST_PYTHON_LIFECYCLE_ENGINE_FILTER",
+                "PLAYWRIGHT_RUST_PYTHON_LIFECYCLE_RECEIPT",
+                "PLAYWRIGHT_RUST_PYTHON_LIFECYCLE_SERVER",
+                "PLAYWRIGHT_RUST_PYTHON_LIFECYCLE_UPSTREAM",
+                "PLAYWRIGHT_RUST_PYTHON_LIFECYCLE_CORE_UPSTREAM",
             )
         },
         "xmlSha256": _sha256(xml),

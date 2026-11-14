@@ -7,10 +7,10 @@ selected=$(mktemp)
 trap 'rm -f "$ordinary" "$selected"' EXIT
 cd "$repo_dir"
 
-cargo tree --locked -p pwright-composition-chromium-handle-evaluation \
+cargo tree --locked -p playwright-rust-composition-chromium-handle-evaluation \
   --edges normal --prefix none --format '{p} features={f}' \
   | sed '1d' | sort -u >"$ordinary"
-cargo tree --locked -p pwright-composition-chromium-handle-evaluation \
+cargo tree --locked -p playwright-rust-composition-chromium-handle-evaluation \
   --features native-creation --edges normal --prefix none --format '{p} features={f}' \
   | sed '1d' | sort -u >"$selected"
 diff -u "$ordinary" "$selected"

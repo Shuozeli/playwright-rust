@@ -653,7 +653,7 @@ def verify_archive(archive: Path, expected_sha256: str) -> dict[str, object]:
         raise ValueError(f"missing archive: {archive}") from error
     require(stat.S_ISREG(mode), "archive must be a regular file")
     require(archive.stat().st_size <= MAX_ARCHIVE_BYTES, "archive exceeds size limit")
-    with tempfile.TemporaryDirectory(prefix="pwright-core-v8-ledger-verify-") as temp:
+    with tempfile.TemporaryDirectory(prefix="playwright-rust-core-v8-ledger-verify-") as temp:
         temporary = Path(temp)
         copied = temporary / "pinned.tar.gz"
         copied_bytes = 0

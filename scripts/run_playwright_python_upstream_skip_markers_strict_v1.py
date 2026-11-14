@@ -139,7 +139,7 @@ def run(mode: str, case: int, result_path: Path) -> Path:
         "callReceipt": str(receipt),
         "callReceiptSha256": sha256_file(receipt),
         "guardSha256": sha256_file(
-            GUARD / "pwright_official_upstream_skip_guard_v1.py"
+            GUARD / "playwright_rust_official_upstream_skip_guard_v1.py"
         ),
         "runnerSha256": sha256_file(RUNNER),
         "verifierSha256": sha256_file(

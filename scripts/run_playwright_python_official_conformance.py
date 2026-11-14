@@ -85,7 +85,7 @@ class InventoryRecord(TypedDict):
 Key = tuple[str, str]
 BROWSERLESS_CAPABILITY = "playwright.lifecycle.browserless"
 DEFAULT_CDP_ENDPOINT = "http://127.0.0.1:9222"
-JUNIT_LAUNCH_MODE_PROPERTY = "pwright.official.launchMode"
+JUNIT_LAUNCH_MODE_PROPERTY = "playwright_rust.official.launchMode"
 SYNC_LIFECYCLE_LOOP_MODE = "same-thread-asyncio-loop"
 SYNC_LIFECYCLE_COMMIT = "47a5d35ef4f815a2021349f86ae391f7c20c02d6"
 SYNC_LIFECYCLE_SOURCE_SHA256 = "f371ee96a8eacc0721e7e3514223992d37ecba8fec86e6396584de4049e03579"
@@ -377,17 +377,17 @@ def _configure_launch_environment(
     environment: dict[str, str], launch_mode: str, endpoint: str | None
 ) -> None:
     if launch_mode == "owned" and endpoint is None:
-        environment.pop("PWRIGHT_CDP_ENDPOINT", None)
+        environment.pop("PLAYWRIGHT_RUST_CDP_ENDPOINT", None)
     elif launch_mode == "cdp-adapter" and endpoint is not None:
-        environment["PWRIGHT_CDP_ENDPOINT"] = endpoint
+        environment["PLAYWRIGHT_RUST_CDP_ENDPOINT"] = endpoint
     else:
         raise ValueError("launch mode and CDP endpoint disagree")
-    environment["PWRIGHT_OFFICIAL_LAUNCH_MODE"] = launch_mode
+    environment["PLAYWRIGHT_RUST_OFFICIAL_LAUNCH_MODE"] = launch_mode
 
 
 def _require_owned_public_launch(python: str, mode: str, *, cwd: Path, env: dict[str, str]) -> None:
     """Inspect the installed public API without starting a browser or test server."""
-    package = "pwright" if mode == "candidate" else "playwright"
+    package = "playwright_rust" if mode == "candidate" else "playwright"
     script = """
 import inspect
 import sys
@@ -930,7 +930,8 @@ def main() -> None:
     parser.add_argument(
         "--manifest",
         type=Path,
-        default=Path(__file__).parents[1] / "packages/pwright-python/tests/official/manifest.json",
+        default=Path(__file__).parents[1]
+        / "packages/playwright-rust-python/tests/official/manifest.json",
     )
     args = parser.parse_args()
     if args.bootstrap_only and not args.collect_only and not args.server_prefix:
@@ -988,7 +989,7 @@ def main() -> None:
         ),
         resume_isolated=args.resume_isolated,
     )
-    official = root / "packages/pwright-python/tests/official"
+    official = root / "packages/playwright-rust-python/tests/official"
     upstream = args.upstream.resolve()
     manifest_path = args.manifest.resolve()
     verification = subprocess.run(
@@ -1083,7 +1084,7 @@ def main() -> None:
             preflight_runtime_package = (
                 Path(importlib.metadata.distribution("playwright").locate_file("playwright"))
                 if args.mode == "oracle"
-                else root / "packages/pwright-python/python/pwright"
+                else root / "packages/playwright-rust-python/python/playwright_rust"
             )
             if persistent_page_argument_browserless:
                 _require_persistent_preflight_runtime_sources(args.mode, preflight_runtime_package)
@@ -1160,17 +1161,17 @@ def main() -> None:
         python_paths.append(existing)
     env["PYTHONPATH"] = os.pathsep.join(python_paths)
     _configure_launch_environment(env, args.launch_mode, endpoint)
-    env["PWRIGHT_OFFICIAL_MODE"] = args.mode
-    env["PWRIGHT_OFFICIAL_BROWSER_CHANNEL"] = args.browser_channel or ""
-    env["PWRIGHT_OFFICIAL_UPSTREAM_TESTS"] = str(upstream / "tests")
+    env["PLAYWRIGHT_RUST_OFFICIAL_MODE"] = args.mode
+    env["PLAYWRIGHT_RUST_OFFICIAL_BROWSER_CHANNEL"] = args.browser_channel or ""
+    env["PLAYWRIGHT_RUST_OFFICIAL_UPSTREAM_TESTS"] = str(upstream / "tests")
     if fixture_ip is not None:
-        env["PWRIGHT_OFFICIAL_TAILSCALE_IP"] = fixture_ip
+        env["PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_IP"] = fixture_ip
     if fixture_host is not None:
-        env["PWRIGHT_OFFICIAL_TAILSCALE_HOST"] = fixture_host
+        env["PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_HOST"] = fixture_host
     if args.secure_http_fixture:
-        env["PWRIGHT_OFFICIAL_SECURE_HTTP_FIXTURE"] = "1"
+        env["PLAYWRIGHT_RUST_OFFICIAL_SECURE_HTTP_FIXTURE"] = "1"
     if server_prefix is not None:
-        env["PWRIGHT_OFFICIAL_SERVER_PREFIX"] = server_prefix
+        env["PLAYWRIGHT_RUST_OFFICIAL_SERVER_PREFIX"] = server_prefix
 
     if args.launch_mode == "owned":
         try:
@@ -1205,7 +1206,7 @@ def main() -> None:
                 "-c",
                 str(official / "pytest.ini"),
                 "-p",
-                "pwright_official_harness.plugin",
+                "playwright_rust_official_harness.plugin",
             ]
         )
     else:
@@ -1219,11 +1220,11 @@ def main() -> None:
         if exact_browserless_preflight:
             command.extend(["-p", "pytest_asyncio.plugin", "-p", "pytest_timeout"])
         if not args.collect_only and requires_fixture_servers:
-            command.extend(["-p", "pwright_official_server_runtime"])
+            command.extend(["-p", "playwright_rust_official_server_runtime"])
         if args.mode == "candidate" and not args.collect_only and requires_fixture_servers:
-            command.extend(["-p", "pwright_candidate_runtime"])
+            command.extend(["-p", "playwright_rust_candidate_runtime"])
         if args.mode == "oracle" and not args.collect_only:
-            command.extend(["-p", "pwright_official_oracle_runtime"])
+            command.extend(["-p", "playwright_rust_official_oracle_runtime"])
     browsers = cast(list[str], args.browser or [])
     for browser in browsers:
         command.append(f"--browser={browser}")
@@ -1297,7 +1298,7 @@ def main() -> None:
         package_value = (
             runtime_identity["playwrightPackage"]
             if args.mode == "oracle"
-            else runtime_identity["pwrightPackage"]
+            else runtime_identity["playwright_rustPackage"]
         )
         if package_value is None:
             raise SystemExit("browserless preflight has no runtime package")

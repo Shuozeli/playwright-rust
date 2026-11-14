@@ -1,0 +1,17 @@
+[package]
+name = "playwright-rust-client-page-creation"
+description = "Opt-in Page creation methods for Playwright Rust clients"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+playwright-rust-browser-model = { workspace = true }
+playwright-rust-cap-page-creation = { workspace = true }
+playwright-rust-client = { workspace = true }
+playwright-rust-core = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }

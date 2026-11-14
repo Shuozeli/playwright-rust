@@ -76,8 +76,8 @@ class RuntimeIdentity(TypedDict):
     pythonExecutable: str
     pythonVersion: str
     playwrightPackage: str
-    pwrightPackage: str | None
-    pwrightArtifact: str | None
+    playwright_rustPackage: str | None
+    playwright_rustArtifact: str | None
 
 
 class CollectionProfileIdentity(TypedDict):
@@ -101,15 +101,15 @@ def file_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def pwright_runtime_library_paths(package: Path) -> list[Path]:
+def playwright_rust_runtime_library_paths(package: Path) -> list[Path]:
     """List the exact adjacent wheel libraries without following archive links."""
-    directory = package.parent / "shuozeli_pwright.dylibs"
+    directory = package.parent / "shuozeli_playwright_rust.dylibs"
     if directory.is_symlink():
-        raise ValueError(f"Pwright runtime library directory is a symlink: {directory}")
+        raise ValueError(f"Playwright Rust runtime library directory is a symlink: {directory}")
     if not directory.exists():
         return []
     if not directory.is_dir():
-        raise ValueError(f"Pwright runtime library directory is not a directory: {directory}")
+        raise ValueError(f"Playwright Rust runtime library directory is not a directory: {directory}")
     resolved_directory = directory.resolve()
     paths = sorted(directory.iterdir(), key=lambda path: path.name)
     for path in paths:
@@ -119,7 +119,7 @@ def pwright_runtime_library_paths(package: Path) -> list[Path]:
             or path.suffix != ".dylib"
             or not path.resolve().is_relative_to(resolved_directory)
         ):
-            raise ValueError(f"Pwright runtime library is not a regular adjacent dylib: {path}")
+            raise ValueError(f"Playwright Rust runtime library is not a regular adjacent dylib: {path}")
     return paths
 
 
@@ -348,10 +348,10 @@ def browser_registry_snapshot(
     short_platform = _executable_platform(host_platform)
     raw_browser_path = env.get("PLAYWRIGHT_BROWSERS_PATH")
     package_root_value = (
-        runtime["pwrightPackage"] if mode == "candidate" else str(browsers_json_path.parent)
+        runtime["playwright_rustPackage"] if mode == "candidate" else str(browsers_json_path.parent)
     )
     if package_root_value is None:
-        raise ValueError("candidate browser registry lacks Pwright package root")
+        raise ValueError("candidate browser registry lacks Playwright Rust package root")
     package_root = Path(package_root_value)
     if not package_root.is_absolute():
         raise ValueError("browser registry package root must be absolute")
@@ -420,7 +420,7 @@ def browser_registry_snapshot(
         )
     return {
         "policy": "playwright-v1.58.0-executable-path",
-        "resolver": "pwright-python" if mode == "candidate" else "official-node-driver",
+        "resolver": "playwright-rust-python" if mode == "candidate" else "official-node-driver",
         "environment": {key: env.get(key) for key in _BROWSER_ENV_KEYS},
         "workingDirectory": str(cwd),
         "cachePlatform": cache_platform,
@@ -522,14 +522,14 @@ payload = {
     "pythonExecutable": str(pathlib.Path(sys.executable).absolute()),
     "pythonVersion": platform.python_version(),
     "playwrightPackage": str(pathlib.Path(playwright.__file__).resolve().parent),
-    "pwrightPackage": None,
-    "pwrightArtifact": None,
+    "playwright_rustPackage": None,
+    "playwright_rustArtifact": None,
 }
 if mode == "candidate":
-    import pwright
-    import pwright._native
-    payload["pwrightPackage"] = str(pathlib.Path(pwright.__file__).resolve().parent)
-    payload["pwrightArtifact"] = str(pathlib.Path(pwright._native.__file__).resolve())
+    import playwright_rust
+    import playwright_rust._native
+    payload["playwright_rustPackage"] = str(pathlib.Path(playwright_rust.__file__).resolve().parent)
+    payload["playwright_rustArtifact"] = str(pathlib.Path(playwright_rust._native.__file__).resolve())
 print(json.dumps(payload, sort_keys=True))
 """
     completed = subprocess.run(
@@ -554,8 +554,8 @@ print(json.dumps(payload, sort_keys=True))
         "pythonExecutable",
         "pythonVersion",
         "playwrightPackage",
-        "pwrightPackage",
-        "pwrightArtifact",
+        "playwright_rustPackage",
+        "playwright_rustArtifact",
     }
     if set(raw) != required:
         raise ValueError("runtime identity probe fields differ from the schema")
@@ -708,11 +708,11 @@ def build_provenance(
     if capture_runtime_libraries and launch_mode is None:
         raise ValueError("runtime-library provenance requires launch-mode binding")
     playwright_package = Path(runtime["playwrightPackage"])
-    pwright_package = (
-        Path(runtime["pwrightPackage"]) if runtime["pwrightPackage"] is not None else None
+    playwright_rust_package = (
+        Path(runtime["playwright_rustPackage"]) if runtime["playwright_rustPackage"] is not None else None
     )
-    pwright_artifact = (
-        Path(runtime["pwrightArtifact"]) if runtime["pwrightArtifact"] is not None else None
+    playwright_rust_artifact = (
+        Path(runtime["playwright_rustArtifact"]) if runtime["playwright_rustArtifact"] is not None else None
     )
     case_reports = result.parent / f"{result.name}.cases"
     provenance: dict[str, object] = {
@@ -758,13 +758,13 @@ def build_provenance(
         "pythonVersion": runtime["pythonVersion"],
         "playwrightPackage": str(playwright_package),
         "playwrightPackageSha256": tree_sha256(playwright_package),
-        "pwrightPackage": str(pwright_package) if pwright_package is not None else None,
-        "pwrightPackageSha256": (
-            tree_sha256(pwright_package) if pwright_package is not None else None
+        "playwright_rustPackage": str(playwright_rust_package) if playwright_rust_package is not None else None,
+        "playwright_rustPackageSha256": (
+            tree_sha256(playwright_rust_package) if playwright_rust_package is not None else None
         ),
-        "pwrightArtifact": (str(pwright_artifact) if pwright_artifact is not None else None),
-        "pwrightArtifactSha256": (
-            file_sha256(pwright_artifact) if pwright_artifact is not None else None
+        "playwright_rustArtifact": (str(playwright_rust_artifact) if playwright_rust_artifact is not None else None),
+        "playwright_rustArtifactSha256": (
+            file_sha256(playwright_rust_artifact) if playwright_rust_artifact is not None else None
         ),
         "harnessInputs": [
             {"path": str(path), "sha256": tree_sha256(path)} for path in harness_inputs
@@ -785,13 +785,13 @@ def build_provenance(
     if launch_mode is not None:
         provenance["launchMode"] = launch_mode
     if capture_runtime_libraries:
-        if mode == "candidate" and pwright_package is None:
-            raise ValueError("candidate runtime-library provenance requires Pwright")
-        provenance["pwrightRuntimeLibraries"] = [
+        if mode == "candidate" and playwright_rust_package is None:
+            raise ValueError("candidate runtime-library provenance requires Playwright Rust")
+        provenance["playwright_rustRuntimeLibraries"] = [
             {"path": str(path), "sha256": file_sha256(path)}
             for path in (
-                pwright_runtime_library_paths(pwright_package)
-                if pwright_package is not None
+                playwright_rust_runtime_library_paths(playwright_rust_package)
+                if playwright_rust_package is not None
                 else []
             )
         ]

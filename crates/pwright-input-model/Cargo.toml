@@ -1,8 +1,0 @@
-[package]
-name = "pwright-input-model"
-description = "Command-free bounded input values shared by Pwright capabilities and backends"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
-repository.workspace = true
-homepage.workspace = true

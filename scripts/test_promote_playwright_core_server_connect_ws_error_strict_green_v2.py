@@ -77,7 +77,7 @@ def _fixture(
             )
             if lane == "candidate":
                 old["error"] = (
-                    "browserType.connect is not supported by the current Pwright native profile"
+                    "browserType.connect is not supported by the current Playwright Rust native profile"
                 )
         baseline.append(_line(old, spaced=index not in promoter.TARGETS))
     cases = {

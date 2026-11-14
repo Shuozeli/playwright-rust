@@ -1,0 +1,45 @@
+[package]
+name = "playwright-rust-composition-chromium-launch"
+description = "Optional owned-Chromium launch leaf for Playwright Rust composition"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[features]
+default = []
+startup-logs = ["playwright-rust-provider-chromium/startup-logs"]
+
+[dependencies]
+playwright-rust-browser-provider = { workspace = true }
+playwright-rust-cap-browser-events = { workspace = true }
+playwright-rust-cap-browser-lifecycle = { workspace = true }
+playwright-rust-cdp = { workspace = true }
+playwright-rust-codec-browser-lifecycle = { workspace = true }
+playwright-rust-codec-handshake = { workspace = true }
+playwright-rust-composition-chromium = { workspace = true }
+playwright-rust-core = { workspace = true }
+playwright-rust-provider-cdp = { workspace = true }
+playwright-rust-provider-chromium = { workspace = true }
+playwright-rust-runtime = { workspace = true }
+playwright-rust-runtime-control = { workspace = true }
+playwright-rust-server-browser-lifecycle = { workspace = true }
+playwright-rust-server-browser-events = { workspace = true }
+playwright-rust-server-wire = { workspace = true }
+playwright-rust-transport = { workspace = true }
+
+[dev-dependencies]
+playwright-rust-backend-cdp = { workspace = true }
+playwright-rust-browser-model = { workspace = true }
+playwright-rust-client = { workspace = true }
+playwright-rust-client-browser-lifecycle = { workspace = true }
+playwright-rust-client-browser-events = { workspace = true }
+playwright-rust-client-control = { workspace = true }
+playwright-rust-client-wire = { workspace = true }
+playwright-rust-codec-control = { workspace = true }
+playwright-rust-codec-browser-events = { workspace = true }
+playwright-rust-process-metrics = { workspace = true, features = ["ledger"] }
+playwright-rust-runtime-tokio = { workspace = true }
+playwright-rust-transport-memory = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "test-util", "time"] }

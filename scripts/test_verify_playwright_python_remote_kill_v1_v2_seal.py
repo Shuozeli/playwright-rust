@@ -50,7 +50,7 @@ def test_replay_never_reads_mutable_candidate_source(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Arrange
-    live_source = verify.ROOT / "packages/pwright-python/python/pwright/async_api.py"
+    live_source = verify.ROOT / "packages/playwright-rust-python/python/playwright_rust/async_api.py"
     original = Path.is_file
 
     def reject_live_source(path: Path) -> bool:
@@ -81,7 +81,7 @@ def test_modified_manifest_is_rejected_before_replay(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     "relative",
     [
-        "repo/packages/pwright-python/python/pwright/async_api.py",
+        "repo/packages/playwright-rust-python/python/playwright_rust/async_api.py",
         f"build-wheel/{verify.BUILD_WHEEL.name}",
     ],
 )

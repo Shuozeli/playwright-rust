@@ -1,0 +1,23 @@
+[package]
+name = "playwright-rust-runtime-control"
+description = "Caller-driven bidirectional control-frame handling for Playwright Rust runtimes"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+playwright-rust-core = { workspace = true }
+playwright-rust-runtime = { workspace = true }
+playwright-rust-server-wire = { workspace = true }
+playwright-rust-transport = { workspace = true }
+
+[dev-dependencies]
+playwright-rust-client = { workspace = true }
+playwright-rust-client-control = { workspace = true }
+playwright-rust-client-wire = { workspace = true }
+playwright-rust-codec-control = { workspace = true }
+playwright-rust-transport-stream = { workspace = true }
+playwright-rust-transport-tokio = { workspace = true }
+tokio = { workspace = true }

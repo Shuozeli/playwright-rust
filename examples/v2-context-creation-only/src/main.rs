@@ -1,4 +1,4 @@
-use pwright_backend_cdp_context_creation::CdpContextCreationLimits;
+use playwright_rust_backend_cdp_context_creation::CdpContextCreationLimits;
 
 fn main() {
     let limits = CdpContextCreationLimits::new(256);

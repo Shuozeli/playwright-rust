@@ -578,49 +578,49 @@ dependencies = [
 ]
 
 [[package]]
-name = "pwright-backend-cdp-common"
+name = "playwright-rust-backend-cdp-common"
 version = "0.1.0"
 dependencies = [
- "pwright-cdp",
- "pwright-core",
+ "playwright-rust-cdp",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-backend-cdp-navigation"
+name = "playwright-rust-backend-cdp-navigation"
 version = "0.1.0"
 dependencies = [
- "pwright-backend-cdp-common",
- "pwright-browser-backend",
- "pwright-cap-navigation",
- "pwright-cdp",
- "pwright-core",
+ "playwright-rust-backend-cdp-common",
+ "playwright-rust-browser-backend",
+ "playwright-rust-cap-navigation",
+ "playwright-rust-cdp",
+ "playwright-rust-core",
  "serde_json",
  "tokio",
 ]
 
 [[package]]
-name = "pwright-browser-backend"
+name = "playwright-rust-browser-backend"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-cap-navigation"
+name = "playwright-rust-cap-navigation"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-cdp"
+name = "playwright-rust-cdp"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
  "dashmap",
  "futures-util",
- "pwright-core",
+ "playwright-rust-core",
  "serde",
  "serde_json",
  "thiserror",
@@ -632,86 +632,86 @@ dependencies = [
 ]
 
 [[package]]
-name = "pwright-codec-binary"
+name = "playwright-rust-codec-binary"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-codec-common"
+name = "playwright-rust-codec-common"
 version = "0.1.0"
 dependencies = [
- "pwright-codec-binary",
- "pwright-core",
+ "playwright-rust-codec-binary",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-codec-navigation"
+name = "playwright-rust-codec-navigation"
 version = "0.1.0"
 dependencies = [
- "pwright-cap-navigation",
- "pwright-codec-binary",
- "pwright-codec-common",
- "pwright-core",
- "pwright-transport",
+ "playwright-rust-cap-navigation",
+ "playwright-rust-codec-binary",
+ "playwright-rust-codec-common",
+ "playwright-rust-core",
+ "playwright-rust-transport",
 ]
 
 [[package]]
-name = "pwright-composition-chromium-navigation"
+name = "playwright-rust-composition-chromium-navigation"
 version = "0.1.0"
 dependencies = [
- "pwright-backend-cdp-navigation",
- "pwright-cap-navigation",
- "pwright-cdp",
- "pwright-codec-navigation",
- "pwright-core",
- "pwright-server-navigation",
- "pwright-transport",
+ "playwright-rust-backend-cdp-navigation",
+ "playwright-rust-cap-navigation",
+ "playwright-rust-cdp",
+ "playwright-rust-codec-navigation",
+ "playwright-rust-core",
+ "playwright-rust-server-navigation",
+ "playwright-rust-transport",
 ]
 
 [[package]]
-name = "pwright-connection-control"
+name = "playwright-rust-connection-control"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-core"
+name = "playwright-rust-core"
 version = "0.1.0"
 
 [[package]]
-name = "pwright-server-navigation"
+name = "playwright-rust-server-navigation"
 version = "0.1.0"
 dependencies = [
- "pwright-cap-navigation",
- "pwright-codec-navigation",
- "pwright-server-wire",
- "pwright-transport",
+ "playwright-rust-cap-navigation",
+ "playwright-rust-codec-navigation",
+ "playwright-rust-server-wire",
+ "playwright-rust-transport",
 ]
 
 [[package]]
-name = "pwright-server-wire"
+name = "playwright-rust-server-wire"
 version = "0.1.0"
 dependencies = [
- "pwright-connection-control",
- "pwright-core",
- "pwright-transport",
+ "playwright-rust-connection-control",
+ "playwright-rust-core",
+ "playwright-rust-transport",
 ]
 
 [[package]]
-name = "pwright-transport"
+name = "playwright-rust-transport"
 version = "0.1.0"
 dependencies = [
- "pwright-core",
+ "playwright-rust-core",
 ]
 
 [[package]]
-name = "pwright-v2-navigation-only-example"
+name = "playwright-rust-v2-navigation-only-example"
 version = "0.1.0"
 dependencies = [
- "pwright-composition-chromium-navigation",
+ "playwright-rust-composition-chromium-navigation",
 ]
 
 [[package]]

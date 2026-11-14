@@ -234,15 +234,15 @@ def check_runtime() -> None:
         "PWTEST_MODE",
         "PWPAGE_IMPL",
         "PWTEST_USE_BIDI_EXPECTATIONS",
-        "PWRIGHT_CANDIDATE_CDP_ENDPOINT",
-        "PWRIGHT_ORACLE_CDP_ENDPOINT",
-        "PWRIGHT_CDP_ENDPOINT",
-        "PWRIGHT_CDP_WS_URL",
-        "PWRIGHT_NATIVE_PROFILE",
-        "PWRIGHT_NODE_CANDIDATE",
-        "PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM",
-        "PWRIGHT_OFFICIAL_SERVER_IP",
-        "PWRIGHT_OFFICIAL_SERVER_HOST",
+        "PLAYWRIGHT_RUST_CANDIDATE_CDP_ENDPOINT",
+        "PLAYWRIGHT_RUST_ORACLE_CDP_ENDPOINT",
+        "PLAYWRIGHT_RUST_CDP_ENDPOINT",
+        "PLAYWRIGHT_RUST_CDP_WS_URL",
+        "PLAYWRIGHT_RUST_NATIVE_PROFILE",
+        "PLAYWRIGHT_RUST_NODE_CANDIDATE",
+        "PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM",
+        "PLAYWRIGHT_RUST_OFFICIAL_SERVER_IP",
+        "PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST",
     )
     if any(os.environ.get(key) for key in forbidden):
         raise ValueError("strict paired capture rejects inherited runtime overrides")
@@ -344,10 +344,10 @@ def capture_lane(mode: str, inputs: dict[str, str]) -> dict[str, Any]:
     output["receipt"].open("x").close()
     env = os.environ.copy()
     env["NODE_OPTIONS"] = f"--require={REDIRECT_GUARD} --require={TIMEOUT_GUARD}"
-    env["PWRIGHT_CORE_SERVER_REDIRECT_TIMEOUT_V1_MODE"] = mode
-    env["PWRIGHT_CORE_SERVER_REDIRECT_TIMEOUT_V1_RECEIPT"] = str(output["receipt"])
-    env["PWRIGHT_CORE_SERVER_CONNECT_TIMEOUTS_V1_MODE"] = mode
-    env["PWRIGHT_CORE_SERVER_CONNECT_TIMEOUTS_V1_RECEIPT"] = str(output["receipt"])
+    env["PLAYWRIGHT_RUST_CORE_SERVER_REDIRECT_TIMEOUT_V1_MODE"] = mode
+    env["PLAYWRIGHT_RUST_CORE_SERVER_REDIRECT_TIMEOUT_V1_RECEIPT"] = str(output["receipt"])
+    env["PLAYWRIGHT_RUST_CORE_SERVER_CONNECT_TIMEOUTS_V1_MODE"] = mode
+    env["PLAYWRIGHT_RUST_CORE_SERVER_CONNECT_TIMEOUTS_V1_RECEIPT"] = str(output["receipt"])
     command = [
         "uv",
         "run",
@@ -392,7 +392,7 @@ def capture_lane(mode: str, inputs: dict[str, str]) -> dict[str, Any]:
         raise ValueError(f"{mode} runner exit does not match the five selected results")
     if mode == "oracle" and expected_exit != 0:
         raise ValueError("pinned upstream oracle unexpectedly failed")
-    if ("[pwright-candidate]" in output["log"].read_text()) != (mode == "candidate"):
+    if ("[playwright-rust-candidate]" in output["log"].read_text()) != (mode == "candidate"):
         raise ValueError("candidate adapter runtime marker disagrees with lane")
     return {
         "suite": SUITE,

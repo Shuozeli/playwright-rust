@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, NoReturn, cast
 
 ROOT = Path(__file__).resolve().parents[1]
-OFFICIAL = ROOT / "packages/pwright-python/tests/official"
+OFFICIAL = ROOT / "packages/playwright-rust-python/tests/official"
 POLICY = OFFICIAL / "async-cdp-websocket-transport-strict-v1-manifest.json"
 POLICY_SHA256 = "029a4a0243ff2eab2d6a3bb40bd16809748bee85786ab13bafa91b8855c9bd1f"
 COMMIT = "47a5d35ef4f815a2021349f86ae391f7c20c02d6"
@@ -50,8 +50,8 @@ _PAYLOAD_KEYS = frozenset(
         "playwrightPackageSha256",
         "driverNode",
         "driverNodeSha256",
-        "pwrightPackage",
-        "pwrightPackageSha256",
+        "playwright_rustPackage",
+        "playwright_rustPackageSha256",
         "nativePath",
         "nativeSha256",
         "runtimeLibraries",
@@ -197,18 +197,18 @@ def _policy(raw: object) -> dict[str, Any]:
         _fail("WebSocket upstream source set differs")
     support = _object(policy["supportSources"], "supportSources")
     if set(support) != {
-        "packages/pwright-python/tests/official/shim/playwright/__init__.py",
-        "packages/pwright-python/tests/official/shim/playwright/async_api.py",
-        "packages/pwright-python/tests/official/shim/playwright/_public_types.py",
-        "packages/pwright-python/tests/official/shim/pwright_candidate_runtime.py",
-        "packages/pwright-python/tests/official/runtime/pwright_official_server_runtime.py",
-        "packages/pwright-python/tests/official/runtime/pwright_official_oracle_runtime.py",
+        "packages/playwright-rust-python/tests/official/shim/playwright/__init__.py",
+        "packages/playwright-rust-python/tests/official/shim/playwright/async_api.py",
+        "packages/playwright-rust-python/tests/official/shim/playwright/_public_types.py",
+        "packages/playwright-rust-python/tests/official/shim/playwright_rust_candidate_runtime.py",
+        "packages/playwright-rust-python/tests/official/runtime/playwright_rust_official_server_runtime.py",
+        "packages/playwright-rust-python/tests/official/runtime/playwright_rust_official_oracle_runtime.py",
     }:
         _fail("WebSocket support source set differs")
     captures = _object(policy["captureSourceSha256"], "captureSourceSha256")
     if policy["captureReady"] is not True or set(captures) != {
         "scripts/run_playwright_python_ws_transport_strict.py",
-        "packages/pwright-python/tests/official/ws_guard_strict/pwright_official_ws_guard.py",
+        "packages/playwright-rust-python/tests/official/ws_guard_strict/playwright_rust_official_ws_guard.py",
     }:
         _fail("WebSocket capture sources are not frozen")
     for label, digest in {**upstream, **support, **captures}.items():
@@ -258,7 +258,7 @@ def _upstream(policy: dict[str, Any], path: Path) -> None:
 
 
 def _wheel_installed(wheel: Path, site: Path) -> None:
-    roots = ("pwright/", "shuozeli_pwright.dylibs/")
+    roots = ("playwright_rust/", "shuozeli_playwright_rust.dylibs/")
     with zipfile.ZipFile(wheel) as archive:
         names = [
             name
@@ -266,7 +266,7 @@ def _wheel_installed(wheel: Path, site: Path) -> None:
             if name.startswith(roots) and not name.endswith("/")
         ]
         if len(names) != len(set(names)) or not any(
-            name == "pwright/_native.abi3.so" for name in names
+            name == "playwright_rust/_native.abi3.so" for name in names
         ):
             _fail("candidate wheel has duplicate or missing package entries")
         installed = {
@@ -316,17 +316,17 @@ def _runtime(policy: dict[str, Any], payload: dict[str, Any]) -> None:
         _fail("candidate wheel path must be absolute")
     _file(wheel, payload["wheelSha256"], "candidate wheel")
     if payload["mode"] == "candidate":
-        package = site / "pwright"
+        package = site / "playwright_rust"
         native = package / "_native.abi3.so"
         if (
-            Path(payload["pwrightPackage"]) != package
+            Path(payload["playwright_rustPackage"]) != package
             or Path(payload["nativePath"]) != native
         ):
             _fail("candidate installed package/native path differs")
-        if sha256_tree(package) != payload["pwrightPackageSha256"]:
+        if sha256_tree(package) != payload["playwright_rustPackageSha256"]:
             _fail("candidate package digest differs")
         _file(native, payload["nativeSha256"], "candidate native artifact")
-        dylib_dir = site / "shuozeli_pwright.dylibs"
+        dylib_dir = site / "shuozeli_playwright_rust.dylibs"
         libraries = _object(payload["runtimeLibraries"], "runtimeLibraries")
         actual = (
             {
@@ -347,14 +347,14 @@ def _runtime(policy: dict[str, Any], payload: dict[str, Any]) -> None:
             any(
                 payload[key] is not None
                 for key in (
-                    "pwrightPackage",
-                    "pwrightPackageSha256",
+                    "playwright_rustPackage",
+                    "playwright_rustPackageSha256",
                     "nativePath",
                     "nativeSha256",
                 )
             )
             or payload["runtimeLibraries"] != {}
-            or (site / "pwright").exists()
+            or (site / "playwright_rust").exists()
         ):
             _fail("oracle interpreter contains candidate artifact")
     else:
@@ -415,17 +415,17 @@ def _environment(payload: dict[str, Any]) -> None:
         "PYTHONPATH": ":".join(map(str, python_paths)),
         "PYTHONNOUSERSITE": "1",
         "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
-        "PWRIGHT_OFFICIAL_MODE": mode,
-        "PWRIGHT_OFFICIAL_LAUNCH_MODE": "owned",
-        "PWRIGHT_OFFICIAL_BROWSER_CHANNEL": "",
-        "PWRIGHT_OFFICIAL_UPSTREAM_TESTS": str(Path(payload["upstream"]) / "tests"),
-        "PWRIGHT_OFFICIAL_TAILSCALE_IP": payload["fixtureBind"],
-        "PWRIGHT_OFFICIAL_TAILSCALE_HOST": payload["fixtureHost"],
-        "PWRIGHT_PYTHON_WS_EXPECTED_TEST": payload["testId"],
-        "PWRIGHT_PYTHON_WS_UPSTREAM": payload["upstream"],
-        "PWRIGHT_PYTHON_WS_PORT": str(payload["fixturePort"]),
-        "PWRIGHT_PYTHON_WS_RECEIPT": payload["callReceipt"],
-        "PWRIGHT_PYTHON_WS_NONCE": payload["runNonce"],
+        "PLAYWRIGHT_RUST_OFFICIAL_MODE": mode,
+        "PLAYWRIGHT_RUST_OFFICIAL_LAUNCH_MODE": "owned",
+        "PLAYWRIGHT_RUST_OFFICIAL_BROWSER_CHANNEL": "",
+        "PLAYWRIGHT_RUST_OFFICIAL_UPSTREAM_TESTS": str(Path(payload["upstream"]) / "tests"),
+        "PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_IP": payload["fixtureBind"],
+        "PLAYWRIGHT_RUST_OFFICIAL_TAILSCALE_HOST": payload["fixtureHost"],
+        "PLAYWRIGHT_RUST_PYTHON_WS_EXPECTED_TEST": payload["testId"],
+        "PLAYWRIGHT_RUST_PYTHON_WS_UPSTREAM": payload["upstream"],
+        "PLAYWRIGHT_RUST_PYTHON_WS_PORT": str(payload["fixturePort"]),
+        "PLAYWRIGHT_RUST_PYTHON_WS_RECEIPT": payload["callReceipt"],
+        "PLAYWRIGHT_RUST_PYTHON_WS_NONCE": payload["runNonce"],
     }
     if payload["environment"] != expected:
         _fail("strict WebSocket environment contains an override or missing field")
@@ -450,13 +450,13 @@ def _command(payload: dict[str, Any]) -> None:
         "-p",
         "pytest_timeout",
         "-p",
-        "pwright_official_server_runtime",
+        "playwright_rust_official_server_runtime",
         "-p",
-        "pwright_candidate_runtime"
+        "playwright_rust_candidate_runtime"
         if payload["mode"] == "candidate"
-        else "pwright_official_oracle_runtime",
+        else "playwright_rust_official_oracle_runtime",
         "-p",
-        "pwright_official_ws_guard",
+        "playwright_rust_official_ws_guard",
         "--browser=chromium",
         "--timeout=20",
         "--timeout-method=signal",

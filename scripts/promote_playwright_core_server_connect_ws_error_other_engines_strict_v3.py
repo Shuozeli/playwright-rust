@@ -191,7 +191,7 @@ def check_harness() -> None:
         sealed(ROOT / relative, expected)
     sealed(PAIRED_VERIFIER, PAIRED_VERIFIER_SHA256)
     sealed(
-        capture.SOURCE_PACKAGE / "native" / capture.PROFILE / "pwright.node",
+        capture.SOURCE_PACKAGE / "native" / capture.PROFILE / "playwright_rust.node",
         capture.ARTIFACT_SHA256,
     )
     sealed(capture.SNAPSHOT_MANIFEST, SNAPSHOT_MANIFEST_SHA256)

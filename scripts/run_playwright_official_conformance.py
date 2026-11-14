@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run a pinned Playwright core suite through oracle or Pwright candidate."""
+"""Run a pinned Playwright core suite through oracle or Playwright Rust candidate."""
 
 from __future__ import annotations
 
@@ -236,11 +236,11 @@ def _resolve_candidate_profile(
 ) -> str | None:
     if mode != "candidate" or collect_only:
         return None
-    selected = (requested or environment.get("PWRIGHT_NATIVE_PROFILE", "")).strip()
+    selected = (requested or environment.get("PLAYWRIGHT_RUST_NATIVE_PROFILE", "")).strip()
     if not selected:
         raise ValueError(
             "candidate execution requires --candidate-profile or "
-            "PWRIGHT_NATIVE_PROFILE; use 'default' explicitly when intended"
+            "PLAYWRIGHT_RUST_NATIVE_PROFILE; use 'default' explicitly when intended"
         )
     if not _CANDIDATE_PROFILE_PATTERN.fullmatch(selected):
         raise ValueError("candidate profile must be a lowercase hyphen-separated name")
@@ -311,8 +311,8 @@ def _candidate_source_sha256(candidate: Path) -> str:
 
 def _candidate_artifact_path(candidate: Path, profile: str) -> Path:
     if profile == "default":
-        return candidate / "native/pwright.node"
-    return candidate / "native" / profile / "pwright.node"
+        return candidate / "native/playwright_rust.node"
+    return candidate / "native" / profile / "playwright_rust.node"
 
 
 def _secure_fixture_source_digests(suite: Suite, upstream: Path) -> dict[str, str]:
@@ -418,7 +418,7 @@ def _probe_trusted_tls_hostname(
 def _install_secure_certificate(
     bind: str, host: str
 ) -> tuple[tempfile.TemporaryDirectory[str], Path, Path]:
-    directory = tempfile.TemporaryDirectory(prefix="pwright-core-official-tls-")
+    directory = tempfile.TemporaryDirectory(prefix="playwright-rust-core-official-tls-")
     certificate = Path(directory.name) / "certificate.pem"
     private_key = Path(directory.name) / "private-key.pem"
     try:
@@ -1139,7 +1139,7 @@ def main() -> None:
     parser.add_argument("--collect-only", action="store_true")
     parser.add_argument("--headed", action="store_true")
     parser.add_argument("--endpoint", default="http://127.0.0.1:9222")
-    parser.add_argument("--candidate", type=Path, default=root / "packages/pwright")
+    parser.add_argument("--candidate", type=Path, default=root / "packages/playwright-rust")
     parser.add_argument("--candidate-profile")
     parser.add_argument(
         "--secure-http-fixture",
@@ -1209,7 +1209,7 @@ def main() -> None:
             "PWTEST_MODE",
             "PWPAGE_IMPL",
             "PWTEST_USE_BIDI_EXPECTATIONS",
-            "PWRIGHT_CORE_SOURCE_ONLY_TEST_WORKER",
+            "PLAYWRIGHT_RUST_CORE_SOURCE_ONLY_TEST_WORKER",
         ):
             if os.environ.get(key):
                 parser.error(f"source-only Core suite forbids inherited {key}")
@@ -1335,9 +1335,9 @@ def main() -> None:
     command.extend(args.test or suite.get("args", []))
 
     env = os.environ.copy()
-    env.pop("PWRIGHT_OFFICIAL_CROSS_ORIGIN_FORWARD", None)
+    env.pop("PLAYWRIGHT_RUST_OFFICIAL_CROSS_ORIGIN_FORWARD", None)
     if cross_origin_forward and not args.collect_only:
-        env["PWRIGHT_OFFICIAL_CROSS_ORIGIN_FORWARD"] = "1"
+        env["PLAYWRIGHT_RUST_OFFICIAL_CROSS_ORIGIN_FORWARD"] = "1"
     if result_path is not None:
         result_path.parent.mkdir(parents=True, exist_ok=True)
         env["PLAYWRIGHT_JSON_OUTPUT_FILE"] = str(result_path)
@@ -1349,9 +1349,9 @@ def main() -> None:
     if not args.collect_only:
         if not source_only:
             fixture_bind, fixture_host = _tailscale_runtime(env)
-            env["PWRIGHT_OFFICIAL_SERVER_IP"] = fixture_bind
-            env["PWRIGHT_OFFICIAL_SERVER_HOST"] = fixture_host
-        env["PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM"] = str(upstream)
+            env["PLAYWRIGHT_RUST_OFFICIAL_SERVER_IP"] = fixture_bind
+            env["PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST"] = fixture_host
+        env["PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM"] = str(upstream)
         if not source_only:
             common_preload = (
                 root / "tests/official/playwright-core-server-runtime.cjs"
@@ -1370,8 +1370,8 @@ def main() -> None:
                 )
             except (OSError, RuntimeError, subprocess.TimeoutExpired) as error:
                 raise SystemExit(f"secure Core fixture unavailable: {error}") from error
-            env["PWRIGHT_OFFICIAL_SECURE_TLS_CERT"] = str(certificate)
-            env["PWRIGHT_OFFICIAL_SECURE_TLS_KEY"] = str(private_key)
+            env["PLAYWRIGHT_RUST_OFFICIAL_SECURE_TLS_CERT"] = str(certificate)
+            env["PLAYWRIGHT_RUST_OFFICIAL_SECURE_TLS_KEY"] = str(private_key)
             secure_preload = (
                 root / "tests/official/playwright-core-secure-server-runtime.cjs"
             ).resolve()
@@ -1383,10 +1383,10 @@ def main() -> None:
     if source_only:
         guard = (root / _SOURCE_ONLY_GUARD_SOURCE).resolve()
         harness_inputs.insert(0, guard)
-        env["PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM"] = str(upstream)
-        env["PWRIGHT_CORE_SOURCE_ONLY_ACTIVE"] = "1"
-        env["PWRIGHT_CORE_SOURCE_ONLY_MANIFEST"] = str(manifest_path)
-        env["PWRIGHT_CORE_SOURCE_ONLY_SUITE"] = suite["id"]
+        env["PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM"] = str(upstream)
+        env["PLAYWRIGHT_RUST_CORE_SOURCE_ONLY_ACTIVE"] = "1"
+        env["PLAYWRIGHT_RUST_CORE_SOURCE_ONLY_MANIFEST"] = str(manifest_path)
+        env["PLAYWRIGHT_RUST_CORE_SOURCE_ONLY_SUITE"] = suite["id"]
         env["NODE_OPTIONS"] = f"--require={guard}"
         if result_path is not None:
             guard_receipt = result_path.with_suffix(".guard-receipt.jsonl")
@@ -1395,11 +1395,11 @@ def main() -> None:
                     f"source-only guard receipt already exists: {guard_receipt}"
                 )
             guard_receipt.open("x").close()
-            env["PWRIGHT_CORE_SOURCE_ONLY_GUARD_RECEIPT"] = str(guard_receipt)
+            env["PLAYWRIGHT_RUST_CORE_SOURCE_ONLY_GUARD_RECEIPT"] = str(guard_receipt)
         else:
             # Collection loads pinned source in the CLI process, but never forks
             # test workers. Its no-I/O guard still runs before any test module.
-            env["PWRIGHT_CORE_SOURCE_ONLY_GUARD_RECEIPT"] = os.devnull
+            env["PLAYWRIGHT_RUST_CORE_SOURCE_ONLY_GUARD_RECEIPT"] = os.devnull
 
     candidate: Path | None = None
     if args.mode == "candidate":
@@ -1415,12 +1415,12 @@ def main() -> None:
         env["NODE_OPTIONS"] = " ".join(
             part for part in (existing_node_options, require_option) if part
         )
-        env["PWRIGHT_NODE_CANDIDATE"] = str(candidate)
-        env["PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM"] = str(upstream)
+        env["PLAYWRIGHT_RUST_NODE_CANDIDATE"] = str(candidate)
+        env["PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM"] = str(upstream)
         if candidate_profile is not None:
-            env["PWRIGHT_NATIVE_PROFILE"] = candidate_profile
+            env["PLAYWRIGHT_RUST_NATIVE_PROFILE"] = candidate_profile
         if requires_browser:
-            env["PWRIGHT_CANDIDATE_CDP_ENDPOINT"] = args.endpoint
+            env["PLAYWRIGHT_RUST_CANDIDATE_CDP_ENDPOINT"] = args.endpoint
     elif not args.collect_only and requires_browser:
         preload = (root / "tests/official/playwright-core-oracle-preload.cjs").resolve()
         harness_inputs.append(preload)
@@ -1429,8 +1429,8 @@ def main() -> None:
         env["NODE_OPTIONS"] = " ".join(
             part for part in (existing_node_options, require_option) if part
         )
-        env["PWRIGHT_PLAYWRIGHT_CORE_UPSTREAM"] = str(upstream)
-        env["PWRIGHT_ORACLE_CDP_ENDPOINT"] = args.endpoint
+        env["PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM"] = str(upstream)
+        env["PLAYWRIGHT_RUST_ORACLE_CDP_ENDPOINT"] = args.endpoint
 
     print(
         f"running Playwright core mode={args.mode} suite={args.suite} "
