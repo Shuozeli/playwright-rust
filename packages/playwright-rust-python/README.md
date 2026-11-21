@@ -1,10 +1,117 @@
-<!-- agent-updated: 2026-11-14T05:28:56Z -->
+<!-- agent-updated: 2026-11-20T08:14:57Z -->
 
 # shuozeli-playwright-rust
 
 Experimental Playwright-shaped Python API backed by Playwright Rust's Rust host. The
 base wheel attaches to an existing Chromium CDP endpoint; it does not load
-Node.js, download a browser, or pretend that Firefox/WebKit use CDP.
+Node.js, download a browser, or pretend that Firefox/WebKit use CDP. The async
+and sync `Playwright` objects expose only `chromium`; direct `BrowserType`
+construction also rejects any non-Chromium engine. Upstream manifest and
+device metadata may still contain historical engine names, but they do not
+create providers. The Python native binding and shared Rust registry,
+installation, backend-manifest, preflight, startup, and connect-header leaves
+now reject non-Chromium engine selection as well. The pinned Playwright Server
+initializer still carries three BrowserType fields as protocol metadata.
+
+Current source ABI141 extends ABI140's independently selectable compiled RegExp
+and HAR recording work with Rust-owned Video artifacts for persistent and
+ordinary owned Contexts, including the implicit Context created by
+`Browser.new_page()`. Python exposes lazy `Page.video` and async/sync
+`Video.path()`, `save_as()`, and `delete()`: paths publish immediately, async
+copy waits for encoder completion, sync copy rejects an open Page with
+Playwright's exact error, and successful deletion is idempotent without hiding
+a real filesystem failure. Exact per-Context ownership prevents persistent
+defaults from leaking into another Context and makes Context close await only
+its own recorder tasks. The complete unchanged async/sync official video files
+pass 11/11 in the candidate. The independently verified Playwright 1.58.0
+Oracle run is 9/11 on bundled Chromium 145; its two failures are official
+`Video.save_as()` calls rejected as `Page closed` after Page close. Repository
+E2E proves persistent and implicit async/sync VP8 640x360 output and deletion.
+Remote artifact transfer and Node Video remain open.
+
+Rust records normalized Page and Context-owned Service
+Worker fetch lifecycles, retrieves ordinary bodies from the exact terminal CDP
+session, and writes the HAR on Context close. Both embedded content and the
+upstream-default attachment mode work: resources use SHA-1 plus MIME-extension
+names, plain HAR resources are siblings, and ZIP output/replay uses root
+`har.har` plus resources. The implemented minimal document uses upstream
+sentinels, POST-data/form serialization, font/base64 behavior, creator version,
+and pinned MIME-extension preferences. Full update mode now includes
+Playwright-shaped Page/title/lifecycle entries, cookies, raw headers, timing,
+sizes, redirects, actual HTTP protocol, server address, and TLS details.
+Browser creation now also accepts the official `record_har_*` options. It
+defaults to full mode, embeds plain-HAR content, attaches ZIP content, honors
+explicit content over the legacy omit flag, and installs recording before the
+Context becomes visible. String filters remain in the base HAR capability;
+`re.Pattern` source and supported flags use `har-recording-regexp`. The fixed
+Playwright Python v1.58.0 manifest passes 10/10 async and 9/9 sync in both the
+installed candidate and Oracle. A request without POST data has full-mode
+`bodySize=0`, while minimal mode retains `-1`. The current local abi3 extension is
+`78a68df32ab6493b240574d6848bf3ee32ad4145f7ec76a90bf775014328cd7c`;
+it is not yet repaired for its external Homebrew OpenSSL libraries. It passes
+706 unit tests with 14 skipped, Ruff, strict Pyright, and full-feature release
+addon Clippy. A rebuilt wheel passes a trusted-HTTPS Chrome 157
+creation/capture/replay E2E for Page and Service Worker bodies. Top-level
+Worker script/import capture remains open. Replay now follows
+upstream's unbounded default instead of rejecting archives, entries, fields,
+headers, bodies, retained bytes, or redirect chains at private fixed caps;
+finite `ReplayLimits` are an explicit Rust embedder choice, and HAR paths no
+longer have a private 4 KiB ceiling. Recorded statuses are deferred to route
+fulfillment instead of invalidating the archive during open. The host also has
+no eight-HAR/aggregate-8-MiB registration gate, and the capability report no
+longer exposes those removed limits. Replay open retains content descriptors
+and acquires only matched bodies through the host blocking lane, rather than
+eagerly duplicating all HAR payloads in memory. Lookup errors use the public
+abort/fallback policy after a diagnostic, matching upstream. ABI138
+added Context-owned Service Worker request/response
+identity, exact `Request.service_worker`, unavailable `Request.frame`, and
+request-history ownership without borrowing a Page. ABI137 added Context-owned
+Service Worker Handle and console semantics to ABI136's optional Chromium
+BrowserContext service-worker list/event/evaluate lane. ABI135 added complete
+creation-time permissions while
+preserving ABI134's runtime BrowserContext geolocation and permission mutation,
+and ABI133's removal of fabricated counts from binding sessions, binding-owned
+Context/Page registries, core topology,
+retained Handle objects, routes, scripts, selectors, and browser output. It also schedules topology,
+Locator-evaluation, world-readiness, and Worker-Handle work instead of rejecting
+ordinary bursts. Frame lifecycle, Frame-tree, network-lane, and retained Handle
+ownership, aggregate navigation registration, and per-invocation navigation
+event/request rows are allocator-backed. The compatibility audit remains open
+for selected close-job ownership. The drag runtime's controller, world/listener,
+command-owner, dispatcher-operation, single-interception scheduling, and CDP-
+subscriber ownership are allocator-backed in the production host; finite drag
+constructors remain available only as explicit constrained profiles. The Python
+capability report must not be read as proof that
+every internal host limit has been removed.
+The RegExp matcher also is not a complete ECMAScript engine: unsupported flags,
+lookaround, and backreference syntax fail explicitly rather than changing
+meaning.
+
+The rebuilt ABI137 extension is verified against Chrome 157 through the
+dedicated loopback CDP profile and a trusted-HTTPS fixture. A new worker is
+published through `BrowserContext.expect_event("serviceworker")`, appears by
+identity in `service_workers`, and evaluates the expected worker-global marker.
+`evaluate_handle()` and console argument Handles retain the Service Worker
+owner without a Page; Worker and Context receive the same ConsoleMessage,
+whose `page` is `None`. The legacy 128-notice/16-MiB Worker-console queue limits
+are removed, and Rust records only while Worker, Context, or related Page
+console subscriptions are active.
+The Rust host also proves registration without a waiting notice consumer and
+both paths close with a zero resource ledger. The Handle/console path is also
+retained as a repository-owned ignored live test and passes with the exact
+minimal Service Worker feature composition. This focused E2E does not replace
+unchanged pinned upstream candidate/Oracle execution, which remains pending.
+
+The ABI134 runtime methods are verified against Chrome 157 over the dedicated
+loopback CDP profile: the page observed the exact configured longitude,
+latitude, and accuracy, and `clear_permissions()` restored geolocation to
+`prompt`. The same run covers the allocator-backed pending-call/deferred-
+disposal attach compatibility fix.
+
+ABI135 creation-time permissions are verified on the same Chrome 157 profile:
+a Context created with `geolocation` and `camera` reported both as `granted`
+immediately after publication. Persistent creation uses the same validated
+Rust `ContextPermissions` value and browser-session mapping.
 
 An isolated all-capability release wheel now includes a default-off
 `navigation-response-finished` join and passes the `Response.finished()`
@@ -25,7 +132,8 @@ sync/async security-detail cases have not yet run on this wheel because the
 dedicated Chrome CDP endpoint is unresponsive. The strict v10 outcome remains
 unchanged; see the [conformance record](../../docs/python-official-conformance.md).
 
-Current official Chromium checkpoint: an installed ABI131 wheel adds
+The previous frozen official Chromium checkpoint used an installed ABI131 wheel
+that adds
 default-off `frameattached`/`framenavigated` and passes 290/290 Python
 browserless contracts. The official 80-case navigation file first ran 76
 pass / two fail / two synthetic errors on that wheel; the independently
@@ -319,7 +427,7 @@ still missing. The Context init-script callback remains a candidate failure
 after reload. Opt-in fresh Chromium
 `BrowserType.launch()` and explicit-profile Chromium
 `launch_persistent_context()` are implemented. Firefox/WebKit positive launch
-remains unsupported. The latest strict 6,526-row candidate ledger has 1,313
+is intentionally out of scope. The latest strict 6,526-row candidate ledger has 1,313
 passes, six failures, 11 skips and 5,196 not run; the independent oracle has
 1,097 passes, five failures, 11 skips and 5,413 not run. These are not paired
 full-corpus results. A complete ABI108 click-file candidate diagnostic is
@@ -1134,11 +1242,11 @@ The currently implemented slice is intentionally small:
   while rejecting bodies above the existing 1 MiB route bound before cloning;
   Python passes only native response identity unless the caller explicitly
   supplies a replacement body or path;
-- optional async/sync `Page.route_from_har()` for bounded plain embedded HAR
+- optional async/sync `Page.route_from_har()` for allocator-backed plain or ZIP HAR
   archives. A backend-neutral Rust leaf owns parsing, exact URL/method/body/
   header selection, redirects and response bytes; the host composes internal
   HAR fulfillment with the existing Page-route Fetch driver;
-- optional async/sync `BrowserContext.route_from_har()` over the same bounded
+- optional async/sync `BrowserContext.route_from_har()` over the same allocator-backed
   archive owner. Context registrations apply to existing and future Pages and
   OOPIF sessions, while Page registrations always take precedence;
 - optional Rust-owned Page and BrowserContext `add_init_script`, with Python
@@ -1212,7 +1320,7 @@ For an editable development install from this directory:
 uv run --with maturin==1.15.0 maturin develop --release
 ```
 
-The current source declares native ABI version `123` and PyO3 `abi3-py39`.
+The current source declares native ABI version `138` and PyO3 `abi3-py39`.
 Import fails if the Python package and extension ABI do not match; older
 wheels cannot serve the new retained ElementHandle DOM reads, `owner_frame`,
 `scroll_into_view_if_needed`, `select_text`, or the new native
@@ -1265,11 +1373,14 @@ the exact Worker execution context; retained primitives require no browser
 round trip. Python converts only opaque descriptors and accepts both the legacy
 11-field and ABI 64 12-field notice shapes.
 
-NODE-306 advances to ABI 65 and adds independently selectable
-`context-locale`. Rust retains at most 16 owned-Context locales of 256 UTF-8
-bytes each. Dedicated and nested Workers inherit the renderer locale as in
-upstream Playwright; no Worker locale command, session registry or separate
-feature exists. Python only forwards the locale during Context creation.
+NODE-306 originally advanced to ABI 65 and added independently selectable
+`context-locale`. The current allocator-backed compatibility revision
+supersedes its retired 16-Context and 256-byte ceilings: Rust retains the exact
+optional string and defers validity to Chromium, while Python accounts for the
+observed UTF-8 bytes at FFI admission. Dedicated and nested Workers inherit the
+renderer locale as in upstream Playwright; no Worker locale command, session
+registry or separate feature exists. Python only forwards the locale during
+Context creation, and an empty string produces no locale override.
 
 NODE-307 advances to ABI 66 and adds independently selectable
 `persistent-context-locale` over `persistent-context` plus `context-locale`.
@@ -1506,8 +1617,9 @@ The unchanged Playwright Python 1.58.0 persistent-Context HAR row passes the
 installed candidate and independent oracle 1/1; candidate stress passes 10/10.
 Installed-wheel units pass 167/167, full collection remains 6,526/6,526 and
 the cumulative ledger advances to 767 passed, zero failed, seven skipped and
-5,752 not run. External `_file` content, ZIP HAR, update recording, Context-
-level routing and broad HAR tests remain explicitly unsupported.
+5,752 not run. At that ABI79 checkpoint, external `_file` content, ZIP HAR,
+update recording, Context-level routing and broad HAR tests remained explicitly
+unsupported; the current ABI139 status is documented at the top of this file.
 
 NODE-322 advances to ABI 78 and adds independently selectable
 `context-http-credentials`, `persistent-context-http-credentials` and
@@ -1527,13 +1639,16 @@ Playwright Python 1.58.0 Chromium rows pass installed candidate/oracle 11/11
 and candidate stress 110/110. Full collection remains 6,526/6,526 and the
 ledger advances to 766 passed, zero failed, seven skipped and 5,753 not run.
 
-NODE-321 advances to ABI 76 and adds independently selectable
+Historical NODE-321 advanced to ABI 76 and added independently selectable
 `context-geolocation`, `context-geolocation-permission` and their persistent-
-default compositions. Rust retains at most 16 selected geolocation policies
-and 16 permission grants, applies exact `Emulation.setGeolocationOverride`
+default compositions. Current ABI136 preserves ABI135's replacement of the former 16-Context tables
+with allocator-backed ownership, applies exact `Emulation.setGeolocationOverride`
 initialization to every selected Page/OOPIF session, and sends exact
 `Browser.grantPermissions` at the browser session for the default or native
-owned Context. A separate `persistent-context-launch-arguments` leaf moves
+owned Context. It also exposes async/sync runtime `set_geolocation()`,
+`grant_permissions()`, and `clear_permissions()`: grants merge per normalized
+origin with the pinned Chromium mapping and clear through
+`Browser.resetPermissions`. A separate `persistent-context-launch-arguments` leaf moves
 bounded, validated Chromium switches into the existing provider request;
 profile, page-opening and remote-debugging ownership cannot be overridden.
 Python only validates and forwards the public `geolocation`, `permissions`
@@ -1555,18 +1670,19 @@ passes the installed candidate and independent oracle, including a ten-repeat
 candidate stress lane.
 
 NODE-319 advances to ABI 74 and adds independently selectable
-`context-timezone` plus `persistent-context-timezone`. Rust owns a fixed
-16-Context registry of validated, nonempty timezone identifiers bounded to 256
-UTF-8 bytes each. An explicit owned Context records its portable identity;
-the persistent default is selected independently; attached external Contexts
-inherit neither policy. Every selected Page/OOPIF initializer sends exact
+`context-timezone` plus `persistent-context-timezone`. The current compatibility
+path uses allocator-backed ownership, admits the observed UTF-8 byte length and
+retains the exact optional identifier without the retired 16-Context, 256-byte,
+control-character or nonempty policies. Empty input is a no-op; every selected
+nonempty Page/OOPIF initializer sends exact
 `Emulation.setTimezoneOverride {"timezoneId": ...}` before publication. Only
 Chromium's duplicate shared-renderer override is idempotent; invalid timezone
 identifiers become stable argument errors and every other protocol failure
 propagates. Python only validates and forwards `timezone_id` through a
-composable native Context-policy options value. The unchanged official
-Playwright Python 1.58.0 Chromium timezone row passes the installed candidate
-and independent oracle, including a ten-repeat candidate stress lane.
+composable native Context-policy options value, while actual FFI admission
+includes its observed byte length. The unchanged official Playwright Python
+1.58.0 Chromium timezone row passes the installed candidate and independent
+oracle, including a ten-repeat candidate stress lane.
 
 NODE-318 advances to ABI 73 and adds independently selectable
 `javascript-disabled` plus `persistent-context-javascript-disabled`. Rust
@@ -1840,7 +1956,9 @@ Context/Browser teardown. Async/sync Python retain public waiter, predicate and
 wrapper identity and forward payloads or paths to the existing bounded Rust
 file-input service.
 
-ABI 53 adds separately selectable Context request waits, exact shared request-
+Historical ABI 53 evidence below records the then-current bounded profile; ABI
+133 no longer imposes its 64-active-request count. ABI 53 added separately
+selectable Context request waits, exact shared request-
 history ownership, `Request.frame` and `Request.post_data_json`. The optional
 frame leaf observes `Page.frame*` and `Network.*` on the same CDP cursor,
 bounded to 64 Frame IDs and 64 active-request flags per Page, so the popup's
@@ -2167,7 +2285,7 @@ state.
 
 The complete unchanged async HTTPS-error file expands to six rows. Candidate
 and independent oracle each pass both Chromium rows; the two Firefox and two
-WebKit rows remain explicit provider-gap `not-run` outcomes. Candidate/oracle
+WebKit rows are out-of-scope non-applicable `not-run` outcomes. Candidate/oracle
 report SHA-256 values are
 `cdd4eb40b5c8c40ede8c84f73056c5faf229837c497bf889d66545612510bea8`
 and
@@ -2350,7 +2468,7 @@ oracle through the same dedicated CDP Chrome; report SHA-256 values are
 `2b2f38ee68d026f3ea1d6eb6f46f8e30edfb8a2a0882921e2cd57622a50d1d38`
 and
 `0c84f8e75291bdae4bd87685ba9efbc86c12e598b5859a1b7e1f8d7e42e15685`.
-Four Firefox/WebKit rows remain explicit provider gaps. Rust owns interception,
+Four Firefox/WebKit rows are out-of-scope non-applicable rows. Rust owns interception,
 exact session/target/backend-node routing, Page-fenced publication and bounded
 payload/path mutation. The initial strong-connection owner passed the test body
 but hung teardown; the final weak route exits cleanly.
@@ -2381,7 +2499,7 @@ through the same dedicated CDP Chrome; report SHA-256 values are
 `c6fd93810787dea30f3beb58ec44202bdff7aad5975f1259852f363faae454cc`
 and
 `1d0416cb3d1e95cb2eab41e3118b7444fe2e47403a6bd98039d70837b392cba6`.
-Four Firefox/WebKit rows remain explicit provider gaps. Three consecutive
+Four Firefox/WebKit rows are out-of-scope non-applicable rows. Three consecutive
 NODE-281-through-NODE-285 candidate regressions pass 10/10, SHA-256
 `60b7992906b838a93a98f8c61aa2a803dbc7485e9b3a358530aaea3f562b26f2`
 and
@@ -2413,7 +2531,7 @@ oracle through the same dedicated CDP Chrome; report SHA-256 values are
 `98a5f800bdeb271affa5947bd91722e615129835d384ac5cb19e0ae81fe52b00`
 and
 `807cc17edba597a72a058041ce73de864942c36dbbc2def5179f2c5445fafa06`.
-Eight Firefox/WebKit rows remain explicit provider gaps. The cumulative
+Eight Firefox/WebKit rows are out-of-scope non-applicable rows. The cumulative
 candidate is 655 passed, seven skipped and 5,864 not run, SHA-256
 `82dad9ef03972b03a4174dad73b07409b59776839d2e9885a01e81fb35f6f0c7`;
 the cumulative oracle is 636 passed, seven skipped and 5,883 not run,
@@ -2438,7 +2556,7 @@ values are
 `15327d9f5ab947fd6c9090f7f33c1be479c55355c6ab317e2cbd9985dae6f91e`
 and
 `a2b8d0ba5c8f9f3ebc78bcf4293042578af96805a4145305d008a0f7aa01300a`.
-Four Firefox/WebKit rows remain explicit provider gaps. The cumulative
+Four Firefox/WebKit rows are out-of-scope non-applicable rows. The cumulative
 candidate is 651 passed, seven skipped and 5,868 not run, SHA-256
 `b64fcdc19f027fd37718a339b122ecb6ea240890e12b4c56c147baac4f3ae0e4`;
 the cumulative oracle is 632 passed, seven skipped and 5,887 not run,
@@ -2464,7 +2582,7 @@ report SHA-256 values are
 `b0cb31378655ab7131bda8d57255e28b8378f2ace1275933e61230aa173c4a42`
 and
 `940665a60c4023e1f2e05a32fa3045339f6052406ddc71df1a7f88b2ffab4fef`.
-Firefox and WebKit remain explicit provider gaps. The cumulative candidate is
+Firefox and WebKit rows are out-of-scope and non-applicable. The cumulative candidate is
 649 passed, seven skipped and 5,870 not run, SHA-256
 `3e75c9588a73cd741ac571800a430e290affb178aee3bed5ab0951b46987602d`;
 the cumulative oracle is 630 passed, seven skipped and 5,889 not run,
@@ -2486,7 +2604,7 @@ thread row without product changes; report SHA-256 values are
 `1fdf1cf683d7ca5bba9f12db51f81bf2fb083d1d230520a25117f43c39ab254a`
 and
 `4b10bc1a7187c08b13e25a639cbd33baa45306edc04f0c6916913ddc3c48de59`.
-Firefox and WebKit remain explicit provider-gap rows. The cumulative candidate
+Firefox and WebKit rows are out-of-scope and non-applicable. The cumulative candidate
 ledger is 648 passed, seven skipped and 5,871 not run, SHA-256
 `4febdfe050081de20ef509f153f4e77669eb2672d22be1a07853d9e2e1916345`.
 The cumulative oracle is 629 passed, seven skipped and 5,890 not run,
@@ -2507,7 +2625,7 @@ report SHA-256 values are
 `c38cfd4ee833a79dd43ae44e6574ea15d3cf10c3321846c088bdcc570f597537`
 and
 `881bcdbf424fab522b7eccd9ba0a4c9555b419b209efe29e025a659d6c1b6c2f`.
-Firefox and WebKit remain explicit provider-gap rows. A 1,024-byte-bounded
+Firefox and WebKit rows are out-of-scope and non-applicable. A 1,024-byte-bounded
 Rust setting drives immutable semantic test-id snapshots and current-setting
 strict diagnostics; each strict error publishes at most five bounded DOM
 previews. The cumulative candidate ledger is 647 passed, seven skipped and
@@ -2532,7 +2650,7 @@ report SHA-256 values are
 `214264e2a9babd5277c448a82d86ba11ace901635120cdd047eb4437a76595c3`
 and
 `d3204cf9be77ba876630627f7f9a81f88017bde7f54f64ebbe7b2f3f58828efa`.
-Four Firefox/WebKit rows remain explicit provider gaps. Selector protocol 1.1
+Four Firefox/WebKit rows are out-of-scope non-applicable rows. Selector protocol 1.1
 and Locator protocols 1.24/2.7 carry typed immediate legacy-text semantics;
 older 1.23/2.6 peers reject the new variant. The cumulative candidate ledger
 is 646 passed, seven skipped and 5,873 not run, SHA-256
@@ -2563,7 +2681,7 @@ SHA-256 values
 `ad7e0c2b043641fa39a4fcac775945a193c4fef63a507f17a4572150bd270c58`
 and
 `d3f45897a07e19a2ac3aa2ac7a737bbaf67d1b3088bb12b8d819632142ca11e4`.
-The six Firefox/WebKit expansions remain explicit provider-gap `not-run`
+The six Firefox/WebKit expansions are out-of-scope non-applicable `not-run`
 outcomes. The cumulative candidate ledger is 644 passed, seven skipped and
 5,875 not run, SHA-256
 `f898f89d210cfb1c73d37b5817b68688050fae9f273c54c92480f4e0375aaf5c`.
@@ -2791,9 +2909,9 @@ console-message-history rows add another 2/2 in both lanes, the async/sync
 request-history rows add 2/2, and the complete device file adds one pass plus
 two upstream browser skips in both lanes. The applicable async and sync
 listener Chromium rows add 2/2 in candidate and oracle; their Firefox/WebKit
-rows remain explicit provider gaps. The applicable sync/async collection-
+rows are out-of-scope and non-applicable. The applicable sync/async collection-
 selector rows and async duplicate-registration row add 3/3 in candidate and
-oracle; their Firefox/WebKit rows remain explicit provider gaps.
+oracle; their Firefox/WebKit rows are out-of-scope and non-applicable.
 The two async/sync registration-error rows add 2/2 in candidate and oracle.
 The six async/sync custom-engine base, path and main/isolated-world Chromium
 rows add 6/6 in candidate and oracle.

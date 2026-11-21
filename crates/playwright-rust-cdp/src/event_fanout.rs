@@ -36,9 +36,16 @@ impl<Event> ReclaimingEventFanout<Event> {
         let fixed = std::mem::size_of::<FanoutShared<Event>>()
             .saturating_add(std::mem::size_of::<FanoutState<Event>>())
             .saturating_add(2 * std::mem::size_of::<usize>());
-        let events = std::mem::size_of::<EventSlot<Event>>().saturating_mul(event_capacity);
-        let subscribers =
-            std::mem::size_of::<Option<SubscriberState>>().saturating_mul(subscriber_capacity);
+        let events = if event_capacity == usize::MAX {
+            0
+        } else {
+            std::mem::size_of::<EventSlot<Event>>().saturating_mul(event_capacity)
+        };
+        let subscribers = if subscriber_capacity == usize::MAX {
+            0
+        } else {
+            std::mem::size_of::<Option<SubscriberState>>().saturating_mul(subscriber_capacity)
+        };
         u64::try_from(fixed.saturating_add(events).saturating_add(subscribers)).unwrap_or(u64::MAX)
     }
 
@@ -57,8 +64,16 @@ impl<Event> ReclaimingEventFanout<Event> {
                 event_capacity,
                 subscriber_capacity,
                 state: Mutex::new(FanoutState {
-                    events: VecDeque::with_capacity(event_capacity),
-                    subscribers: Vec::with_capacity(subscriber_capacity),
+                    events: if event_capacity == usize::MAX {
+                        VecDeque::new()
+                    } else {
+                        VecDeque::with_capacity(event_capacity)
+                    },
+                    subscribers: if subscriber_capacity == usize::MAX {
+                        Vec::new()
+                    } else {
+                        Vec::with_capacity(subscriber_capacity)
+                    },
                     subscriber_count: 0,
                     peak_subscribers: 0,
                     next_sequence: 0,
@@ -95,6 +110,11 @@ impl<Event> ReclaimingEventFanout<Event> {
             lagged: 0,
         });
         if subscriber == state.subscribers.len() {
+            state.subscribers.try_reserve(1).map_err(|error| {
+                ReclaimingFanoutSubscribeError::AllocationFailed {
+                    message: error.to_string(),
+                }
+            })?;
             state.subscribers.push(subscriber_state);
         } else {
             state.subscribers[subscriber] = subscriber_state;
@@ -117,6 +137,14 @@ impl<Event> ReclaimingEventFanout<Event> {
             state.dropped_without_subscribers = state.dropped_without_subscribers.saturating_add(1);
             return Ok(0);
         }
+        if self.shared.event_capacity == usize::MAX
+            && let Err(error) = state.events.try_reserve(1)
+        {
+            return Err(ReclaimingFanoutSendError::AllocationFailed(
+                event,
+                error.to_string(),
+            ));
+        }
         let sequence = state.next_sequence;
         let Some(next_sequence) = sequence.checked_add(1) else {
             state.closed = true;
@@ -125,7 +153,9 @@ impl<Event> ReclaimingEventFanout<Event> {
             return Err(ReclaimingFanoutSendError::SequenceExhausted(event));
         };
         state.next_sequence = next_sequence;
-        if state.events.len() == self.shared.event_capacity {
+        if self.shared.event_capacity != usize::MAX
+            && state.events.len() == self.shared.event_capacity
+        {
             let evicted = state
                 .events
                 .pop_front()
@@ -355,6 +385,7 @@ impl std::error::Error for ReclaimingFanoutConfigError {}
 pub enum ReclaimingFanoutSubscribeError {
     Closed,
     CapacityExceeded { limit: usize },
+    AllocationFailed { message: String },
 }
 
 impl Display for ReclaimingFanoutSubscribeError {
@@ -363,6 +394,9 @@ impl Display for ReclaimingFanoutSubscribeError {
             Self::Closed => formatter.write_str("event fanout is closed"),
             Self::CapacityExceeded { limit } => {
                 write!(formatter, "event subscriber capacity {limit} is exhausted")
+            }
+            Self::AllocationFailed { message } => {
+                write!(formatter, "event subscriber allocation failed: {message}")
             }
         }
     }
@@ -374,6 +408,7 @@ impl std::error::Error for ReclaimingFanoutSubscribeError {}
 pub enum ReclaimingFanoutSendError<Event> {
     Closed(Event),
     SequenceExhausted(Event),
+    AllocationFailed(Event, String),
 }
 
 impl<Event> Display for ReclaimingFanoutSendError<Event> {
@@ -381,6 +416,9 @@ impl<Event> Display for ReclaimingFanoutSendError<Event> {
         match self {
             Self::Closed(_) => formatter.write_str("event fanout is closed"),
             Self::SequenceExhausted(_) => formatter.write_str("event fanout sequence is exhausted"),
+            Self::AllocationFailed(_, message) => {
+                write!(formatter, "event fanout allocation failed: {message}")
+            }
         }
     }
 }
@@ -512,6 +550,59 @@ mod tests {
         );
         assert_eq!(fanout.metrics().subscribers, 0);
         assert_eq!(fanout.metrics().peak_subscribers, 2);
+    }
+
+    #[test]
+    fn allocator_backed_subscribers_grow_past_the_legacy_count() {
+        // Arrange
+        let fanout = ReclaimingEventFanout::<()>::new(1, usize::MAX)
+            .expect("allocator-backed fanout should validate");
+
+        // Act
+        let receivers = (0..129)
+            .map(|_| {
+                fanout
+                    .subscribe()
+                    .expect("subscriber should be allocator-backed")
+            })
+            .collect::<Vec<_>>();
+
+        // Assert
+        assert_eq!(fanout.metrics().subscribers, 129);
+        drop(receivers);
+        assert_eq!(fanout.metrics().subscribers, 0);
+    }
+
+    #[test]
+    fn allocator_backed_events_cross_the_legacy_backlog_without_lag() {
+        // Arrange
+        let fanout = ReclaimingEventFanout::new(usize::MAX, 1)
+            .expect("allocator-backed event fanout should validate");
+        let mut receiver = fanout.subscribe().expect("subscriber should fit");
+
+        // Act
+        for event in 0..=8_192 {
+            fanout.send(event).expect("event should remain queued");
+        }
+
+        // Assert
+        assert_eq!(fanout.metrics().queued_events, 8_193);
+        assert_eq!(fanout.metrics().lagged_deliveries, 0);
+        for event in 0..=8_192 {
+            assert_eq!(receiver.try_recv(), Ok(event));
+        }
+        assert_eq!(fanout.metrics().queued_events, 0);
+    }
+
+    #[test]
+    fn allocator_backed_events_do_not_project_infinite_slot_bookkeeping() {
+        // Act
+        let unbounded =
+            ReclaimingEventFanout::<u64>::maximum_retained_bookkeeping_bytes(usize::MAX, 2);
+        let empty = ReclaimingEventFanout::<u64>::maximum_retained_bookkeeping_bytes(0, 2);
+
+        // Assert
+        assert_eq!(unbounded, empty);
     }
 
     #[tokio::test]

@@ -1,0 +1,18 @@
+[package]
+name = "playwright-rust-ecmascript-regexp"
+description = "Composable ECMAScript RegExp matching policy for Playwright Rust"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+regress = { path = "../../third_party/regress", default-features = false, features = ["backend-pikevm", "std", "utf16"] }
+thiserror.workspace = true
+
+[dev-dependencies]
+base64.workspace = true
+flate2.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true

@@ -13,11 +13,12 @@ pub(crate) struct FrameNameLimits {
 pub(super) struct NameResources {
     resources: ResourceLedger,
     limits: FrameNameLimits,
+    allocator_backed: bool,
 }
 
 pub(super) struct BudgetedName {
     pub value: Box<str>,
-    _bytes: ResourceLease,
+    _bytes: Option<ResourceLease>,
 }
 
 impl NameResources {
@@ -46,7 +47,23 @@ impl NameResources {
         let resources = ProductionResourceLedger::new(resource_limits, requirements)
             .and_then(|ledger| ledger.claim(requirements))
             .map_err(HostError::backend)?;
-        Ok(Self { resources, limits })
+        Ok(Self {
+            resources,
+            limits,
+            allocator_backed: false,
+        })
+    }
+
+    pub fn new_allocator_backed(limits: FrameNameLimits) -> Result<Self, HostError> {
+        let requirements = ResourceRequirements::none();
+        let resources = ProductionResourceLedger::new(ResourceLimits::deny_all(0, 0), requirements)
+            .and_then(|ledger| ledger.claim(requirements))
+            .map_err(HostError::backend)?;
+        Ok(Self {
+            resources,
+            limits,
+            allocator_backed: true,
+        })
     }
 
     pub fn allocate(&self, value: &str) -> Result<Option<Arc<BudgetedName>>, HostError> {
@@ -65,14 +82,19 @@ impl NameResources {
             .ok_or_else(|| {
                 HostError::ResourceExhausted("Frame name allocation size overflow".into())
             })?;
-        let lease = self
-            .resources
-            .reserve(
-                NAME_SCOPE,
-                ResourceClass::BackendStateBytes,
-                u64::try_from(bytes).map_err(HostError::backend)?,
+        let lease = if self.allocator_backed {
+            None
+        } else {
+            Some(
+                self.resources
+                    .reserve(
+                        NAME_SCOPE,
+                        ResourceClass::BackendStateBytes,
+                        u64::try_from(bytes).map_err(HostError::backend)?,
+                    )
+                    .map_err(|error| HostError::ResourceExhausted(error.to_string()))?,
             )
-            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
+        };
         Ok(Some(Arc::new(BudgetedName {
             value: value.into(),
             _bytes: lease,

@@ -44,13 +44,6 @@ pub(crate) struct Installation {
     pub(super) batches: Arc<super::batch_publication::BatchPublications>,
     pub owners: Arc<Owners>,
     pub(crate) cleanup: TokioCleanupExecutor,
-    #[cfg(feature = "element-handle-click")]
-    pub(crate) parent_hit_slots: Arc<tokio::sync::Semaphore>,
-    #[cfg(any(
-        feature = "element-handle-scroll-into-view",
-        feature = "element-handle-select-text"
-    ))]
-    pub(crate) element_action_slots: Arc<tokio::sync::Semaphore>,
     pub(super) worlds: ChromiumFrameWorldAccess,
 }
 
@@ -157,7 +150,7 @@ impl Installation {
             composition.resources(),
             owners.clone(),
         )?;
-        let handle_subtree_objects = std::num::NonZeroUsize::new(super::MAX_HANDLES).unwrap();
+        let handle_subtree_objects = std::num::NonZeroUsize::new(1).unwrap();
         Ok(Self {
             create: Arc::new(create),
             dispose: Releases::new(
@@ -170,13 +163,6 @@ impl Installation {
             publications,
             batches,
             cleanup,
-            #[cfg(feature = "element-handle-click")]
-            parent_hit_slots: Arc::new(tokio::sync::Semaphore::new(super::MAX_CALLS)),
-            #[cfg(any(
-                feature = "element-handle-scroll-into-view",
-                feature = "element-handle-select-text"
-            ))]
-            element_action_slots: new_element_action_slots(),
             worlds,
         })
     }
@@ -200,9 +186,6 @@ impl Installation {
             () = self.publications.changed() => {},
             () = self.batches.changed() => {},
         }
-    }
-    pub fn native_event_processed(&self) {
-        self.dispose.creation_polled();
     }
     pub async fn wait(&self) -> Result<(), HostError> {
         let waiting = self.owners.wait();
@@ -288,47 +271,6 @@ impl Installation {
     }
 }
 
-#[cfg(any(
-    feature = "element-handle-scroll-into-view",
-    feature = "element-handle-select-text"
-))]
-fn new_element_action_slots() -> Arc<tokio::sync::Semaphore> {
-    // Both whole-action APIs share this single budget, leaving half of the
-    // ordinary Handle call slots for their nested exact-handle evaluations.
-    Arc::new(tokio::sync::Semaphore::new(super::MAX_CALLS / 2))
-}
-
-#[cfg(all(
-    test,
-    feature = "element-handle-scroll-into-view",
-    feature = "element-handle-select-text"
-))]
-mod element_action_slot_tests {
-    use super::new_element_action_slots;
-
-    #[test]
-    fn scroll_and_select_text_share_four_action_slots() {
-        // Arrange
-        let shared = new_element_action_slots();
-        let scroll = shared.clone();
-        let select_text = shared.clone();
-        let mut held = Vec::new();
-
-        // Act
-        for slots in [&scroll, &select_text, &scroll, &select_text] {
-            held.push(slots.clone().try_acquire_owned().unwrap());
-        }
-        let scroll_at_capacity = scroll.try_acquire_owned();
-        let select_text_at_capacity = select_text.try_acquire_owned();
-
-        // Assert
-        assert_eq!(held.len(), 4);
-        assert!(scroll_at_capacity.is_err());
-        assert!(select_text_at_capacity.is_err());
-        assert_eq!(shared.available_permits(), 0);
-        assert_eq!(super::super::MAX_CALLS - held.len(), 4);
-    }
-}
 impl Drop for Installation {
     fn drop(&mut self) {
         self.close();

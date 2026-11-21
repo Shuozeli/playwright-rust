@@ -44,16 +44,10 @@ impl NativeSession {
         let frame_id = boundary::bounded_string(frame_id, 20, "Frame ID")?;
         let request_id = boundary::bounded_string(request_id, 256, "response request ID")?;
         let host = self.host.clone();
-        boundary::spawn_published_sized(
-            env,
-            execution,
-            self.publications.clone(),
-            async move {
-                host.frame_response_body(&page_id, &frame_id, &request_id)
-                    .await
-                    .map(ResponseBodyOutput)
-            },
-            |body| body.0.len() as u64,
-        )
+        boundary::spawn_published(env, execution, self.publications.clone(), async move {
+            host.frame_response_body(&page_id, &frame_id, &request_id)
+                .await
+                .map(ResponseBodyOutput)
+        })
     }
 }

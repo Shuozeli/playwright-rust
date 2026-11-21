@@ -1,4 +1,4 @@
-//! Bounded Playwright-scoped custom selector-engine registration.
+//! Playwright-scoped custom selector-engine registration with bounded fields.
 
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
@@ -10,7 +10,6 @@ pub use playwright_rust_cap_locator::TestIdAttributes;
 use crate::HostError;
 use crate::locator_query::{PLAYWRIGHT_BUILTIN_ENGINES, SelectorPart, playwright_selector_part};
 
-pub const MAX_SELECTOR_ENGINES: usize = 64;
 pub const MAX_SELECTOR_ENGINE_NAME_BYTES: usize = 64;
 pub const MAX_SELECTOR_ENGINE_SOURCE_BYTES: usize = 1024 * 1024;
 pub const MAX_SELECTOR_REGISTRY_BYTES: usize = 8 * 1024 * 1024;
@@ -277,11 +276,9 @@ impl SelectorRegistry {
                 "\"{name}\" is a predefined selector engine"
             )));
         }
-        if state.engines.len() >= MAX_SELECTOR_ENGINES
-            || retained_bytes > MAX_SELECTOR_REGISTRY_BYTES.saturating_sub(state.retained_bytes)
-        {
+        if retained_bytes > MAX_SELECTOR_REGISTRY_BYTES.saturating_sub(state.retained_bytes) {
             return Err(HostError::ResourceExhausted(
-                "selector registry engine or byte capacity exceeded".into(),
+                "selector registry byte capacity exceeded".into(),
             ));
         }
 
@@ -490,6 +487,23 @@ mod tests {
             registry.metrics().unwrap(),
             SelectorRegistryMetrics::default()
         );
+    }
+
+    #[test]
+    fn engine_registry_grows_past_the_legacy_engine_count() {
+        // Arrange
+        let registry = SelectorRegistry::default();
+
+        // Act
+        for value in 1..=129 {
+            registry
+                .register(&format!("engine{value}"), "() => ({})", false)
+                .expect("selector-engine count should not be API-limited");
+        }
+
+        // Assert
+        assert_eq!(registry.metrics().unwrap().engines, 129);
+        assert!(registry.get("engine129").unwrap().is_some());
     }
 
     #[test]

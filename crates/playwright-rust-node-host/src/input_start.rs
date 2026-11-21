@@ -1,10 +1,11 @@
-//! Bounded synchronous submission order for the first poll of raw input calls.
+//! Synchronous submission order for the first poll of raw input calls.
 //! This is not a transaction lock: native replies and later continuations overlap.
 use crate::{HostError, HostSession};
 use playwright_rust_core::{
     ProductionResourceLedger, ResourceClass, ResourceLease, ResourceRequirements, ResourceScope,
 };
 use std::{
+    collections::VecDeque,
     future::{Future, poll_fn},
     pin::pin,
     sync::{Arc, Mutex},
@@ -12,7 +13,6 @@ use std::{
 };
 use tokio_util::task::task_tracker::TaskTrackerToken;
 
-const CAPACITY: usize = 32;
 const SCOPE: ResourceScope = ResourceScope::extension(120, 22);
 struct Slot {
     id: u64,
@@ -22,7 +22,7 @@ struct Slot {
 struct State {
     next: u64,
     closed: bool,
-    slots: [Option<Slot>; CAPACITY],
+    slots: VecDeque<Slot>,
 }
 struct Inner {
     state: Mutex<State>,
@@ -32,21 +32,20 @@ struct Inner {
 pub(crate) struct Order(Arc<Inner>);
 
 pub(crate) fn requirements() -> ResourceRequirements {
-    // Includes the concrete fixed array, mutex, lease and Arc control words.
-    // Waker implementations and the ordered future retain their caller budgets.
+    // Includes the fixed queue header, mutex, lease and Arc control words.
+    // Dynamic slots, Wakers and ordered futures retain their actual allocations.
     let bytes = (std::mem::size_of::<Inner>() + 2 * std::mem::size_of::<usize>()) as u64;
     ResourceRequirements::none()
         .with_class(ResourceClass::BackendStateBytes, bytes, bytes)
         .with_metadata(1, 1)
 }
 impl State {
-    fn head(&self) -> Option<usize> {
-        self.slots
-            .iter()
-            .enumerate()
-            .filter_map(|(i, slot)| slot.as_ref().map(|s| (i, s.id)))
-            .min_by_key(|(_, id)| *id)
-            .map(|(i, _)| i)
+    fn reserve_slot(&mut self) -> Result<(), HostError> {
+        self.slots.try_reserve(1).map_err(|error| {
+            HostError::ResourceExhausted(format!(
+                "raw input start queue allocation failed: {error}"
+            ))
+        })
     }
 }
 impl Order {
@@ -62,7 +61,7 @@ impl Order {
             state: Mutex::new(State {
                 next: 1,
                 closed: false,
-                slots: std::array::from_fn(|_| None),
+                slots: VecDeque::new(),
             }),
             _storage: storage,
         })))
@@ -72,39 +71,32 @@ impl Order {
         if state.closed {
             return Err(HostError::TargetClosed);
         }
-        let index = state
-            .slots
-            .iter()
-            .position(Option::is_none)
-            .ok_or_else(|| {
-                HostError::ResourceExhausted("raw input start capacity exceeded (32)".into())
-            })?;
+        state.reserve_slot()?;
         let id = state.next;
         state.next = id.checked_add(1).ok_or_else(|| {
             HostError::ResourceExhausted("raw input start identity exhausted".into())
         })?;
-        state.slots[index] = Some(Slot {
+        state.slots.push_back(Slot {
             id,
             running: false,
             waker: None,
         });
         Ok(InputStartTicket {
             order: self.0.clone(),
-            index,
             id,
             _lifetime: lifetime,
         })
     }
     pub(crate) fn close(&self) {
-        let wake = {
+        let slots = {
             let mut state = self.0.state.lock().unwrap_or_else(|e| e.into_inner());
             state.closed = true;
-            std::array::from_fn::<_, CAPACITY, _>(|i| {
-                state.slots[i].as_mut().and_then(|slot| slot.waker.take())
-            })
+            std::mem::take(&mut state.slots)
         };
-        for waker in wake.into_iter().flatten() {
-            waker.wake();
+        for slot in slots {
+            if let Some(waker) = slot.waker {
+                waker.wake();
+            }
         }
     }
 }
@@ -122,7 +114,6 @@ impl Drop for Order {
 /// continuation is not made atomic by this ticket, nor is HTML drag implemented.
 pub struct InputStartTicket {
     order: Arc<Inner>,
-    index: usize,
     id: u64,
     _lifetime: Option<TaskTrackerToken>,
 }
@@ -135,12 +126,14 @@ impl InputStartTicket {
         if state.closed {
             return Poll::Ready(Err(HostError::TargetClosed));
         }
-        let head = state.head();
-        let slot = state.slots[self.index]
-            .as_mut()
+        let is_head = state.slots.front().is_some_and(|slot| slot.id == self.id);
+        let slot = state
+            .slots
+            .iter_mut()
+            .find(|slot| slot.id == self.id)
             .expect("live start ticket owns its slot");
         assert_eq!(slot.id, self.id);
-        if head == Some(self.index) && !slot.running {
+        if is_head && !slot.running {
             slot.running = true;
             Poll::Ready(Ok(()))
         } else {
@@ -179,13 +172,18 @@ impl Drop for InputStartTicket {
     fn drop(&mut self) {
         let wake = {
             let mut state = self.order.state.lock().unwrap_or_else(|e| e.into_inner());
-            let slot = state.slots[self.index]
-                .take()
-                .expect("live start ticket owns its slot");
+            let Some(index) = state.slots.iter().position(|slot| slot.id == self.id) else {
+                debug_assert!(state.closed, "live start ticket owns its slot");
+                return;
+            };
+            let slot = state
+                .slots
+                .remove(index)
+                .expect("located start ticket owns its slot");
             assert_eq!(slot.id, self.id);
-            state
-                .head()
-                .and_then(|index| state.slots[index].as_mut())
+            (index == 0)
+                .then(|| state.slots.front_mut())
+                .flatten()
                 .filter(|slot| !slot.running)
                 .and_then(|slot| slot.waker.take())
         };

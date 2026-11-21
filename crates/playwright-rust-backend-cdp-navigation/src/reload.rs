@@ -93,7 +93,7 @@ impl CdpNavigationService {
             break (loader, url, state);
         };
         drop(old_loader);
-        wait_for_new_document_with_state(
+        let result = wait_for_new_document_with_state(
             &mut events,
             NewDocumentWait {
                 expected_session: expected_session.as_deref(),
@@ -106,7 +106,10 @@ impl CdpNavigationService {
             },
             state,
         )
-        .await
+        .await?;
+        #[cfg(feature = "history-navigation")]
+        self.remember_current_history_response(&result).await;
+        Ok(result)
     }
 }
 

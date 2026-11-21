@@ -2,7 +2,13 @@
 
 // API-shaped values only. Native Locators own the query graph, Frame identity,
 // storage admission and DOM resolution; selector strings are never composed here.
-module.exports = function locatorApi({ mapError, validateOptions, UnsupportedOperationError, handleKind }) {
+module.exports = function locatorApi({
+  mapError,
+  validateOptions,
+  UnsupportedOperationError,
+  handleKind,
+  runTracingAction = (_owner, _action, _detail, operation) => operation(),
+}) {
   const act = require('./locator-actions.cjs')({ mapError, validateOptions, handleKind });
   const setInputFiles = require('./file-input.cjs')({ mapError, validateOptions, UnsupportedOperationError });
   const screenshotOptions = require('./screenshot.cjs')({ validateOptions });
@@ -419,8 +425,10 @@ module.exports = function locatorApi({ mapError, validateOptions, UnsupportedOpe
     setChecked(checked, options = {}) { return this.#action('setChecked', options, checked); }
     selectOption(values, options = {}) { return this.#action('selectOption', options, values); }
     setInputFiles(files, options = {}) {
-      if (this.#native) return setInputFiles(this.#native, files, options);
-      return this.#resolved().then(locator => locator.setInputFiles(files, options));
+      return runTracingAction(this.page(), 'locator-set-input-files', undefined, () => {
+        if (this.#native) return setInputFiles(this.#native, files, options);
+        return this.#resolved().then(locator => setInputFiles(locator.#native, files, options));
+      });
     }
     hover(options = {}) { return this.#action('hover', options); }
     focus(options = {}) { return this.#action('focus', options); }
@@ -428,6 +436,10 @@ module.exports = function locatorApi({ mapError, validateOptions, UnsupportedOpe
     scrollIntoViewIfNeeded(options = {}) { return this.#action('scrollIntoViewIfNeeded', options); }
     async _expect(expression, options = {}) {
       if (!this.#native) return (await this.#resolved())._expect(expression, options);
+      return runTracingAction(this.page(), 'locator-expect', expression,
+        () => this.#expect(expression, options));
+    }
+    async #expect(expression, options) {
       validateOptions(options, ['expectedNumber', 'expectedText', 'expectedValue', 'expressionArg', 'isNot', 'useInnerText', 'timeout'], 'locator._expect');
       const timeout = options.timeout ?? 5_000;
       if (!Number.isInteger(timeout) || timeout < 0 || timeout > 0xffff_ffff)
@@ -510,6 +522,24 @@ module.exports = function locatorApi({ mapError, validateOptions, UnsupportedOpe
           const result = await this.#native.expectString(
             timeout, expression === 'to.have.class' ? 'class' : 'value',
             matcher.expected, matcher.flags, isNot,
+          );
+          return this.#withExpectationDiagnostic(result, expression, timeout, isNot);
+        }
+        if (expression === 'to.have.css') {
+          if (typeof options.expressionArg !== 'string')
+            throw new TypeError('locator._expect: expressionArg must be a string');
+          if (!Array.isArray(options.expectedText) || options.expectedText.length !== 1)
+            throw new TypeError('locator._expect: expectedText must contain exactly one value');
+          const expected = options.expectedText[0];
+          if (!expected || (typeof expected.string !== 'string' && typeof expected.regexSource !== 'string'))
+            throw new TypeError('locator._expect: expectedText value must contain string or regexSource');
+          if (expected.regexFlags !== undefined && typeof expected.regexFlags !== 'string')
+            throw new TypeError('locator._expect: regexFlags must be a string');
+          const result = await this.#native.expectCss(
+            timeout, options.expressionArg,
+            expected.regexSource ?? expected.string,
+            expected.regexSource === undefined ? undefined : expected.regexFlags ?? '',
+            isNot,
           );
           return this.#withExpectationDiagnostic(result, expression, timeout, isNot);
         }

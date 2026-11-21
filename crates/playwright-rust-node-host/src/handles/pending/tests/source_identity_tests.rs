@@ -341,17 +341,7 @@ async fn a_different_registered_ticket_does_not_keep_disposed_source_dispatchabl
     initializer.object_kind = ELEMENT_HANDLE_OBJECT_KIND.tag;
     let sibling = owners.retain(initializer, ticket, admission).unwrap();
     original.dispose().await.unwrap();
-    assert_eq!(
-        owners
-            .state
-            .lock()
-            .unwrap()
-            .tickets
-            .iter()
-            .flatten()
-            .count(),
-        1
-    );
+    assert_eq!(owners.state.lock().unwrap().tickets.len(), 1);
 
     // Act
     let result = owners.check_file_input_dispatch_source(&identity);

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable
 from types import SimpleNamespace
 from typing import Any, cast
 
@@ -77,6 +76,7 @@ def context(native: NativeBindings) -> tuple[Browser, BrowserContext, Page]:
     browser._response_task = None
     browser._download_task = None
     browser._worker_task = None
+    browser._service_worker_task = None
     browser._cdp_event_task = None
     browser._cdp_registration_tasks = set()
     browser._cdp_detach_tasks = set()
@@ -331,7 +331,7 @@ async def test_page_binding_caller_cancellation_keeps_callback_until_native_comm
 
 
 @pytest.mark.asyncio
-async def test_binding_registration_admission_is_shared_and_survives_caller_cancellation(
+async def test_binding_registration_registry_grows_and_survives_caller_cancellation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Arrange
@@ -365,10 +365,10 @@ async def test_binding_registration_admission_is_shared_and_survives_caller_canc
     with pytest.raises(asyncio.CancelledError):
         await first
 
-    # Act: detached transactions keep their slots even while waiting for the
+    # Act: detached transactions keep their ownership even while waiting for the
     # same Context lock; alternating Page/Context callers cannot bypass it.
     try:
-        for index in range(1, 64):
+        for index in range(1, 129):
             owner = page if index % 2 else value
             caller = asyncio.create_task(owner.expose_function(f"queued-{index}", lambda: None))
             await asyncio.sleep(0)
@@ -376,31 +376,10 @@ async def test_binding_registration_admission_is_shared_and_survives_caller_canc
             with pytest.raises(asyncio.CancelledError):
                 await caller
 
-        # Assert: admission precedes coroutine construction and applies across
-        # all Contexts owned by this Browser, before any native FFI admission.
-        assert len(browser._binding_registration_tasks) == 64
+        # Assert: all 129 transactions remain owned while only the lock holder
+        # has entered native code; the legacy count is not a public rejection.
+        assert len(browser._binding_registration_tasks) == 129
         assert native.entered == ["first"]
-        factory_called = False
-
-        async def rejected_operation() -> None:
-            raise AssertionError("rejected transaction must not run")
-
-        def rejected_factory() -> Awaitable[None]:
-            nonlocal factory_called
-            factory_called = True
-            return rejected_operation()
-
-        with pytest.raises(async_api.ResourceExhaustedError, match="registration capacity"):
-            await async_api._shield_binding_registration(browser, rejected_factory, "test")
-        assert not factory_called
-        for index in range(12):
-            denied_owner = (page, value, other)[index % 3]
-            with pytest.raises(async_api.ResourceExhaustedError, match="registration capacity"):
-                await denied_owner.expose_function(f"denied-{index}", lambda: None)
-        assert len(browser._binding_registration_tasks) == 64
-        assert native.entered == ["first"]
-        assert other._bindings == {}
-        assert not any(name.startswith("denied-") for name in value._bindings | page._bindings)
     finally:
         admitted = tuple(browser._binding_registration_tasks)
         native.release.set()
@@ -857,51 +836,42 @@ async def test_binding_acknowledgement_failure_cancels_its_callback_child() -> N
 
 
 @pytest.mark.asyncio
-async def test_binding_dispatch_cap_survives_native_page_retirement() -> None:
+async def test_binding_dispatch_registry_grows_across_native_page_retirement() -> None:
     # Arrange
-    class OverflowBindings(QueuedBindings):
-        def __init__(self) -> None:
-            super().__init__()
-            self.rejected = asyncio.Event()
-
-        async def deliver_page_binding_error(
-            self, call_id: str, name: str, message: str, stack: str | None
-        ) -> None:
-            await super().deliver_page_binding_error(call_id, name, message, stack)
-            if call_id == "65":
-                self.rejected.set()
-
-    native = OverflowBindings()
+    native = QueuedBindings()
     browser, value, _page = context(native)
     started = 0
     all_started = asyncio.Event()
+    replacement_started = asyncio.Event()
     blocker = asyncio.Event()
 
     async def pending(_source: object) -> None:
         nonlocal started
         started += 1
-        if started == 64:
+        if started == 129:
             all_started.set()
+        elif started == 130:
+            replacement_started.set()
         await blocker.wait()
 
     value._bindings["pending"] = (pending, False)
-    for call_id in range(1, 65):
+    for call_id in range(1, 130):
         native.calls.put_nowait((str(call_id), "7", "9", "11", "pending", "[]", False))
     browser._binding_task = asyncio.create_task(browser._watch_page_bindings())
     await asyncio.wait_for(all_started.wait(), timeout=1)
 
-    # Act: native retirement released all 64 pending entries, but their Python
+    # Act: native retirement released all 129 pending entries, but their Python
     # callbacks are still alive when a replacement Page invokes the binding.
     value._pages.clear()
     value._pages["10"] = Page(value, "10", "11", "about:blank")
-    native.calls.put_nowait(("65", "7", "10", "11", "pending", "[]", False))
+    native.calls.put_nowait(("130", "7", "10", "11", "pending", "[]", False))
     try:
-        await asyncio.wait_for(native.rejected.wait(), timeout=1)
+        await asyncio.wait_for(replacement_started.wait(), timeout=1)
 
         # Assert
-        assert started == 64
-        assert len(browser._binding_dispatch_tasks) == 64
-        assert native.errors == [("65", "pending binding dispatch capacity exceeded (64)")]
+        assert started == 130
+        assert len(browser._binding_dispatch_tasks) == 130
+        assert native.errors == []
     finally:
         browser._closed = True
         native.calls.put_nowait(None)

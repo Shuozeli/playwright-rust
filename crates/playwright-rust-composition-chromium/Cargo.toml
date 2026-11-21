@@ -21,6 +21,10 @@ history-navigation = [
     "playwright-rust-backend-cdp/history-navigation",
 ]
 request-frame = ["playwright-rust-backend-cdp/request-frame"]
+response-connection-details = [
+    "playwright-rust-backend-cdp/response-connection-details",
+    "playwright-rust-composition-chromium-network-events/response-connection-details",
+]
 response-security-details = [
     "playwright-rust-backend-cdp/response-security-details",
     "playwright-rust-composition-chromium-network-events/response-security-details",

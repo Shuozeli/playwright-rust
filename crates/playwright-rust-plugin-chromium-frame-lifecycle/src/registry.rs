@@ -14,6 +14,7 @@ pub struct FrameLifecycleRegistryProfile {
     shared_navigation_limit: Option<usize>,
     index_bytes: u64,
     requirements: ResourceRequirements,
+    allocator_backed: bool,
 }
 
 struct NavigationCapacity {
@@ -45,9 +46,33 @@ impl FrameLifecycleRegistryProfile {
             },
         )
     }
+    pub fn new_allocator_backed(namespace: u32, id_bytes: usize) -> Result<Self> {
+        if id_bytes == 0 || namespace > u32::MAX - 3 {
+            return Err("invalid allocator-backed lifecycle registry profile".into());
+        }
+        Ok(Self {
+            namespace,
+            pages: usize::MAX,
+            owners: usize::MAX,
+            frames: usize::MAX,
+            requests: usize::MAX,
+            id_bytes,
+            navigation_slots: 0,
+            shared_navigation_limit: None,
+            index_bytes: 0,
+            requirements: ResourceRequirements::none(),
+            allocator_backed: true,
+        })
+    }
     pub fn with_navigation_slots(self, slots: usize) -> Result<Self> {
         if slots == 0 {
             return Err("navigation registration capacity must be positive".into());
+        }
+        if self.allocator_backed {
+            return Ok(Self {
+                navigation_slots: slots,
+                ..self
+            });
         }
         Self::new_with_slots(
             self.namespace,
@@ -65,6 +90,15 @@ impl FrameLifecycleRegistryProfile {
     /// Select a connection-wide registration ceiling in addition to the
     /// per-Page index. The ordinary profile has no shared ceiling.
     pub fn with_shared_navigation_limit(self, limit: usize) -> Result<Self> {
+        if self.allocator_backed {
+            if limit == 0 || self.navigation_slots == 0 {
+                return Err("invalid shared navigation registration capacity".into());
+            }
+            return Ok(Self {
+                shared_navigation_limit: Some(limit),
+                ..self
+            });
+        }
         Self::new_with_slots(
             self.namespace,
             self.pages,
@@ -133,10 +167,11 @@ impl FrameLifecycleRegistryProfile {
             shared_navigation_limit,
             index_bytes,
             requirements: ResourceRequirements::none(),
+            allocator_backed: false,
         };
         // Validate the largest slot's scope arithmetic before declaring storage.
-        profile.page_profile(owners - 1)?;
-        let one = profile.page_profile(0)?.requirements();
+        profile.page_profile(owners - 1, ObjectId::new(1))?;
+        let one = profile.page_profile(0, ObjectId::new(1))?.requirements();
         let count = u64::try_from(owners)?;
         let mut all = ResourceRequirements::none().with_metadata(
             one.scopes
@@ -163,7 +198,28 @@ impl FrameLifecycleRegistryProfile {
         profile.requirements = all.combine_concurrent(profile.index_requirements());
         Ok(profile)
     }
-    fn page_profile(self, slot: usize) -> Result<PageLifecycleObservationProfile> {
+    fn page_profile(self, slot: usize, page: ObjectId) -> Result<PageLifecycleObservationProfile> {
+        if self.allocator_backed {
+            let scope = |offset: u32| {
+                self.namespace
+                    .checked_add(offset)
+                    .map(|namespace| ResourceScope::extension(namespace, page.get()))
+                    .ok_or("lifecycle scope overflow")
+            };
+            let profile = PageLifecycleObservationProfile::new_allocator_backed(
+                CdpFrameLifecycleProfile::new_allocator_backed(
+                    FrameLifecycleProfile::new_allocator_backed(scope(0)?),
+                    scope(1)?,
+                    self.id_bytes,
+                )?,
+                scope(2)?,
+            );
+            return if self.navigation_slots == 0 {
+                Ok(profile)
+            } else {
+                profile.with_allocator_backed_navigation_slots(scope(3)?, self.navigation_slots)
+            };
+        }
         let base = u64::try_from(slot)?
             .checked_mul(if self.navigation_slots == 0 { 3 } else { 4 })
             .and_then(|n| n.checked_add(1))
@@ -188,6 +244,9 @@ impl FrameLifecycleRegistryProfile {
         }
     }
     fn index_requirements(self) -> ResourceRequirements {
+        if self.allocator_backed {
+            return ResourceRequirements::none();
+        }
         ResourceRequirements::none()
             .with_class(
                 ResourceClass::BackendStateBytes,
@@ -208,7 +267,7 @@ struct Entry {
 struct Terminal {
     sealed: AtomicBool,
     closed: tokio::sync::Notify,
-    _lease: ResourceLease,
+    _lease: Option<ResourceLease>,
 }
 impl Terminal {
     fn seal(&self) {
@@ -337,18 +396,24 @@ impl FrameLifecycleRegistry {
         // Check the complete selected plan, then reserve the index before its
         // fixed allocation. Page bodies are admitted by prepare_page, not lazily
         // by a readiness query or after native domains have been enabled.
-        resources.claim(profile.requirements())?;
-        let lease = resources.claim(profile.index_requirements())?.reserve(
-            ResourceScope::extension(profile.namespace, 0),
-            ResourceClass::BackendStateBytes,
-            profile.index_bytes,
-        )?;
+        let lease = if profile.allocator_backed {
+            None
+        } else {
+            resources.claim(profile.requirements())?;
+            Some(resources.claim(profile.index_requirements())?.reserve(
+                ResourceScope::extension(profile.namespace, 0),
+                ResourceClass::BackendStateBytes,
+                profile.index_bytes,
+            )?)
+        };
         let mut entries = Vec::new();
-        entries.try_reserve_exact(profile.owners)?;
-        if entries.capacity() != profile.owners {
-            return Err("lifecycle index capacity mismatch".into());
+        if !profile.allocator_backed {
+            entries.try_reserve_exact(profile.owners)?;
+            if entries.capacity() != profile.owners {
+                return Err("lifecycle index capacity mismatch".into());
+            }
+            entries.resize_with(profile.owners, || None);
         }
-        entries.resize_with(profile.owners, || None);
         Ok(Self {
             profile,
             epoch,
@@ -366,7 +431,7 @@ impl FrameLifecycleRegistry {
             }),
         })
     }
-    fn with_entries<T>(&self, run: impl FnOnce(&mut [Option<Entry>]) -> Result<T>) -> Result<T> {
+    fn with_entries<T>(&self, run: impl FnOnce(&mut Vec<Option<Entry>>) -> Result<T>) -> Result<T> {
         if self.terminal.sealed.load(Ordering::Acquire) {
             return Err("lifecycle registry is sealed".into());
         }
@@ -443,15 +508,21 @@ impl ChromiumFrameEventObserver for FrameLifecycleRegistry {
                 .filter(|entry| !entry.owner.is_sealed())
                 .count()
                 == self.profile.pages
+                && !self.profile.allocator_backed
             {
                 return Err("active lifecycle Page capacity exhausted".into());
             }
-            let slot = entries
-                .iter()
-                .position(Option::is_none)
-                .ok_or("retained lifecycle owner capacity exhausted")?;
+            let slot = match entries.iter().position(Option::is_none) {
+                Some(slot) => slot,
+                None if self.profile.allocator_backed => {
+                    entries.try_reserve(1)?;
+                    entries.push(None);
+                    entries.len() - 1
+                }
+                None => return Err("retained lifecycle owner capacity exhausted".into()),
+            };
             let owner = Arc::new(PageLifecycleObservation::new_with_shared_navigation_pool(
-                self.profile.page_profile(slot)?,
+                self.profile.page_profile(slot, page)?,
                 page,
                 self.epoch,
                 &self.resources,

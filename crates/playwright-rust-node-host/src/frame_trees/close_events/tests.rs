@@ -46,7 +46,7 @@ impl Fixture {
                 entries: 128,
                 url_bytes: 64,
                 total_bytes: 8192,
-                publications: if external { 256 } else { 100 },
+                publications: 512,
             })
             .unwrap(),
         );
@@ -118,6 +118,19 @@ impl Fixture {
         let revision = planned.revision().clone();
         let mut state = owner.state.lock().unwrap();
         let collection = state.collections.as_mut().unwrap();
+        let members = revision.contexts().len() + revision.pages().len();
+        collection
+            .terminal
+            .as_mut()
+            .unwrap()
+            .replenish(members, &book, &owner.factory)
+            .unwrap();
+        if let Some(external) = collection.external.as_mut() {
+            external.replenish(members, &book, &owner.factory).unwrap();
+        }
+        if let Some(ready) = collection.ready.as_mut() {
+            ready.replenish(members, &book, &owner.factory).unwrap();
+        }
         collection.native = Some(revision.clone());
         collection.planned = Some(planned);
         drop(state);

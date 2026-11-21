@@ -11,7 +11,7 @@ use playwright_rust_composition_chromium_mouse::{
 use playwright_rust_core::{
     CallMetadata, CancellationReason, Command, CommandCancellation, CommandSpec, ObjectId,
     OperationContext, OperationError, ProductionResourceLedger, ResourceClass, ResourceLease,
-    ResourceLedger, ResourceRequirements, ResourceScope,
+    ResourceLimits, ResourceRequirements, ResourceScope,
 };
 use playwright_rust_runtime::TargetedService;
 use std::{
@@ -24,7 +24,6 @@ use std::{
 };
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
-const RETAINED: usize = 16;
 pub(crate) const EXECUTING: usize = 8;
 pub(crate) const MAX_CLICK_COMMANDS: usize =
     playwright_rust_input_model::INPUT_MOUSE_MAX_CLICKS as usize * 2 + 1;
@@ -32,9 +31,8 @@ pub(crate) const MAX_CLICK_COMMANDS: usize =
 pub(crate) const MAX_PENDING_COMMANDS: usize = EXECUTING * MAX_CLICK_COMMANDS;
 const NATIVE_BYTES: usize = 32 * 1024;
 const PROVIDER_FRAME_BYTES: usize = 4096;
-// At most 65 native calls in a click. Pointer JSON and bounded native errors
-// have a separate allowance from each measured async provider frame.
-const PROVIDER_BYTES: u64 = MAX_CLICK_COMMANDS as u64 * (PROVIDER_FRAME_BYTES as u64 + 8192);
+// Pointer JSON and bounded native errors have a separate allowance from each
+// measured async provider frame.
 const CALL_BYTES: u64 = 16 * 1024;
 const STATE_BYTES: u64 = 16 * 1024;
 const STATE_SCOPE: ResourceScope = ResourceScope::extension(120, 20);
@@ -51,19 +49,21 @@ fn backend_profile() -> Result<CdpMouseProductionProfile, HostError> {
     .map_err(HostError::backend)
 }
 fn storage_requirements() -> ResourceRequirements {
-    let bytes = STATE_BYTES + RETAINED as u64 * (CALL_BYTES + PROVIDER_BYTES);
     ResourceRequirements::none()
-        .with_class(ResourceClass::BackendStateBytes, bytes, bytes)
-        .with_metadata(1, RETAINED + 1)
+        .with_class(ResourceClass::BackendStateBytes, STATE_BYTES, STATE_BYTES)
+        .with_metadata(1, 1)
 }
 pub(crate) fn requirements() -> Result<ResourceRequirements, HostError> {
-    let mut required = storage_requirements().combine_concurrent(backend_profile()?.requirements());
-    for _ in 0..RETAINED {
-        required = required.combine_concurrent(
-            ChromiumMousePage::route_requirements(capacity()).map_err(HostError::backend)?,
-        );
+    Ok(storage_requirements().combine_concurrent(backend_profile()?.requirements()))
+}
+fn route_resources() -> Result<ProductionResourceLedger, HostError> {
+    let required = ChromiumMousePage::route_requirements(capacity()).map_err(HostError::backend)?;
+    let mut limits = ResourceLimits::deny_all(required.scopes, required.leases);
+    for class in ResourceClass::ALL {
+        let bound = required.class(class);
+        limits = limits.with_class(class, bound.global, bound.per_scope);
     }
-    Ok(required)
+    ProductionResourceLedger::new(limits, required).map_err(HostError::backend)
 }
 struct HostDelay;
 impl CdpMouseDelay for HostDelay {
@@ -98,12 +98,11 @@ struct Shared {
     _storage: ResourceLease,
 }
 struct CallLease {
-    storage: Option<ResourceLease>,
+    _route_resources: ProductionResourceLedger,
     shared: Arc<Shared>,
 }
 impl Drop for CallLease {
     fn drop(&mut self) {
-        drop(self.storage.take());
         let previous = self.shared.active.fetch_sub(1, Ordering::AcqRel);
         debug_assert!(previous > 0);
     }
@@ -158,8 +157,6 @@ pub(crate) struct Installation {
     #[cfg(feature = "drag-runtime")]
     drag: Option<Arc<crate::drag::host::Installation>>,
     factory: CdpMouseServiceFactory,
-    resources: ProductionResourceLedger,
-    ledger: ResourceLedger,
     shared: Arc<Shared>,
 }
 impl Drop for Installation {
@@ -181,10 +178,9 @@ impl Installation {
         resources
             .claim(requirements()?)
             .map_err(HostError::backend)?;
-        let ledger = resources
+        let storage = resources
             .claim(storage_requirements())
-            .map_err(HostError::backend)?;
-        let storage = ledger
+            .map_err(HostError::backend)?
             .reserve(STATE_SCOPE, ResourceClass::BackendStateBytes, STATE_BYTES)
             .map_err(HostError::backend)?;
         Ok(Self {
@@ -196,8 +192,6 @@ impl Installation {
                 Arc::new(HostDelay),
             )
             .map_err(HostError::backend)?,
-            resources: resources.clone(),
-            ledger,
             shared: Arc::new(Shared {
                 status: Mutex::new(Status::default()),
                 active: AtomicUsize::new(0),
@@ -225,22 +219,23 @@ impl Installation {
         if status.closed || self.shared.stop.is_cancelled() {
             return Err(HostError::TargetClosed);
         }
-        if self.shared.active.load(Ordering::Acquire) >= RETAINED {
-            return Err(HostError::ResourceExhausted(
-                "Mouse retained invocation capacity exceeded".into(),
-            ));
-        }
-        let storage = self
-            .ledger
-            .reserve(
-                STATE_SCOPE,
-                ResourceClass::BackendStateBytes,
-                CALL_BYTES + PROVIDER_BYTES,
-            )
-            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
-        self.shared.active.fetch_add(1, Ordering::AcqRel);
+        self.shared
+            .active
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |active| {
+                active.checked_add(1)
+            })
+            .map_err(|_| {
+                HostError::ResourceExhausted("Mouse retained invocation count overflow".into())
+            })?;
+        let route_resources = match route_resources() {
+            Ok(resources) => resources,
+            Err(error) => {
+                self.shared.active.fetch_sub(1, Ordering::AcqRel);
+                return Err(error);
+            }
+        };
         let lease = Arc::new(CallLease {
-            storage: Some(storage),
+            _route_resources: route_resources,
             shared: self.shared.clone(),
         });
         // Reserve before the retained native session/ID snapshot is allocated.
@@ -276,7 +271,7 @@ impl Installation {
                 input,
                 &self.factory,
                 capacity(),
-                &self.resources,
+                &lease._route_resources,
                 drag.dispatcher.clone(),
             )
         } else {
@@ -286,7 +281,7 @@ impl Installation {
                 input,
                 &self.factory,
                 capacity(),
-                &self.resources,
+                &lease._route_resources,
             )
         }
         .map_err(HostError::backend)?;
@@ -297,7 +292,7 @@ impl Installation {
             input,
             &self.factory,
             capacity(),
-            &self.resources,
+            &lease._route_resources,
         )
         .map_err(HostError::backend)?;
         let finished = CancellationToken::new();

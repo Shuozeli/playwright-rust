@@ -2,20 +2,24 @@
 //! shutdown. They share the existing queue and its fixed publication watermarks.
 use super::{
     FrameChange, FrameChangeValue, FrameMetadata, FramePublications, FrameTree, HostError,
-    ResourceClass, ResourceLease, SCOPE, Storage,
+    ResourceLease, Storage,
 };
 use std::sync::Arc;
 use std::sync::Weak;
 
 pub(crate) struct FrameClosePermit {
     book: Weak<FrameMetadata>,
-    pub(super) event: ResourceLease,
+    pub(super) event: Option<ResourceLease>,
 }
 
 impl FrameMetadata {
     pub(crate) fn publication_storage_bytes(&self) -> Result<usize, HostError> {
-        self.limits
-            .publications
+        let publications = if self.allocator_backed {
+            0
+        } else {
+            self.limits.publications
+        };
+        publications
             .checked_mul(std::mem::size_of::<FrameChange>())
             .and_then(|bytes| {
                 bytes.checked_add(
@@ -41,10 +45,12 @@ impl FrameMetadata {
                 "Page closure requires a fresh bounded publication queue".into(),
             ));
         }
-        state
-            .pending
-            .try_reserve_exact(self.limits.publications)
-            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
+        if !self.allocator_backed {
+            state
+                .pending
+                .try_reserve_exact(self.limits.publications)
+                .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
+        }
         state.queue_storage = Some(storage);
         Ok(())
     }
@@ -61,11 +67,7 @@ impl FramePublications {
                 "Page close publication is not selected".into(),
             ));
         }
-        let event = self
-            .0
-            .resources
-            .reserve(SCOPE, ResourceClass::EventItem, 1)
-            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
+        let event = self.0.reserve_event()?;
         Ok(FrameClosePermit {
             book: Arc::downgrade(&self.0),
             event,

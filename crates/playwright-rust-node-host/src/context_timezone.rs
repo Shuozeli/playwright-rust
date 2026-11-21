@@ -1,9 +1,10 @@
 //! Optional Context-scoped Chromium timezone policy.
 //!
-//! Rust retains one bounded timezone identifier per selected Context and
+//! Rust retains one timezone identifier per selected Context in allocator-backed storage and
 //! applies it through Chromium's session-initialization fence before a Page or
 //! out-of-process Frame is published. Chromium remains the authority for IANA
-//! timezone validity; the language bindings only forward bounded strings.
+//! timezone validity; the language bindings forward strings without adding a
+//! private grammar or size policy.
 
 use std::error::Error;
 use std::sync::{Arc, Mutex};
@@ -11,8 +12,8 @@ use std::sync::{Arc, Mutex};
 use playwright_rust_backend_cdp_topology::CdpContextOwnership;
 use playwright_rust_cdp::{CdpConnection, CdpSession, connection::CdpError};
 use playwright_rust_core::{
-    ObjectId, ProductionResourceLedger, ResourceClass, ResourceLease, ResourceRequest,
-    ResourceRequirements, ResourceScope,
+    ObjectId, ProductionResourceLedger, ResourceClass, ResourceLease, ResourceRequirements,
+    ResourceScope,
 };
 use playwright_rust_plugin_chromium_session_initialization::{
     ChromiumSessionInitializationFuture, ChromiumSessionInitializationTarget,
@@ -21,9 +22,6 @@ use playwright_rust_plugin_chromium_session_initialization::{
 
 use crate::HostError;
 
-pub(crate) const MAX_CONTEXTS: usize = 16;
-pub(crate) const MAX_TIMEZONE_BYTES: usize = 256;
-const MAX_RETAINED_BYTES: u64 = (MAX_CONTEXTS * MAX_TIMEZONE_BYTES) as u64;
 const SCOPE: ResourceScope = ResourceScope::extension(192, 0);
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -31,21 +29,6 @@ pub struct ContextTimezone(Box<str>);
 
 impl ContextTimezone {
     pub fn new(value: String) -> Result<Self, HostError> {
-        if value.is_empty() {
-            return Err(HostError::InvalidArgument(
-                "BrowserContext timezone_id must not be empty".into(),
-            ));
-        }
-        if value.len() > MAX_TIMEZONE_BYTES {
-            return Err(HostError::ResourceExhausted(format!(
-                "Context timezone identifier exceeds {MAX_TIMEZONE_BYTES} UTF-8 bytes"
-            )));
-        }
-        if value.chars().any(char::is_control) {
-            return Err(HostError::InvalidArgument(
-                "BrowserContext timezone_id must not contain control characters".into(),
-            ));
-        }
         Ok(Self(value.into_boxed_str()))
     }
 
@@ -56,7 +39,6 @@ impl ContextTimezone {
 
 pub(crate) struct StoredTimezone {
     timezone: ContextTimezone,
-    _lease: ResourceLease,
 }
 
 impl StoredTimezone {
@@ -77,26 +59,17 @@ struct State {
 }
 
 pub(crate) const fn requirements() -> ResourceRequirements {
-    let storage_bytes = (std::mem::size_of::<Installation>()
-        + std::mem::size_of::<State>()
-        + MAX_CONTEXTS * std::mem::size_of::<ContextEntry>()) as u64;
+    let storage_bytes = (std::mem::size_of::<Installation>() + std::mem::size_of::<State>()) as u64;
     ResourceRequirements::none()
-        .with_class(ResourceClass::EventItem, MAX_CONTEXTS as u64, 1)
-        .with_class(
-            ResourceClass::EventBytes,
-            MAX_RETAINED_BYTES,
-            MAX_TIMEZONE_BYTES as u64,
-        )
         .with_class(
             ResourceClass::BackendStateBytes,
             storage_bytes,
             storage_bytes,
         )
-        .with_metadata(MAX_CONTEXTS + 1, MAX_CONTEXTS * 3 + 1)
+        .with_metadata(1, 1)
 }
 
 pub(crate) struct Installation {
-    resources: playwright_rust_core::ResourceLedger,
     state: Mutex<State>,
     _storage: ResourceLease,
 }
@@ -115,18 +88,11 @@ impl Installation {
                 plan.class(ResourceClass::BackendStateBytes).global,
             )
             .map_err(HostError::backend)?;
-        let mut entries = Vec::new();
-        entries
-            .try_reserve_exact(MAX_CONTEXTS)
-            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
-        let default_timezone = default_timezone
-            .map(|timezone| retained_timezone(&ledger, SCOPE, timezone))
-            .transpose()?;
+        let default_timezone = default_timezone.map(retained_timezone);
         Ok(Arc::new(Self {
-            resources: ledger,
             state: Mutex::new(State {
                 default_timezone,
-                entries,
+                entries: Vec::new(),
                 closed: false,
             }),
             _storage: storage,
@@ -147,17 +113,10 @@ impl Installation {
                 "timezone policy is already installed for this Context".into(),
             ));
         }
-        let retained = state
-            .entries
-            .len()
-            .saturating_add(usize::from(state.default_timezone.is_some()));
-        if retained >= MAX_CONTEXTS {
-            return Err(HostError::ResourceExhausted(format!(
-                "timezone policy exceeds {MAX_CONTEXTS} live Contexts"
-            )));
-        }
-        let timezone =
-            retained_timezone(&self.resources, ResourceScope::Object(context), timezone)?;
+        state.entries.try_reserve(1).map_err(|error| {
+            HostError::ResourceExhausted(format!("timezone policy allocation failed: {error}"))
+        })?;
+        let timezone = retained_timezone(timezone);
         state.entries.push(ContextEntry { context, timezone });
         Ok(())
     }
@@ -207,26 +166,8 @@ impl Drop for Installation {
     }
 }
 
-fn retained_timezone(
-    resources: &playwright_rust_core::ResourceLedger,
-    scope: ResourceScope,
-    timezone: ContextTimezone,
-) -> Result<Arc<StoredTimezone>, HostError> {
-    let bytes = u64::try_from(timezone.as_str().len())
-        .map_err(|_| HostError::ResourceExhausted("timezone size overflow".into()))?;
-    let lease = resources
-        .reserve_many(
-            scope,
-            &[
-                ResourceRequest::new(ResourceClass::EventItem, 1),
-                ResourceRequest::new(ResourceClass::EventBytes, bytes),
-            ],
-        )
-        .map_err(HostError::backend)?;
-    Ok(Arc::new(StoredTimezone {
-        timezone,
-        _lease: lease,
-    }))
+fn retained_timezone(timezone: ContextTimezone) -> Arc<StoredTimezone> {
+    Arc::new(StoredTimezone { timezone })
 }
 
 pub(crate) struct Initializer<Downstream> {
@@ -258,6 +199,9 @@ impl<Downstream> Initializer<Downstream> {
         let Some(timezone) = self.installation.timezone(context, ownership)? else {
             return Ok(());
         };
+        if timezone.as_str().is_empty() {
+            return Ok(());
+        }
         let session = CdpSession::new(
             Arc::clone(&self.connection),
             session_id.to_owned(),
@@ -400,11 +344,11 @@ mod tests {
     }
 
     #[test]
-    fn default_timezone_consumes_one_fixed_context_slot() {
+    fn default_timezone_does_not_reduce_dynamic_context_capacity() {
         // Arrange
         let timezone = ContextTimezone::new("UTC".to_owned()).unwrap();
         let installation = Installation::new_with_default(&resources(), Some(timezone)).unwrap();
-        for value in 1..MAX_CONTEXTS {
+        for value in 1..=129 {
             installation
                 .install(
                     ObjectId::new(value as u64),
@@ -414,28 +358,29 @@ mod tests {
         }
 
         // Act
-        let error = installation
-            .install(
-                ObjectId::new(MAX_CONTEXTS as u64),
-                ContextTimezone::new("UTC".to_owned()).unwrap(),
-            )
-            .unwrap_err();
+        let retained = installation
+            .timezone(ObjectId::new(129), CdpContextOwnership::Owned)
+            .unwrap();
 
         // Assert
-        assert!(matches!(error, HostError::ResourceExhausted(_)));
+        assert_eq!(retained.unwrap().as_str(), "UTC");
     }
 
     #[test]
-    fn timezone_identifier_and_protocol_payload_are_bounded_and_exact() {
+    fn timezone_identifier_domain_and_protocol_payload_match_playwright() {
         // Arrange
-        let too_long = "a".repeat(MAX_TIMEZONE_BYTES + 1);
+        let large_input = "a".repeat(4096);
 
         // Act
-        let error = ContextTimezone::new(too_long).unwrap_err();
+        let empty = ContextTimezone::new(String::new());
+        let control = ContextTimezone::new("UTC\n".to_owned());
+        let large = ContextTimezone::new(large_input.clone());
         let payload = timezone_override_params("America/Jamaica");
 
         // Assert
-        assert!(matches!(error, HostError::ResourceExhausted(_)));
+        assert_eq!(empty.unwrap().as_str(), "");
+        assert_eq!(control.unwrap().as_str(), "UTC\n");
+        assert_eq!(large.unwrap().as_str(), large_input);
         assert_eq!(
             payload,
             serde_json::json!({ "timezoneId": "America/Jamaica" })

@@ -87,8 +87,8 @@ pub struct RetainedFileInputRegistration {
 
 impl RetainedUploads {
     fn profile() -> Result<ResolutionProfile, HostError> {
-        ResolutionProfile::new(ResourceScope::extension(169, 1), 2 * super::MAX_CALLS)
-            .and_then(ResolutionProfile::with_retained_reference)
+        ResolutionProfile::new_allocator_backed(ResourceScope::extension(169, 1))
+            .with_retained_reference()
             .map_err(HostError::backend)
     }
 
@@ -110,7 +110,7 @@ impl RetainedUploads {
             )
             .map_err(HostError::backend)?,
         );
-        let cleanup = TokioCleanupExecutor::new(super::MAX_CALLS);
+        let cleanup = TokioCleanupExecutor::new_allocator_backed();
         Ok(Self {
             attempts: ContinuableResolutionService::new(raw.clone(), cleanup.clone()),
             raw,

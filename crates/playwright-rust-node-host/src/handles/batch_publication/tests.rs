@@ -371,7 +371,10 @@ async fn unused_upfront_sibling_admission_is_trimmed_before_publication() {
     fixture.queue.finish_ready().unwrap();
     let named = result.await.unwrap();
     // Assert
-    assert_eq!(before.active_leases - queued.active_leases, 2);
+    // Allocator-backed sibling routes no longer consume one fixed resource
+    // lease per possible handle. Cleanup reservations still prove that the
+    // unused sibling admission was trimmed before publication.
+    assert_eq!(before.active_leases, queued.active_leases);
     assert_eq!(queued_cleanup.reserved, 4);
     assert_eq!(fixture.cleanup.metrics().reserved, 3);
     assert_eq!(fixture.routes.metrics().unwrap().reserved, 0);

@@ -1,4 +1,4 @@
-<!-- agent-updated: 2026-11-14T05:28:56Z -->
+<!-- agent-updated: 2026-11-20T01:14:01Z -->
 
 # Node retained handles: integration contract and verification
 
@@ -31,10 +31,11 @@ and ignores the injected helper's returned error string. A late non-file target
 is consequently a successful terminal no-op, matching Playwright's ignored
 return rather than inventing a protocol failure.
 
-Ownership remains explicit through settlement. The backend admits one
-ActiveCommand and 64 KiB of control/scratch storage. The composition admits one
-LiveObject and 16 KiB owner plus 512 bytes fixed state and a reserved cleanup
-continuation. The existing 96 MiB graph owner, validated target chain, Node
+Ownership remains explicit through settlement. In the compatibility profile,
+backend command and composition-operation counts are allocator-backed instead
+of capped at one aggregate operation. Each operation still owns its 64 KiB
+control/scratch envelope, checked 16 KiB composition owner, fixed service state,
+and reserved cleanup continuation. The existing 96 MiB graph owner, validated target chain, Node
 deadline and 1 MiB FFI ticket stay live until mutation and acknowledged group
 release settle; direct V8 roots remain zero. Dropping an unpolled future issues
 no command. Dropping a started waiter transfers the future to cleanup, and a
@@ -294,14 +295,11 @@ backend error; the final Playwright language-error mapping is intentionally not
 claimed yet.
 
 There is still one 1 MiB FFI permit, 32 preparation slots and ten Node roots.
-The original eight-call marker admission remains occupied inside the validated
-owner. The selected preflight adds two independent capacity-eight scopes:
-
-- backend admission: 16 RemoteHandle units and 156,368 BackendStateBytes total
-  (two handles plus 19,546 bytes per active operation);
-- composition admission: eight LiveObjects, 16 KiB per owner plus 512 bytes of
-  fixed service state (131,584 BackendStateBytes total), with eight separate
-  cleanup reservations.
+Marker and preflight owners remain occupied inside the validated owner, but the
+compatibility profiles no longer impose aggregate counts. Backend admissions,
+composition owners and cleanup reservations are allocator-backed. Each
+composition owner still has a checked 16 KiB envelope and 512 bytes of fixed
+service state remains ledger-admitted.
 
 The fixed service state contributes one selected installation lease. Thus the
 shared host teardown assertion remains exactly six leases for the old marking
@@ -607,8 +605,8 @@ single-waiter authority. Main-world replacement does not invalidate an unchanged
 utility world; an observed utility retirement remains sticky.
 
 The host cache keys Page, Frame, client Arc identity and unique utility-world
-ID. It admits 64 current/creating entries, eight retiring generations and eight
-lookup/call leases independently. Concurrent same-world lookups share creation
+ID. Current/creating entries, retiring generations and lookup/call waiters are
+allocator-backed. Concurrent same-world lookups share creation
 and reuse the persistent marker after calls finish. Generation checks prevent
 old completion from clearing a replacement. Failed or abandoned native cleanup
 closes further admission rather than reporting successful release.
@@ -620,32 +618,27 @@ the source Handle, paired snapshot, tracked-call admission and marker lease
 through acknowledged target cleanup. Caller cancellation cannot return these
 allowances while native work still owns them.
 
-At every serialized host topology boundary, bounded pruning examines exact
+At every serialized host topology boundary, pruning examines exact
 route currentness, including removed Frames and closed Pages. A retained wakeup
 permit makes cleanup completion observable even before the next driver select.
 Pruning, factory callbacks, route callbacks, native-owner drops and wakeups run
 outside the cache lock. Currentness is checked again before creation publication,
-lookup delivery and marking. If retirement headroom is exhausted, stale slots
-remain charged and unusable until actual cleanup; route disappearance alone
-does not return capacity. Sealing happens before host work drains; persistent
+lookup delivery and marking. Stale entries remain owned until actual cleanup;
+route disappearance alone does not prove reclamation. Sealing happens before host work drains; persistent
 native cleanup follows owned inspector-session retirement.
 
 ### Resource and failure contract
 
-| Selected component | Scope | BackendStateBytes | Other capacity |
+| Selected component | Scope | Fixed ledger state | Dynamic compatibility ownership |
 | --- | --- | ---: | --- |
-| Fixed cache, 72 world/driver allowances and eight lookup/call allowances | 183/1 | 1,343,488 | 81 maximum leases |
-| Native marker backend | 183/2 | 1,625,392 | 160 RemoteHandle units |
-| Persistent composition state owners | 183/3 | 1,180,160 | 72 LiveObject units |
-| Temporary composition call owners | 183/4 | 131,584 | 8 LiveObject units |
+| Marker cache administration | 183/1 | 128 KiB | entries, strings, flights, waiters and detached close batches |
+| Native marker backend | 183/2 | 512 bytes | state and call admissions |
+| Persistent composition state owners | 183/3 | 512 bytes | checked 16 KiB owners |
+| Temporary composition call owners | 183/4 | 512 bytes | checked 16 KiB owners |
 
-These four components total 4,280,624 declared backend-state bytes across four
-scopes and 244 maximum leases. They are additional to 72 shared snapshot slots
-and expanded receipt-registry metadata. The selected snapshot capacity becomes
-153, or 1177 with drag-runtime. Creation has 72 injected untimed continuation
-reservations; marker state/call cleanup has 80, independent of the existing
-eight adoption continuations. Fixed table/control storage has compile-time size
-checks, while generic cache-future storage has checked static-size assertions.
+Creation and marker cleanup executors are allocator-backed and untimed. Fixed
+control storage has compile-time size checks, while generic cache-future storage
+has checked static-size assertions.
 Retained host diagnostics are copied into fresh,
 total-at-most-1024-byte string backing; truncating an oversized String in place
 would not satisfy this bound. Native creation errors keep their typed structure.
@@ -917,16 +910,11 @@ owned inspector-session retirement, and only then finish persistent cleanup.
 Actual cleanup completion, not marker Drop or route disappearance, retires a
 cache slot. Failure/fallback teardown must follow the same ownership discipline.
 
-The current host limits Frames to 64 and Handle calls to eight. A candidate
-cache policy is 64 current/creating worlds plus eight separately admitted
-retiring generations, with eight call slots. The retiring bound is a proposed
-new backpressure policy, not a consequence of the existing call count: the
-ninth blocked retirement must wait or refuse before creating a successor.
-If selected, 72 state slots plus eight calls require 160 backend native units,
-72 extra snapshot slots and 80 separate marker cleanup reservations, in
-addition to existing adoption capacity. Derive and check metadata, native
-receipt and future storage before accepting those numbers into the host;
-none of these proposed capacities is installed by NODE-182.
+Historical NODE-182 planning proposed 64 current worlds, eight retiring
+generations and eight calls. That proposal was installed by NODE-183 and later
+superseded on 2026-11-20: the compatibility cache, marker owners, backend
+admissions and cleanup executors are allocator-backed. The paragraph is kept
+only to record the earlier design decision, not as the current policy.
 
 ## NODE-181: Original native wrapper binding
 

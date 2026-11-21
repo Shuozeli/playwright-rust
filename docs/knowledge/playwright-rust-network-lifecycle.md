@@ -1,4 +1,4 @@
-<!-- agent-updated: 2026-11-14T05:28:56Z -->
+<!-- agent-updated: 2026-11-15T03:21:53Z -->
 
 # Playwright Rust network lifecycle
 
@@ -165,8 +165,8 @@ second adapter, cursor, task, publication lane or per-Worker request budget.
 The backend key is `(native scope, native request ID)`: ordinary Page events
 use the empty scope and Worker events use their exact session ID. This permits
 different sessions to reuse the same CDP request ID without collision. Every
-scope still competes for the Page profile's 64 active requests and event-byte
-limits. Exact Worker detach recursively removes descendant routes and drains
+scope shares the Page profile's allocator-backed active-request map and still
+competes for explicit event-byte limits. Exact Worker detach recursively removes descendant routes and drains
 only those scoped requests; Page retirement clears all related routes.
 
 The language binding receives only portable Page/Request/Response identities.

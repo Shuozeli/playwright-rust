@@ -98,6 +98,7 @@ pub enum UploadError {
 pub struct UploadProfile {
     scope: ResourceScope,
     capacity: usize,
+    allocator_backed: bool,
     owner_bytes: usize,
     requirements: ResourceRequirements,
 }
@@ -120,6 +121,7 @@ impl UploadProfile {
         Ok(Self {
             scope,
             capacity,
+            allocator_backed: false,
             owner_bytes,
             requirements: ResourceRequirements::none()
                 .with_class(ResourceClass::LiveObject, count, count)
@@ -127,8 +129,26 @@ impl UploadProfile {
                 .with_metadata(1, leases),
         })
     }
+    pub fn new_allocator_backed(
+        scope: ResourceScope,
+        owner_bytes: usize,
+    ) -> Result<Self, UploadError> {
+        let mut profile = Self::new(scope, 1, owner_bytes)?;
+        profile.capacity = usize::MAX;
+        profile.allocator_backed = true;
+        profile.requirements = ResourceRequirements::none()
+            .with_class(ResourceClass::BackendStateBytes, STATE_BYTES, STATE_BYTES)
+            .with_metadata(1, 1);
+        Ok(profile)
+    }
     pub fn requirements(self) -> ResourceRequirements {
         self.requirements
+    }
+    pub const fn capacity(self) -> usize {
+        self.capacity
+    }
+    pub const fn allocator_backed(self) -> bool {
+        self.allocator_backed
     }
 }
 
@@ -196,6 +216,38 @@ impl<E: ReservedCleanupExecutor> FilePayloadOperationService<E> {
         self.state.active.load(Ordering::Acquire)
     }
 
+    fn admit_owner(&self) -> Result<Owner, UploadError> {
+        if !self.is_cleanup_healthy() {
+            return Err(UploadError::Unhealthy);
+        }
+        self.state
+            .active
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |count| {
+                count
+                    .checked_add(1)
+                    .filter(|next| self.profile.allocator_backed || *next <= self.profile.capacity)
+            })
+            .map_err(|_| UploadError::Capacity)?;
+        let mut owner = Owner {
+            state: self.state.clone(),
+            lease: None,
+            armed: false,
+        };
+        if !self.profile.allocator_backed {
+            owner.lease = Some(self.ledger.reserve_many(
+                self.profile.scope,
+                &[
+                    ResourceRequest::new(ResourceClass::LiveObject, 1),
+                    ResourceRequest::new(
+                        ResourceClass::BackendStateBytes,
+                        self.profile.owner_bytes as u64,
+                    ),
+                ],
+            )?);
+        }
+        Ok(owner)
+    }
+
     /// Consume exactly one resolved element and source. No mutation is sent
     /// until the returned future is polled. Rejection drops source ownership and
     /// lets OwnedElement submit its already-reserved group cleanup.
@@ -216,30 +268,7 @@ impl<E: ReservedCleanupExecutor> FilePayloadOperationService<E> {
         payloads: PreparedPayloads,
         retained: Retained,
     ) -> Result<UploadFuture<E::Reservation>, UploadError> {
-        if !self.is_cleanup_healthy() {
-            return Err(UploadError::Unhealthy);
-        }
-        self.state
-            .active
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |count| {
-                (count < self.profile.capacity).then(|| count + 1)
-            })
-            .map_err(|_| UploadError::Capacity)?;
-        let mut owner = Owner {
-            state: self.state.clone(),
-            lease: None,
-            armed: false,
-        };
-        owner.lease = Some(self.ledger.reserve_many(
-            self.profile.scope,
-            &[
-                ResourceRequest::new(ResourceClass::LiveObject, 1),
-                ResourceRequest::new(
-                    ResourceClass::BackendStateBytes,
-                    self.profile.owner_bytes as u64,
-                ),
-            ],
-        )?);
+        let mut owner = self.admit_owner()?;
         let reservation = self.cleanup.try_reserve()?;
         let backend = self.backend.clone();
         let future = async move {

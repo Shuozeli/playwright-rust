@@ -1,7 +1,8 @@
-//! Fixed environment administrative storage, separate from pending FFI work.
+//! Fixed environment registry-header storage, separate from pending FFI work.
 use super::*;
 
-/// Admission for a fixed foreign-thread cleanup registry. This owns no task
+/// Admission for the fixed header of an allocator-backed foreign-thread cleanup
+/// registry. Dynamic entries own their actual allocations. This owns no task
 /// token and therefore cannot keep FfiBudget.shutdown waiting for itself.
 pub struct PublicationRegistryStorage {
     _lease: ResourceLease,

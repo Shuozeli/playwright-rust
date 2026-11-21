@@ -138,6 +138,42 @@ fn empty_expected_session_is_rejected_even_for_unrelated_events() {
 }
 
 #[test]
+fn allocator_backed_session_profile_preserves_a_browser_identity_beyond_legacy_cap() {
+    // Arrange
+    let profile = DragDataProfile::new_allocator_backed_session(
+        ResourceScope::extension(14, 61),
+        limits(),
+        NonZeroUsize::new(1).unwrap(),
+    )
+    .unwrap();
+    let requirements = profile.requirements();
+    let bytes = requirements.class(ResourceClass::BackendStateBytes);
+    let resources = ProductionResourceLedger::new(
+        ResourceLimits::deny_all(requirements.scopes, requirements.leases).with_class(
+            ResourceClass::BackendStateBytes,
+            bytes.global,
+            bytes.per_scope,
+        ),
+        requirements,
+    )
+    .unwrap();
+    let store = DragDataStore::new(profile, &resources).unwrap();
+    let session = format!("session/{}", "x".repeat(4096));
+    let source = CdpEvent::new(
+        "Input.dragIntercepted".into(),
+        json!({"data": sample()}),
+        Some(session.clone()),
+    );
+
+    // Act
+    let admitted = store.admit(&source, &session).unwrap().unwrap();
+
+    // Assert
+    assert_eq!(profile.session_bytes(), None);
+    assert_eq!(admitted.session_id(), session);
+}
+
+#[test]
 fn malformed_fields_are_rejected_without_a_retained_record() {
     for (data, expected) in [
         (Value::Null, DragDataAdmissionError::Object),

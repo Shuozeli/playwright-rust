@@ -381,7 +381,7 @@ async fn cancellation_during_adoption_cleans_up_without_ever_submitting_upload()
     assert!(!revalidated.load(Ordering::Acquire));
     assert!(observed_input.upgrade().is_none());
     assert!(observed_route.upgrade().is_some());
-    assert_eq!(fixture.current(ResourceClass::RemoteHandle), 2);
+    assert_eq!(fixture.current(ResourceClass::RemoteHandle), 0);
     assert_eq!(fixture.current(ResourceClass::ArtifactBytes), 0);
     assert_eq!(fixture.mutations(), 0);
     assert_eq!(fixture.upload.active_operations(), 0);
@@ -425,7 +425,7 @@ async fn cancellation_after_mutation_keeps_input_and_route_until_group_release()
     // Assert
     assert!(observed_route.upgrade().is_some());
     assert!(observed_input.upgrade().is_some());
-    assert_eq!(fixture.current(ResourceClass::RemoteHandle), 2);
+    assert_eq!(fixture.current(ResourceClass::RemoteHandle), 0);
     assert_eq!(fixture.current(ResourceClass::ActiveCommand), 1);
     assert_eq!(fixture.current(ResourceClass::ArtifactBytes), 3);
     assert_eq!(fixture.upload.active_operations(), 1);
@@ -595,7 +595,7 @@ async fn abandoned_adoption_and_terminal_release_stay_owned_beyond_five_seconds(
     assert_eq!(fixture.retained.cleanup.metrics().in_flight, 1);
     assert_eq!(fixture.retained.cleanup.metrics().timed_out, 0);
     assert!(observed.upgrade().is_some());
-    assert_eq!(fixture.current(ResourceClass::RemoteHandle), 2);
+    assert_eq!(fixture.current(ResourceClass::RemoteHandle), 0);
     adoption.notify_one();
     wait_for_release(&fixture.client).await;
     let mut shutdown = Box::pin(fixture.retained.shutdown());
@@ -603,7 +603,7 @@ async fn abandoned_adoption_and_terminal_release_stay_owned_beyond_five_seconds(
     tokio::time::advance(Duration::from_secs(6)).await;
     assert!(poll_now(shutdown.as_mut()).is_pending());
     assert!(observed.upgrade().is_some());
-    assert_eq!(fixture.current(ResourceClass::RemoteHandle), 2);
+    assert_eq!(fixture.current(ResourceClass::RemoteHandle), 0);
     assert_eq!(fixture.mutations(), 0);
     release.notify_one();
     shutdown.await.unwrap();

@@ -1,6 +1,6 @@
 //! Optional Page-scoped viewport overrides.
 //!
-//! The leaf retains at most one fixed-size record per live Page and replays it
+//! The leaf retains one allocator-backed record per live Page and replays it
 //! through the session-initialization fence after Chromium replaces a Page
 //! session. Device scale and mobile semantics are composed from the separately
 //! selected Context device-emulation owner; language bindings only validate
@@ -23,11 +23,9 @@ use playwright_rust_plugin_chromium_session_initialization::{
 use crate::{HostError, HostSession, device_emulation};
 
 pub mod profile {
-    pub const PAGES: usize = 64;
     pub const BYTES: u64 = 8 * 1024;
 }
 
-const MAX_PAGES: usize = profile::PAGES;
 const STORAGE_BYTES: u64 = profile::BYTES;
 const SCOPE: ResourceScope = ResourceScope::extension(178, 1);
 
@@ -47,26 +45,15 @@ struct PageState {
     viewport: device_emulation::DeviceViewport,
 }
 
-fn prune_closed_pages_and_has_capacity(
-    pages: &mut [Option<PageState>; MAX_PAGES],
-    active: &[Option<ObjectId>; MAX_PAGES],
-    page: ObjectId,
-) -> bool {
-    for entry in pages.iter_mut() {
-        if entry.is_some_and(|entry| !active.contains(&Some(entry.page))) {
-            *entry = None;
-        }
-    }
-    pages
-        .iter()
-        .any(|entry| entry.is_none_or(|entry| entry.page == page))
+fn prune_closed_pages(pages: &mut Vec<PageState>, active: &[ObjectId]) {
+    pages.retain(|entry| active.contains(&entry.page));
 }
 
 pub(crate) struct Installation {
     connection: Arc<playwright_rust_cdp::CdpConnection>,
     devices: Arc<device_emulation::Installation>,
     gate: tokio::sync::Mutex<()>,
-    pages: Mutex<[Option<PageState>; MAX_PAGES]>,
+    pages: Mutex<Vec<PageState>>,
     headful: bool,
     host_platform: &'static str,
     _storage: ResourceLease,
@@ -90,7 +77,7 @@ impl Installation {
             connection,
             devices,
             gate: tokio::sync::Mutex::new(()),
-            pages: Mutex::new([None; MAX_PAGES]),
+            pages: Mutex::new(Vec::new()),
             headful,
             host_platform,
             _storage: storage,
@@ -100,28 +87,26 @@ impl Installation {
     fn prepare(
         &self,
         page: ObjectId,
-        active: &[Option<ObjectId>; MAX_PAGES],
+        active: &[ObjectId],
         viewport: device_emulation::DeviceViewport,
     ) -> Result<PageState, HostError> {
         let mut pages = self.pages.lock().map_err(HostError::backend)?;
-        if !prune_closed_pages_and_has_capacity(&mut pages, active, page) {
-            return Err(HostError::ResourceExhausted(
-                "Page viewport capacity exceeds 64 live Pages".into(),
-            ));
-        }
+        prune_closed_pages(&mut pages, active);
         Ok(PageState { page, viewport })
     }
 
     fn commit(&self, state: PageState) -> Result<(), HostError> {
         let mut pages = self.pages.lock().map_err(HostError::backend)?;
-        let slot = pages
-            .iter()
-            .position(|entry| entry.is_some_and(|entry| entry.page == state.page))
-            .or_else(|| pages.iter().position(Option::is_none))
-            .ok_or_else(|| {
-                HostError::ResourceExhausted("Page viewport capacity exceeds 64 live Pages".into())
+        if let Some(slot) = pages.iter_mut().find(|entry| entry.page == state.page) {
+            *slot = state;
+        } else {
+            pages.try_reserve(1).map_err(|error| {
+                HostError::ResourceExhausted(format!(
+                    "Page viewport registry allocation failed: {error}"
+                ))
             })?;
-        pages[slot] = Some(state);
+            pages.push(state);
+        }
         Ok(())
     }
 
@@ -134,7 +119,6 @@ impl Installation {
             .lock()
             .map_err(HostError::backend)?
             .iter()
-            .flatten()
             .find(|entry| entry.page == page)
             .map(|entry| entry.viewport))
     }
@@ -211,10 +195,7 @@ impl Installation {
     }
 }
 
-const _: () = assert!(
-    std::mem::size_of::<Installation>() + std::mem::size_of::<[Option<PageState>; MAX_PAGES]>()
-        < STORAGE_BYTES as usize
-);
+const _: () = assert!(std::mem::size_of::<Installation>() < STORAGE_BYTES as usize);
 
 pub(crate) struct Initializer<Downstream> {
     downstream: Downstream,
@@ -290,10 +271,10 @@ impl HostSession {
                 .page_session_routes()
                 .find(|route| route.object_id() == page)
                 .ok_or(HostError::TargetClosed)?;
-            let mut active = [None; MAX_PAGES];
-            for (slot, route) in active.iter_mut().zip(topology.page_session_routes()) {
-                *slot = Some(route.object_id());
-            }
+            let active = topology
+                .page_session_routes()
+                .map(|route| route.object_id())
+                .collect::<Vec<_>>();
             (
                 route.session_id().to_owned(),
                 route.target_id().to_owned(),
@@ -320,24 +301,22 @@ mod tests {
     use super::*;
 
     #[test]
-    fn viewport_registry_prunes_closed_pages_before_enforcing_capacity() {
+    fn viewport_registry_prunes_closed_pages_and_grows_dynamically() {
         // Arrange
-        let page = ObjectId::new(70);
         let viewport = device_emulation::DeviceViewport::new(500, 500).unwrap();
-        let mut stored = [None; MAX_PAGES];
-        for (index, entry) in stored.iter_mut().enumerate() {
-            *entry = Some(PageState {
+        let mut stored = Vec::new();
+        for index in 0..129 {
+            stored.push(PageState {
                 page: ObjectId::new(u64::try_from(index + 1).unwrap()),
                 viewport,
             });
         }
-        let active = [None; MAX_PAGES];
+        let active = Vec::new();
 
         // Act
-        let admitted = prune_closed_pages_and_has_capacity(&mut stored, &active, page);
+        prune_closed_pages(&mut stored, &active);
 
         // Assert
-        assert!(admitted);
-        assert!(stored.iter().all(Option::is_none));
+        assert!(stored.is_empty());
     }
 }

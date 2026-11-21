@@ -1,11 +1,13 @@
 //! Optional Page and BrowserContext init-script registration. Rust owns
-//! bounded persistence, target-session selection, future child-session
+//! allocator-backed persistence, target-session selection, future child-session
 //! installation, and rollback.
 
 use std::future::Future;
 use std::sync::{Arc, Mutex};
 
 use playwright_rust_cdp::CdpConnection;
+#[cfg(not(feature = "file-input"))]
+use playwright_rust_cdp::connection::large_commands::LargeCommandProfile;
 use playwright_rust_core::{
     ObjectId, ProductionResourceLedger, ResourceClass, ResourceLease, ResourceRequirements,
     ResourceScope,
@@ -19,8 +21,20 @@ use serde_json::Value;
 use crate::{HostError, HostSession};
 
 const SCOPE: ResourceScope = ResourceScope::extension(138, 0);
-pub const MAX_SOURCE_BYTES: usize = 64 * 1024;
-const MAX_SCRIPTS: usize = 128;
+#[cfg(not(feature = "file-input"))]
+const LARGE_COMMAND_SCOPE: ResourceScope = ResourceScope::extension(138, 1);
+#[cfg(not(feature = "file-input"))]
+const LARGE_COMMAND_FRAGMENT_BYTES: usize = 64 * 1024;
+
+#[cfg(not(feature = "file-input"))]
+pub(crate) fn large_commands() -> Result<LargeCommandProfile, HostError> {
+    LargeCommandProfile::new_allocator_backed(
+        LARGE_COMMAND_SCOPE,
+        usize::MAX,
+        LARGE_COMMAND_FRAGMENT_BYTES,
+    )
+    .map_err(HostError::backend)
+}
 
 #[derive(Clone, Copy)]
 enum InstallationPhase {
@@ -91,16 +105,9 @@ fn add_registration_to_state(
     scope: RegistrationScope,
     source: String,
 ) -> Result<u64, HostError> {
-    if source.len() > MAX_SOURCE_BYTES {
-        return Err(HostError::InvalidArgument(format!(
-            "init script exceeds {MAX_SOURCE_BYTES} UTF-8 bytes"
-        )));
-    }
-    if state.registrations.len() == MAX_SCRIPTS {
-        return Err(HostError::ResourceExhausted(format!(
-            "init-script capacity exceeded ({MAX_SCRIPTS})"
-        )));
-    }
+    state.registrations.try_reserve(1).map_err(|error| {
+        HostError::ResourceExhausted(format!("init-script allocation failed: {error}"))
+    })?;
     let id = state.next_id;
     state.next_id = state
         .next_id
@@ -127,10 +134,7 @@ pub(crate) struct Installation {
 }
 
 pub(crate) const fn requirements() -> ResourceRequirements {
-    let bytes = (std::mem::size_of::<Installation>()
-        + std::mem::size_of::<State>()
-        + MAX_SCRIPTS * (std::mem::size_of::<Registration>() + MAX_SOURCE_BYTES))
-        as u64;
+    let bytes = (std::mem::size_of::<Installation>() + std::mem::size_of::<State>()) as u64;
     ResourceRequirements::none()
         .with_class(ResourceClass::BackendStateBytes, bytes, bytes)
         .with_metadata(1, 1)
@@ -151,14 +155,10 @@ impl Installation {
                 plan.class(ResourceClass::BackendStateBytes).global,
             )
             .map_err(HostError::backend)?;
-        let mut registrations = Vec::new();
-        registrations
-            .try_reserve_exact(MAX_SCRIPTS)
-            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
         Ok(Arc::new(Self {
             connection,
             state: Mutex::new(State {
-                registrations,
+                registrations: Vec::new(),
                 next_id: 1,
             }),
             _storage: storage,
@@ -202,7 +202,7 @@ impl Installation {
     ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         install_with_sender(source, phase, |method, params| {
             self.connection
-                .send_command_with_session(method, params, Some(session_id))
+                .send_large_command_to_settlement_with_session(method, params, Some(session_id))
         })
         .await
     }
@@ -441,7 +441,7 @@ mod tests {
     }
 
     #[test]
-    fn registration_is_bounded_and_page_scoped() {
+    fn registration_is_page_scoped() {
         // Arrange
         let mut state = State {
             registrations: Vec::new(),
@@ -474,7 +474,7 @@ mod tests {
     }
 
     #[test]
-    fn oversized_source_is_rejected_before_storage() {
+    fn registration_registry_grows_past_the_legacy_script_count() {
         // Arrange
         let mut state = State {
             registrations: Vec::new(),
@@ -482,16 +482,58 @@ mod tests {
         };
 
         // Act
-        let error = add_registration_to_state(
-            &mut state,
-            RegistrationScope::Page(ObjectId::new(7)),
-            "x".repeat(MAX_SOURCE_BYTES + 1),
-        )
-        .unwrap_err();
+        for value in 1..=129 {
+            add_registration_to_state(
+                &mut state,
+                RegistrationScope::Page(ObjectId::new(value)),
+                format!("globalThis.script{value} = true"),
+            )
+            .expect("init-script storage should be allocator-backed");
+        }
 
         // Assert
-        assert!(matches!(error, HostError::InvalidArgument(_)));
-        assert!(state.registrations.is_empty());
+        assert_eq!(state.registrations.len(), 129);
+        assert_eq!(state.next_id, 130);
+    }
+
+    #[test]
+    fn source_storage_has_no_non_playwright_byte_cap() {
+        // Arrange
+        let mut state = State {
+            registrations: Vec::new(),
+            next_id: 1,
+        };
+        let source = "x".repeat(2 * 1024 * 1024);
+
+        // Act
+        add_registration_to_state(
+            &mut state,
+            RegistrationScope::Page(ObjectId::new(7)),
+            source.clone(),
+        )
+        .unwrap();
+
+        // Assert
+        assert_eq!(state.registrations.len(), 1);
+        assert_eq!(state.registrations[0].source.len(), source.len());
+    }
+
+    #[test]
+    fn production_large_command_profile_has_no_init_script_byte_ceiling() {
+        // Arrange
+        #[cfg(not(feature = "file-input"))]
+        let profile = large_commands().unwrap();
+        #[cfg(feature = "file-input")]
+        let profile = crate::file_input::profile::large_commands().unwrap();
+
+        // Act
+        let requirements = profile.requirements();
+
+        // Assert
+        assert!(profile.allocator_backed());
+        assert_eq!(profile.capacity(), usize::MAX);
+        assert_eq!(profile.max_bytes(), usize::MAX);
+        assert_eq!(requirements.class(ResourceClass::WireBytes).global, 0);
     }
 
     #[test]

@@ -50,7 +50,7 @@ impl fmt::Display for DragDataAdmissionError {
             Self::ResourceClaim => "drag data resource claim failed",
             Self::Storage => "drag data storage admission failed",
             Self::Capacity => "drag data retained-record capacity exceeded",
-            Self::Session => "drag data requires an exact session ID of 1..=128 bytes",
+            Self::Session => "drag data requires a non-empty session ID accepted by the profile",
             Self::Object => "drag event/data/item must be an object",
             Self::UnknownField => "drag data contains an unsupported field",
             Self::Items => "drag data requires an items array",
@@ -71,6 +71,7 @@ pub struct DragDataProfile {
     scope: ResourceScope,
     limits: DragDataLimits,
     records: NonZeroUsize,
+    session_bytes: Option<usize>,
     record_bytes: u64,
     requirements: ResourceRequirements,
 }
@@ -80,6 +81,21 @@ impl DragDataProfile {
         limits: DragDataLimits,
         records: NonZeroUsize,
     ) -> Result<Self> {
+        Self::new_inner(scope, limits, records, Some(MAX_SESSION_BYTES))
+    }
+    pub fn new_allocator_backed_session(
+        scope: ResourceScope,
+        limits: DragDataLimits,
+        records: NonZeroUsize,
+    ) -> Result<Self> {
+        Self::new_inner(scope, limits, records, None)
+    }
+    fn new_inner(
+        scope: ResourceScope,
+        limits: DragDataLimits,
+        records: NonZeroUsize,
+        session_bytes: Option<usize>,
+    ) -> Result<Self> {
         let bytes = limits
             .items
             .checked_mul(std::mem::size_of::<DragDataItem>())
@@ -87,7 +103,7 @@ impl DragDataProfile {
                 bytes.checked_add(limits.files.checked_mul(std::mem::size_of::<String>())?)
             })
             .and_then(|bytes| bytes.checked_add(limits.text_bytes))
-            .and_then(|bytes| bytes.checked_add(MAX_SESSION_BYTES))
+            .and_then(|bytes| bytes.checked_add(session_bytes.unwrap_or(0)))
             .and_then(|bytes| {
                 bytes.checked_add(std::mem::size_of::<Record>() + 2 * std::mem::size_of::<usize>())
             })
@@ -105,6 +121,7 @@ impl DragDataProfile {
             scope,
             limits,
             records,
+            session_bytes,
             record_bytes: u64::try_from(bytes)
                 .map_err(|_| DragDataAdmissionError::ProfileOverflow)?,
             requirements: ResourceRequirements::none()
@@ -120,6 +137,9 @@ impl DragDataProfile {
     }
     pub const fn record_bytes(self) -> u64 {
         self.record_bytes
+    }
+    pub const fn session_bytes(self) -> Option<usize> {
+        self.session_bytes
     }
 }
 
@@ -156,6 +176,14 @@ impl DragDataStore {
     pub fn active_records(&self) -> usize {
         self.0.active.load(Ordering::Acquire)
     }
+    pub(crate) fn accepts_session(&self, session: &str) -> bool {
+        !session.is_empty()
+            && self
+                .0
+                .profile
+                .session_bytes
+                .is_none_or(|maximum| session.len() <= maximum)
+    }
     /// Unrelated events are ignored without validating or retaining their trees.
     /// The caller must subscribe before interception and separately enforce the
     /// capture epoch/first-event policy; session identity alone is not freshness.
@@ -164,7 +192,7 @@ impl DragDataStore {
         event: &CdpEvent,
         expected_session: &str,
     ) -> Result<Option<AdmittedDragData>> {
-        if expected_session.is_empty() || expected_session.len() > MAX_SESSION_BYTES {
+        if !self.accepts_session(expected_session) {
             return Err(DragDataAdmissionError::Session);
         }
         if event.method != "Input.dragIntercepted"

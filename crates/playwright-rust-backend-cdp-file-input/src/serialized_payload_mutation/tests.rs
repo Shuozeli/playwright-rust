@@ -34,6 +34,24 @@ fn service() -> (
     (service, resources)
 }
 
+#[test]
+fn allocator_backed_mutation_admission_grows_past_legacy_counts() {
+    // Arrange
+    let profile = SerializedPayloadMutationProfile::new_allocator_backed(ResourceScope::Connection);
+    let required = profile.requirements().unwrap();
+    let resources =
+        ProductionResourceLedger::new(ResourceLimits::deny_all(0, 0), required).unwrap();
+    let service = CdpSerializedPayloadMutationService::new(profile, &resources).unwrap();
+
+    // Act
+    let admissions: Vec<_> = (0..129).map(|_| service.admit().unwrap()).collect();
+
+    // Assert
+    assert!(profile.allocator_backed());
+    assert!(admissions.iter().all(Option::is_none));
+    assert_eq!(resources.metrics().unwrap().active_leases, 0);
+}
+
 #[tokio::test]
 async fn dispatches_one_large_user_gesture_call_on_the_exact_retained_target() {
     // Arrange

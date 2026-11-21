@@ -207,32 +207,29 @@ async fn driver_failure_is_retained_and_reported_at_shutdown() {
 }
 
 #[tokio::test]
-async fn retained_limit_precedes_new_route_and_worker_allocation() {
+async fn allocator_backed_invocation_ownership_grows_past_legacy_count() {
     // Arrange
     let resources = resources();
     let installation = Installation::new(&resources).unwrap();
+    let baseline = resources.metrics().unwrap().active_leases;
     let client = Arc::new(FakeCdpClient::from_html(""));
     let input = input();
-    let invocations: Vec<_> = (0..RETAINED)
-        .map(|n| {
-            installation
-                .bind(client.clone(), input.clone(), &down(n as u64 + 1))
-                .unwrap()
-        })
-        .collect();
+    let mut invocations = Vec::new();
+    invocations.try_reserve(129).unwrap();
+
     // Act
-    let snapshots = AtomicUsize::new(0);
-    let error = installation
-        .bind_with(&down(100), || {
-            snapshots.fetch_add(1, Ordering::Relaxed);
-            Ok((client.clone(), input))
-        })
-        .err()
-        .unwrap();
+    for id in 1..=129 {
+        invocations.push(
+            installation
+                .bind(client.clone(), input.clone(), &down(id))
+                .unwrap(),
+        );
+    }
+
     // Assert
-    assert!(matches!(error, HostError::ResourceExhausted(_)));
-    assert_eq!(snapshots.load(Ordering::Relaxed), 0);
-    assert_eq!(installation.metrics().unwrap().retirement_tasks, RETAINED);
+    assert_eq!(installation.metrics().unwrap().retained_invocations, 129);
+    assert_eq!(installation.metrics().unwrap().retirement_tasks, 129);
+    assert_eq!(resources.metrics().unwrap().active_leases, baseline);
     assert!(client.calls().is_empty());
     drop(invocations);
     installation.shutdown().await.unwrap();

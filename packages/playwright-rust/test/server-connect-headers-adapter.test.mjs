@@ -114,7 +114,7 @@ test('selected profile leaves absent User-Agent for Rust to synthesize', async (
   const { api, calls } = fixture(true);
 
   // Act
-  const connection = api.firefox.connect('ws://example.test/ws', {
+  const connection = api.chromium.connect('ws://example.test/ws', {
     headers: { foo: 'bar' },
   });
 
@@ -122,6 +122,6 @@ test('selected profile leaves absent User-Agent for Rust to synthesize', async (
   await assert.rejects(connection, { code: 'PLAYWRIGHT_RUST_UNSUPPORTED' });
   assert.deepEqual(calls, [[
     'ws://example.test/ws', 30_000, [['foo', 'bar']],
-    'firefox', ['darwin', 'arm64', '25.0.0'],
+    'chromium', ['darwin', 'arm64', '25.0.0'],
   ]]);
 });

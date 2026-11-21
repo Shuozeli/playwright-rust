@@ -26,13 +26,13 @@ fn bytes(resources: &ProductionResourceLedger) -> u64 {
 }
 
 #[tokio::test]
-async fn tracked_read_shares_the_eight_call_limit_without_admitting_another_handle() {
+async fn tracked_reads_grow_past_the_legacy_call_limit_without_new_handles() {
     // Arrange
     let (owners, resources) = owners();
     let cleanup = TokioCleanupExecutor::new(1);
     let released = Arc::new(AtomicUsize::new(0));
     let pending = retained(&owners, &cleanup, &released);
-    let ordinary = (1..MAX_CALLS)
+    let ordinary = (0..MAX_HANDLES)
         .map(|_| owners.admit_call().unwrap())
         .collect::<Vec<_>>();
 
@@ -40,28 +40,23 @@ async fn tracked_read_shares_the_eight_call_limit_without_admitting_another_hand
     let read = owners.admit_tracked_read(&pending).unwrap();
     let admitted = resources.metrics().unwrap();
     let caller = read.call.clone();
-    let overflow_read = owners.admit_tracked_read(&pending);
-    let overflow_ordinary = owners.admit_call();
+    let additional_read = owners.admit_tracked_read(&pending).unwrap();
+    let additional_ordinary = owners.admit_call().unwrap();
 
     // Assert
-    assert!(matches!(
-        overflow_read,
-        Err(HostError::ResourceExhausted(_))
-    ));
-    assert!(matches!(
-        overflow_ordinary,
-        Err(HostError::ResourceExhausted(_))
-    ));
     assert_eq!(resources.metrics().unwrap(), admitted);
-    assert_eq!(owners.capacity.calls.load(Ordering::Acquire), MAX_CALLS);
-    assert_eq!(owners.capacity.owners.load(Ordering::Acquire), 1);
-    assert_eq!(admitted.class(ResourceClass::RemoteHandle).current, 2);
     assert_eq!(
-        bytes(&resources),
-        STATE_BYTES + OWNER_BYTES + CALL_BYTES * MAX_CALLS as u64
+        owners.capacity.calls.load(Ordering::Acquire),
+        MAX_HANDLES + 3
     );
+    assert_eq!(owners.capacity.owners.load(Ordering::Acquire), 1);
+    assert_eq!(admitted.class(ResourceClass::RemoteHandle).current, 0);
+    assert_eq!(bytes(&resources), STATE_BYTES);
     drop(read);
-    assert_eq!(owners.capacity.calls.load(Ordering::Acquire), MAX_CALLS);
+    assert_eq!(
+        owners.capacity.calls.load(Ordering::Acquire),
+        MAX_HANDLES + 3
+    );
     assert_eq!(
         resources
             .metrics()
@@ -71,7 +66,12 @@ async fn tracked_read_shares_the_eight_call_limit_without_admitting_another_hand
         0
     );
     drop(caller);
-    assert_eq!(owners.capacity.calls.load(Ordering::Acquire), MAX_CALLS - 1);
+    assert_eq!(
+        owners.capacity.calls.load(Ordering::Acquire),
+        MAX_HANDLES + 2
+    );
+    drop(additional_read);
+    drop(additional_ordinary);
     drop(ordinary);
     pending.dispose().await.unwrap();
     drop(pending);
@@ -104,7 +104,7 @@ async fn close_waits_for_tracked_work_after_explicit_cleanup_and_descriptor_drop
             .unwrap()
             .class(ResourceClass::RemoteHandle)
             .current,
-        2
+        0
     );
 
     // Act
@@ -136,7 +136,7 @@ async fn close_waits_for_tracked_work_after_explicit_cleanup_and_descriptor_drop
 }
 
 #[tokio::test]
-async fn eight_tracked_reads_admit_sixteen_temporary_objects_not_persistent_handles() {
+async fn tracked_reads_grow_past_legacy_count_without_static_remote_handle_slots() {
     // Arrange
     let (owners, resources) = owners();
     let cleanup = TokioCleanupExecutor::new(1);
@@ -144,21 +144,21 @@ async fn eight_tracked_reads_admit_sixteen_temporary_objects_not_persistent_hand
     let pending = retained(&owners, &cleanup, &released);
 
     // Act
-    let reads = (0..MAX_CALLS)
+    let reads = (0..MAX_HANDLES)
         .map(|_| owners.admit_tracked_read(&pending).unwrap())
         .collect::<Vec<_>>();
     let admitted = resources.metrics().unwrap();
-    let overflow = owners.admit_tracked_read(&pending);
+    let additional = owners.admit_tracked_read(&pending).unwrap();
 
     // Assert
-    assert!(matches!(overflow, Err(HostError::ResourceExhausted(_))));
     assert_eq!(resources.metrics().unwrap(), admitted);
     assert_eq!(owners.capacity.owners.load(Ordering::Acquire), 1);
-    assert_eq!(owners.capacity.calls.load(Ordering::Acquire), MAX_CALLS);
     assert_eq!(
-        admitted.class(ResourceClass::RemoteHandle).current,
-        2 * MAX_CALLS as u64
+        owners.capacity.calls.load(Ordering::Acquire),
+        MAX_HANDLES + 1
     );
+    assert_eq!(admitted.class(ResourceClass::RemoteHandle).current, 0);
+    drop(additional);
     drop(reads);
     assert_eq!(owners.capacity.calls.load(Ordering::Acquire), 0);
     assert_eq!(
@@ -356,10 +356,10 @@ async fn cancelled_tracked_creation_retains_native_call_and_work_until_settlemen
 
     // Assert
     assert!(before_settlement.is_pending());
-    assert_eq!(retained.class(ResourceClass::RemoteHandle).current, 2);
+    assert_eq!(retained.class(ResourceClass::RemoteHandle).current, 0);
     assert_eq!(
         retained.class(ResourceClass::BackendStateBytes).current,
-        STATE_BYTES + CALL_BYTES
+        STATE_BYTES
     );
     assert_eq!(started.load(Ordering::Acquire), 1);
     assert_eq!(released.load(Ordering::Acquire), 1);

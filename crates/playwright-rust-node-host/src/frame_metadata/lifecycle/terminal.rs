@@ -4,11 +4,8 @@ use super::*;
 use crate::frame_metadata::FrameClosePermit;
 use crate::frame_tree::FrameTree;
 
-const GROUPS: usize =
-    crate::frame_metadata::collections::CONTEXTS + crate::frame_metadata::collections::PAGES;
-
-/// All possible terminal Page/Context groups exist before native initialization.
-/// Ordinary creation/close never spends this terminal-only admission.
+/// Terminal Page/Context groups are admitted while the collection is still
+/// live. Teardown only consumes this pool and therefore never allocates.
 pub(crate) struct TerminalLifecycle {
     reserved: Vec<LifecycleReservation>,
     _storage: Storage,
@@ -16,26 +13,49 @@ pub(crate) struct TerminalLifecycle {
 
 impl TerminalLifecycle {
     pub(crate) fn reserve(
-        book: &FramePublications,
+        _book: &FramePublications,
         factory: &FrameTreeFactory,
     ) -> Result<Box<Self>, HostError> {
-        let storage = factory.reserve_collection_storage(
-            std::mem::size_of::<Self>() + GROUPS * std::mem::size_of::<LifecycleReservation>(),
-        )?;
-        let mut reserved = Vec::with_capacity(GROUPS);
-        for _ in 0..GROUPS {
-            reserved.push(book.reserve_lifecycle(factory)?);
-        }
+        let storage = factory.reserve_collection_storage(std::mem::size_of::<Self>())?;
         Ok(Box::new(Self {
-            reserved,
+            reserved: Vec::new(),
             _storage: storage,
         }))
     }
 
+    pub(crate) fn len(&self) -> usize {
+        self.reserved.len()
+    }
+
+    pub(crate) fn truncate(&mut self, len: usize) {
+        self.reserved.truncate(len);
+    }
+
+    pub(crate) fn replenish(
+        &mut self,
+        target: usize,
+        book: &FramePublications,
+        factory: &FrameTreeFactory,
+    ) -> Result<(), HostError> {
+        let before = self.len();
+        self.reserved
+            .try_reserve(target.saturating_sub(before))
+            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
+        while self.len() < target {
+            match book.reserve_lifecycle(factory) {
+                Ok(reserved) => self.reserved.push(reserved),
+                Err(error) => {
+                    self.truncate(before);
+                    return Err(error);
+                }
+            }
+        }
+        Ok(())
+    }
+
     fn append(&mut self, state: &mut MetadataState, prepared: PreparedLifecycle) {
-        // CollectionView validates the fixed Context/Page caps and distinct IDs.
-        // Exactly one group is produced per visible member, so this cannot grow
-        // the preallocated queue or exhaust the terminal-only reservation pool.
+        // Collection reconciliation admits one group per visible member before
+        // native teardown can begin.
         let mut reserved = self
             .reserved
             .pop()

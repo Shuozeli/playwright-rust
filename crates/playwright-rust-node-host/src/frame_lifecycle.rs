@@ -32,20 +32,8 @@ struct LifecycleSupport {
     origin: Instant,
     _lease: ResourceLease,
 }
-#[cfg(all(feature = "frame-navigation", feature = "frame-navigation-burst-20"))]
-const NAVIGATION_SLOTS_PER_PAGE: usize = 21;
-#[cfg(all(
-    feature = "frame-navigation",
-    not(feature = "frame-navigation-burst-20")
-))]
-const NAVIGATION_SLOTS_PER_PAGE: usize = 4;
-#[cfg(all(feature = "frame-navigation", feature = "frame-navigation-burst-20"))]
-const MAX_REGISTRATIONS: usize = 21;
-#[cfg(all(
-    feature = "frame-navigation",
-    not(feature = "frame-navigation-burst-20")
-))]
-const MAX_REGISTRATIONS: usize = 128;
+#[cfg(feature = "frame-navigation")]
+const INITIAL_NAVIGATION_SLOTS_PER_PAGE: usize = 4;
 impl FrameLifecycleClock for LifecycleSupport {
     fn now(&self) -> Duration {
         self.origin.elapsed()
@@ -57,17 +45,13 @@ impl FrameLifecycleNoticeSink for LifecycleSupport {
     }
 }
 fn profile() -> Result<FrameLifecycleRegistryProfile, HostError> {
-    // Matches 16 active host Pages, with another 16 slots for escaped retired
-    // owners. Each Page has bounded Frame/request/ID storage, allocated on admit.
-    let profile = FrameLifecycleRegistryProfile::new(123, 16, 32, 64, 256, 256)
+    // Page, Frame, request and native-ID ownership follows observed Chromium
+    // state. Navigation registration remains a separately selected scheduler.
+    let profile = FrameLifecycleRegistryProfile::new_allocator_backed(123, 256)
         .map_err(HostError::backend)?;
     #[cfg(feature = "frame-navigation")]
     let profile = profile
-        .with_navigation_slots(NAVIGATION_SLOTS_PER_PAGE)
-        .map_err(HostError::backend)?;
-    #[cfg(feature = "frame-navigation-burst-20")]
-    let profile = profile
-        .with_shared_navigation_limit(MAX_REGISTRATIONS)
+        .with_navigation_slots(INITIAL_NAVIGATION_SLOTS_PER_PAGE)
         .map_err(HostError::backend)?;
     Ok(profile)
 }
@@ -83,8 +67,9 @@ pub(crate) fn matched_registration_profile() -> Result<NavigationRegistrationPro
 fn registration_profile_with_url_bytes(
     url_bytes: usize,
 ) -> Result<NavigationRegistrationProfile, HostError> {
-    let wait = FrameNavigationWaitProfile::new(
+    let wait = FrameNavigationWaitProfile::new_allocator_backed(
         ResourceScope::extension(125, 0),
+        // Initial capacities only; observed rows grow through the allocator.
         16,
         8,
         256,
@@ -97,7 +82,7 @@ fn registration_profile_with_url_bytes(
     } else {
         wait.with_url_bytes(url_bytes).map_err(HostError::backend)?
     };
-    Ok(NavigationRegistrationProfile::new(
+    Ok(NavigationRegistrationProfile::new_allocator_backed(
         wait,
         ResourceScope::extension(125, 1),
     ))
@@ -112,19 +97,8 @@ pub(crate) fn requirements() -> Result<ResourceRequirements, HostError> {
     let requirements = profile()?
         .requirements()
         .combine_concurrent(support_requirements());
-    // Ordinary: 32 active-or-escaped Page owners, four registrations each.
-    // Opt-in burst: 21 Page slots with a shared lifetime-bound 21-permit pool.
-    // The executor separately rejects the 21st foreign navigation waiter, so
-    // one command can still register while 20 waiters are live.
-    // Moved-out results remain charged until their owners are dropped.
-    #[cfg(feature = "frame-navigation")]
-    let requirements = {
-        #[cfg(feature = "navigation-url-match")]
-        let registration = matched_registration_profile()?.requirements();
-        #[cfg(not(feature = "navigation-url-match"))]
-        let registration = registration_profile()?.requirements();
-        (0..MAX_REGISTRATIONS).fold(requirements, |all, _| all.combine_concurrent(registration))
-    };
+    // Registration indexes, wait arenas and moved-out results grow through the
+    // allocator. Per-operation field validation remains independent.
     Ok(requirements)
 }
 pub(crate) fn install(
@@ -212,35 +186,25 @@ mod tests {
     use super::*;
 
     #[test]
-    fn registration_plan_matches_selected_global_capacity() {
+    fn allocator_backed_registration_adds_no_fabricated_global_capacity() {
         // Arrange
         let base = profile()
             .unwrap()
             .requirements()
             .combine_concurrent(support_requirements());
+        #[cfg(feature = "navigation-url-match")]
+        let registration = matched_registration_profile().unwrap().requirements();
+        #[cfg(not(feature = "navigation-url-match"))]
         let registration = registration_profile().unwrap().requirements();
 
         // Act
         let selected = requirements().unwrap();
         let selected_bytes = selected.class(ResourceClass::BackendStateBytes).global;
         let base_bytes = base.class(ResourceClass::BackendStateBytes).global;
-        let one_bytes = registration.class(ResourceClass::BackendStateBytes).global;
 
         // Assert
-        assert_eq!(
-            selected_bytes - base_bytes,
-            one_bytes * MAX_REGISTRATIONS as u64
-        );
-        #[cfg(feature = "frame-navigation-burst-20")]
-        {
-            assert_eq!(NAVIGATION_SLOTS_PER_PAGE, 21);
-            assert_eq!(MAX_REGISTRATIONS, 21);
-            assert!(selected_bytes - base_bytes < one_bytes * (32 * 21));
-        }
-        #[cfg(not(feature = "frame-navigation-burst-20"))]
-        {
-            assert_eq!(NAVIGATION_SLOTS_PER_PAGE, 4);
-            assert_eq!(MAX_REGISTRATIONS, 32 * 4);
-        }
+        assert_eq!(INITIAL_NAVIGATION_SLOTS_PER_PAGE, 4);
+        assert_eq!(registration, ResourceRequirements::none());
+        assert_eq!(selected_bytes, base_bytes);
     }
 }

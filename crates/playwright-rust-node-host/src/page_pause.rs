@@ -24,7 +24,6 @@ impl HostSession {
         let (installation, contexts, pages) = self.timeout_snapshot()?;
         let context = pages
             .iter()
-            .flatten()
             .find_map(|(candidate, context)| (*candidate == page).then_some(*context))
             .ok_or(HostError::TargetClosed)?;
         let _reset = installation.begin_headless_pause(page, context, &contexts, &pages)?;

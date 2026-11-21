@@ -26,6 +26,14 @@ fn fixture(
     let store = FrameLifecycleStore::new(profile, &resources).unwrap();
     (store, resources, profile)
 }
+
+fn allocator_backed_fixture() -> FrameLifecycleStore {
+    let profile = FrameLifecycleProfile::new_allocator_backed(ResourceScope::Connection);
+    let resources =
+        ProductionResourceLedger::new(ResourceLimits::deny_all(0, 0), ResourceRequirements::none())
+            .unwrap();
+    FrameLifecycleStore::new(profile, &resources).unwrap()
+}
 fn apply(store: &mut FrameLifecycleStore, input: LifecycleInput) {
     store.apply(store.now, input).unwrap();
 }
@@ -50,6 +58,34 @@ fn commit(store: &mut FrameLifecycleStore, frame: u64, document: u64) {
 }
 fn snapshot(store: &FrameLifecycleStore, frame: u64) -> LifecycleSnapshot {
     store.snapshot(ObjectId::new(frame)).unwrap().unwrap()
+}
+
+#[test]
+fn allocator_backed_store_grows_past_legacy_frame_and_request_counts() {
+    // Arrange
+    let mut store = allocator_backed_fixture();
+
+    // Act
+    attach(&mut store, 1, None);
+    for frame in 2..=130 {
+        attach(&mut store, frame, Some(1));
+    }
+    for request in 1..=257 {
+        apply(
+            &mut store,
+            LifecycleInput::RequestStarted {
+                frame: ObjectId::new(1),
+                request: ObjectId::new(1_000 + request),
+                favicon: false,
+            },
+        );
+    }
+
+    // Assert
+    assert_eq!(store.frames.iter().flatten().count(), 130);
+    assert_eq!(store.requests.iter().flatten().count(), 257);
+    assert_eq!(snapshot(&store, 130).document, None);
+    assert_eq!(store.frames[0].as_ref().unwrap().requests, 257);
 }
 
 #[test]

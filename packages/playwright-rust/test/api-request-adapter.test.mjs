@@ -18,7 +18,7 @@ function validateOptions(options, supported, api) {
   }
 }
 
-function fixture() {
+function fixture(runTracingAction) {
   const constructions = [];
   const calls = [];
   class NativeApiResponse {
@@ -67,9 +67,32 @@ function fixture() {
     }),
     validateOptions,
     UnsupportedOperationError,
+    runTracingAction,
   });
   return { request, constructions, calls };
 }
+
+test('BrowserContext request wraps one Rust request with the owning Context trace action', async () => {
+  // Arrange
+  const traceCalls = [];
+  const { request } = fixture(async (owner, action, detail, operation) => {
+    traceCalls.push([owner, action, detail]);
+    return operation();
+  });
+  const standalone = await request.newContext({ baseURL: 'http://example.test/root/' });
+  const owner = { _id: 'context-1' };
+  const browserRequest = request._fromNative(standalone._native, 'http://example.test/root/', owner);
+
+  // Act
+  await browserRequest.post('child', { data: { ok: true } });
+
+  // Assert
+  assert.deepEqual(traceCalls, [[
+    owner,
+    'api-request',
+    'POST\nhttp://example.test/root/child',
+  ]]);
+});
 
 test('API request adapter delegates all seven verbs and exposes Playwright-shaped responses', async () => {
   // Arrange
@@ -161,6 +184,41 @@ test('API request default User-Agent is derived without launching a helper proce
     /^Playwright\/1\.58\.0 \([^;]+; (?:macOS|windows|linux|unknown) [^)]+\) node\/\d+\.\d+(?: CI\/1)?$/,
   );
   await context.dispose();
+});
+
+test('API request tracing facade validates and delegates without serializing trace data in JS', async () => {
+  // Arrange
+  const calls = [];
+  class NativeApiRequestContext {
+    constructor() {}
+    traceStart(snapshots) { calls.push(['start', snapshots]); }
+    async traceStop(path) { calls.push(['stop', path]); }
+    dispose() {}
+    metrics() { return {}; }
+  }
+  const request = createApiRequest({
+    nativeAddon: () => ({
+      NativeApiRequestContext,
+      apiRequestTracingEnabled: () => true,
+    }),
+    validateOptions,
+    UnsupportedOperationError,
+  });
+  const context = await request.newContext({ userAgent: 'playwright-rust-test' });
+
+  // Act
+  await context._tracing.start({ snapshots: true });
+  await context._tracing.stop({ path: '/tmp/request-trace.zip' });
+  const instrumentation = Symbol('startedCollectingArtifacts');
+  context._tracing[instrumentation] = true;
+
+  // Assert
+  assert.deepEqual(calls, [['start', true], ['stop', '/tmp/request-trace.zip']]);
+  assert.equal(context._tracing[instrumentation], true);
+  await assert.rejects(
+    context._tracing.stop({}),
+    /apiRequestContext\._tracing\.stop: path must be a string/,
+  );
 });
 
 test('API request adapter maps native timeout and rejects unsupported options', async () => {

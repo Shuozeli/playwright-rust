@@ -1,11 +1,18 @@
 'use strict';
 
 // Shape and defaults only; coordinates, button state and scheduling live in Rust.
-module.exports = function mouseApi({ mapError, validateOptions }) {
+module.exports = function mouseApi({
+  mapError,
+  validateOptions,
+  runTracingAction = (_owner, _action, _detail, operation) => operation(),
+}) {
   return class Mouse {
     #session;
     #page;
-    constructor(session, page) { this.#session = session; this.#page = page; }
+    constructor(session, page) {
+      this.#session = session;
+      this.#page = typeof page === 'string' ? { _id: page } : page;
+    }
     async #call(operation, x, y, options, supported) {
       const api = `mouse.${operation}`;
       validateOptions(options, supported, api);
@@ -23,8 +30,13 @@ module.exports = function mouseApi({ mapError, validateOptions }) {
       for (const [key, value] of Object.entries(native)) {
         if (typeof value !== 'number') throw new TypeError(`${api}: ${key} must be a number`);
       }
-      try { await this.#session.mouse(this.#page, operation, x, y, native); }
-      catch (error) { throw mapError(error, api); }
+      const invoke = async () => {
+        try { await this.#session.mouse(this.#page._id, operation, x, y, native); }
+        catch (error) { throw mapError(error, api); }
+      };
+      if (operation === 'move' || operation === 'dblclick')
+        return runTracingAction(this.#page, `mouse-${operation}`, undefined, invoke);
+      return invoke();
     }
     move(x, y, options = {}) { return this.#call('move', x, y, options, ['steps']); }
     down(options = {}) { return this.#call('down', 0, 0, options, ['button', 'clickCount']); }

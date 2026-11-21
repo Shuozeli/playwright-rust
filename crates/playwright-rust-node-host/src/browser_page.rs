@@ -6,8 +6,6 @@ use playwright_rust_core::ObjectId;
 
 use crate::{BrowserPageDescriptor, HostError, HostSession};
 
-const MAX_BROWSER_PAGES: usize = 16;
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct Entry {
     context: ObjectId,
@@ -15,13 +13,13 @@ struct Entry {
 }
 
 pub(crate) struct BrowserPages {
-    entries: Mutex<[Option<Entry>; MAX_BROWSER_PAGES]>,
+    entries: Mutex<Vec<Entry>>,
 }
 
 impl BrowserPages {
     pub(crate) const fn new() -> Self {
         Self {
-            entries: Mutex::new([None; MAX_BROWSER_PAGES]),
+            entries: Mutex::new(Vec::new()),
         }
     }
 
@@ -36,24 +34,17 @@ impl BrowserPages {
     pub(crate) fn reserve(&self, context_id: &str) -> Result<(), HostError> {
         let context = Self::parse(context_id, "Context")?;
         let mut entries = self.entries.lock().map_err(HostError::backend)?;
-        if entries
-            .iter()
-            .flatten()
-            .any(|entry| entry.context == context)
-        {
+        if entries.iter().any(|entry| entry.context == context) {
             return Err(HostError::Backend(
                 "Browser.new_page Context is already reserved".into(),
             ));
         }
-        let slot = entries
-            .iter_mut()
-            .find(|entry| entry.is_none())
-            .ok_or_else(|| {
-                HostError::ResourceExhausted(format!(
-                    "Browser.new_page ownership capacity exceeded ({MAX_BROWSER_PAGES})"
-                ))
-            })?;
-        *slot = Some(Entry {
+        entries.try_reserve(1).map_err(|error| {
+            HostError::ResourceExhausted(format!(
+                "Browser.new_page ownership allocation failed: {error}"
+            ))
+        })?;
+        entries.push(Entry {
             context,
             page: None,
         });
@@ -66,7 +57,6 @@ impl BrowserPages {
         let mut entries = self.entries.lock().map_err(HostError::backend)?;
         let entry = entries
             .iter_mut()
-            .flatten()
             .find(|entry| entry.context == context)
             .ok_or_else(|| HostError::Backend("Browser.new_page reservation is missing".into()))?;
         if entry.page.replace(page).is_some() {
@@ -80,10 +70,7 @@ impl BrowserPages {
     pub(crate) fn owns_context(&self, context_id: &str) -> Result<bool, HostError> {
         let context = Self::parse(context_id, "Context")?;
         let entries = self.entries.lock().map_err(HostError::backend)?;
-        Ok(entries
-            .iter()
-            .flatten()
-            .any(|entry| entry.context == context))
+        Ok(entries.iter().any(|entry| entry.context == context))
     }
 
     pub(crate) fn context_for_page(&self, page_id: &str) -> Result<Option<ObjectId>, HostError> {
@@ -91,7 +78,6 @@ impl BrowserPages {
         let entries = self.entries.lock().map_err(HostError::backend)?;
         Ok(entries
             .iter()
-            .flatten()
             .find(|entry| entry.page == Some(page))
             .map(|entry| entry.context))
     }
@@ -99,22 +85,13 @@ impl BrowserPages {
     pub(crate) fn remove_context(&self, context_id: &str) -> Result<(), HostError> {
         let context = Self::parse(context_id, "Context")?;
         let mut entries = self.entries.lock().map_err(HostError::backend)?;
-        if let Some(slot) = entries
-            .iter_mut()
-            .find(|slot| slot.is_some_and(|entry| entry.context == context))
-        {
-            *slot = None;
-        }
+        entries.retain(|entry| entry.context != context);
         Ok(())
     }
 
     pub(crate) fn prune(&self, mut is_live: impl FnMut(ObjectId) -> bool) -> Result<(), HostError> {
         let mut entries = self.entries.lock().map_err(HostError::backend)?;
-        for slot in &mut *entries {
-            if slot.is_some_and(|entry| !is_live(entry.context)) {
-                *slot = None;
-            }
-        }
+        entries.retain(|entry| is_live(entry.context));
         Ok(())
     }
 }
@@ -142,6 +119,63 @@ impl HostSession {
         let target_fence = self.cdp_browser_target_fence()?;
         let context = self.new_context_with_base_url(base_url).await?;
         if let Err(primary) = self.browser_pages.reserve(&context.id) {
+            return Err(self
+                .compensate_browser_page_context(&context.id, primary)
+                .await);
+        }
+        #[cfg(feature = "download-events")]
+        if accept_downloads && let Err(primary) = self.enable_download_context(&context.id).await {
+            return Err(self
+                .compensate_browser_page_context(&context.id, primary)
+                .await);
+        }
+        let page = match self.new_page_inner(&context.id).await {
+            Ok(page) => page,
+            Err(primary) => {
+                return Err(self
+                    .compensate_browser_page_context(&context.id, primary)
+                    .await);
+            }
+        };
+        #[cfg(feature = "browser-cdp-session")]
+        if let Err(primary) = self
+            .cdp_wait_browser_target_fence(&page.id, &target_fence)
+            .await
+        {
+            return Err(self
+                .compensate_browser_page_context(&context.id, primary)
+                .await);
+        }
+        if let Err(primary) = self.browser_pages.commit(&context.id, &page.id) {
+            return Err(self
+                .compensate_browser_page_context(&context.id, primary)
+                .await);
+        }
+        Ok(BrowserPageDescriptor { context, page })
+    }
+
+    #[cfg(feature = "video-recording")]
+    pub async fn new_browser_page_with_video(
+        &self,
+        base_url: Option<&str>,
+        accept_downloads: bool,
+        video: crate::PersistentContextVideoOptions,
+    ) -> Result<BrowserPageDescriptor, HostError> {
+        #[cfg(not(feature = "download-events"))]
+        if accept_downloads {
+            return Err(HostError::UnsupportedOperation(
+                "download event capability is not installed".into(),
+            ));
+        }
+        #[cfg(feature = "browser-cdp-session")]
+        let target_fence = self.cdp_browser_target_fence()?;
+        let context = self.new_context_with_base_url(base_url).await?;
+        if let Err(primary) = self.browser_pages.reserve(&context.id) {
+            return Err(self
+                .compensate_browser_page_context(&context.id, primary)
+                .await);
+        }
+        if let Err(primary) = self.install_context_video(&context.id, video) {
             return Err(self
                 .compensate_browser_page_context(&context.id, primary)
                 .await);
@@ -238,5 +272,21 @@ mod tests {
         // Assert
         assert!(!pages.owns_context("10").unwrap());
         assert!(pages.owns_context("11").unwrap());
+    }
+
+    #[test]
+    fn ownership_registry_grows_past_the_legacy_page_count() {
+        // Arrange
+        let pages = BrowserPages::new();
+
+        // Act
+        for id in 1..=129 {
+            pages
+                .reserve(&id.to_string())
+                .expect("Browser.new_page ownership should be allocator-backed");
+        }
+
+        // Assert
+        assert!(pages.owns_context("129").unwrap());
     }
 }

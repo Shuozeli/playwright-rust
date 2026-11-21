@@ -1,0 +1,80 @@
+{
+  "schema": 1,
+  "repository": "https://github.com/microsoft/playwright.git",
+  "tag": "v1.58.0",
+  "commit": "961381ec73a9fa2661d92504eab1a6bd6eaffc75",
+  "suites": [
+    {
+      "id": "library-browsercontext-cookies-chromium-v1",
+      "role": "browser-backed-official-file",
+      "runner": "packages/playwright/cli.js",
+      "config": "tests/library/playwright.config.ts",
+      "args": [
+        "tests/library/browsercontext-cookies.spec.ts"
+      ],
+      "candidateAdapter": "test-mode-playwright-core",
+      "oracleAdapter": "test-mode-playwright-core-cdp",
+      "project": "chromium-library",
+      "channel": "chromium",
+      "requiresBrowser": true,
+      "expectedTestsPerProject": 16,
+      "expectedFiles": 1,
+      "upstreamTestSourceSha256": "a2ee0efe1e482c50b1f8e927066b3f4ec6dbd6f33af25eae63fa534e6ce6bdf9",
+      "expectedSpecIdsSha256": "b22d26b82fa61dd5da6243fc90574c9f78af80519acbe5c7a2f2964e6190f768"
+    },
+    {
+      "id": "library-browsercontext-clearcookies-chromium-v1",
+      "role": "browser-backed-official-file",
+      "runner": "packages/playwright/cli.js",
+      "config": "tests/library/playwright.config.ts",
+      "args": [
+        "tests/library/browsercontext-clearcookies.spec.ts"
+      ],
+      "candidateAdapter": "test-mode-playwright-core",
+      "oracleAdapter": "test-mode-playwright-core-cdp",
+      "project": "chromium-library",
+      "channel": "chromium",
+      "requiresBrowser": true,
+      "expectedTestsPerProject": 7,
+      "expectedFiles": 1,
+      "upstreamTestSourceSha256": "34c061221df5950e8bfd16675b94d49fe1190d7ff79f9e3f0bb3c2da97eb36f1",
+      "expectedSpecIdsSha256": "472dac4cbb5d36c7f19d731fb1f94cfc390d6269c7ef0d21147fe39dd5c6276b"
+    },
+    {
+      "id": "library-browsercontext-add-cookies-chromium-v1",
+      "role": "browser-backed-official-file",
+      "runner": "packages/playwright/cli.js",
+      "config": "tests/library/playwright.config.ts",
+      "args": [
+        "tests/library/browsercontext-add-cookies.spec.ts"
+      ],
+      "candidateAdapter": "test-mode-playwright-core",
+      "oracleAdapter": "test-mode-playwright-core-cdp",
+      "project": "chromium-library",
+      "channel": "chromium",
+      "requiresBrowser": true,
+      "expectedTestsPerProject": 23,
+      "expectedFiles": 1,
+      "upstreamTestSourceSha256": "83a86c29c2a05be4ec7aac868b7aa89c666f7cde5c6ffab3d818ab460266e761",
+      "expectedSpecIdsSha256": "b9658f4b46202f5e2b945fc8236f1a17d349aa6920a12c1179834015cc3ef16c"
+    },
+    {
+      "id": "library-browsercontext-cookies-third-party-chromium-v1",
+      "role": "browser-backed-official-file",
+      "runner": "packages/playwright/cli.js",
+      "config": "tests/library/playwright.config.ts",
+      "args": [
+        "tests/library/browsercontext-cookies-third-party.spec.ts"
+      ],
+      "candidateAdapter": "test-mode-playwright-core",
+      "oracleAdapter": "test-mode-playwright-core-cdp",
+      "project": "chromium-library",
+      "channel": "chromium",
+      "requiresBrowser": true,
+      "expectedTestsPerProject": 11,
+      "expectedFiles": 1,
+      "upstreamTestSourceSha256": "5e81ef0e3b4dfae9ae432cb6bc536db72f9d856a91f941effd5bcde4101b3a5e",
+      "expectedSpecIdsSha256": "6ac1a0ebe0a016e8be98794acecb34e14507e6a91040728ccc2253a89b411d3e"
+    }
+  ]
+}

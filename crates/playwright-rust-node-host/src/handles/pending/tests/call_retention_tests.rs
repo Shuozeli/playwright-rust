@@ -5,7 +5,7 @@ use std::{
 };
 
 #[tokio::test]
-async fn delayed_result_consumer_retains_call_capacity_without_an_additional_lease() {
+async fn delayed_result_consumer_retains_one_allocator_backed_call() {
     // Arrange
     let (owners, resources) = owners();
     let cleanup = TokioCleanupExecutor::new(1);
@@ -24,28 +24,34 @@ async fn delayed_result_consumer_retains_call_capacity_without_an_additional_lea
     assert!(consumer.as_mut().poll(&mut context).is_pending());
     let (initializer, ticket, owner) = ticket(2, admission, &cleanup, released.clone());
     let pending = owners.retain(initializer, ticket, owner).unwrap();
-    let remaining = (1..MAX_CALLS)
+    let remaining = (0..MAX_HANDLES)
         .map(|_| owners.admit_call().unwrap())
         .collect::<Vec<_>>();
 
     // Act: publication settles, but its consumer is deliberately not repolled.
     assert!(reply.send(pending).is_ok());
     drop(native);
-    let excess = owners.admit_call();
+    let additional = owners.admit_call().unwrap();
 
     // Assert
-    assert!(matches!(excess, Err(HostError::ResourceExhausted(_))));
-    assert_eq!(owners.capacity.calls.load(Ordering::Acquire), MAX_CALLS);
+    assert_eq!(
+        owners.capacity.calls.load(Ordering::Acquire),
+        MAX_HANDLES + 2
+    );
     assert_eq!(
         resources
             .metrics()
             .unwrap()
             .class(ResourceClass::BackendStateBytes)
             .current,
-        STATE_BYTES + OWNER_BYTES + CALL_BYTES * MAX_CALLS as u64
+        STATE_BYTES
     );
     let pending = consumer.await;
-    assert_eq!(owners.capacity.calls.load(Ordering::Acquire), MAX_CALLS - 1);
+    assert_eq!(
+        owners.capacity.calls.load(Ordering::Acquire),
+        MAX_HANDLES + 1
+    );
+    drop(additional);
     drop(remaining);
     pending.dispose().await.unwrap();
     drop(pending);
@@ -89,7 +95,7 @@ async fn cancelled_consumer_keeps_the_started_continuation_admitted() {
             .unwrap()
             .class(ResourceClass::BackendStateBytes)
             .current,
-        STATE_BYTES + CALL_BYTES
+        STATE_BYTES
     );
     drop(native);
     assert_eq!(owners.capacity.calls.load(Ordering::Acquire), 0);

@@ -323,17 +323,46 @@ async fn multiple_page_routes_reuse_a_single_factory_admission_budget() {
 }
 
 #[test]
-fn undeclared_route_resources_fail_before_binding_or_cdp() {
+fn page_route_owns_an_independent_resource_ledger_from_backend_factory() {
     // Arrange
+    let client = Arc::new(FakeCdpClient::from_html(""));
+    let input = CdpInputCoordinator::new();
     let selected = profile().backend();
-    let resources = resources(selected.requirements());
+    let backend_resources = resources(selected.requirements());
     let factory = CdpKeyboardServiceFactory::new_with_production_resources(
         selected,
-        &resources,
+        &backend_resources,
         Arc::new(Delay),
         KeyboardPlatform::Other,
     )
     .unwrap();
+    let route_resources = resources(ChromiumKeyboardPage::route_requirements());
+
+    // Act
+    let page =
+        ChromiumKeyboardPage::bind(ObjectId::new(7), client, input, &factory, &route_resources)
+            .unwrap();
+
+    // Assert
+    assert_eq!(backend_resources.metrics().unwrap().active_leases, 0);
+    assert_eq!(route_resources.metrics().unwrap().active_leases, 1);
+    drop(page);
+    assert_eq!(route_resources.metrics().unwrap().active_leases, 0);
+}
+
+#[test]
+fn undeclared_route_resources_fail_before_binding_or_cdp() {
+    // Arrange
+    let selected = profile().backend();
+    let backend_resources = resources(selected.requirements());
+    let factory = CdpKeyboardServiceFactory::new_with_production_resources(
+        selected,
+        &backend_resources,
+        Arc::new(Delay),
+        KeyboardPlatform::Other,
+    )
+    .unwrap();
+    let undeclared_resources = resources(ResourceRequirements::none());
     let client = Arc::new(FakeCdpClient::from_html(""));
     // Act
     let result = ChromiumKeyboardPage::bind(
@@ -341,12 +370,13 @@ fn undeclared_route_resources_fail_before_binding_or_cdp() {
         client.clone(),
         CdpInputCoordinator::new(),
         &factory,
-        &resources,
+        &undeclared_resources,
     );
     // Assert
     assert!(result.is_err());
     assert!(client.calls().is_empty());
-    assert_eq!(resources.metrics().unwrap().active_leases, 0);
+    assert_eq!(backend_resources.metrics().unwrap().active_leases, 0);
+    assert_eq!(undeclared_resources.metrics().unwrap().active_leases, 0);
 }
 
 #[derive(Default)]

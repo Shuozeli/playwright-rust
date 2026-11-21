@@ -49,6 +49,7 @@ async function inspectNativeArtifactInChild() {
 test('built native artifact exports the current ABI and core environment', { timeout: 25000 }, async () => {
   // Arrange
   const features = nativeFeatures(nativeArtifact.profile);
+  const expectsHarReplay = features.includes('har-replay') || features.includes('har-recording');
   const expected = {
     abi: nativeAbiVersion,
     environment: 'function',
@@ -58,6 +59,13 @@ test('built native artifact exports the current ABI and core environment', { tim
     fillNavigationCommitEnabled: features.includes('fill-navigation-commit'),
     routeRequestHistoryEnabled: features.includes('route-request-history'),
     contextCookiesEnabled: features.includes('context-cookies'),
+    contextLocaleEnabled: features.includes('context-locale'),
+    contextTimezoneEnabled: features.includes('context-timezone'),
+    contextGeolocationEnabled: features.includes('context-geolocation'),
+    contextPermissionsEnabled: features.includes('context-geolocation-permission'),
+    contextHttpCredentialsEnabled: features.includes('context-http-credentials'),
+    contextBindingsEnabled: features.includes('context-bindings'),
+    ignoreHttpsErrorsEnabled: features.includes('ignore-https-errors'),
     largeEvaluationInputsEnabled: features.includes('large-evaluation-inputs'),
     largeRoutePostDataEnabled: features.includes('large-route-post-data'),
     elementHandleScrollIntoViewEnabled: features.includes('element-handle-scroll-into-view'),
@@ -65,6 +73,9 @@ test('built native artifact exports the current ABI and core environment', { tim
     elementHandleSelectOptionValueEnabled: features.includes('element-handle-select-option-value'),
     lightSelectorsEnabled: features.includes('light-selectors'),
     frameEventsEnabled: features.includes('frame-events'),
+    harReplayEnabled: expectsHarReplay,
+    harRecordingEnabled: features.includes('har-recording'),
+    harRecordingRegExpEnabled: features.includes('har-recording-regexp'),
     cdpSessionLease: features.includes('cdp-session') ? 'function' : 'undefined',
     cdpEventBatch: features.includes('cdp-session') ? 'function' : 'undefined',
     methods: {
@@ -83,10 +94,30 @@ test('built native artifact exports the current ABI and core environment', { tim
       cdpBatchRollback: features.includes('cdp-session') ? 'function' : 'undefined',
       launchChromiumWithTracesDir: features.includes('playwright-trace') ? 'function' : 'undefined',
       contextRequest: features.includes('context-api-request') ? 'function' : 'undefined',
+      contextCookies: features.includes('context-cookies') ? 'function' : 'undefined',
       contextAddCookies: features.includes('context-cookies') ? 'function' : 'undefined',
+      contextClearCookies: features.includes('context-cookies') ? 'function' : 'undefined',
+      contextStorageState: features.includes('context-storage-state') ? 'function' : 'undefined',
+      contextSetStorageState: features.includes('context-storage-state') ? 'function' : 'undefined',
+      newContextWithIgnoreHttpsErrors: features.includes('ignore-https-errors') ? 'function' : 'undefined',
+      newContextWithLocale: features.includes('context-locale') ? 'function' : 'undefined',
+      newContextWithPolicies: features.some(feature => [
+        'extra-headers', 'context-locale', 'context-timezone', 'context-geolocation', 'context-geolocation-permission', 'context-http-credentials', 'context-offline', 'context-proxy',
+        'ignore-https-errors', 'bypass-csp',
+      ].includes(feature)) ? 'function' : 'undefined',
+      newContextWithPoliciesAndExtraHttpHeaders: features.includes('extra-headers') ? 'function' : 'undefined',
+      setContextGeolocation: features.includes('context-geolocation') ? 'function' : 'undefined',
+      setContextHttpCredentials: features.includes('context-http-credentials') ? 'function' : 'undefined',
+      contextExposeBinding: features.includes('context-bindings') ? 'function' : 'undefined',
+      grantContextPermissions: features.includes('context-geolocation-permission') ? 'function' : 'undefined',
+      clearContextPermissions: features.includes('context-geolocation-permission') ? 'function' : 'undefined',
+      newContextWithDeviceOptionsAndIgnoreHttpsErrors: features.includes('ignore-https-errors')
+        && features.includes('device-emulation') ? 'function' : 'undefined',
       pageGoBack: features.includes('history-navigation') ? 'function' : 'undefined',
       pageGoForward: features.includes('history-navigation') ? 'function' : 'undefined',
+      pagePdf: features.includes('page-pdf') ? 'function' : 'undefined',
       newContextWithHasTouch: features.includes('device-emulation') ? 'function' : 'undefined',
+      newContextWithDeviceOptions: features.includes('device-emulation') ? 'function' : 'undefined',
       touchscreenTap: features.includes('touchscreen-input') ? 'function' : 'undefined',
       elementHandleTap: features.includes('touchscreen-input') && features.includes('element-handle-dom')
         ? 'function'
@@ -108,9 +139,18 @@ test('built native artifact exports the current ABI and core environment', { tim
         : {}),
       pageRouteContinueWithHeaders: features.includes('route-header-url-overrides') ? 'function' : 'undefined',
       pageRouteFallbackWithUrl: features.includes('route-header-url-overrides') ? 'function' : 'undefined',
+      pageRouteFallbackWithOverrides: features.includes('route-header-url-overrides') ? 'function' : 'undefined',
       pageUnroute: features.includes('page-unroute') ? 'function' : 'undefined',
       responseRawHeaders: features.includes('route-request-history') ? 'function' : 'undefined',
       newContextWithProxy: features.includes('context-proxy') ? 'function' : 'undefined',
+      pageRouteFromHar: expectsHarReplay ? 'function' : 'undefined',
+      contextRouteFromHar: expectsHarReplay ? 'function' : 'undefined',
+      pageRouteFromHarRegExp: expectsHarReplay && features.includes('route-regexp') ? 'function' : 'undefined',
+      contextRouteFromHarRegExp: expectsHarReplay && features.includes('route-regexp') ? 'function' : 'undefined',
+      pageRecordHar: features.includes('har-recording') ? 'function' : 'undefined',
+      contextRecordHar: features.includes('har-recording') ? 'function' : 'undefined',
+      pageRecordHarRegExp: features.includes('har-recording-regexp') ? 'function' : 'undefined',
+      contextRecordHarRegExp: features.includes('har-recording-regexp') ? 'function' : 'undefined',
     },
   };
   // Act

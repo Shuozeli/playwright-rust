@@ -16,7 +16,6 @@ use tokio_util::sync::CancellationToken;
 
 mod conversion;
 
-const PORTS: usize = 16;
 // One synchronous conversion/emit at a time under the exclusive native drain.
 // Covers the port/Rc bodies, Node reference holder, ID strings and call frames;
 // V8 allocations are GC-owned, not claimed as Rust RSS accounting.
@@ -50,9 +49,35 @@ const _: () = assert!(
             + 4096
 );
 
+struct PortOwners<T> {
+    ports: Vec<Weak<RefCell<T>>>,
+}
+
+impl<T> Default for PortOwners<T> {
+    fn default() -> Self {
+        Self { ports: Vec::new() }
+    }
+}
+
+impl<T> PortOwners<T> {
+    fn reserve(&mut self, is_live: impl Fn(&Rc<RefCell<T>>) -> bool) -> Result<(), HostError> {
+        self.ports
+            .retain(|port| port.upgrade().is_some_and(|state| is_live(&state)));
+        self.ports.try_reserve(1).map_err(|error| {
+            HostError::ResourceExhausted(format!(
+                "publication port registry allocation failed: {error}"
+            ))
+        })
+    }
+
+    fn push(&mut self, state: &Rc<RefCell<T>>) {
+        self.ports.push(Rc::downgrade(state));
+    }
+}
+
 struct Registry {
     stopped: bool,
-    ports: [Option<Weak<RefCell<State>>>; PORTS],
+    ports: PortOwners<State>,
     _storage: PublicationRegistryStorage,
 }
 
@@ -64,16 +89,11 @@ impl PublicationPorts {
         let storage = PublicationRegistryStorage::reserve(
             std::mem::size_of::<RefCell<Registry>>()
                 + 2 * std::mem::size_of::<usize>()
-                + std::mem::size_of::<Self>()
-                + std::mem::size_of::<[Option<Weak<RefCell<State>>>; PORTS]>()
-                // Weak slots can retain an empty Rc allocation after its
-                // last strong port has released the per-session lease.
-                + PORTS * (std::mem::size_of::<RefCell<State>>()
-                    + 2 * std::mem::size_of::<usize>()),
+                + std::mem::size_of::<Self>(),
         )?;
         Ok(Self(Rc::new(RefCell::new(Registry {
             stopped: false,
-            ports: std::array::from_fn(|_| None),
+            ports: PortOwners::default(),
             _storage: storage,
         }))))
     }
@@ -83,17 +103,7 @@ impl PublicationPorts {
         if registry.stopped {
             return Err(HostError::TargetClosed);
         }
-        let slot = registry
-            .ports
-            .iter_mut()
-            .find(|slot| {
-                slot.as_ref()
-                    .and_then(Weak::upgrade)
-                    .is_none_or(|state| state.borrow().finished)
-            })
-            .ok_or_else(|| {
-                HostError::ResourceExhausted("publication port capacity exceeded (16)".into())
-            })?;
+        registry.ports.reserve(|state| !state.borrow().finished)?;
         let storage = host.reserve_metadata_conversion(PORT_BYTES)?;
         let state = Rc::new(RefCell::new(State {
             #[cfg(feature = "retained-file-input")]
@@ -102,7 +112,7 @@ impl PublicationPorts {
             finished: false,
             _storage: storage,
         }));
-        *slot = Some(Rc::downgrade(&state));
+        registry.ports.push(&state);
         Ok(PublicationPort {
             state,
             book: host.frame_publications(),
@@ -115,13 +125,9 @@ impl PublicationPorts {
         let ports = {
             let mut registry = self.0.borrow_mut();
             registry.stopped = true;
-            std::mem::take(&mut registry.ports)
+            std::mem::take(&mut registry.ports.ports)
         };
-        for state in ports
-            .into_iter()
-            .flatten()
-            .filter_map(|weak| weak.upgrade())
-        {
+        for state in ports.into_iter().filter_map(|weak| weak.upgrade()) {
             finish(&state);
         }
     }
@@ -292,5 +298,34 @@ fn emit<'env>(env: &'env Env, callback: Unknown<'env>) -> napi::Result<Option<Un
     } else {
         status(code)?;
         Ok(None)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn port_ownership_grows_past_the_legacy_session_count_and_reclaims_dead_entries() {
+        // Arrange
+        let mut owners = PortOwners::default();
+        let mut live = Vec::new();
+
+        // Act
+        for _ in 0..129 {
+            owners.reserve(|_| true).unwrap();
+            let state = Rc::new(RefCell::new(()));
+            owners.push(&state);
+            live.push(state);
+        }
+        live.remove(64);
+        owners.reserve(|_| true).unwrap();
+        let replacement = Rc::new(RefCell::new(()));
+        owners.push(&replacement);
+
+        // Assert
+        assert_eq!(live.len(), 128);
+        assert_eq!(owners.ports.len(), 129);
+        assert!(owners.ports.iter().all(|port| port.upgrade().is_some()));
     }
 }

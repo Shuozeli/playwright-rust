@@ -28,11 +28,11 @@ type Result<T> = std::result::Result<T, CloseRouteRetirementError>;
 /// subscription state unchanged. Native proof and commit scratch belong to the
 /// selecting coordinator, not this local routing primitive.
 #[must_use = "commit route retirement or drop to preserve the current view"]
-pub struct PreparedCloseRouteRetirement<'a> {
-    current: MutexGuard<'a, CdpServiceRoutes>,
-    network: Option<MutexGuard<'a, ChromiumNetworkSubscriptionState>>,
-    disposed: &'a [ObjectId],
-    readiness: Option<&'a Arc<ExecutionWorldReadiness>>,
+pub struct PreparedCloseRouteRetirement<'services, 'disposed> {
+    current: MutexGuard<'services, CdpServiceRoutes>,
+    network: Option<MutexGuard<'services, ChromiumNetworkSubscriptionState>>,
+    disposed: &'disposed [ObjectId],
+    readiness: Option<&'services Arc<ExecutionWorldReadiness>>,
 }
 
 /// Explicit post-commit wake port. Invoke only after releasing ALL surrounding
@@ -57,11 +57,11 @@ impl CdpPageServices {
     ///
     /// The candidate and runtime child-first disposal IDs are borrowed. No
     /// allocation, service construction, native command or subscription is made.
-    pub fn prepare_close_route_retirement<'a>(
-        &'a self,
+    pub fn prepare_close_route_retirement<'services, 'disposed>(
+        &'services self,
         candidate: &playwright_rust_backend_cdp::CdpTopology,
-        disposed: &'a [ObjectId],
-    ) -> Result<PreparedCloseRouteRetirement<'a>> {
+        disposed: &'disposed [ObjectId],
+    ) -> Result<PreparedCloseRouteRetirement<'services, 'disposed>> {
         let current = self
             .routes
             .lock()
@@ -96,7 +96,7 @@ impl CdpPageServices {
     }
 }
 
-impl<'a> PreparedCloseRouteRetirement<'a> {
+impl<'services> PreparedCloseRouteRetirement<'services, '_> {
     /// Record an independently validated native fact, not local route absence.
     #[cfg(feature = "native-close-retirement")]
     pub(crate) fn observe_native_destruction(
@@ -111,7 +111,7 @@ impl<'a> PreparedCloseRouteRetirement<'a> {
 
     /// Infallible, allocation-free deletion. Keeps all surviving Arc identities
     /// and the native-world receipt registry. Does NOT mark any world destroyed.
-    pub fn commit(mut self) -> CloseRouteRetirementWake<'a> {
+    pub fn commit(mut self) -> CloseRouteRetirementWake<'services> {
         let disposed = self.disposed;
         let keep = |id: &ObjectId| !disposed.contains(id);
         if let Some(table) = &mut self.current.frame_navigation {

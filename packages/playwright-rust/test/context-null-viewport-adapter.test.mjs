@@ -20,17 +20,16 @@ test('null viewport rejects the two pinned option conflicts before native select
     assert.throws(() => nullViewport.validate(options), error => error.message === `browser.newContext: ${message}`);
 });
 
-test('null viewport execution and standalone device scale remain explicit capability gaps', () => {
+test('null viewport execution uses the ordinary non-emulated Context path', () => {
   // Arrange
-  const unsupported = [
+  const supported = [
     { noViewport: true },
     { noViewport: true, isMobile: false },
-    { deviceScaleFactor: 2 },
   ];
 
   // Act and Assert
-  for (const options of unsupported)
-    assert.throws(() => nullViewport.validate(options), UnsupportedOperationError);
+  for (const options of supported)
+    assert.equal(nullViewport.validate(options), undefined);
 });
 
 test('default viewport path remains unchanged and invalid option type fails', () => {

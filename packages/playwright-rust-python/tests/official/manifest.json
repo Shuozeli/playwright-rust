@@ -23,7 +23,7 @@
         "pytestVersion": "8.4.1",
         "pytestPlaywrightVersion": "0.7.2",
         "requirements": "packages/playwright-rust-python/tests/official/examples-oracle-requirements.txt",
-        "requirementsSha256": "28a04972055dcaedcc64fa5b23d7bf0b31544cbb2bd79fccae388636fa866594"
+        "requirementsSha256": "21e32b57e3d18046a7d6c67c930bb5881aae351f3367e9c674048984e51f5761"
       }
     ],
     "defaultBrowsers": [

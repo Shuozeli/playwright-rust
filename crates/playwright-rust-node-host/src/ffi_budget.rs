@@ -10,6 +10,7 @@ use playwright_rust_core::{
     ProductionResourceLedger, ResourceClass, ResourceLease, ResourceLedger, ResourceLimits,
     ResourceRequest, ResourceRequirements, ResourceScope,
 };
+use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::{TaskTracker, task_tracker::TaskTrackerToken};
 
@@ -45,6 +46,9 @@ impl FfiLane {
 
 #[derive(Clone, Copy)]
 pub struct FfiLimits {
+    /// Maximum Connect operations executing native startup concurrently.
+    /// Callers and completed results are allocator-backed and do not consume
+    /// these slots.
     pub connects: usize,
     pub commands: usize,
     pub closes: usize,
@@ -84,6 +88,10 @@ struct Registry {
 struct BudgetInner {
     resources: ResourceLedger,
     limits: [usize; 4],
+    // Connect tickets are allocator-backed so completed results and callers
+    // waiting to start cannot consume the native execution capacity. This
+    // fair semaphore limits only network/process startup work.
+    connect_slots: Arc<Semaphore>,
     future_bytes: [usize; 4],
     active: [AtomicUsize; 4],
     queued: AtomicUsize,
@@ -104,8 +112,16 @@ impl FfiBudget {
             limits.closes,
             limits.watches,
         ];
-        let capacity = lanes
+        if limits.connects > Semaphore::MAX_PERMITS {
+            return Err(HostError::InvalidArgument(format!(
+                "FFI Connect execution limit {} exceeds {}",
+                limits.connects,
+                Semaphore::MAX_PERMITS
+            )));
+        }
+        let capacity = lanes[1..]
             .iter()
+            .filter(|value| **value != usize::MAX)
             .try_fold(0usize, |total, value| total.checked_add(*value))
             .ok_or_else(|| HostError::ResourceExhausted("FFI capacity overflow".into()))?;
         let units = u64::try_from(capacity).map_err(HostError::backend)?;
@@ -133,6 +149,7 @@ impl FfiBudget {
         Ok(Self(Arc::new(BudgetInner {
             resources,
             limits: lanes,
+            connect_slots: Arc::new(Semaphore::new(limits.connects)),
             future_bytes: limits.future_bytes,
             active: std::array::from_fn(|_| AtomicUsize::new(0)),
             queued: AtomicUsize::new(0),
@@ -145,6 +162,10 @@ impl FfiBudget {
             stopped: CancellationToken::new(),
             tasks: TaskTracker::new(),
         })))
+    }
+
+    fn allocator_backed_lane(&self, lane: FfiLane) -> bool {
+        matches!(lane, FfiLane::Connect) || self.0.limits[lane.index()] == usize::MAX
     }
 
     /// Reserve before copying foreign arguments or spawning any task. The
@@ -183,7 +204,9 @@ impl FfiBudget {
         }
         registry.entries.retain(|_, entry| entry.is_active());
         let index = lane.index();
-        if self.0.active[index].load(Ordering::Acquire) >= self.0.limits[index] {
+        if !matches!(lane, FfiLane::Connect)
+            && self.0.active[index].load(Ordering::Acquire) >= self.0.limits[index]
+        {
             return Err(HostError::ResourceExhausted(format!(
                 "FFI {lane:?} pending-result capacity exceeded ({})",
                 self.0.limits[index]
@@ -193,18 +216,23 @@ impl FfiBudget {
         registry.next_id = id
             .checked_add(1)
             .ok_or_else(|| HostError::ResourceExhausted("FFI ticket IDs exhausted".into()))?;
-        let mut requests = vec![ResourceRequest::new(ResourceClass::PendingCall, 1)];
-        if reserved_bytes != 0 {
-            requests.push(ResourceRequest::new(
-                ResourceClass::BackendStateBytes,
-                reserved_bytes,
-            ));
-        }
-        let lease = self
-            .0
-            .resources
-            .reserve_many(ResourceScope::extension(122, 1), &requests)
-            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
+        let lease = if self.allocator_backed_lane(lane) {
+            None
+        } else {
+            let mut requests = vec![ResourceRequest::new(ResourceClass::PendingCall, 1)];
+            if reserved_bytes != 0 {
+                requests.push(ResourceRequest::new(
+                    ResourceClass::BackendStateBytes,
+                    reserved_bytes,
+                ));
+            }
+            Some(
+                self.0
+                    .resources
+                    .reserve_many(ResourceScope::extension(122, 1), &requests)
+                    .map_err(|error| HostError::ResourceExhausted(error.to_string()))?,
+            )
+        };
         self.0.active[index].fetch_add(1, Ordering::Release);
         let entry = Arc::new(Entry {
             state: Mutex::new(EntryState {
@@ -235,19 +263,27 @@ impl FfiBudget {
             self.0.active.each_ref().map(|count| {
                 u32::try_from(count.load(Ordering::Acquire)).map_err(HostError::backend)
             });
+        let connects = connects?;
+        let commands = commands?;
+        let closes = closes?;
+        let watches = watches?;
+        let pending = connects
+            .checked_add(commands)
+            .and_then(|value| value.checked_add(closes))
+            .and_then(|value| value.checked_add(watches))
+            .ok_or_else(|| HostError::backend("FFI pending metric overflow"))?;
         Ok(FfiMetrics {
-            pending: u32::try_from(metrics.class(ResourceClass::PendingCall).current)
-                .map_err(HostError::backend)?,
+            pending,
             queued: u32::try_from(self.0.queued.load(Ordering::Acquire))
                 .map_err(HostError::backend)?,
             queued_commands: u32::try_from(self.0.queued_commands.load(Ordering::Acquire))
                 .map_err(HostError::backend)?,
             running: u32::try_from(self.0.tasks.len()).map_err(HostError::backend)?,
             reserved_bytes: metrics.class(ResourceClass::BackendStateBytes).current,
-            connects: connects?,
-            commands: commands?,
-            closes: closes?,
-            watches: watches?,
+            connects,
+            commands,
+            closes,
+            watches,
         })
     }
 
@@ -262,6 +298,7 @@ impl FfiBudget {
         // Both operations can synchronously wake arbitrary Rust code. The
         // sealed registry rejects admission/promotion even before cancellation
         // is observed; neither wakeup may run while its lock is held.
+        self.0.connect_slots.close();
         self.0.stopped.cancel();
         self.0.tasks.close();
         self.0.tasks.wait().await;
@@ -278,7 +315,7 @@ struct Permit {
     budget: FfiBudget,
     lane: FfiLane,
     queued: bool,
-    _lease: ResourceLease,
+    _lease: Option<ResourceLease>,
     additional: Vec<ResourceLease>,
     future: Option<ResourceLease>,
 }
@@ -342,6 +379,17 @@ pub struct FfiExecution<T: Send> {
 }
 
 impl<T: Send> FfiExecution<T> {
+    fn connect_lane(&self) -> Result<Option<(FfiBudget, Arc<Semaphore>)>, HostError> {
+        let state = self.ticket.entry.state.lock().map_err(HostError::backend)?;
+        let permit = state.permit.as_ref().ok_or(HostError::TargetClosed)?;
+        Ok(matches!(permit.lane, FfiLane::Connect).then(|| {
+            (
+                permit.budget.clone(),
+                Arc::clone(&permit.budget.0.connect_slots),
+            )
+        }))
+    }
+
     /// A typed handle that can charge a result-dependent allocation after the
     /// foreign call has produced its bounded native value. The added lease is
     /// retained by the original ticket through foreign-runtime conversion.
@@ -372,7 +420,7 @@ impl<T: Send> FfiExecution<T> {
                 "FFI future allocation was already reserved".into(),
             ));
         }
-        if bytes > 0 {
+        if bytes > 0 && !permit.budget.allocator_backed_lane(permit.lane) {
             permit.future = Some(
                 permit
                     .budget
@@ -405,10 +453,13 @@ impl<T: Send> FfiExecution<T> {
     /// asynchronous calls. The returned ticket must be delivered by the
     /// caller while its foreign runtime is still available.
     pub fn run_sync(self, operation: impl FnOnce() -> Result<T, HostError>) -> FfiTicket<T> {
-        let outcome = if self.stopped.is_cancelled() {
-            Err(HostError::TargetClosed)
-        } else {
-            operation()
+        let outcome = match self.connect_lane() {
+            Err(error) => Err(error),
+            Ok(Some(_)) => Err(HostError::InvalidArgument(
+                "FFI Connect operations must use asynchronous execution".into(),
+            )),
+            Ok(None) if self.stopped.is_cancelled() => Err(HostError::TargetClosed),
+            Ok(None) => operation(),
         };
         self.settle(outcome)
     }
@@ -481,6 +532,9 @@ impl<T: Send> FfiReservation<T> {
             return Err(HostError::TargetClosed);
         }
         let permit = state.permit.as_mut().ok_or(HostError::TargetClosed)?;
+        if permit.budget.allocator_backed_lane(permit.lane) {
+            return Ok(());
+        }
         let lease = permit
             .budget
             .0
@@ -506,6 +560,38 @@ struct ExecutionWork<T: Send, F> {
 impl<T: Send, F: Future<Output = Result<T, HostError>>> ExecutionWork<T, F> {
     async fn run(self) -> FfiTicket<T> {
         let Self { future, execution } = self;
+        let connect_slot = match execution.connect_lane() {
+            Ok(Some((budget, slots))) => {
+                let acquired = tokio::select! {
+                    biased;
+                    () = execution.stopped.cancelled() => Err(HostError::TargetClosed),
+                    permit = slots.acquire_owned() => permit.map_err(|_| HostError::TargetClosed),
+                };
+                match acquired {
+                    Ok(permit) => {
+                        // The registry is the authoritative shutdown gate. A
+                        // waiter can wake in the interval after shutdown seals
+                        // it but before semaphore close/cancellation arrives;
+                        // confirm promotion under that same gate before the
+                        // startup future receives its first poll.
+                        let promotion_open = budget
+                            .0
+                            .registry
+                            .lock()
+                            .map(|registry| !registry.closed)
+                            .map_err(HostError::backend);
+                        match promotion_open {
+                            Ok(true) if !execution.stopped.is_cancelled() => Some(permit),
+                            Ok(_) => return execution.settle(Err(HostError::TargetClosed)),
+                            Err(error) => return execution.settle(Err(error)),
+                        }
+                    }
+                    Err(error) => return execution.settle(Err(error)),
+                }
+            }
+            Ok(None) => None,
+            Err(error) => return execution.settle(Err(error)),
+        };
         #[cfg(feature = "retained-file-input")]
         let outcome = {
             // This lexical holder owns the actual future, not just a Pin
@@ -525,6 +611,9 @@ impl<T: Send, F: Future<Output = Result<T, HostError>>> ExecutionWork<T, F> {
             () = execution.stopped.cancelled() => Err(HostError::TargetClosed),
             result = future => result,
         };
+        // Promotion is tied to native completion, not to later foreign result
+        // conversion. Dropping this exact permit wakes the oldest waiter.
+        drop(connect_slot);
         execution.settle(outcome)
     }
 }
@@ -565,6 +654,11 @@ mod shutdown_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::{
+        pin::Pin,
+        sync::atomic::AtomicBool,
+        task::{Context, Poll, Waker},
+    };
 
     fn budget() -> FfiBudget {
         FfiBudget::new(FfiLimits {
@@ -576,6 +670,138 @@ mod tests {
             future_bytes: [16; 4],
         })
         .unwrap()
+    }
+
+    struct ConnectProbe {
+        id: usize,
+        polls: Arc<Mutex<Vec<usize>>>,
+    }
+
+    impl Future for ConnectProbe {
+        type Output = Result<(), HostError>;
+
+        fn poll(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Self::Output> {
+            self.polls.lock().unwrap().push(self.id);
+            Poll::Pending
+        }
+    }
+
+    struct ControlledConnect {
+        id: usize,
+        polls: Arc<Mutex<Vec<usize>>>,
+        ready: Arc<AtomicBool>,
+    }
+
+    impl Future for ControlledConnect {
+        type Output = Result<(), HostError>;
+
+        fn poll(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Self::Output> {
+            self.polls.lock().unwrap().push(self.id);
+            if self.ready.load(Ordering::Acquire) {
+                Poll::Ready(Ok(()))
+            } else {
+                Poll::Pending
+            }
+        }
+    }
+
+    fn poll_now<F: Future + ?Sized>(future: Pin<&mut F>) -> Poll<F::Output> {
+        future.poll(&mut Context::from_waker(Waker::noop()))
+    }
+
+    #[test]
+    fn connect_execution_waits_fifo_without_a_public_ticket_limit() {
+        // Arrange
+        let budget = budget();
+        let polls = Arc::new(Mutex::new(Vec::new()));
+        let mut runs = (0..129)
+            .map(|id| {
+                let execution = budget.admit(FfiLane::Connect, 8).unwrap();
+                Box::pin(execution.run(ConnectProbe {
+                    id,
+                    polls: Arc::clone(&polls),
+                }))
+            })
+            .collect::<Vec<_>>();
+
+        // Act
+        for run in &mut runs {
+            assert!(poll_now(run.as_mut()).is_pending());
+        }
+
+        // Assert
+        assert_eq!(*polls.lock().unwrap(), [0]);
+        assert_eq!(budget.metrics().unwrap().connects, 129);
+        for expected in 1..129 {
+            drop(runs.remove(0));
+            assert!(poll_now(runs[0].as_mut()).is_pending());
+            assert_eq!(polls.lock().unwrap().last(), Some(&expected));
+        }
+        drop(runs);
+        assert_eq!(budget.metrics().unwrap(), FfiMetrics::default());
+    }
+
+    #[test]
+    fn cancelled_connect_waiter_loses_its_exact_fifo_position() {
+        // Arrange
+        let budget = budget();
+        let polls = Arc::new(Mutex::new(Vec::new()));
+        let mut runs = (0..3)
+            .map(|id| {
+                let execution = budget.admit(FfiLane::Connect, 8).unwrap();
+                Box::pin(execution.run(ConnectProbe {
+                    id,
+                    polls: Arc::clone(&polls),
+                }))
+            })
+            .collect::<Vec<_>>();
+        for run in &mut runs {
+            assert!(poll_now(run.as_mut()).is_pending());
+        }
+
+        // Act
+        drop(runs.remove(1));
+        drop(runs.remove(0));
+        assert!(poll_now(runs[0].as_mut()).is_pending());
+
+        // Assert
+        assert_eq!(*polls.lock().unwrap(), [0, 2]);
+        drop(runs);
+        assert_eq!(budget.metrics().unwrap(), FfiMetrics::default());
+    }
+
+    #[test]
+    fn completed_connect_promotes_waiter_before_foreign_delivery() {
+        // Arrange
+        let budget = budget();
+        let polls = Arc::new(Mutex::new(Vec::new()));
+        let ready = Arc::new(AtomicBool::new(false));
+        let first = budget.admit(FfiLane::Connect, 8).unwrap();
+        let second = budget.admit(FfiLane::Connect, 8).unwrap();
+        let mut first_run = Box::pin(first.run(ControlledConnect {
+            id: 0,
+            polls: Arc::clone(&polls),
+            ready: Arc::clone(&ready),
+        }));
+        let mut second_run = Box::pin(second.run(ConnectProbe {
+            id: 1,
+            polls: Arc::clone(&polls),
+        }));
+        assert!(poll_now(first_run.as_mut()).is_pending());
+        assert!(poll_now(second_run.as_mut()).is_pending());
+
+        // Act
+        ready.store(true, Ordering::Release);
+        let Poll::Ready(first_ticket) = poll_now(first_run.as_mut()) else {
+            panic!("the first connect must settle once its native work completes");
+        };
+        assert!(poll_now(second_run.as_mut()).is_pending());
+
+        // Assert
+        assert_eq!(*polls.lock().unwrap(), [0, 0, 1]);
+        assert_eq!(budget.metrics().unwrap().queued, 1);
+        drop((first_ticket, second_run));
+        assert_eq!(budget.metrics().unwrap(), FfiMetrics::default());
     }
 
     #[tokio::test]

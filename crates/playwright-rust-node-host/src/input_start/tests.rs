@@ -109,19 +109,21 @@ fn close_wakes_every_queued_call_without_polling_its_body() {
 }
 
 #[test]
-fn capacity_bounds_unpolled_submissions_and_reclaims_dropped_slots() {
+fn allocator_backed_queue_grows_past_legacy_capacity_and_reclaims_dropped_tickets() {
     // Arrange
     let (_, order) = setup();
-    let mut tickets = (0..CAPACITY)
+    let mut tickets = (0..129)
         .map(|_| order.admit(None).unwrap())
         .collect::<Vec<_>>();
+
     // Act
-    let overflow = order.admit(None);
-    // Assert
-    assert!(matches!(overflow, Err(HostError::ResourceExhausted(_))));
-    tickets.pop();
+    tickets.remove(64);
     let replacement = order.admit(None).unwrap();
-    assert_eq!(replacement.id, CAPACITY as u64 + 1);
+
+    // Assert
+    assert_eq!(tickets.len(), 128);
+    assert_eq!(order.0.state.lock().unwrap().slots.len(), 129);
+    assert_eq!(replacement.id, 130);
 }
 
 #[test]

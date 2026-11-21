@@ -18,6 +18,18 @@ fn access_fixture(capacity: usize) -> (Fixture, ChromiumFrameWorldAccess) {
             .unwrap();
     (fixture, access)
 }
+fn allocator_access_fixture(native_retirement: bool) -> (Fixture, ChromiumFrameWorldAccess) {
+    let mut profile =
+        ChromiumFrameWorldAccessProfile::new_allocator_backed(ResourceScope::extension(98, 3));
+    if native_retirement {
+        profile = profile.with_native_retirement().unwrap();
+    }
+    let fixture = fixture_with_world_access(true, Some(profile));
+    let access =
+        ChromiumFrameWorldAccess::new(&fixture.services, profile, fixture.prepared.resources())
+            .unwrap();
+    (fixture, access)
+}
 fn pair(fixture: &mut Fixture, frame: &str, first: i64) {
     attach_world(
         &mut fixture.topology,
@@ -50,6 +62,37 @@ fn scope_bytes(fixture: &Fixture, scope: ResourceScope) -> u64 {
         .scope_metrics(scope)
         .unwrap()
         .map_or(0, |metrics| metrics.units(ResourceClass::BackendStateBytes))
+}
+
+#[tokio::test]
+async fn allocator_backed_access_retains_129_snapshots_and_receipts() {
+    // Arrange
+    let (mut fixture, access) = allocator_access_fixture(true);
+    pair(&mut fixture, "frame-a", 11);
+    let baseline = bytes(&fixture);
+
+    // Act
+    let mut snapshots = Vec::new();
+    for _ in 0..129 {
+        snapshots.push(access.snapshot(ObjectId::new(4)).await.unwrap());
+    }
+    let browser = playwright_rust_fake::FakeCdpClient::from_html("");
+    access.retire_owned_native_sessions(&browser).await.unwrap();
+
+    // Assert
+    assert_eq!(snapshots.len(), 129);
+    assert!(
+        snapshots
+            .iter()
+            .all(|snapshot| snapshot.is_current().unwrap())
+    );
+    assert!(snapshots.iter().all(|snapshot| {
+        snapshot
+            .native_lifetime()
+            .is_some_and(|receipt| receipt.native_objects_retired())
+    }));
+    assert_eq!(browser.method_names(), ["Target.detachFromTarget"]);
+    assert_eq!(bytes(&fixture), baseline);
 }
 
 #[tokio::test]
@@ -148,7 +191,7 @@ async fn main_only_snapshot_resolves_the_child_owner_before_utility_is_ready() {
     );
     assert_eq!(fake.calls()[1].1[0]["executionContextId"], 11);
     assert!(poll(paired.as_mut()).is_pending());
-    assert_eq!(bytes(&fixture), baseline + 2 * 8192);
+    assert_eq!(bytes(&fixture), baseline + 8192);
     drop(main);
     drop(paired);
     assert_eq!(bytes(&fixture), baseline);
@@ -272,15 +315,14 @@ async fn main_only_oopif_uses_its_exact_parent_session_after_handoff() {
 }
 
 #[tokio::test]
-async fn installation_clones_share_capacity_for_unpolled_and_retained_snapshots() {
+async fn installation_clones_share_capacity_for_retained_snapshots() {
     // Arrange
     let (mut fixture, access) = access_fixture(1);
     pair(&mut fixture, "frame-a", 11);
-    let first = access.snapshot(ObjectId::new(4));
+    let retained = access.snapshot(ObjectId::new(4)).await.unwrap();
     let clone = access.clone();
     // Act
     let excess = clone.snapshot(ObjectId::new(4)).await;
-    let retained = first.await.unwrap();
     let still_excess = clone.snapshot(ObjectId::new(4)).await;
     drop(retained);
     let replacement = clone.snapshot(ObjectId::new(4)).await;
@@ -702,7 +744,7 @@ async fn an_observed_retired_snapshot_cannot_revive_when_the_old_route_reappears
 }
 
 #[tokio::test]
-async fn readiness_rejection_releases_only_the_rejected_snapshot_allowance() {
+async fn readiness_queue_does_not_claim_snapshot_allowance_before_admission() {
     // Arrange
     let (fixture, access) = access_fixture(3);
     let baseline = bytes(&fixture);
@@ -711,16 +753,15 @@ async fn readiness_rejection_releases_only_the_rejected_snapshot_allowance() {
     assert!(poll(first.as_mut()).is_pending());
     assert!(poll(second.as_mut()).is_pending());
     // Act
-    let third = access.snapshot(ObjectId::new(4)).await;
+    let mut third = Box::pin(access.snapshot(ObjectId::new(4)));
+    assert!(poll(third.as_mut()).is_pending());
+    assert_eq!(bytes(&fixture), baseline);
+    drop(first);
+    let admitted = poll(third.as_mut());
     // Assert
-    assert!(matches!(
-        third,
-        Err(FrameWorldAccessError::Topology(
-            CdpPageRouteError::WorldReadinessCapacityExceeded { limit: 2 }
-        ))
-    ));
-    assert_eq!(bytes(&fixture), baseline + 2 * 8192);
-    drop((first, second));
+    assert!(admitted.is_pending());
+    assert_eq!(bytes(&fixture), baseline);
+    drop((second, third));
     assert_eq!(bytes(&fixture), baseline);
 }
 

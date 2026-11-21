@@ -62,6 +62,7 @@ from playwright_rust.sync_api import ConsoleMessage as SyncConsoleMessage
 from playwright_rust.sync_api import Dialog as SyncDialog
 from playwright_rust.sync_api import Download as SyncDownload
 from playwright_rust.sync_api import ElementHandle as SyncElementHandle
+from playwright_rust.sync_api import Error as SyncError
 from playwright_rust.sync_api import Frame as SyncFrame
 from playwright_rust.sync_api import JSHandle as SyncJSHandle
 from playwright_rust.sync_api import Locator as SyncLocator
@@ -99,13 +100,13 @@ def test_source_abi_rejects_older_native_before_first_call(
     )
 
 
-def test_frame_events_abi_is_131() -> None:
+def test_native_abi_is_141() -> None:
     # Arrange / Act
     declared = playwright_rust.NATIVE_ABI_VERSION
     observed = _native.native_abi_version()
 
     # Assert
-    assert declared == observed == 131
+    assert declared == observed == 141
 
 
 def test_remote_close_notice_method_matches_selected_feature() -> None:
@@ -128,33 +129,16 @@ def test_remote_close_notice_method_matches_selected_feature() -> None:
 def test_native_abi_and_selected_profile_are_explicit() -> None:
     # Arrange
     expected_limits = {
-        "sessions": 16,
         "connects": 16,
-        "commands": 32,
         "closes": 16,
         "watches": 256,
         "request_history_items_per_page": 100,
         "request_history_owners": 4096,
         "request_history_owners_per_page": 256,
-        "device_contexts": 16,
         "device_context_bytes": 64 * 1024,
-        "locale_contexts": 16,
-        "locale_bytes_per_context": 256,
-        "timezone_contexts": 16,
-        "timezone_bytes_per_context": 256,
-        "offline_contexts": 16,
-        "geolocation_contexts": 16,
-        "geolocation_permission_contexts": 16,
-        "http_credential_contexts": 16,
         "http_credential_field_bytes": 64 * 1024,
         "persistent_launch_arguments": 256,
         "persistent_launch_argument_bytes": 1024 * 1024,
-        "ignore_https_error_contexts": 16,
-        "bypass_csp_contexts": 16,
-        "javascript_disabled_contexts": 16,
-        "har_replay_archive_bytes": 8 * 1024 * 1024,
-        "har_replay_archives": 8,
-        "har_replay_retained_bytes": 8 * 1024 * 1024,
         "route_fulfill_body_bytes": 1024 * 1024,
         "route_fulfill_path_bytes": 4 * 1024,
         "route_initializing_sessions": 64,
@@ -165,62 +149,39 @@ def test_native_abi_and_selected_profile_are_explicit() -> None:
         "context_storage_state_bytes": 8 * 1024 * 1024,
         "context_storage_origins": 128,
         "context_storage_items": 4096,
-        "pdf_bytes": 2 * 1024 * 1024,
-        "pdf_concurrent_captures": 2,
-        "page_viewport_pages": 64,
         "page_viewport_bytes": 8 * 1024,
-        "screenshot_bytes": 2 * 1024 * 1024,
-        "screenshot_concurrent_captures": 2,
         "file_input_items": 64,
         "file_input_path_bytes": 4096,
         "file_input_name_bytes": 4096,
         "file_input_mime_bytes": 1024,
-        "selector_engines": 64,
         "selector_engine_name_bytes": 64,
         "selector_engine_source_bytes": 1024 * 1024,
         "selector_registry_bytes": 8 * 1024 * 1024,
         "test_id_attribute_bytes": 1024,
         "layout_selector_parts": 256,
         "layout_selector_program_bytes": 256 * 1024,
-        "request_size_owners": 64,
-        "request_event_contexts": 16,
         "request_event_notices": 256,
         "request_event_bytes": 16 * 1024 * 1024,
-        "response_event_contexts": 16,
         "response_event_notices": 256,
         "response_event_bytes": 16 * 1024 * 1024,
         "response_finished_owners": 256,
         "response_finished_bytes": 64 * 1024,
-        "download_contexts": 16,
-        "download_owners": 64,
         "download_notices": 64,
         "download_path_bytes": 4096,
-        "worker_owners": 64,
         "worker_notices": 128,
         "worker_url_bytes": 1024 * 1024,
         "worker_concurrent_evaluations": 8,
-        "worker_handles": 64,
         "worker_handle_concurrent_calls": 8,
-        "worker_console_notices": 128,
-        "worker_console_bytes": 16 * 1024 * 1024,
-        "wait_for_timeout_operations": 16,
-        "wait_for_timeout_bytes": 12 * 1024,
+        "wait_for_timeout_bytes": 4 * 1024,
         "reserved_bytes": 64 * 1024 * 1024,
     }
-    if "cdp-session" in _native.selected_features():
-        expected_limits.update(
-            {
-                "cdp_sessions": 8,
-                "cdp_session_events": 64,
-                "cdp_session_event_bytes": 1024 * 1024,
-            }
-        )
-
     # Act
     capabilities = playwright_rust.native_capabilities()
 
     # Assert
     assert capabilities["abi"] == playwright_rust.NATIVE_ABI_VERSION
+    limits = cast(dict[str, int], capabilities["limits"])
+    assert "sessions" not in limits
     expected_features = [
         "browser-registry",
         "fresh-launch",
@@ -238,6 +199,7 @@ def test_native_abi_and_selected_profile_are_explicit() -> None:
         "persistent-context-extra-headers",
         "persistent-context-bypass-csp",
         "persistent-context-javascript-disabled",
+        "video-recording",
         "context-cookies",
         "context-storage-state",
         "handles",
@@ -265,6 +227,8 @@ def test_native_abi_and_selected_profile_are_explicit() -> None:
         "route-fulfill-api-response",
         "route-fetch",
         "har-replay",
+        "har-recording",
+        "har-recording-regexp",
         "wait-for-function",
         "wait-for-timeout",
         "file-input",
@@ -316,6 +280,7 @@ def test_native_abi_and_selected_profile_are_explicit() -> None:
         "response-security-details",
         "download-events",
         "worker-events",
+        "service-worker-events",
         "worker-handle-evaluation",
         "worker-console-events",
         "worker-console-argument-handles",
@@ -392,13 +357,8 @@ def test_native_abi_and_selected_profile_are_explicit() -> None:
         selected_remote_with_notices_and_title,
     ):
         assert capabilities["profile"] == "+".join(features)
-        limits = cast(dict[str, int], capabilities["limits"])
-        assert {
-            name: limits[name] for name in ("sessions", "connects", "commands", "closes", "watches")
-        } == {
-            "sessions": 16,
+        assert {name: limits[name] for name in ("connects", "closes", "watches")} == {
             "connects": 16,
-            "commands": 32,
             "closes": 16,
             "watches": 16,
         }
@@ -413,7 +373,7 @@ def test_native_abi_and_selected_profile_are_explicit() -> None:
         server_initialize_conformance_features,
     )
     assert capabilities["profile"] == "+".join(features)
-    assert capabilities["limits"] == expected_limits
+    assert limits == expected_limits
 
 
 def test_native_timeout_error_exposes_playwright_name_and_message() -> None:
@@ -2106,6 +2066,9 @@ def test_public_handler_wrapper_preserves_declared_argument_order() -> None:
 @pytest.mark.asyncio
 async def test_browser_new_context_forwards_typed_context_policies_to_native_rust() -> None:
     # Arrange
+    locale = "x" * 4096
+    timezone_id = "y" * 4096
+
     class Native:
         observed: (
             tuple[
@@ -2114,7 +2077,7 @@ async def test_browser_new_context_forwards_typed_context_policies_to_native_rus
                 str | None,
                 str | None,
                 tuple[float, float, float] | None,
-                bool,
+                list[str],
                 tuple[str, str, str | None, bool] | None,
                 bool,
                 bool,
@@ -2133,7 +2096,7 @@ async def test_browser_new_context_forwards_typed_context_policies_to_native_rus
             locale: str | None,
             timezone_id: str | None,
             geolocation: tuple[float, float, float] | None,
-            geolocation_permission: bool,
+            permissions: list[str],
             http_credentials: tuple[str, str, str | None, bool] | None,
             ignore_https_errors: bool,
             offline: bool,
@@ -2148,7 +2111,7 @@ async def test_browser_new_context_forwards_typed_context_policies_to_native_rus
                 locale,
                 timezone_id,
                 geolocation,
-                geolocation_permission,
+                permissions,
                 http_credentials,
                 ignore_https_errors,
                 offline,
@@ -2167,10 +2130,10 @@ async def test_browser_new_context_forwards_typed_context_policies_to_native_rus
     # Act
     context = await browser.new_context(
         base_url="https://example.test",
-        locale="ru-RU",
-        timezone_id="America/Jamaica",
+        locale=locale,
+        timezone_id=timezone_id,
         geolocation={"longitude": -70, "latitude": 30, "accuracy": 7},
-        permissions=["geolocation"],
+        permissions=["geolocation", "camera"],
         http_credentials={
             "username": "user",
             "password": "pass",
@@ -2188,10 +2151,10 @@ async def test_browser_new_context_forwards_typed_context_policies_to_native_rus
     assert native.observed == (
         "https://example.test",
         None,
-        "ru-RU",
-        "America/Jamaica",
+        locale,
+        timezone_id,
         (-70.0, 30.0, 7.0),
-        True,
+        ["geolocation", "camera"],
         ("user", "pass", "https://example.test", False),
         True,
         True,
@@ -2241,6 +2204,62 @@ async def test_browser_new_context_forwards_filtered_extra_headers_with_other_op
         "extra_http_headers": [("foo", "bar"), ("empty", "")],
     }
     assert context._object_id == "context-with-headers"
+
+
+@pytest.mark.asyncio
+async def test_browser_new_page_installs_context_video_before_page_creation(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    # Arrange
+    ffmpeg = tmp_path / "ffmpeg"
+    ffmpeg.touch()
+
+    def bundled_ffmpeg_path(_package_root: str) -> str:
+        return str(ffmpeg)
+
+    monkeypatch.setattr(
+        "playwright_rust.async_api._native.ffmpeg_executable_path",
+        bundled_ffmpeg_path,
+        raising=False,
+    )
+
+    class Native:
+        video: object = None
+
+        async def new_context(
+            self,
+            *_args: object,
+            video: object = None,
+            **_kwargs: object,
+        ) -> tuple[str, None]:
+            self.video = video
+            return ("context-video", None)
+
+        async def new_page(self, context_id: str) -> tuple[str, str, str, str]:
+            assert context_id == "context-video"
+            return ("page-video", context_id, "frame-video", "about:blank")
+
+    native = Native()
+    browser = cast(Any, object.__new__(Browser))
+    browser._native = native
+    browser._contexts = {}
+    browser._unidentified_context_creations = 0
+    browser._pending_context_ids = set()
+    browser._pending_context_cleanup_tasks = {}
+    video_dir = tmp_path / "videos"
+
+    # Act
+    page = await browser.new_page(
+        record_video_dir=video_dir,
+        record_video_size={"width": 641, "height": 361},
+    )
+
+    # Assert
+    assert native.video == (str(video_dir.resolve()), str(ffmpeg), 640, 360)
+    assert page.context._record_video_dir == video_dir.resolve()
+    assert page.video is not None
+    assert page._closes_context
 
 
 @pytest.mark.asyncio
@@ -2465,6 +2484,8 @@ async def test_persistent_context_forwards_context_defaults_before_native_launch
     tmp_path: Path,
 ) -> None:
     # Arrange
+    timezone_id = "z" * 4096
+
     class NativeLaunchObserved(Exception):
         pass
 
@@ -2496,9 +2517,9 @@ async def test_persistent_context_forwards_context_defaults_before_native_launch
             base_url="https://example.test/root/",
             extra_http_headers={"foo": "bar", "x-sequence": "two"},
             locale="fr-FR",
-            timezone_id="America/Jamaica",
+            timezone_id=timezone_id,
             geolocation={"longitude": -70, "latitude": 30, "accuracy": 7},
-            permissions=["geolocation"],
+            permissions=["geolocation", "camera"],
             http_credentials={"username": "user", "password": "pass"},
             ignore_https_errors=True,
             offline=True,
@@ -2526,9 +2547,9 @@ async def test_persistent_context_forwards_context_defaults_before_native_launch
             "https://example.test/root/",
             (
                 "fr-FR",
-                "America/Jamaica",
+                timezone_id,
                 (-70.0, 30.0, 7.0),
-                True,
+                ["geolocation", "camera"],
                 ("user", "pass", None, False),
                 True,
                 True,
@@ -2544,6 +2565,7 @@ async def test_persistent_context_forwards_context_defaults_before_native_launch
                 True,
             ),
             ("dark", "reduce", "more"),
+            None,
             [("foo", "bar"), ("x-sequence", "two")],
             ["--disable-features=Translate"],
             None,
@@ -2554,7 +2576,276 @@ async def test_persistent_context_forwards_context_defaults_before_native_launch
 
 
 @pytest.mark.asyncio
-async def test_persistent_context_rejects_uninstalled_permission_before_native(
+async def test_persistent_chromium_channel_uses_the_bundled_executable(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    # Arrange
+    executable = tmp_path / "bundled-chromium"
+    executable.touch()
+
+    def bundled_executable_path(_name: str, _package_root: str) -> str:
+        return str(executable)
+
+    monkeypatch.setattr(
+        "playwright_rust.async_api._native.browser_executable_path",
+        bundled_executable_path,
+    )
+
+    class NativeLaunchObserved(Exception):
+        pass
+
+    class Environment:
+        options: tuple[object, ...] | None = None
+
+        async def launch_persistent_context(
+            self,
+            _user_data_dir: str,
+            _headless: bool,
+            options: tuple[object, ...],
+        ) -> object:
+            self.options = options
+            raise NativeLaunchObserved
+
+    class PlaywrightOwner:
+        def __init__(self, environment: Environment) -> None:
+            self._environment = environment
+            self._browsers: list[object] = []
+
+    environment = Environment()
+    browser_type = BrowserType(cast(Any, PlaywrightOwner(environment)), "chromium")
+
+    # Act
+    with pytest.raises(NativeLaunchObserved):
+        await browser_type.launch_persistent_context(tmp_path / "profile", channel="chromium")
+
+    # Assert
+    assert environment.options is not None
+    assert environment.options[7:9] == (str(executable.resolve()), "chromium")
+
+
+@pytest.mark.asyncio
+async def test_persistent_video_uses_bundled_ffmpeg_and_upstream_default_size(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    # Arrange
+    ffmpeg = tmp_path / "ffmpeg"
+    ffmpeg.touch()
+
+    def bundled_ffmpeg_path(_package_root: str) -> str:
+        return str(ffmpeg)
+
+    monkeypatch.setattr(
+        "playwright_rust.async_api._native.ffmpeg_executable_path",
+        bundled_ffmpeg_path,
+        raising=False,
+    )
+
+    class NativeLaunchObserved(Exception):
+        pass
+
+    class Environment:
+        options: tuple[object, ...] | None = None
+
+        async def launch_persistent_context(
+            self,
+            _user_data_dir: str,
+            _headless: bool,
+            options: tuple[object, ...],
+        ) -> object:
+            self.options = options
+            raise NativeLaunchObserved
+
+    class PlaywrightOwner:
+        def __init__(self, environment: Environment) -> None:
+            self._environment = environment
+            self._browsers: list[object] = []
+
+    environment = Environment()
+    browser_type = BrowserType(cast(Any, PlaywrightOwner(environment)), "chromium")
+    video_dir = tmp_path / "videos"
+
+    # Act
+    with pytest.raises(NativeLaunchObserved):
+        await browser_type.launch_persistent_context(
+            tmp_path / "profile",
+            record_video_dir=video_dir,
+        )
+
+    # Assert
+    assert environment.options is not None
+    assert environment.options[4] == (
+        str(video_dir.resolve()),
+        str(ffmpeg),
+        800,
+        450,
+    )
+
+
+def test_page_video_exists_only_for_a_recording_context(tmp_path: Path) -> None:
+    # Arrange
+    class BrowserOwner:
+        def is_connected(self) -> bool:
+            return True
+
+    recording_context = BrowserContext(
+        cast(Any, BrowserOwner()),
+        "context-recording",
+        None,
+        record_video_dir=tmp_path,
+    )
+    plain_context = BrowserContext(cast(Any, BrowserOwner()), "context-plain", None)
+    recording_page = Page(recording_context, "page-recording", "frame-1", "about:blank")
+    plain_page = Page(plain_context, "page-plain", "frame-2", "about:blank")
+
+    # Act
+    first = recording_page.video
+    second = recording_page.video
+    absent = plain_page.video
+
+    # Assert
+    assert first is not None
+    assert second is first
+    assert absent is None
+
+
+@pytest.mark.asyncio
+async def test_async_video_delegates_artifact_lifecycle_to_native(tmp_path: Path) -> None:
+    # Arrange
+    source = tmp_path / "source.webm"
+    destination = tmp_path / "copies" / "saved.webm"
+
+    class Native:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, ...]] = []
+
+        async def page_video_path(self, page_id: str) -> str:
+            self.calls.append(("path", page_id))
+            return str(source)
+
+        async def page_video_save_as(self, page_id: str, path: str) -> None:
+            self.calls.append(("save_as", page_id, path))
+
+        async def page_video_delete(self, page_id: str) -> None:
+            self.calls.append(("delete", page_id))
+
+    class BrowserOwner:
+        def __init__(self, native: Native) -> None:
+            self._native = native
+
+        def is_connected(self) -> bool:
+            return True
+
+    native = Native()
+    context = BrowserContext(
+        cast(Any, BrowserOwner(native)),
+        "context-video",
+        None,
+        record_video_dir=tmp_path,
+    )
+    page = Page(context, "page-video", "frame-video", "about:blank")
+    video = page.video
+    assert video is not None
+
+    # Act
+    observed_path = await video.path()
+    await video.save_as(destination)
+    await video.delete()
+
+    # Assert
+    assert observed_path == source
+    assert native.calls == [
+        ("path", "page-video"),
+        ("save_as", "page-video", str(destination)),
+        ("delete", "page-video"),
+    ]
+    assert repr(video) == "<Video page=<Page url='about:blank'>>"
+
+
+def test_sync_video_save_as_rejects_an_open_page(tmp_path: Path) -> None:
+    # Arrange
+    class Native:
+        called = False
+
+        async def page_video_save_as(self, _page_id: str, _path: str) -> None:
+            self.called = True
+
+    class BrowserOwner:
+        def __init__(self, native: Native) -> None:
+            self._native = native
+
+        def is_connected(self) -> bool:
+            return True
+
+    native = Native()
+    context = BrowserContext(
+        cast(Any, BrowserOwner(native)),
+        "context-sync-open",
+        None,
+        record_video_dir=tmp_path,
+    )
+    async_page = Page(context, "page-sync-open", "frame-sync-open", "about:blank")
+    bridge = _LoopThread()
+    page = SyncPage(bridge, async_page, cast(Any, None))
+    video = page.video
+    assert video is not None
+
+    # Act
+    try:
+        with pytest.raises(SyncError) as failure:
+            video.save_as(tmp_path / "saved.webm")
+    finally:
+        bridge.close()
+
+    # Assert
+    assert str(failure.value) == ("Page is not yet closed. Close the page prior to calling save_as")
+    assert not native.called
+
+
+def test_sync_video_save_as_delegates_after_page_closes(tmp_path: Path) -> None:
+    # Arrange
+    destination = tmp_path / "saved.webm"
+
+    class Native:
+        observed: tuple[str, str] | None = None
+
+        async def page_video_save_as(self, page_id: str, path: str) -> None:
+            self.observed = (page_id, path)
+
+    class BrowserOwner:
+        def __init__(self, native: Native) -> None:
+            self._native = native
+
+        def is_connected(self) -> bool:
+            return True
+
+    native = Native()
+    context = BrowserContext(
+        cast(Any, BrowserOwner(native)),
+        "context-sync-closed",
+        None,
+        record_video_dir=tmp_path,
+    )
+    async_page = Page(context, "page-sync-closed", "frame-sync-closed", "about:blank")
+    async_page._closed = True
+    bridge = _LoopThread()
+    page = SyncPage(bridge, async_page, cast(Any, None))
+    video = page.video
+    assert video is not None
+
+    # Act
+    try:
+        video.save_as(destination)
+    finally:
+        bridge.close()
+
+    # Assert
+    assert native.observed == ("page-sync-closed", str(destination))
+
+
+@pytest.mark.asyncio
+async def test_persistent_context_rejects_invalid_permission_collection_before_native(
     tmp_path: Path,
 ) -> None:
     # Arrange
@@ -2574,13 +2865,10 @@ async def test_persistent_context_rejects_uninstalled_permission_before_native(
     browser_type = BrowserType(cast(Any, PlaywrightOwner(environment)), "chromium")
 
     # Act
-    with pytest.raises(
-        playwright_rust.UnsupportedError,
-        match="permissions are not installed: camera",
-    ):
+    with pytest.raises(TypeError, match="permissions must be a sequence of strings"):
         await browser_type.launch_persistent_context(
             tmp_path,
-            permissions=["geolocation", "camera"],
+            permissions=cast(Any, "camera"),
         )
 
     # Assert
@@ -2821,66 +3109,6 @@ async def test_persistent_context_rejects_page_launch_argument_before_native(
 
 
 @pytest.mark.asyncio
-async def test_webkit_persistent_context_rejects_page_argument_before_native(
-    tmp_path: Path,
-) -> None:
-    # Arrange
-    class Environment:
-        called = False
-
-        async def launch_persistent_context(self, *_args: object) -> object:
-            self.called = True
-            raise AssertionError("native persistent launch must not run")
-
-    class PlaywrightOwner:
-        def __init__(self, environment: Environment) -> None:
-            self._environment = environment
-            self._browsers: list[object] = []
-
-    environment = Environment()
-    browser_type = BrowserType(cast(Any, PlaywrightOwner(environment)), "webkit")
-
-    # Act
-    with pytest.raises(playwright_rust.Error, match="Arguments can not specify page"):
-        await browser_type.launch_persistent_context(
-            tmp_path,
-            args=["https://example.test/page"],
-        )
-
-    # Assert
-    assert not environment.called
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("engine", ["firefox", "webkit"])
-async def test_non_chromium_persistent_context_still_rejects_valid_launch_before_native(
-    tmp_path: Path, engine: str
-) -> None:
-    # Arrange
-    class Environment:
-        called = False
-
-        async def launch_persistent_context(self, *_args: object) -> object:
-            self.called = True
-            raise AssertionError("native persistent launch must not run")
-
-    class PlaywrightOwner:
-        def __init__(self, environment: Environment) -> None:
-            self._environment = environment
-            self._browsers: list[object] = []
-
-    environment = Environment()
-    browser_type = BrowserType(cast(Any, PlaywrightOwner(environment)), engine)
-
-    # Act
-    with pytest.raises(playwright_rust.UnsupportedError, match="only available for Chromium"):
-        await browser_type.launch_persistent_context(tmp_path, args=["--headless"])
-
-    # Assert
-    assert not environment.called
-
-
-@pytest.mark.asyncio
 async def test_persistent_context_rejects_empty_profile_before_native() -> None:
     # Arrange
     class Environment:
@@ -2922,41 +3150,6 @@ def test_sync_persistent_context_uses_the_same_page_argument_preflight(tmp_path:
 
     environment = Environment()
     async_browser_type = BrowserType(cast(Any, PlaywrightOwner(environment)), "chromium")
-    bridge = _LoopThread()
-    browser_type = SyncBrowserType(bridge, async_browser_type)
-
-    # Act
-    try:
-        with pytest.raises(playwright_rust.Error, match="Arguments can not specify page"):
-            browser_type.launch_persistent_context(
-                tmp_path,
-                args=["https://example.test/page"],
-            )
-    finally:
-        bridge.close()
-
-    # Assert
-    assert not environment.called
-
-
-def test_sync_webkit_persistent_context_rejects_page_argument_before_native(
-    tmp_path: Path,
-) -> None:
-    # Arrange
-    class Environment:
-        called = False
-
-        async def launch_persistent_context(self, *_args: object) -> object:
-            self.called = True
-            raise AssertionError("native persistent launch must not run")
-
-    class PlaywrightOwner:
-        def __init__(self, environment: Environment) -> None:
-            self._environment = environment
-            self._browsers: list[object] = []
-
-    environment = Environment()
-    async_browser_type = BrowserType(cast(Any, PlaywrightOwner(environment)), "webkit")
     bridge = _LoopThread()
     browser_type = SyncBrowserType(bridge, async_browser_type)
 
@@ -3021,6 +3214,8 @@ async def test_persistent_context_close_releases_its_native_browser_session() ->
 
         async def close(self) -> None:
             observed.append("browser")
+            for context in self._contexts.values():
+                context._closed = True
 
     browser = PersistentBrowser()
     context = BrowserContext(cast(Any, browser), "context-7", None)
@@ -3030,7 +3225,7 @@ async def test_persistent_context_close_releases_its_native_browser_session() ->
     await context.close()
 
     # Assert
-    assert observed == ["context:context-7", "browser"]
+    assert observed == ["browser"]
     assert context._closed
 
 
@@ -3040,6 +3235,12 @@ async def test_owned_context_close_keeps_its_shared_browser_session_open() -> No
     observed: list[str] = []
 
     class Native:
+        request_created = False
+
+        def context_request(self, _context_id: str) -> object:
+            self.request_created = True
+            raise AssertionError("Context close must not create an unused request owner")
+
         async def close_context(self, context_id: str) -> None:
             observed.append(f"context:{context_id}")
 
@@ -3062,6 +3263,7 @@ async def test_owned_context_close_keeps_its_shared_browser_session_open() -> No
     # Assert
     assert observed == ["context:context-8"]
     assert context._closed
+    assert not browser._native.request_created
 
 
 @pytest.mark.asyncio
@@ -3097,6 +3299,7 @@ async def test_browser_close_releases_its_python_environment_owner() -> None:
     browser._response_task = None
     browser._download_task = None
     browser._worker_task = None
+    browser._service_worker_task = None
     browser._worker_console_task = None
     browser._cdp_event_task = None
     browser._cdp_registration_tasks = set()
@@ -5862,6 +6065,9 @@ async def test_request_notice_watcher_emits_requestfailed_with_the_native_failur
             self.browser = browser
             self._pages: dict[str, Page] = {}
 
+        def _emit_context_event(self, _event: str, _value: object) -> None:
+            pass
+
     browser = object.__new__(Browser)
     browser._native = cast(Any, Native())
     browser._closed = False
@@ -6557,6 +6763,7 @@ def test_sync_context_expect_console_message_wraps_predicate_and_value() -> None
     assert native.flushes == 1
     assert native.subscriptions == [("context-1", "subscribe"), ("release", 42)]
     assert isinstance(message, SyncConsoleMessage)
+    assert message.page is not None
     assert message.page.context is context
     assert message.type == "warning"
     assert message.text == "careful"
@@ -7292,8 +7499,19 @@ async def test_page_route_from_har_delegates_path_and_policy_to_rust() -> None:
             path: str,
             pattern: str | None,
             not_found: str | None,
+            update: bool,
+            update_content: str | None,
+            update_mode: str | None,
         ) -> str:
-            self.call = (page_id, path, pattern, not_found)
+            self.call = (
+                page_id,
+                path,
+                pattern,
+                not_found,
+                update,
+                update_content,
+                update_mode,
+            )
             return "12"
 
     class BrowserOwner:
@@ -7317,7 +7535,58 @@ async def test_page_route_from_har_delegates_path_and_policy_to_rust() -> None:
     )
 
     # Assert
-    assert native.call == ("page-7", "fixtures/replay.har", "**/*.js", "fallback")
+    assert native.call == (
+        "page-7",
+        "fixtures/replay.har",
+        "**/*.js",
+        "fallback",
+        False,
+        None,
+        None,
+    )
+
+
+@pytest.mark.asyncio
+async def test_page_route_from_har_update_delegates_recording_options_to_rust() -> None:
+    # Arrange
+    class Native:
+        call: object = None
+
+        async def page_route_from_har(self, *args: object) -> str:
+            self.call = args
+            return "14"
+
+    class BrowserOwner:
+        def __init__(self, native: Native) -> None:
+            self._native = native
+
+    class ContextOwner:
+        def __init__(self, native: Native) -> None:
+            self.browser = BrowserOwner(native)
+            self._pages: dict[str, Page] = {}
+
+    native = Native()
+    page = Page(cast(Any, ContextOwner(native)), "page-7", "frame-8", "about:blank")
+
+    # Act
+    await page.route_from_har(
+        Path("fixtures/record.har"),
+        url="**/api/**",
+        update=True,
+        update_content="embed",
+        update_mode="minimal",
+    )
+
+    # Assert
+    assert native.call == (
+        "page-7",
+        "fixtures/record.har",
+        "**/api/**",
+        None,
+        True,
+        "embed",
+        "minimal",
+    )
 
 
 @pytest.mark.asyncio
@@ -7332,8 +7601,19 @@ async def test_context_route_from_har_delegates_path_and_policy_to_rust() -> Non
             path: str,
             pattern: str | None,
             not_found: str | None,
+            update: bool,
+            update_content: str | None,
+            update_mode: str | None,
         ) -> str:
-            self.call = (context_id, path, pattern, not_found)
+            self.call = (
+                context_id,
+                path,
+                pattern,
+                not_found,
+                update,
+                update_content,
+                update_mode,
+            )
             return "13"
 
     class BrowserOwner:
@@ -7351,7 +7631,15 @@ async def test_context_route_from_har_delegates_path_and_policy_to_rust() -> Non
     )
 
     # Assert
-    assert native.call == ("context-7", "fixtures/replay.har", "**/*.js", "fallback")
+    assert native.call == (
+        "context-7",
+        "fixtures/replay.har",
+        "**/*.js",
+        "fallback",
+        False,
+        None,
+        None,
+    )
 
 
 @pytest.mark.asyncio
@@ -7709,6 +7997,7 @@ async def test_page_predicate_route_falls_back_when_the_url_does_not_match() -> 
             "22",
             "context-22",
             "page-22",
+            None,
             "frame-22",
             "https://example.test/miss",
             "GET",
@@ -7773,6 +8062,7 @@ async def test_page_binding_route_times_counts_matches_and_retires_after_handlin
             "23",
             "context-23",
             "page-23",
+            None,
             "frame-23",
             "https://example.test/empty.html",
             "GET",
@@ -7822,6 +8112,7 @@ async def test_page_route_handler_can_return_without_handling_the_route() -> Non
                 "unhandled",
                 "context-unhandled",
                 "page-unhandled",
+                None,
                 "frame-unhandled",
                 "https://example.test/unhandled",
                 "GET",
@@ -7838,6 +8129,65 @@ async def test_page_route_handler_can_return_without_handling_the_route() -> Non
 
     # Assert
     assert observed == ["https://example.test/unhandled"]
+
+
+@pytest.mark.asyncio
+async def test_context_route_receives_service_worker_request_without_a_page() -> None:
+    # Arrange
+    class Native:
+        call: object = None
+
+        async def page_route_continue(
+            self,
+            call_id: str,
+            url: str | None,
+            method: str | None,
+            headers: list[tuple[str, str]] | None,
+            post_data: bytes | None,
+        ) -> None:
+            self.call = (call_id, url, method, headers, post_data)
+
+    native = Native()
+    browser = object.__new__(Browser)
+    browser._native = cast(Any, native)
+    context = BrowserContext(browser, "context-worker-route", None)
+    browser._contexts = {"context-worker-route": context}
+    worker = object()
+    context._service_workers["service-worker-7"] = cast(Any, worker)
+    observed: list[Request] = []
+
+    async def handler(route: Route) -> None:
+        observed.append(route.request)
+        await route.continue_()
+
+    context._routes["worker-route"] = handler
+
+    # Act
+    await browser._dispatch_page_route(
+        (
+            "call-worker-route",
+            "worker-route",
+            "context-worker-route",
+            None,
+            "service-worker-7",
+            None,
+            "https://example.test/from-worker",
+            "GET",
+            "fetch",
+            [],
+            None,
+            False,
+            False,
+            None,
+        )
+    )
+
+    # Assert
+    assert len(observed) == 1
+    assert observed[0].service_worker is worker
+    with pytest.raises(playwright_rust.Error, match="Service Worker requests"):
+        observed[0].frame
+    assert native.call == ("call-worker-route", None, None, None, None)
 
 
 @pytest.mark.asyncio
@@ -7921,6 +8271,7 @@ async def test_routed_request_response_uses_the_exact_native_network_identity() 
             "24",
             "context-24",
             "page-24",
+            None,
             "frame-24",
             "https://example.test/fonts?helvetica|arial",
             "GET",
@@ -8076,7 +8427,8 @@ async def test_expiring_native_route_call_releases_the_python_handler() -> None:
         str,
         str,
         str,
-        str,
+        str | None,
+        str | None,
         str | None,
         str,
         str,
@@ -8091,6 +8443,7 @@ async def test_expiring_native_route_call_releases_the_python_handler() -> None:
         "7",
         "context-1",
         "page-1",
+        None,
         "frame-1",
         "https://example.test/empty.html",
         "GET",
@@ -8493,6 +8846,54 @@ async def test_navigation_response_body_uses_the_rust_response_body_leaf() -> No
     # Assert
     assert body == b"navigation"
     assert observed == [("page-7", "frame-8", "request-9")]
+
+
+@pytest.mark.asyncio
+async def test_page_network_response_body_uses_the_exact_request_route() -> None:
+    # Arrange
+    observed: list[tuple[str, str, str]] = []
+
+    class Native:
+        async def frame_response_body(self, page_id: str, frame_id: str, request_id: str) -> bytes:
+            observed.append((page_id, frame_id, request_id))
+            return b"responseFromServiceWorker:foo"
+
+    native = Native()
+    request = Request(
+        {
+            "id": "request-10",
+            "native_request_id": "native-request-10",
+            "page_id": "page-7",
+            "frame_id": "frame-8",
+            "url": "https://example.test/foo",
+            "method": "GET",
+            "resource_type": "fetch",
+            "headers": {},
+        },
+        native,  # type: ignore[arg-type]
+    )
+    response = Response(
+        {
+            "id": "response-11",
+            "request_id": "request-10",
+            "native_request_id": "native-request-10",
+            "url": "https://example.test/foo",
+            "status": 200,
+            "status_text": "OK",
+            "ok": True,
+            "headers": {},
+            "from_service_worker": True,
+        },
+        native,  # type: ignore[arg-type]
+        request=request,
+    )
+
+    # Act
+    body = await response.text()
+
+    # Assert
+    assert body == "responseFromServiceWorker:foo"
+    assert observed == [("page-7", "frame-8", "native-request-10")]
 
 
 @pytest.mark.asyncio
@@ -8947,6 +9348,7 @@ async def test_context_network_wait_uses_context_identity_and_converts_request()
             assert waiter_id == 7
             return {
                 "kind": "request",
+                "id": "request-7",
                 "url": "https://example.test/post",
                 "method": "POST",
                 "resource_type": "fetch",
@@ -9282,6 +9684,43 @@ async def test_page_on_frameattached_receives_canonical_child(
 
     # Assert
     assert observed == [page.frame("child")]
+
+
+@pytest.mark.asyncio
+async def test_page_framedetached_event_retires_and_yields_canonical_child(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Arrange
+    monkeypatch.setattr(
+        _native,
+        "selected_features",
+        lambda: ["frame-events", "frame-detach-events"],
+    )
+    browser, page, native = _frame_event_fixture()
+    child = page.frame("child")
+    assert child is not None
+    observed: list[Frame] = []
+    page.on("framedetached", lambda value: observed.append(cast(Frame, value)))
+    native.rows.pop()
+
+    # Act
+    browser._receive_lifecycle_notice(
+        13,
+        "context-1",
+        "page-2",
+        None,
+        None,
+        "frame-3",
+        "about:blank",
+        None,
+        None,
+        frame_id="frame-4",
+    )
+
+    # Assert
+    assert observed == [child]
+    assert "frame-4" not in page._frames
+    assert page.frame("child") is None
 
 
 @pytest.mark.asyncio
@@ -10271,7 +10710,7 @@ async def test_worker_evaluate_uses_the_exact_native_owner() -> None:
         "frame",
         "about:blank",
     )
-    worker = Worker(page, "worker-1", "https://example.test/worker.js", native_owner)
+    worker = Worker(page, page._context, "worker-1", "https://example.test/worker.js", native_owner)
 
     # Act
     result = await worker.evaluate("value => value.answer", {"answer": 42})
@@ -10281,6 +10720,547 @@ async def test_worker_evaluate_uses_the_exact_native_owner() -> None:
     assert native.observed == (native_owner, "value => value.answer", {"answer": 42})
     assert worker.url == "https://example.test/worker.js"
     assert repr(worker) == "<Worker url='https://example.test/worker.js'>"
+
+
+@pytest.mark.asyncio
+async def test_context_service_workers_snapshot_and_evaluate_use_context_owner(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Arrange
+    monkeypatch.setattr(
+        "playwright_rust.async_api._native.selected_features",
+        lambda: ["service-worker-events"],
+    )
+    native_owner = cast(Any, object())
+
+    class Native:
+        observed: tuple[object, str, object] | None = None
+
+        def context_service_workers(self, context_id: str) -> list[tuple[str, str, object]]:
+            assert context_id == "7"
+            return [("service-1", "https://example.test/sw.js", native_owner)]
+
+        async def worker_evaluate(self, owner: object, expression: str, argument: object) -> object:
+            self.observed = (owner, expression, argument)
+            return "service result"
+
+    native = Native()
+    browser = cast(Any, object.__new__(Browser))
+    browser._native = native
+    context = BrowserContext(browser, "7", None)
+
+    # Act
+    workers = context.service_workers
+    result = await workers[0].evaluate("value => value.answer", {"answer": 42})
+
+    # Assert
+    assert len(workers) == 1
+    assert workers[0].url == "https://example.test/sw.js"
+    assert result == "service result"
+    assert native.observed == (native_owner, "value => value.answer", {"answer": 42})
+
+
+def test_background_pages_matches_the_deprecated_empty_upstream_surface() -> None:
+    # Arrange
+    context = BrowserContext(cast(Any, object()), "context-7", None)
+    context._closed = True
+
+    # Act
+    pages = context.background_pages
+
+    # Assert
+    assert pages == []
+
+
+def test_sync_background_pages_matches_the_async_surface() -> None:
+    # Arrange
+    async_context = BrowserContext(cast(Any, object()), "context-7", None)
+    context = SyncBrowserContext(cast(Any, object()), async_context, cast(Any, None))
+
+    # Act
+    pages = context.background_pages
+
+    # Assert
+    assert pages == []
+
+
+@pytest.mark.asyncio
+async def test_service_worker_notice_publishes_browser_context_event(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Arrange
+    monkeypatch.setattr(
+        "playwright_rust.async_api._native.selected_features",
+        lambda: ["service-worker-events"],
+    )
+    native_owner = cast(Any, object())
+
+    class Native:
+        calls = 0
+
+        async def next_service_worker_notice(
+            self,
+        ) -> tuple[int, str, str, str, object]:
+            self.calls += 1
+            if self.calls == 1:
+                return (0, "7", "service-1", "https://example.test/sw.js", native_owner)
+            raise playwright_rust.TargetClosedError("closed")
+
+    browser = cast(Any, object.__new__(Browser))
+    browser._native = Native()
+    browser._closed = False
+    context = BrowserContext(browser, "7", None)
+    browser._contexts = {"7": context}
+    observed: list[object] = []
+    context.on("serviceworker", observed.append)
+
+    # Act
+    await browser._watch_service_worker_notices()
+
+    # Assert
+    assert len(observed) == 1
+    assert observed[0] is next(iter(context._service_workers.values()))
+
+
+@pytest.mark.asyncio
+async def test_initial_service_worker_notice_updates_snapshot_without_emitting_event(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Arrange
+    monkeypatch.setattr(
+        "playwright_rust.async_api._native.selected_features",
+        lambda: ["service-worker-events"],
+    )
+    native_owner = cast(Any, object())
+
+    class Native:
+        calls = 0
+
+        def context_service_workers(self, context_id: str) -> list[tuple[str, str, object]]:
+            assert context_id == "7"
+            return [("service-1", "https://example.test/sw.js", native_owner)]
+
+        async def next_service_worker_notice(
+            self,
+        ) -> tuple[int, str, str, str, object]:
+            self.calls += 1
+            if self.calls == 1:
+                return (0, "7", "service-1", "https://example.test/sw.js", native_owner)
+            raise playwright_rust.TargetClosedError("closed")
+
+    browser = cast(Any, object.__new__(Browser))
+    browser._native = Native()
+    browser._closed = False
+    context = BrowserContext(browser, "7", None)
+    browser._contexts = {"7": context}
+    initial = context.service_workers[0]
+    observed: list[object] = []
+    context.on("serviceworker", observed.append)
+
+    # Act
+    await browser._watch_service_worker_notices()
+
+    # Assert
+    assert observed == []
+    assert context.service_workers == [initial]
+
+
+@pytest.mark.asyncio
+async def test_service_worker_request_notice_is_context_owned_without_a_page(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Arrange
+    monkeypatch.setattr(
+        "playwright_rust.async_api._native.selected_features",
+        lambda: ["request-events", "service-worker-events"],
+    )
+    native_owner = cast(Any, object())
+
+    class Native:
+        calls = 0
+
+        def context_service_workers(self, context_id: str) -> list[tuple[str, str, object]]:
+            assert context_id == "context-7"
+            return [("service-1", "https://example.test/sw.js", native_owner)]
+
+        async def next_request_notice(self) -> tuple[str, int, dict[str, object]]:
+            self.calls += 1
+            if self.calls == 1:
+                return (
+                    "context-7",
+                    1,
+                    {
+                        "kind": "request",
+                        "id": "request-1",
+                        "page_id": None,
+                        "context_id": "context-7",
+                        "service_worker_id": "service-1",
+                        "url": "https://example.test/data.json",
+                        "method": "GET",
+                        "resource_type": "fetch",
+                        "headers": {},
+                        "post_data": None,
+                        "post_data_buffer": None,
+                        "is_navigation_request": False,
+                        "frame_available": False,
+                    },
+                )
+            raise playwright_rust.TargetClosedError("closed")
+
+    browser = cast(Any, object.__new__(Browser))
+    browser._native = Native()
+    browser._closed = False
+    browser._request_watch_error = None
+    browser._request_notice_sequence = 0
+    browser._network_notice_condition = asyncio.Condition()
+    context = BrowserContext(browser, "context-7", None)
+    browser._contexts = {"context-7": context}
+    observed: list[Request] = []
+    context.on("request", lambda value: observed.append(cast(Request, value)))
+
+    # Act
+    await browser._watch_request_notices()
+
+    # Assert
+    assert browser._request_watch_error is None
+    assert len(observed) == 1
+    request = observed[0]
+    assert request.service_worker is context.service_workers[0]
+    with pytest.raises(playwright_rust.Error, match="Service Worker requests"):
+        _ = request.frame
+    assert context._pages == {}
+    assert browser._request_notice_sequence == 1
+
+
+@pytest.mark.asyncio
+async def test_service_worker_response_notice_reuses_the_context_request_identity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Arrange
+    monkeypatch.setattr(
+        "playwright_rust.async_api._native.selected_features",
+        lambda: ["response-events", "service-worker-events"],
+    )
+
+    class Native:
+        calls = 0
+
+        async def next_response_notice(self) -> tuple[str, int, dict[str, object]]:
+            self.calls += 1
+            if self.calls == 1:
+                return (
+                    "context-7",
+                    1,
+                    {
+                        "kind": "response",
+                        "id": "response-1",
+                        "request_id": "request-1",
+                        "context_id": "context-7",
+                        "service_worker_id": "service-1",
+                        "url": "https://example.test/data.json",
+                        "status": 200,
+                        "status_text": "OK",
+                        "ok": True,
+                        "headers": {},
+                        "from_service_worker": False,
+                        "body_owner": None,
+                        "finished_owner": None,
+                    },
+                )
+            raise playwright_rust.TargetClosedError("closed")
+
+    browser = cast(Any, object.__new__(Browser))
+    browser._native = Native()
+    browser._closed = False
+    browser._response_watch_error = None
+    browser._response_notice_sequence = 0
+    browser._network_notice_condition = asyncio.Condition()
+    context = BrowserContext(browser, "context-7", None)
+    browser._contexts = {"context-7": context}
+    request = cast(
+        Request,
+        context._wrap_network_value(
+            {
+                "kind": "request",
+                "id": "request-1",
+                "page_id": None,
+                "context_id": "context-7",
+                "service_worker_id": "service-1",
+                "url": "https://example.test/data.json",
+                "method": "GET",
+                "resource_type": "fetch",
+                "headers": {},
+                "post_data": None,
+                "post_data_buffer": None,
+                "is_navigation_request": False,
+                "frame_available": False,
+            }
+        ),
+    )
+    observed: list[Response] = []
+    context.on("response", lambda value: observed.append(cast(Response, value)))
+
+    # Act
+    await browser._watch_response_notices()
+
+    # Assert
+    assert browser._response_watch_error is None
+    assert len(observed) == 1
+    assert observed[0].request is request
+    assert context._pages == {}
+    assert browser._response_notice_sequence == 1
+
+
+def test_finished_service_worker_request_keeps_identity_for_a_later_response_wrapper() -> None:
+    # Arrange
+    browser = cast(Any, object.__new__(Browser))
+    browser._native = cast(Any, object())
+    context = BrowserContext(browser, "context-7", None)
+    raw_request: dict[str, object] = {
+        "kind": "request",
+        "id": "request-1",
+        "page_id": None,
+        "context_id": "context-7",
+        "service_worker_id": "service-1",
+        "url": "https://example.test/data.json",
+        "method": "GET",
+        "resource_type": "fetch",
+        "headers": {},
+        "post_data": None,
+        "post_data_buffer": None,
+        "is_navigation_request": False,
+        "frame_available": False,
+    }
+    request = cast(Request, context._wrap_network_value(raw_request))
+    context._forget_context_request(raw_request)
+
+    # Act
+    response = cast(
+        Response,
+        context._wrap_network_value(
+            {
+                "kind": "response",
+                "id": "response-1",
+                "request_id": "request-1",
+                "context_id": "context-7",
+                "service_worker_id": "service-1",
+                "url": "https://example.test/data.json",
+                "status": 200,
+                "status_text": "OK",
+                "ok": True,
+                "headers": {},
+                "from_service_worker": False,
+                "body_owner": None,
+                "finished_owner": None,
+            }
+        ),
+    )
+
+    # Assert
+    assert response.request is request
+
+
+def test_sync_service_worker_request_uses_the_exact_context_worker_wrapper() -> None:
+    # Arrange
+    native_owner = cast(Any, object())
+
+    class Native:
+        @staticmethod
+        def context_service_workers(
+            context_id: str,
+        ) -> list[tuple[str, str, object]]:
+            assert context_id == "context-7"
+            return [("service-1", "https://example.test/sw.js", native_owner)]
+
+    browser = cast(Any, object.__new__(Browser))
+    browser._native = Native()
+    async_context = BrowserContext(browser, "context-7", None)
+    async_request = cast(
+        Request,
+        async_context._wrap_network_value(
+            {
+                "kind": "request",
+                "id": "request-1",
+                "page_id": None,
+                "context_id": "context-7",
+                "service_worker_id": "service-1",
+                "url": "https://example.test/data.json",
+                "method": "GET",
+                "resource_type": "fetch",
+                "headers": {},
+                "post_data": None,
+                "post_data_buffer": None,
+                "is_navigation_request": False,
+                "frame_available": False,
+            }
+        ),
+    )
+    bridge = _LoopThread()
+    context = SyncBrowserContext(bridge, async_context, cast(Any, None))
+
+    # Act
+    try:
+        request = context._wrap_request(async_request)
+        worker = request.service_worker
+    finally:
+        bridge.close()
+
+    # Assert
+    assert worker is context.service_workers[0]
+
+
+@pytest.mark.asyncio
+async def test_service_worker_console_fans_out_with_context_owned_message(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Arrange
+    monkeypatch.setattr(
+        "playwright_rust.async_api._native.selected_features",
+        lambda: [
+            "page-events",
+            "worker-events",
+            "service-worker-events",
+            "console-events",
+            "worker-console-events",
+        ],
+    )
+    native_owner = cast(Any, object())
+
+    class Native:
+        calls = 0
+
+        @staticmethod
+        def is_connected() -> bool:
+            return True
+
+        @staticmethod
+        def subscribe_context_console(_context_id: str) -> int:
+            return 1
+
+        @staticmethod
+        def subscribe_page_console(_page_id: str) -> int:
+            return 2
+
+        @staticmethod
+        def release_console_subscription(_token: int) -> None:
+            return None
+
+        @staticmethod
+        def set_page_console_listener(_page_id: str, _enabled: bool) -> None:
+            return None
+
+        @staticmethod
+        def set_worker_console_listener(_worker: object, _enabled: bool) -> None:
+            return None
+
+        async def next_worker_console_notice(self) -> tuple[object, ...]:
+            self.calls += 1
+            if self.calls == 1:
+                return (
+                    None,
+                    "7",
+                    "service-1",
+                    "https://example.test/scope/sw.js",
+                    native_owner,
+                    "log",
+                    "hello from service worker",
+                    "[]",
+                    "https://example.test/scope/sw.js",
+                    0,
+                    0,
+                    1,
+                )
+            raise playwright_rust.TargetClosedError("closed")
+
+    browser = cast(Any, object.__new__(Browser))
+    browser._native = Native()
+    browser._closed = False
+    context = BrowserContext(browser, "7", None)
+    browser._contexts = {"7": context}
+    scoped_page = Page(context, "page-1", "frame-1", "https://example.test/scope/index.html")
+    unrelated_page = Page(context, "page-2", "frame-2", "https://other.test/")
+    context._pages = {"page-1": scoped_page, "page-2": unrelated_page}
+    service_workers: list[object] = []
+    worker_messages: list[object] = []
+    context_messages: list[object] = []
+    scoped_messages: list[object] = []
+    unrelated_messages: list[object] = []
+
+    def service_worker_created(value: object) -> None:
+        worker = cast(Worker, value)
+        service_workers.append(worker)
+        worker.on("console", worker_messages.append)
+
+    context.on("serviceworker", service_worker_created)
+    context.on("console", context_messages.append)
+    scoped_page.on("console", scoped_messages.append)
+    unrelated_page.on("console", unrelated_messages.append)
+
+    # Act
+    await browser._watch_worker_console_notices()
+
+    # Assert
+    assert getattr(browser, "_worker_console_watch_error", None) is None
+    assert len(service_workers) == 1
+    assert len(worker_messages) == 1
+    message = cast(ConsoleMessage, worker_messages[0])
+    assert context_messages == [message]
+    assert scoped_messages == [message]
+    assert unrelated_messages == []
+    assert message.page is None
+    assert message.worker is service_workers[0]
+    assert message.text == "hello from service worker"
+
+
+@pytest.mark.asyncio
+async def test_service_worker_evaluate_handle_uses_context_owned_handle() -> None:
+    # Arrange
+    native_owner = cast(Any, object())
+
+    class NativeHandle:
+        @staticmethod
+        def preview() -> str:
+            return "JSHandle@object"
+
+        @staticmethod
+        def is_element() -> bool:
+            return False
+
+    native_handle = NativeHandle()
+
+    class Native:
+        observed: tuple[object, str, object] | None = None
+
+        async def worker_evaluate_handle(
+            self, owner: object, expression: str, argument: object
+        ) -> NativeHandle:
+            self.observed = (owner, expression, argument)
+            return native_handle
+
+        async def handle_json_value(self, handle: NativeHandle) -> object:
+            assert handle is native_handle
+            return {"answer": 42}
+
+    native = Native()
+    browser = cast(Any, object.__new__(Browser))
+    browser._native = native
+    context = BrowserContext(browser, "7", None)
+    worker = Worker(
+        None,
+        context,
+        "service-1",
+        "https://example.test/scope/sw.js",
+        native_owner,
+    )
+
+    # Act
+    handle = await worker.evaluate_handle("() => ({ answer: 42 })")
+    value = await handle.json_value()
+
+    # Assert
+    assert native.observed == (native_owner, "() => ({ answer: 42 })", None)
+    assert value == {"answer": 42}
+    assert handle._page is None
 
 
 @pytest.mark.asyncio
@@ -10334,7 +11314,7 @@ async def test_worker_evaluate_handle_and_property_preserve_native_owners() -> N
         "frame",
         "about:blank",
     )
-    worker = Worker(page, "worker-1", "https://example.test/worker.js", native_owner)
+    worker = Worker(page, page._context, "worker-1", "https://example.test/worker.js", native_owner)
 
     # Act
     handle = await worker.evaluate_handle("value => value", {"answer": 42})
@@ -10526,6 +11506,10 @@ async def test_worker_console_waiter_and_listener_receive_one_message_identity(
     listener_values: list[object] = []
 
     class Native:
+        @staticmethod
+        def set_worker_console_listener(_worker: object, _enabled: bool) -> None:
+            return None
+
         def page_default_timeout(self, _page_id: str, _navigation: bool) -> int:
             return 30_000
 
@@ -10540,6 +11524,7 @@ async def test_worker_console_waiter_and_listener_receive_one_message_identity(
     page = Page(cast(Any, ContextOwner()), "page", "frame", "about:blank")
     worker = Worker(
         page,
+        page._context,
         "worker-1",
         "https://example.test/worker.js",
         cast(Any, object()),
@@ -10595,7 +11580,7 @@ async def test_page_close_retires_worker_owner_before_session_close() -> None:
     context = ContextOwner()
     page = Page(cast(Any, context), "page", "frame", "about:blank")
     context._pages["page"] = page
-    worker = Worker(page, "worker-1", "https://example.test/worker.js", native_owner)
+    worker = Worker(page, page._context, "worker-1", "https://example.test/worker.js", native_owner)
     page._workers["worker-1"] = worker
     worker.once("close", lambda value: close_events.append(cast(Worker, value)))
 
@@ -10638,6 +11623,7 @@ def test_sync_worker_event_info_wraps_predicate_value_and_evaluation() -> None:
     page = Page(cast(Any, ContextOwner()), "page", "frame", "about:blank")
     worker = Worker(
         page,
+        page._context,
         "worker-1",
         "https://example.test/worker.js",
         native_owner,
@@ -10698,6 +11684,18 @@ async def test_init_script_source_matches_playwright_missing_input_error() -> No
 
     # Assert
     assert str(raised.value) == "Either path or script parameter must be specified"
+
+
+@pytest.mark.asyncio
+async def test_init_script_source_preserves_source_beyond_retired_native_byte_cap() -> None:
+    # Arrange
+    source = "x" * (2 * 1024 * 1024)
+
+    # Act
+    observed = await _init_script_source(source, None, source_url=True)
+
+    # Assert
+    assert observed == source
 
 
 @pytest.mark.asyncio
@@ -10766,6 +11764,9 @@ async def test_playwright_stop_cancels_all_explicit_notice_watchers() -> None:
         def _cancel_worker_watcher(self) -> Awaitable[None]:
             return self.cancel("worker")
 
+        def _cancel_service_worker_watcher(self) -> Awaitable[None]:
+            return self.cancel("service_worker")
+
         def _cancel_worker_console_watcher(self) -> Awaitable[None]:
             return self.cancel("worker_console")
 
@@ -10796,6 +11797,7 @@ async def test_playwright_stop_cancels_all_explicit_notice_watchers() -> None:
         "response",
         "download",
         "worker",
+        "service_worker",
         "worker_console",
         "settle_cdp",
         "finish_lifecycle",
@@ -10805,19 +11807,22 @@ async def test_playwright_stop_cancels_all_explicit_notice_watchers() -> None:
 
 
 @pytest.mark.asyncio
-async def test_non_chromium_cdp_attach_is_explicitly_unsupported() -> None:
+async def test_non_chromium_public_providers_are_absent() -> None:
     # Arrange
     manager = async_playwright()
     playwright = await manager.start()
 
     # Act
-    with pytest.raises(
-        playwright_rust.UnsupportedError, match="only available for Chromium"
-    ) as raised:
-        await playwright.firefox.connect_over_cdp("http://127.0.0.1:9222")
+    firefox = getattr(playwright, "firefox", None)
+    webkit = getattr(playwright, "webkit", None)
 
     # Assert
-    assert raised.value.code == "PLAYWRIGHT_RUST_UNSUPPORTED"
+    assert firefox is None
+    assert webkit is None
+    with pytest.raises(KeyError):
+        playwright["firefox"]
+    with pytest.raises(KeyError):
+        playwright["webkit"]
     await playwright.stop()
 
 

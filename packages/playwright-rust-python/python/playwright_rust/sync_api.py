@@ -37,6 +37,7 @@ ResourceTiming = async_api.ResourceTiming
 SourceLocation = async_api.SourceLocation
 DeviceDescriptor = async_api.DeviceDescriptor
 ViewportSize = async_api.ViewportSize
+Geolocation = async_api.Geolocation
 FileInput = async_api.FileInput
 FilePayload = async_api.FilePayload
 Cookie = async_api.Cookie
@@ -333,6 +334,13 @@ class Request:
     @property
     def resource_type(self) -> str:
         return self._value.resource_type
+
+    @property
+    def service_worker(self) -> Worker | None:
+        value = self._value.service_worker
+        if value is None or self._context is None:
+            return None
+        return self._context._wrap_service_worker(value)
 
     @property
     def headers(self) -> dict[str, str]:
@@ -671,7 +679,11 @@ class PageEventContextManager:
         if isinstance(value, async_api.Worker):
             return self._page._wrap_worker(value)
         if isinstance(value, async_api.ConsoleMessage):
-            return ConsoleMessage(value, self._page)
+            return ConsoleMessage(
+                value,
+                self._page if value.page is not None else None,
+                self._page.context,
+            )
         return value
 
     def __exit__(
@@ -737,7 +749,7 @@ class WorkerEventContextManager:
     def value(self) -> object:
         value = self._bridge.run(self._wait())
         if isinstance(value, async_api.ConsoleMessage):
-            return ConsoleMessage(value, self._worker._page)
+            return ConsoleMessage(value, self._worker._page, self._worker._context)
         if isinstance(value, async_api.Worker):
             return self._worker
         return value
@@ -1104,11 +1116,39 @@ class Download:
         return repr(self._value)
 
 
-class Worker:
-    def __init__(self, bridge: _LoopThread, value: async_api.Worker, page: Page) -> None:
+class Video:
+    def __init__(self, bridge: _LoopThread, value: async_api.Video, page: Page) -> None:
         self._bridge = bridge
         self._value = value
         self._page = page
+
+    def path(self) -> Path:
+        return self._bridge.run(self._value.path())
+
+    def save_as(self, path: str | Path) -> None:
+        if not self._page.is_closed():
+            raise Error("Page is not yet closed. Close the page prior to calling save_as")
+        self._bridge.run(self._value.save_as(path))
+
+    def delete(self) -> None:
+        self._bridge.run(self._value.delete())
+
+    def __repr__(self) -> str:
+        return repr(self._value)
+
+
+class Worker:
+    def __init__(
+        self,
+        bridge: _LoopThread,
+        value: async_api.Worker,
+        page: Page | None,
+        context: BrowserContext,
+    ) -> None:
+        self._bridge = bridge
+        self._value = value
+        self._page = page
+        self._context = context
         self._event_handlers: list[
             tuple[str, Callable[[object], object], Callable[[object], object]]
         ] = []
@@ -1129,7 +1169,7 @@ class Worker:
 
     def _wrap_event(self, value: object) -> object:
         if isinstance(value, async_api.ConsoleMessage):
-            return ConsoleMessage(value, self._page)
+            return ConsoleMessage(value, self._page, self._context)
         if isinstance(value, async_api.Worker):
             return self
         return value
@@ -1217,18 +1257,37 @@ class Worker:
 
 
 class ConsoleMessage:
-    def __init__(self, value: async_api.ConsoleMessage, page: Page) -> None:
+    def __init__(
+        self,
+        value: async_api.ConsoleMessage,
+        page: Page | None,
+        context: BrowserContext | None = None,
+    ) -> None:
+        if page is None and context is None:
+            raise InvalidArgumentError("ConsoleMessage requires a Page or BrowserContext owner")
         self._value = value
         self._page = page
+        if page is not None:
+            self._context = page.context
+            self._bridge = page._bridge
+        else:
+            assert context is not None
+            self._context = context
+            self._bridge = context._bridge
 
     @property
-    def page(self) -> Page:
+    def page(self) -> Page | None:
         return self._page
 
     @property
     def worker(self) -> Worker | None:
         value = self._value.worker
-        return None if value is None else self._page._wrap_worker(value)
+        if value is None:
+            return None
+        if self._page is not None:
+            return self._page._wrap_worker(value)
+        assert self._context is not None
+        return self._context._wrap_service_worker(value)
 
     @property
     def type(self) -> str:
@@ -1240,7 +1299,7 @@ class ConsoleMessage:
 
     @property
     def args(self) -> list[JSHandle]:
-        return [JSHandle(self._page._bridge, value, self._page) for value in self._value.args]
+        return [JSHandle(self._bridge, value, self._page) for value in self._value.args]
 
     @property
     def location(self) -> async_api.SourceLocation:
@@ -2876,6 +2935,7 @@ class Page:
             self._keyboard = Keyboard(bridge, value.keyboard)
             self._mouse = Mouse(bridge, value.mouse)
             self._touchscreen = Touchscreen(bridge, value.touchscreen)
+        self._video: Video | None = None
         self._event_handlers: list[
             tuple[str, Callable[[object], object], Callable[[object], object]]
         ] = []
@@ -2916,6 +2976,15 @@ class Page:
         return self._touchscreen
 
     @property
+    def video(self) -> Video | None:
+        value = self._value.video
+        if value is None:
+            return None
+        if self._video is None:
+            self._video = Video(self._bridge, value, self)
+        return self._video
+
+    @property
     def url(self) -> str:
         return self._value.url
 
@@ -2948,7 +3017,7 @@ class Page:
         if isinstance(value, async_api.Worker):
             return self._wrap_worker(value)
         if isinstance(value, async_api.ConsoleMessage):
-            return ConsoleMessage(value, self)
+            return ConsoleMessage(value, self if value.page is not None else None, self._context)
         if isinstance(value, async_api.Request):
             context = cast("BrowserContext | None", self._context)
             if context is None:
@@ -2968,7 +3037,9 @@ class Page:
         return self._file_choosers.setdefault(id(value), FileChooser(self._bridge, value, self))
 
     def _wrap_worker(self, value: async_api.Worker) -> Worker:
-        return self._workers.setdefault(value._worker_id, Worker(self._bridge, value, self))
+        return self._workers.setdefault(
+            value._worker_id, Worker(self._bridge, value, self, self._context)
+        )
 
     def _invoke_event_handler(self, handler: Callable[[object], object], value: object) -> object:
         try:
@@ -4104,6 +4175,7 @@ class BrowserContext:
         self._value = value
         self._browser = browser
         self._pages: dict[int, Page] = {}
+        self._service_workers: dict[int, Worker] = {}
         self._requests: weakref.WeakValueDictionary[int, Request] = weakref.WeakValueDictionary()
         self._responses: weakref.WeakValueDictionary[int, Response] = weakref.WeakValueDictionary()
         self._event_handlers: list[
@@ -4155,6 +4227,9 @@ class BrowserContext:
     def _wrap_page(self, value: async_api.Page) -> Page:
         return self._pages.setdefault(id(value), Page(self._bridge, value, self))
 
+    def _wrap_service_worker(self, value: async_api.Worker) -> Worker:
+        return self._service_workers.setdefault(id(value), Worker(self._bridge, value, None, self))
+
     def _wrap_request(self, value: async_api.Request) -> Request:
         key = id(value)
         request = self._requests.get(key)
@@ -4177,11 +4252,18 @@ class BrowserContext:
         if isinstance(value, async_api.Page):
             return self._wrap_page(value)
         if isinstance(value, async_api.ConsoleMessage):
-            return ConsoleMessage(value, self._wrap_page(value.page))
+            page = None if value.page is None else self._wrap_page(value.page)
+            return ConsoleMessage(value, page, self)
         if isinstance(value, async_api.Dialog):
             return self._wrap_page(value.page)._wrap_dialog(value)
         if isinstance(value, async_api.WebError):
             return WebError(value, self)
+        if isinstance(value, async_api.Worker):
+            return self._wrap_service_worker(value)
+        if isinstance(value, async_api.Response):
+            return self._wrap_response(value)
+        if isinstance(value, async_api.Request):
+            return self._wrap_request(value)
         return value
 
     def _invoke_event_handler(self, handler: Callable[[object], object], value: object) -> object:
@@ -4240,6 +4322,15 @@ class BrowserContext:
         values = self._value.pages
         return [self._wrap_page(value) for value in values]
 
+    @property
+    def background_pages(self) -> list[Page]:
+        return []
+
+    @property
+    def service_workers(self) -> list[Worker]:
+        values = self._value.service_workers
+        return [self._wrap_service_worker(value) for value in values]
+
     def new_page(self) -> Page:
         return self._wrap_page(self._bridge.run(self._value.new_page()))
 
@@ -4285,6 +4376,20 @@ class BrowserContext:
 
     def set_offline(self, offline: bool) -> None:
         self._bridge.run(self._value.set_offline(offline))
+
+    def set_geolocation(self, geolocation: async_api.Geolocation | None = None) -> None:
+        self._bridge.run(self._value.set_geolocation(geolocation))
+
+    def grant_permissions(
+        self,
+        permissions: Sequence[str],
+        *,
+        origin: str | None = None,
+    ) -> None:
+        self._bridge.run(self._value.grant_permissions(permissions, origin=origin))
+
+    def clear_permissions(self) -> None:
+        self._bridge.run(self._value.clear_permissions())
 
     def expose_binding(
         self,
@@ -4403,7 +4508,11 @@ class BrowserContext:
 
             def wrap_console(value: object) -> object:
                 wrapped = (
-                    ConsoleMessage(value, self._wrap_page(value.page))
+                    ConsoleMessage(
+                        value,
+                        None if value.page is None else self._wrap_page(value.page),
+                        self,
+                    )
                     if isinstance(value, async_api.ConsoleMessage)
                     else value
                 )
@@ -4580,6 +4689,13 @@ class Browser:
         accept_downloads: bool = False,
         service_workers: Literal["allow", "block"] = "allow",
         storage_state: Mapping[str, object] | str | PathLike[str] | None = None,
+        record_har_path: str | PathLike[str] | None = None,
+        record_har_omit_content: bool | None = None,
+        record_har_url_filter: str | Pattern[str] | None = None,
+        record_har_mode: Literal["full", "minimal"] | None = None,
+        record_har_content: Literal["attach", "embed", "omit"] | None = None,
+        record_video_dir: str | Path | None = None,
+        record_video_size: Mapping[str, int] | None = None,
         forced_colors: Literal["active", "none"] | None = None,
         strict_selectors: bool = False,
         **kwargs: object,
@@ -4609,6 +4725,13 @@ class Browser:
                     accept_downloads=accept_downloads,
                     service_workers=service_workers,
                     storage_state=storage_state,
+                    record_har_path=record_har_path,
+                    record_har_omit_content=record_har_omit_content,
+                    record_har_url_filter=record_har_url_filter,
+                    record_har_mode=record_har_mode,
+                    record_har_content=record_har_content,
+                    record_video_dir=record_video_dir,
+                    record_video_size=record_video_size,
                     forced_colors=forced_colors,
                     strict_selectors=strict_selectors,
                     **kwargs,
@@ -4621,10 +4744,18 @@ class Browser:
         *,
         base_url: str | None = None,
         accept_downloads: bool = False,
+        record_video_dir: str | Path | None = None,
+        record_video_size: Mapping[str, int] | None = None,
         **kwargs: object,
     ) -> Page:
         value = self._bridge.run(
-            self._value.new_page(base_url=base_url, accept_downloads=accept_downloads, **kwargs)
+            self._value.new_page(
+                base_url=base_url,
+                accept_downloads=accept_downloads,
+                record_video_dir=record_video_dir,
+                record_video_size=record_video_size,
+                **kwargs,
+            )
         )
         return self._wrap_context(value.context)._wrap_page(value)
 
@@ -4735,6 +4866,8 @@ class BrowserType:
         color_scheme: Literal["dark", "light", "no-preference"] | None = None,
         reduced_motion: Literal["no-preference", "reduce"] | None = None,
         contrast: Literal["more", "no-preference"] | None = None,
+        record_video_dir: str | Path | None = None,
+        record_video_size: Mapping[str, int] | None = None,
         args: Sequence[str] | None = None,
         executable_path: str | Path | None = None,
         channel: str | None = None,
@@ -4765,6 +4898,8 @@ class BrowserType:
                 color_scheme=color_scheme,
                 reduced_motion=reduced_motion,
                 contrast=contrast,
+                record_video_dir=record_video_dir,
+                record_video_size=record_video_size,
                 args=args,
                 executable_path=executable_path,
                 channel=channel,
@@ -4816,8 +4951,6 @@ class Playwright:
         self._dispatcher_fiber = dispatcher
         self._stopped = False
         self.chromium = BrowserType(bridge, value.chromium)
-        self.firefox = BrowserType(bridge, value.firefox)
-        self.webkit = BrowserType(bridge, value.webkit)
         self.selectors = Selectors(bridge, value.selectors)
         self.devices = value.devices
         self.request = APIRequest(bridge, value.request)
@@ -4825,10 +4958,6 @@ class Playwright:
     def __getitem__(self, name: str) -> BrowserType:
         if name == "chromium":
             return self.chromium
-        if name == "firefox":
-            return self.firefox
-        if name == "webkit":
-            return self.webkit
         raise KeyError(name)
 
     def stop(self) -> None:
@@ -4925,6 +5054,7 @@ __all__ = [
     "Keyboard",
     "Mouse",
     "Touchscreen",
+    "Video",
     "Page",
     "Playwright",
     "PlaywrightContextManager",

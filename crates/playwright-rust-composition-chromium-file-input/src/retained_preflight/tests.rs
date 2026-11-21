@@ -202,6 +202,38 @@ impl Fixture {
     }
 }
 
+#[test]
+fn allocator_backed_preflight_owner_grows_past_the_legacy_count() {
+    // Arrange
+    let fixture = Fixture::new(1, 1, 4096);
+    let profile =
+        UploadProfile::new_allocator_backed(ResourceScope::extension(178, 14), 4096).unwrap();
+    let owners = production(profile.requirements());
+    let service = FileInputPreflightOperationService::new(
+        profile,
+        &owners,
+        fixture.service.backend.clone(),
+        fixture.queue.clone(),
+    )
+    .unwrap();
+
+    // Act
+    let admitted: Vec<_> = (0..129).map(|_| service.admit_owner().unwrap()).collect();
+
+    // Assert
+    assert_eq!(service.active_operations(), 129);
+    assert_eq!(
+        owners
+            .metrics()
+            .unwrap()
+            .class(ResourceClass::LiveObject)
+            .current,
+        0
+    );
+    drop(admitted);
+    assert_eq!(service.active_operations(), 0);
+}
+
 fn poll_once<F: Future + Unpin>(future: &mut F) -> Poll<F::Output> {
     Pin::new(future).poll(&mut Context::from_waker(Waker::noop()))
 }

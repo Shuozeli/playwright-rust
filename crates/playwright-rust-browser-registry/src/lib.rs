@@ -13,8 +13,6 @@ use std::path::{Component, Path, PathBuf};
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum BrowserEngine {
     Chromium,
-    Firefox,
-    WebKit,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -119,13 +117,13 @@ pub fn registry_directory(inputs: &RegistryDirectoryInputs<'_>) -> Result<PathBu
 /// Return the canonical expected path even if no matching browser is installed.
 pub fn executable_path_v1_58_0(
     registry_directory: &Path,
-    engine: BrowserEngine,
+    _engine: BrowserEngine,
     platform: ShortPlatform,
-    host_platform: &str,
+    _host_platform: &str,
 ) -> Result<PathBuf, RegistryError> {
     require_absolute(registry_directory, "registry directory")?;
-    let (directory, executable): (&str, &[&str]) = match (engine, platform) {
-        (BrowserEngine::Chromium, ShortPlatform::MacArm64) => (
+    let (directory, executable): (&str, &[&str]) = match platform {
+        ShortPlatform::MacArm64 => (
             "chromium-1208",
             &[
                 "chrome-mac-arm64",
@@ -135,7 +133,7 @@ pub fn executable_path_v1_58_0(
                 "Google Chrome for Testing",
             ],
         ),
-        (BrowserEngine::Chromium, ShortPlatform::MacX64) => (
+        ShortPlatform::MacX64 => (
             "chromium-1208",
             &[
                 "chrome-mac-x64",
@@ -145,32 +143,9 @@ pub fn executable_path_v1_58_0(
                 "Google Chrome for Testing",
             ],
         ),
-        (BrowserEngine::Chromium, ShortPlatform::LinuxX64) => {
-            ("chromium-1208", &["chrome-linux64", "chrome"])
-        }
-        (BrowserEngine::Chromium, ShortPlatform::LinuxArm64) => {
-            ("chromium-1208", &["chrome-linux", "chrome"])
-        }
-        (BrowserEngine::Chromium, ShortPlatform::WindowsX64) => {
-            ("chromium-1208", &["chrome-win64", "chrome.exe"])
-        }
-        (BrowserEngine::Firefox, ShortPlatform::MacX64 | ShortPlatform::MacArm64) => (
-            "firefox-1509",
-            &["firefox", "Nightly.app", "Contents", "MacOS", "firefox"],
-        ),
-        (BrowserEngine::Firefox, ShortPlatform::LinuxX64 | ShortPlatform::LinuxArm64) => {
-            ("firefox-1509", &["firefox", "firefox"])
-        }
-        (BrowserEngine::Firefox, ShortPlatform::WindowsX64) => {
-            ("firefox-1509", &["firefox", "firefox.exe"])
-        }
-        (BrowserEngine::WebKit, ShortPlatform::WindowsX64) => ("webkit-2248", &["Playwright.exe"]),
-        (BrowserEngine::WebKit, _) => ("webkit-2248", &["pw_run.sh"]),
-    };
-    let directory = if engine == BrowserEngine::WebKit {
-        webkit_directory(host_platform)
-    } else {
-        directory.to_owned()
+        ShortPlatform::LinuxX64 => ("chromium-1208", &["chrome-linux64", "chrome"]),
+        ShortPlatform::LinuxArm64 => ("chromium-1208", &["chrome-linux", "chrome"]),
+        ShortPlatform::WindowsX64 => ("chromium-1208", &["chrome-win64", "chrome.exe"]),
     };
     let mut path = registry_directory.join(directory);
     for segment in executable {
@@ -179,16 +154,19 @@ pub fn executable_path_v1_58_0(
     Ok(path)
 }
 
-fn webkit_directory(host_platform: &str) -> String {
-    match host_platform {
-        "debian11-x64" | "debian11-arm64" => {
-            format!("webkit_{}_special-2105", host_platform.replace('-', "_"))
-        }
-        "ubuntu20.04-x64" | "ubuntu20.04-arm64" => {
-            format!("webkit_{}_special-2092", host_platform.replace('-', "_"))
-        }
-        _ => "webkit-2248".to_owned(),
-    }
+/// Return the canonical Playwright 1.58.0 FFmpeg path without inspecting the
+/// filesystem. Video recording remains an independently selected consumer.
+pub fn ffmpeg_executable_path_v1_58_0(
+    registry_directory: &Path,
+    platform: ShortPlatform,
+) -> Result<PathBuf, RegistryError> {
+    require_absolute(registry_directory, "registry directory")?;
+    let executable = match platform {
+        ShortPlatform::MacX64 | ShortPlatform::MacArm64 => "ffmpeg-mac",
+        ShortPlatform::LinuxX64 | ShortPlatform::LinuxArm64 => "ffmpeg-linux",
+        ShortPlatform::WindowsX64 => "ffmpeg-win64.exe",
+    };
+    Ok(registry_directory.join("ffmpeg-1011").join(executable))
 }
 
 fn require_absolute(path: &Path, name: &'static str) -> Result<(), RegistryError> {
@@ -217,7 +195,7 @@ fn clean_absolute(path: &Path) -> PathBuf {
 mod tests {
     use super::{
         BrowserEngine, RegistryDirectoryInputs, RegistryError, ShortPlatform,
-        executable_path_v1_58_0, registry_directory,
+        executable_path_v1_58_0, ffmpeg_executable_path_v1_58_0, registry_directory,
     };
     use std::path::Path;
 
@@ -263,32 +241,17 @@ mod tests {
     }
 
     #[test]
-    fn firefox_and_webkit_metadata_match_official_mac_arm64() {
+    fn ffmpeg_metadata_matches_official_revision_and_platform_name() {
         // Arrange
-        let directory = Path::new("/Users/alice/Library/Caches/ms-playwright");
+        let root = Path::new("/Users/alice/Library/Caches/ms-playwright");
 
         // Act
-        let firefox = executable_path_v1_58_0(
-            directory,
-            BrowserEngine::Firefox,
-            ShortPlatform::MacArm64,
-            "mac15-arm64",
-        )
-        .unwrap();
-        let webkit = executable_path_v1_58_0(
-            directory,
-            BrowserEngine::WebKit,
-            ShortPlatform::MacArm64,
-            "mac15-arm64",
-        )
-        .unwrap();
+        let mac = ffmpeg_executable_path_v1_58_0(root, ShortPlatform::MacArm64).unwrap();
+        let linux = ffmpeg_executable_path_v1_58_0(root, ShortPlatform::LinuxArm64).unwrap();
 
         // Assert
-        assert_eq!(
-            firefox,
-            directory.join("firefox-1509/firefox/Nightly.app/Contents/MacOS/firefox")
-        );
-        assert_eq!(webkit, directory.join("webkit-2248/pw_run.sh"));
+        assert_eq!(mac, root.join("ffmpeg-1011/ffmpeg-mac"));
+        assert_eq!(linux, root.join("ffmpeg-1011/ffmpeg-linux"));
     }
 
     #[test]
@@ -355,7 +318,7 @@ mod tests {
     }
 
     #[test]
-    fn linux_cache_override_and_old_webkit_revision_are_exact() {
+    fn linux_cache_override_and_chromium_path_are_exact() {
         // Arrange
         let mut inputs = mac_inputs(None);
         inputs.platform = ShortPlatform::LinuxArm64;
@@ -363,9 +326,9 @@ mod tests {
 
         // Act
         let directory = registry_directory(&inputs).unwrap();
-        let webkit = executable_path_v1_58_0(
+        let chromium = executable_path_v1_58_0(
             &directory,
-            BrowserEngine::WebKit,
+            BrowserEngine::Chromium,
             inputs.platform,
             "debian11-arm64",
         )
@@ -374,8 +337,8 @@ mod tests {
         // Assert
         assert_eq!(directory, Path::new("/cache/ms-playwright"));
         assert_eq!(
-            webkit,
-            Path::new("/cache/ms-playwright/webkit_debian11_arm64_special-2105/pw_run.sh")
+            chromium,
+            Path::new("/cache/ms-playwright/chromium-1208/chrome-linux/chrome")
         );
     }
 

@@ -14,7 +14,6 @@ function fixture() {
   writeFileSync(executable, `#!/bin/sh
 case "$1" in
   --user-data-dir=*) profile="\${1#--user-data-dir=}" ;;
-  --profile) profile="$2" ;;
   *) exit 9 ;;
 esac
 if [ ! -d "$profile" ]; then exit 10; fi
@@ -26,10 +25,7 @@ exit 7
   return { directory, executable, tracesDir: join(directory, 'traces') };
 }
 
-for (const [engine, channel] of [
-  ['chromium', 'bidi-chromium'],
-  ['firefox', 'moz-firefox'],
-]) {
+for (const [engine, channel] of [['chromium', 'bidi-chromium']]) {
   test(`native ${engine} failure-only startup observes the real child and removes its profile`, async () => {
     // Arrange
     const { directory, executable, tracesDir } = fixture();
@@ -39,7 +35,6 @@ for (const [engine, channel] of [
       const launching = api[engine].launch({
         executablePath: executable,
         channel,
-        firefoxUserPrefs: {},
         tracesDir,
         handleSIGINT: false,
       });
@@ -69,9 +64,9 @@ test('native failure-only route prepares traces before rejecting a missing execu
 
   try {
     // Act
-    const launching = api.firefox.launch({
+    const launching = api.chromium.launch({
       executablePath: missing,
-      channel: 'moz-firefox-beta',
+      channel: 'bidi-chromium',
       tracesDir,
     });
 

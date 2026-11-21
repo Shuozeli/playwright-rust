@@ -8,6 +8,7 @@ import './cdp-session-adapter.test.mjs';
 import './cdp-handshake-headers-adapter.test.mjs';
 import './cdp-default-user-agent-adapter.test.mjs';
 import './cdp-errors-adapter.test.mjs';
+import './page-pdf-adapter.test.mjs';
 
 class NativeEnvironment {
   registerSelectorEngine() {}
@@ -18,10 +19,20 @@ class NativeSession {
   setContextConsoleListener() {}
   handleDialog() {}
   pageRoute() {}
+  contextExposeBinding() {}
+  contextRoute() {}
   nextPageRouteCall() {}
   pageRouteContinue() {}
   newContextWithBypassCsp() {}
+  newContextWithLocale() {}
+  newContextWithPolicies() {}
+  newContextWithPoliciesAndExtraHttpHeaders() {}
+  setContextGeolocation() {}
+  setContextHttpCredentials() {}
+  grantContextPermissions() {}
+  clearContextPermissions() {}
   newContextWithHasTouch() {}
+  newContextWithDeviceOptions() {}
   touchscreenTap() {}
   elementHandleTap() {}
   elementHandleDispatchEvent() {}
@@ -53,37 +64,70 @@ class NativeSessionWithRetainedSelectOptionValue extends NativeSessionWithRetain
 class NativeSessionWithRouteHeaderUrlOverrides extends NativeSession {
   pageRouteContinueWithHeaders() {}
   pageRouteFallbackWithUrl() {}
+  pageRouteFallbackWithOverrides() {}
 }
 class NativeSessionWithUnroute extends NativeSession {
   pageUnroute() {}
+  contextUnroute() {}
+  pageUnrouteAll() {}
+  contextUnrouteAll() {}
 }
 class NativeSessionWithRouteFulfill extends NativeSession {
   pageRouteFulfill() {}
 }
 class NativeSessionWithRouteRegExp extends NativeSession {
   pageRouteRegExp() {}
+  contextRouteRegExp() {}
+}
+class NativeSessionWithHarReplay extends NativeSession {
+  pageRouteFromHar() {}
+  contextRouteFromHar() {}
+}
+class NativeSessionWithHarReplayRegExp extends NativeSessionWithRouteRegExp {
+  pageRouteFromHar() {}
+  contextRouteFromHar() {}
+  pageRouteFromHarRegExp() {}
+  contextRouteFromHarRegExp() {}
 }
 class NativeSessionWithRouteRequestHistory extends NativeSession {
   responseRawHeaders() {}
 }
 class NativeSessionWithContextCookies extends NativeSession {
+  contextCookies() {}
   contextAddCookies() {}
+  contextClearCookies() {}
+}
+class NativeSessionWithContextStorageState extends NativeSessionWithContextCookies {
+  contextStorageState() {}
+  contextSetStorageState() {}
+}
+class NativeSessionWithContextCookiesIgnoreHttps extends NativeSessionWithContextCookies {
+  newContextWithIgnoreHttpsErrors() {}
+  newContextWithDeviceOptionsAndIgnoreHttpsErrors() {}
+  contextStorageState() {}
+  contextSetStorageState() {}
 }
 class NativeSessionWithLargeRoutePostData extends NativeSession {
   frameEvaluate() {}
 }
 class NativeSessionWithRouteHeaderUrlAndUnroute extends NativeSessionWithRouteHeaderUrlOverrides {
   pageUnroute() {}
+  contextUnroute() {}
+  pageUnrouteAll() {}
+  contextUnrouteAll() {}
 }
 class NativeSessionWithRouteHeaderUrlUnrouteCorsRegExp extends NativeSessionWithRouteHeaderUrlAndUnroute {
   pageRouteFulfill() {}
   pageRouteRegExp() {}
+  contextRouteRegExp() {}
 }
 class NativeSessionWithRouteHeaderUrlUnrouteCorsRegExpHistory extends NativeSessionWithRouteHeaderUrlUnrouteCorsRegExp {
   responseRawHeaders() {}
 }
 class NativeSessionWithRouteHeaderUrlUnrouteCorsRegExpHistoryCookies extends NativeSessionWithRouteHeaderUrlUnrouteCorsRegExpHistory {
+  contextCookies() {}
   contextAddCookies() {}
+  contextClearCookies() {}
 }
 class NativeSessionWithRouteHeaderUrlUnrouteCorsRegExpHistoryCookiesLargePostData extends NativeSessionWithRouteHeaderUrlUnrouteCorsRegExpHistoryCookies {
   frameEvaluate() {}
@@ -104,11 +148,16 @@ class NativeFrameTree {
 class NativeFrameNode {
   parentId() {}
 }
+class NativeApiRequestContext {
+  traceStart() {}
+  traceStop() {}
+}
 const nativeIdentity = Object.freeze({
   NativeEnvironment,
   NativeSession,
   NativeLocator,
   NativeDialog,
+  NativeApiRequestContext,
   nativeAbiVersion: () => 1,
 });
 const nativeBinary = (features = {}) => ({ ...nativeIdentity, ...features });
@@ -164,6 +213,7 @@ test('fresh Chromium launch has an isolated native profile and exact ownership p
   const selected = resolveNativeArtifact('owned-launch');
   class OwnedEnvironment extends NativeEnvironment {
     launchChromium() {}
+    launchPersistentChromium() {}
   }
   const binary = nativeBinary({
     NativeEnvironment: OwnedEnvironment,
@@ -188,6 +238,7 @@ test('Playwright trace-directory launch is an additive fail-closed owned profile
   const selected = resolveNativeArtifact('playwright-trace');
   class TraceEnvironment extends NativeEnvironment {
     launchChromium() {}
+    launchPersistentChromium() {}
     launchChromiumWithTracesDir() {}
   }
   const binary = nativeBinary({
@@ -214,6 +265,7 @@ test('Playwright trace-directory launch is an additive fail-closed owned profile
 
 class OwnedEnvironmentWithoutTraceDir extends NativeEnvironment {
   launchChromium() {}
+  launchPersistentChromium() {}
 }
 
 test('persistent-Context preflight profile requires its pure decision ports', () => {
@@ -413,6 +465,476 @@ test('native profiles select distinct fixed paths without loading a binary', () 
   assert.match(selected.path, /\/native\/drag-runtime\/playwright_rust\.node$/);
   assert.notEqual(base.path, selected.path);
   assert.equal(Object.isFrozen(selected), true);
+});
+
+test('HAR replay is independently composable with an optional RegExp matcher', () => {
+  // Arrange
+  const { nativeFeatures, resolveNativeArtifact, verifyNativeArtifact } = createRequire(import.meta.url)('../src/native-artifact.cjs');
+  const lean = resolveNativeArtifact('har-replay');
+  const regexp = resolveNativeArtifact('har-replay-regexp');
+  const leanBinary = nativeBinary({
+    NativeSession: NativeSessionWithHarReplay,
+    pageRoutesEnabled: () => true,
+    harReplayEnabled: () => true,
+  });
+  const regexpBinary = nativeBinary({
+    NativeSession: NativeSessionWithHarReplayRegExp,
+    pageRoutesEnabled: () => true,
+    harReplayEnabled: () => true,
+    routeRegExpEnabled: () => true,
+  });
+
+  // Act
+  const leanFeatures = nativeFeatures(lean.profile);
+  const regexpFeatures = nativeFeatures(regexp.profile);
+
+  // Assert
+  assert.deepEqual(leanFeatures, ['page-routes', 'har-replay']);
+  assert.deepEqual(regexpFeatures, ['page-routes', 'har-replay', 'route-regexp']);
+  assert.doesNotThrow(() => verifyNativeArtifact(leanBinary, lean));
+  assert.doesNotThrow(() => verifyNativeArtifact(regexpBinary, regexp));
+  assert.throws(() => verifyNativeArtifact({ ...leanBinary, harReplayEnabled: () => false }, lean), /profile mismatch/);
+  assert.throws(() => verifyNativeArtifact(leanBinary, regexp), /profile mismatch/);
+});
+
+test('video recording stays a lean leaf while the official profile composes persistent launch', () => {
+  // Arrange
+  const { nativeFeatures, resolveNativeArtifact } = createRequire(import.meta.url)('../src/native-artifact.cjs');
+  const lean = resolveNativeArtifact('video-recording');
+  const owned = resolveNativeArtifact('owned-launch-video-recording');
+  const official = resolveNativeArtifact('official-conformance-page-video-recording');
+  const page = nativeFeatures('official-conformance-page-bindings');
+
+  // Act
+  const leanFeatures = nativeFeatures(lean.profile);
+  const ownedFeatures = nativeFeatures(owned.profile);
+  const officialFeatures = nativeFeatures(official.profile);
+
+  // Assert
+  assert.deepEqual(leanFeatures, ['browser-registry', 'video-recording']);
+  assert.deepEqual(ownedFeatures, [
+    'owned-launch', 'persistent-context-ignore-https-errors',
+    'persistent-context-locale', 'persistent-context-timezone',
+    'context-geolocation', 'persistent-context-geolocation',
+    'context-geolocation-permission', 'persistent-context-geolocation-permission',
+    'context-http-credentials', 'persistent-context-http-credentials',
+    'persistent-context-offline',
+    'persistent-context-bypass-csp', 'persistent-context-javascript-disabled',
+    ...leanFeatures,
+  ]);
+  assert.deepEqual(officialFeatures, [
+    ...page,
+    'browser-registry',
+    'owned-launch',
+    'persistent-context-ignore-https-errors',
+    'persistent-context-locale',
+    'persistent-context-timezone',
+    'persistent-context-geolocation',
+    'persistent-context-geolocation-permission',
+    'persistent-context-http-credentials',
+    'persistent-context-offline',
+    'persistent-context-bypass-csp',
+    'persistent-context-javascript-disabled',
+    'official-test-browser-kill',
+    'playwright-trace',
+    'context-tracing-screenshots',
+    'persistent-context-preflight',
+    'video-recording',
+  ]);
+  assert.ok(lean.path.endsWith('/native/video-recording/playwright_rust.node'));
+  assert.ok(owned.path.endsWith('/native/owned-launch-video-recording/playwright_rust.node'));
+  assert.ok(official.path.endsWith('/native/official-conformance-page-video-recording/playwright_rust.node'));
+});
+
+test('Context timezone stays an independently selectable ordinary Context leaf', () => {
+  // Arrange
+  const { nativeFeatures, resolveNativeArtifact, verifyNativeArtifact } = createRequire(import.meta.url)('../src/native-artifact.cjs');
+  const binary = nativeBinary({ contextTimezoneEnabled: () => true });
+
+  // Act
+  const selected = resolveNativeArtifact('context-timezone');
+
+  // Assert
+  assert.deepEqual(nativeFeatures(selected.profile), ['context-timezone']);
+  assert.doesNotThrow(() => verifyNativeArtifact(binary, selected));
+  assert.throws(() => verifyNativeArtifact({ ...binary, contextTimezoneEnabled: () => false }, selected), /profile mismatch/);
+  assert.ok(selected.path.endsWith('/native/context-timezone/playwright_rust.node'));
+});
+
+test('Context geolocation stays an independently selectable ordinary Context leaf', () => {
+  // Arrange
+  const { nativeFeatures, resolveNativeArtifact, verifyNativeArtifact } = createRequire(import.meta.url)('../src/native-artifact.cjs');
+  const binary = nativeBinary({ contextGeolocationEnabled: () => true });
+
+  // Act
+  const selected = resolveNativeArtifact('context-geolocation');
+
+  // Assert
+  assert.deepEqual(nativeFeatures(selected.profile), ['context-geolocation']);
+  assert.doesNotThrow(() => verifyNativeArtifact(binary, selected));
+  assert.throws(() => verifyNativeArtifact({ ...binary, contextGeolocationEnabled: () => false }, selected), /profile mismatch/);
+  assert.ok(selected.path.endsWith('/native/context-geolocation/playwright_rust.node'));
+});
+
+test('Context permissions stay an independently selectable ordinary Context leaf', () => {
+  // Arrange
+  const { nativeFeatures, resolveNativeArtifact, verifyNativeArtifact } = createRequire(import.meta.url)('../src/native-artifact.cjs');
+  const binary = nativeBinary({ contextGeolocationPermissionEnabled: () => true });
+
+  // Act
+  const selected = resolveNativeArtifact('context-permissions');
+
+  // Assert
+  assert.deepEqual(nativeFeatures(selected.profile), ['context-geolocation-permission']);
+  assert.doesNotThrow(() => verifyNativeArtifact(binary, selected));
+  assert.throws(() => verifyNativeArtifact({ ...binary, contextGeolocationPermissionEnabled: () => false }, selected), /profile mismatch/);
+  assert.ok(selected.path.endsWith('/native/context-permissions/playwright_rust.node'));
+});
+
+test('Context HTTP credentials stay an independently selectable ordinary Context leaf', () => {
+  // Arrange
+  const { nativeFeatures, resolveNativeArtifact, verifyNativeArtifact } = createRequire(import.meta.url)('../src/native-artifact.cjs');
+  const binary = nativeBinary({ contextHttpCredentialsEnabled: () => true });
+  class NativeSessionWithoutCredentialSetter extends NativeSession {}
+  Object.defineProperty(
+    NativeSessionWithoutCredentialSetter.prototype,
+    'setContextHttpCredentials',
+    { value: undefined },
+  );
+  const staleBinary = nativeBinary({
+    NativeSession: NativeSessionWithoutCredentialSetter,
+    contextHttpCredentialsEnabled: () => true,
+  });
+
+  // Act
+  const selected = resolveNativeArtifact('context-http-credentials');
+
+  // Assert
+  assert.deepEqual(nativeFeatures(selected.profile), ['context-http-credentials']);
+  assert.doesNotThrow(() => verifyNativeArtifact(binary, selected));
+  assert.throws(() => verifyNativeArtifact({ ...binary, contextHttpCredentialsEnabled: () => false }, selected), /profile mismatch/);
+  assert.throws(() => verifyNativeArtifact(staleBinary, selected), /profile mismatch/);
+  assert.ok(selected.path.endsWith('/native/context-http-credentials/playwright_rust.node'));
+});
+
+test('persistent Context locale stays an independently selectable owned-launch leaf', () => {
+  // Arrange
+  const { nativeFeatures, resolveNativeArtifact, verifyNativeArtifact } = createRequire(import.meta.url)('../src/native-artifact.cjs');
+  class PersistentLocaleEnvironment extends NativeEnvironment {
+    launchChromium() {}
+    launchPersistentChromium() {}
+    launchPersistentChromiumWithContextDefaults() {}
+  }
+  const binary = nativeBinary({
+    NativeEnvironment: PersistentLocaleEnvironment,
+    ownedLaunchEnabled: () => true,
+    persistentContextLocaleEnabled: () => true,
+  });
+
+  // Act
+  const selected = resolveNativeArtifact('persistent-context-locale');
+
+  // Assert
+  assert.deepEqual(nativeFeatures(selected.profile), ['owned-launch', 'persistent-context-locale']);
+  assert.doesNotThrow(() => verifyNativeArtifact(binary, selected));
+  assert.throws(() => verifyNativeArtifact({ ...binary, persistentContextLocaleEnabled: () => false }, selected), /profile mismatch/);
+  assert.ok(selected.path.endsWith('/native/persistent-context-locale/playwright_rust.node'));
+});
+
+test('persistent Context timezone stays an independently selectable owned-launch leaf', () => {
+  // Arrange
+  const { nativeFeatures, resolveNativeArtifact, verifyNativeArtifact } = createRequire(import.meta.url)('../src/native-artifact.cjs');
+  class PersistentTimezoneEnvironment extends NativeEnvironment {
+    launchChromium() {}
+    launchPersistentChromium() {}
+    launchPersistentChromiumWithContextDefaults() {}
+  }
+  const binary = nativeBinary({
+    NativeEnvironment: PersistentTimezoneEnvironment,
+    ownedLaunchEnabled: () => true,
+    persistentContextTimezoneEnabled: () => true,
+  });
+
+  // Act
+  const selected = resolveNativeArtifact('persistent-context-timezone');
+
+  // Assert
+  assert.deepEqual(nativeFeatures(selected.profile), ['owned-launch', 'persistent-context-timezone']);
+  assert.doesNotThrow(() => verifyNativeArtifact(binary, selected));
+  assert.throws(() => verifyNativeArtifact({ ...binary, persistentContextTimezoneEnabled: () => false }, selected), /profile mismatch/);
+  assert.ok(selected.path.endsWith('/native/persistent-context-timezone/playwright_rust.node'));
+});
+
+test('persistent Context geolocation composes its ordinary owner with owned launch', () => {
+  // Arrange
+  const { nativeFeatures, resolveNativeArtifact, verifyNativeArtifact } = createRequire(import.meta.url)('../src/native-artifact.cjs');
+  class PersistentGeolocationEnvironment extends NativeEnvironment {
+    launchChromium() {}
+    launchPersistentChromium() {}
+    launchPersistentChromiumWithContextDefaults() {}
+  }
+  const binary = nativeBinary({
+    NativeEnvironment: PersistentGeolocationEnvironment,
+    ownedLaunchEnabled: () => true,
+    contextGeolocationEnabled: () => true,
+    persistentContextGeolocationEnabled: () => true,
+  });
+
+  // Act
+  const selected = resolveNativeArtifact('persistent-context-geolocation');
+
+  // Assert
+  assert.deepEqual(nativeFeatures(selected.profile), [
+    'owned-launch', 'context-geolocation', 'persistent-context-geolocation',
+  ]);
+  assert.doesNotThrow(() => verifyNativeArtifact(binary, selected));
+  assert.throws(() => verifyNativeArtifact({ ...binary, persistentContextGeolocationEnabled: () => false }, selected), /profile mismatch/);
+  assert.ok(selected.path.endsWith('/native/persistent-context-geolocation/playwright_rust.node'));
+});
+
+test('persistent Context permissions compose their ordinary owner with owned launch', () => {
+  // Arrange
+  const { nativeFeatures, resolveNativeArtifact, verifyNativeArtifact } = createRequire(import.meta.url)('../src/native-artifact.cjs');
+  class PersistentPermissionsEnvironment extends NativeEnvironment {
+    launchChromium() {}
+    launchPersistentChromium() {}
+    launchPersistentChromiumWithContextDefaults() {}
+  }
+  const binary = nativeBinary({
+    NativeEnvironment: PersistentPermissionsEnvironment,
+    ownedLaunchEnabled: () => true,
+    contextGeolocationPermissionEnabled: () => true,
+    persistentContextGeolocationPermissionEnabled: () => true,
+  });
+
+  // Act
+  const selected = resolveNativeArtifact('persistent-context-permissions');
+
+  // Assert
+  assert.deepEqual(nativeFeatures(selected.profile), [
+    'owned-launch', 'context-geolocation-permission', 'persistent-context-geolocation-permission',
+  ]);
+  assert.doesNotThrow(() => verifyNativeArtifact(binary, selected));
+  assert.throws(() => verifyNativeArtifact({ ...binary, persistentContextGeolocationPermissionEnabled: () => false }, selected), /profile mismatch/);
+  assert.ok(selected.path.endsWith('/native/persistent-context-permissions/playwright_rust.node'));
+});
+
+test('persistent Context HTTP credentials compose their ordinary owner with owned launch', () => {
+  // Arrange
+  const { nativeFeatures, resolveNativeArtifact, verifyNativeArtifact } = createRequire(import.meta.url)('../src/native-artifact.cjs');
+  class PersistentCredentialsEnvironment extends NativeEnvironment {
+    launchChromium() {}
+    launchPersistentChromium() {}
+    launchPersistentChromiumWithContextDefaults() {}
+  }
+  const binary = nativeBinary({
+    NativeEnvironment: PersistentCredentialsEnvironment,
+    ownedLaunchEnabled: () => true,
+    contextHttpCredentialsEnabled: () => true,
+    persistentContextHttpCredentialsEnabled: () => true,
+  });
+
+  // Act
+  const selected = resolveNativeArtifact('persistent-context-http-credentials');
+
+  // Assert
+  assert.deepEqual(nativeFeatures(selected.profile), [
+    'owned-launch', 'context-http-credentials', 'persistent-context-http-credentials',
+  ]);
+  assert.doesNotThrow(() => verifyNativeArtifact(binary, selected));
+  assert.throws(() => verifyNativeArtifact({ ...binary, persistentContextHttpCredentialsEnabled: () => false }, selected), /profile mismatch/);
+  assert.ok(selected.path.endsWith('/native/persistent-context-http-credentials/playwright_rust.node'));
+});
+
+test('persistent Context offline stays an independently selectable owned-launch leaf', () => {
+  // Arrange
+  const { nativeFeatures, resolveNativeArtifact, verifyNativeArtifact } = createRequire(import.meta.url)('../src/native-artifact.cjs');
+  class PersistentOfflineEnvironment extends NativeEnvironment {
+    launchChromium() {}
+    launchPersistentChromium() {}
+    launchPersistentChromiumWithContextDefaults() {}
+  }
+  const binary = nativeBinary({
+    NativeEnvironment: PersistentOfflineEnvironment,
+    ownedLaunchEnabled: () => true,
+    persistentContextOfflineEnabled: () => true,
+  });
+
+  // Act
+  const selected = resolveNativeArtifact('persistent-context-offline');
+
+  // Assert
+  assert.deepEqual(nativeFeatures(selected.profile), ['owned-launch', 'persistent-context-offline']);
+  assert.doesNotThrow(() => verifyNativeArtifact(binary, selected));
+  assert.throws(() => verifyNativeArtifact({ ...binary, persistentContextOfflineEnabled: () => false }, selected), /profile mismatch/);
+  assert.ok(selected.path.endsWith('/native/persistent-context-offline/playwright_rust.node'));
+});
+
+test('persistent CSP and JavaScript policies remain independent owned-launch leaves', () => {
+  // Arrange
+  const { nativeFeatures, resolveNativeArtifact, verifyNativeArtifact } = createRequire(import.meta.url)('../src/native-artifact.cjs');
+  class PersistentDefaultsEnvironment extends NativeEnvironment {
+    launchChromium() {}
+    launchPersistentChromium() {}
+    launchPersistentChromiumWithContextDefaults() {}
+  }
+  const cases = [
+    ['persistent-context-bypass-csp', 'persistentContextBypassCspEnabled'],
+    ['persistent-context-javascript-disabled', 'persistentContextJavascriptDisabledEnabled'],
+  ];
+
+  for (const [profile, marker] of cases) {
+    // Act
+    const selected = resolveNativeArtifact(profile);
+    const binary = nativeBinary({
+      NativeEnvironment: PersistentDefaultsEnvironment,
+      ownedLaunchEnabled: () => true,
+      [marker]: () => true,
+    });
+
+    // Assert
+    assert.deepEqual(nativeFeatures(profile), ['owned-launch', profile]);
+    assert.doesNotThrow(() => verifyNativeArtifact(binary, selected));
+    assert.throws(() => verifyNativeArtifact({ ...binary, [marker]: () => false }, selected), /profile mismatch/);
+  }
+
+  // Act
+  const combined = resolveNativeArtifact('persistent-context-policies');
+  const combinedBinary = nativeBinary({
+    NativeEnvironment: PersistentDefaultsEnvironment,
+    ownedLaunchEnabled: () => true,
+    persistentContextLocaleEnabled: () => true,
+    persistentContextTimezoneEnabled: () => true,
+    contextGeolocationEnabled: () => true,
+    persistentContextGeolocationEnabled: () => true,
+    contextGeolocationPermissionEnabled: () => true,
+    persistentContextGeolocationPermissionEnabled: () => true,
+    contextHttpCredentialsEnabled: () => true,
+    persistentContextHttpCredentialsEnabled: () => true,
+    persistentContextOfflineEnabled: () => true,
+    persistentContextBypassCspEnabled: () => true,
+    persistentContextJavascriptDisabledEnabled: () => true,
+  });
+
+  // Assert
+  assert.deepEqual(nativeFeatures(combined.profile), [
+    'owned-launch', 'persistent-context-ignore-https-errors',
+    'persistent-context-locale', 'persistent-context-timezone',
+    'context-geolocation', 'persistent-context-geolocation',
+    'context-geolocation-permission', 'persistent-context-geolocation-permission',
+    'context-http-credentials', 'persistent-context-http-credentials',
+    'persistent-context-offline',
+    'persistent-context-bypass-csp', 'persistent-context-javascript-disabled',
+  ]);
+  assert.doesNotThrow(() => verifyNativeArtifact(combinedBinary, combined));
+});
+
+test('official Context tracing composes trace and storage-state leaves', () => {
+  // Arrange
+  const { nativeFeatures, resolveNativeArtifact } = createRequire(import.meta.url)('../src/native-artifact.cjs');
+  const page = nativeFeatures('official-conformance-page-bindings');
+
+  // Act
+  const artifact = resolveNativeArtifact('official-conformance-page-context-tracing');
+  const features = nativeFeatures(artifact.profile);
+
+  // Assert
+  assert.deepEqual(features, [
+    ...page,
+    'browser-registry',
+    'owned-launch',
+    'playwright-trace',
+    'context-tracing-screenshots',
+    'context-tracing-chunks',
+    'context-tracing-actions',
+    'context-tracing-snapshots',
+    'context-tracing-console',
+    'context-tracing-network',
+    'api-request-tracing',
+    'context-cookies',
+    'context-storage-state',
+    'frame-expect-title',
+  ]);
+  assert.ok(artifact.path.endsWith('/native/official-conformance-page-context-tracing/playwright_rust.node'));
+});
+
+test('Context trace console capture is an independent console-event composition', () => {
+  // Arrange
+  const { nativeFeatures, resolveNativeArtifact } = createRequire(import.meta.url)('../src/native-artifact.cjs');
+
+  // Act
+  const artifact = resolveNativeArtifact('context-tracing-console');
+  const features = nativeFeatures(artifact.profile);
+
+  // Assert
+  assert.deepEqual(features, [
+    'owned-launch',
+    'playwright-trace',
+    'context-tracing-screenshots',
+    'console-events',
+    'context-tracing-console',
+  ]);
+  assert.ok(artifact.path.endsWith('/native/context-tracing-console/playwright_rust.node'));
+});
+
+test('Context trace network capture is an independent Rust HAR composition', () => {
+  // Arrange
+  const { nativeFeatures, resolveNativeArtifact, verifyNativeArtifact } = createRequire(import.meta.url)('../src/native-artifact.cjs');
+  const artifact = resolveNativeArtifact('context-tracing-network');
+  class TraceNetworkEnvironment extends NativeEnvironment {
+    launchChromium() {}
+    launchPersistentChromium() {}
+    launchChromiumWithTracesDir() {}
+  }
+  const binary = nativeBinary({
+    NativeEnvironment: TraceNetworkEnvironment,
+    NativeSession: class extends NativeSession {
+      contextTracingStart() {}
+      contextTracingStop() {}
+    },
+    ownedLaunchEnabled: () => true,
+    playwrightTraceDirEnabled: () => true,
+    contextTracingNetworkEnabled: () => true,
+  });
+
+  // Act
+  const features = nativeFeatures(artifact.profile);
+
+  // Assert
+  assert.deepEqual(features, [
+    'owned-launch',
+    'playwright-trace',
+    'context-tracing-screenshots',
+    'context-tracing-network',
+  ]);
+  assert.ok(artifact.path.endsWith('/native/context-tracing-network/playwright_rust.node'));
+  assert.doesNotThrow(() => verifyNativeArtifact(binary, artifact));
+  assert.throws(
+    () => verifyNativeArtifact({ ...binary, contextTracingNetworkEnabled: () => false }, artifact),
+    /profile mismatch/,
+  );
+});
+
+test('API request tracing is an independent Rust request composition', () => {
+  // Arrange
+  const { nativeFeatures, resolveNativeArtifact, verifyNativeArtifact } = createRequire(import.meta.url)('../src/native-artifact.cjs');
+  const artifact = resolveNativeArtifact('api-request-tracing');
+  const binary = nativeBinary({
+    apiRequestEnabled: () => true,
+    apiRequestTracingEnabled: () => true,
+  });
+
+  // Act
+  const features = nativeFeatures(artifact.profile);
+
+  // Assert
+  assert.deepEqual(features, ['api-request', 'api-request-tracing']);
+  assert.ok(artifact.path.endsWith('/native/api-request-tracing/playwright_rust.node'));
+  assert.doesNotThrow(() => verifyNativeArtifact(binary, artifact));
+  assert.throws(
+    () => verifyNativeArtifact({ ...binary, apiRequestTracingEnabled: () => false }, artifact),
+    /profile mismatch/,
+  );
 });
 
 test('page-check conformance profile preserves the prior feature closure but not its artifact path', () => {
@@ -660,6 +1182,52 @@ test('Context cookies select one independent Rust leaf and reject unmarked nativ
   assert.throws(() => verifyNativeArtifact({ ...binary, contextCookiesEnabled: () => false }, selected), /profile mismatch/);
   assert.throws(() => verifyNativeArtifact({ ...binary, NativeSession }, selected), /profile mismatch/);
   assert.throws(() => verifyNativeArtifact(binary, resolveNativeArtifact('default')), /profile mismatch/);
+});
+
+test('HTTPS error policy selects one independent Rust leaf and exact creation port', () => {
+  // Arrange
+  const { nativeFeatures, resolveNativeArtifact, verifyNativeArtifact } = createRequire(import.meta.url)('../src/native-artifact.cjs');
+  class NativeSessionWithIgnoreHttpsErrors extends NativeSession {
+    newContextWithIgnoreHttpsErrors() {}
+  }
+  const selected = resolveNativeArtifact('ignore-https-errors');
+  const binary = nativeBinary({
+    NativeSession: NativeSessionWithIgnoreHttpsErrors,
+    ignoreHttpsErrorsEnabled: () => true,
+  });
+
+  // Act
+  const features = nativeFeatures(selected.profile);
+
+  // Assert
+  assert.deepEqual(features, ['ignore-https-errors']);
+  assert.ok(selected.path.endsWith('/native/ignore-https-errors/playwright_rust.node'));
+  assert.doesNotThrow(() => verifyNativeArtifact(binary, selected));
+  assert.throws(() => verifyNativeArtifact({ ...binary, ignoreHttpsErrorsEnabled: () => false }, selected), /profile mismatch/);
+  assert.throws(() => verifyNativeArtifact({ ...binary, NativeSession }, selected), /profile mismatch/);
+  assert.throws(() => verifyNativeArtifact(binary, resolveNativeArtifact('default')), /profile mismatch/);
+});
+
+test('Context storage state composes its cookie dependency and exact Rust port', () => {
+  // Arrange
+  const { nativeFeatures, resolveNativeArtifact, verifyNativeArtifact } = createRequire(import.meta.url)('../src/native-artifact.cjs');
+  const selected = resolveNativeArtifact('context-storage-state');
+  const binary = nativeBinary({
+    NativeSession: NativeSessionWithContextStorageState,
+    contextCookiesEnabled: () => true,
+    contextStorageStateEnabled: () => true,
+  });
+
+  // Act
+  const features = nativeFeatures(selected.profile);
+
+  // Assert
+  assert.deepEqual(features, ['context-cookies', 'context-storage-state']);
+  assert.ok(selected.path.endsWith('/native/context-storage-state/playwright_rust.node'));
+  assert.doesNotThrow(() => verifyNativeArtifact(binary, selected));
+  assert.throws(() => verifyNativeArtifact({ ...binary, contextStorageStateEnabled: () => false }, selected), /profile mismatch/);
+  assert.throws(() => verifyNativeArtifact({ ...binary, NativeSession: NativeSessionWithContextCookies }, selected), /profile mismatch/);
+  assert.throws(() => verifyNativeArtifact(binary, resolveNativeArtifact('context-cookies')), /profile mismatch/);
 });
 
 test('large Route POST profile selects only bounded Rust inputs and routing without network observation', () => {
@@ -944,6 +1512,27 @@ test('touchscreen-input profile composes touch Context creation with its native 
   assert.throws(() => verifyNativeArtifact({ ...binary, NativeSession: class {} }, selected), /profile mismatch/);
 });
 
+test('BrowserContext bindings compose the Page transport with their exact Rust port', () => {
+  // Arrange
+  const { nativeFeatures, resolveNativeArtifact, verifyNativeArtifact } = createRequire(import.meta.url)('../src/native-artifact.cjs');
+  const selected = resolveNativeArtifact('context-bindings');
+  const binary = nativeBinary({
+    pageBindingsEnabled: () => true,
+    contextBindingsEnabled: () => true,
+    handlesEnabled: () => true,
+  });
+
+  // Act
+  const features = nativeFeatures('context-bindings');
+
+  // Assert
+  assert.deepEqual(features, ['page-bindings', 'context-bindings', 'handles']);
+  assert.ok(selected.path.endsWith('/native/context-bindings/playwright_rust.node'));
+  assert.doesNotThrow(() => verifyNativeArtifact(binary, selected));
+  assert.throws(() => verifyNativeArtifact({ ...binary, contextBindingsEnabled: () => false }, selected), /profile mismatch/);
+  assert.throws(() => verifyNativeArtifact({ ...binary, NativeSession: class {} }, selected), /profile mismatch/);
+});
+
 test('Page-event profiles keep lifecycle delivery independently selectable', () => {
   // Arrange
   const { nativeFeatures, resolveNativeArtifact, verifyNativeArtifact } = createRequire(import.meta.url)('../src/native-artifact.cjs');
@@ -953,7 +1542,7 @@ test('Page-event profiles keep lifecycle delivery independently selectable', () 
     ['set-content-page-events', ['set-content', 'page-events']],
     ['set-content-page-events-console', ['set-content', 'page-events', 'console-events']],
     ['set-content-page-events-console-bindings', ['set-content', 'page-events', 'console-events', 'page-bindings', 'handles']],
-    ['official-conformance-page-bindings', ['set-content', 'page-events', 'page-dialogs', 'page-routes', 'console-events', 'page-bindings', 'handles', 'element-handle-dom', 'file-input', 'frame-navigation', 'history-navigation', 'init-scripts', 'timeout-settings', 'wait-for-function', 'wait-for-url', 'wait-for-timeout', 'large-evaluation-results', 'emulate-media', 'device-emulation', 'touchscreen-input', 'page-viewport', 'request-gc', 'response-body', 'response-request', 'request-events', 'response-events', 'response-finished', 'request-frame', 'request-post-data-json', 'locator-bounding-box', 'locator-highlight', 'locator-screenshot', 'locator-dom-actions', 'extra-headers', 'selector-registration', 'bypass-csp', 'api-request', 'context-api-request']],
+    ['official-conformance-page-bindings', ['set-content', 'page-events', 'page-dialogs', 'page-routes', 'console-events', 'page-bindings', 'context-bindings', 'handles', 'element-handle-dom', 'file-input', 'frame-navigation', 'history-navigation', 'init-scripts', 'timeout-settings', 'wait-for-function', 'wait-for-url', 'wait-for-timeout', 'large-evaluation-results', 'emulate-media', 'device-emulation', 'touchscreen-input', 'page-viewport', 'request-gc', 'response-body', 'response-request', 'request-events', 'response-events', 'response-finished', 'request-frame', 'request-post-data-json', 'locator-bounding-box', 'locator-highlight', 'locator-screenshot', 'locator-dom-actions', 'extra-headers', 'selector-registration', 'bypass-csp', 'context-locale', 'context-timezone', 'context-geolocation', 'context-geolocation-permission', 'context-http-credentials', 'api-request', 'context-api-request']],
     ['official-conformance-page-frame-events', [...nativeFeatures('official-conformance-page-bindings'), 'frame-events']],
     ['official-conformance-page-frame-hierarchy', [...nativeFeatures('official-conformance-page-frame-events'), 'frame-detach-events', 'frame-element']],
     ['official-conformance-page-dispatch-event', nativeFeatures('official-conformance-page-bindings')],
@@ -964,6 +1553,18 @@ test('Page-event profiles keep lifecycle delivery independently selectable', () 
     ['official-conformance-page-route-header-url-unroute-cors-regexp', [...nativeFeatures('official-conformance-page-route-header-url-unroute-cors'), 'route-regexp']],
     ['official-conformance-page-route-header-url-unroute-cors-regexp-history', [...nativeFeatures('official-conformance-page-route-header-url-unroute-cors-regexp'), 'route-request-history']],
     ['official-conformance-page-route-header-url-unroute-cors-regexp-history-cookies', [...nativeFeatures('official-conformance-page-route-header-url-unroute-cors-regexp-history'), 'context-cookies']],
+    ['official-conformance-browsercontext-cookies', [
+      ...nativeFeatures('official-conformance-page-bindings'),
+      'browser-registry', 'owned-launch', 'persistent-context-preflight',
+      'persistent-context-ignore-https-errors', 'persistent-context-locale',
+      'persistent-context-timezone',
+      'persistent-context-geolocation',
+      'persistent-context-geolocation-permission',
+      'persistent-context-http-credentials',
+      'persistent-context-offline',
+      'persistent-context-bypass-csp', 'persistent-context-javascript-disabled',
+      'context-cookies', 'context-storage-state', 'ignore-https-errors',
+    ]],
     ['official-conformance-page-route-header-url-unroute-cors-regexp-history-cookies-large-post-data', [...nativeFeatures('official-conformance-page-route-header-url-unroute-cors-regexp-history-cookies'), 'large-evaluation-inputs', 'large-route-post-data']],
     ['official-conformance-page-fill-navigation-commit', [...nativeFeatures('official-conformance-page-route-header-url-unroute'), 'fill-navigation-commit']],
     ['official-conformance-page-select-option-timeout-progress', [...nativeFeatures('official-conformance-page-bindings'), 'select-option-timeout-progress']],
@@ -975,11 +1576,17 @@ test('Page-event profiles keep lifecycle delivery independently selectable', () 
   ];
   for (const [profile, expected] of cases) {
     const binary = nativeBinary({
+      NativeEnvironment: expected.includes('owned-launch') ? class extends NativeEnvironment {
+        launchChromium() {}
+        launchPersistentChromium() {}
+        launchPersistentChromiumWithContextDefaults() {}
+      } : NativeEnvironment,
       NativeSession: expected.includes('frame-element') ? class extends NativeSession { frameElement() {} }
         : expected.includes('element-handle-select-option-value') ? NativeSessionWithRetainedSelectOptionValue
         : expected.includes('element-handle-wait-for-selector') ? NativeSessionWithRetainedWait
         : expected.includes('element-handle-scroll-into-view') ? NativeSessionWithRetainedScroll
         : expected.includes('large-route-post-data') ? NativeSessionWithRouteHeaderUrlUnrouteCorsRegExpHistoryCookiesLargePostData
+        : expected.includes('ignore-https-errors') ? NativeSessionWithContextCookiesIgnoreHttps
         : expected.includes('context-cookies') ? NativeSessionWithRouteHeaderUrlUnrouteCorsRegExpHistoryCookies
         : expected.includes('route-request-history') ? NativeSessionWithRouteHeaderUrlUnrouteCorsRegExpHistory
         : expected.includes('route-regexp') ? NativeSessionWithRouteHeaderUrlUnrouteCorsRegExp
@@ -1005,6 +1612,7 @@ test('Page-event profiles keep lifecycle delivery independently selectable', () 
       reactSelectorsEnabled: () => expected.includes('react-selectors'),
       consoleEventsEnabled: () => expected.includes('console-events'),
       pageBindingsEnabled: () => expected.includes('page-bindings'),
+      contextBindingsEnabled: () => expected.includes('context-bindings'),
       initScriptsEnabled: () => expected.includes('init-scripts'),
       waitForFunctionEnabled: () => expected.includes('wait-for-function'),
       waitForUrlEnabled: () => expected.includes('wait-for-url'),
@@ -1041,12 +1649,34 @@ test('Page-event profiles keep lifecycle delivery independently selectable', () 
       extraHeadersEnabled: () => expected.includes('extra-headers'),
       selectorRegistrationEnabled: () => expected.includes('selector-registration'),
       bypassCspEnabled: () => expected.includes('bypass-csp'),
+      contextLocaleEnabled: () => expected.includes('context-locale'),
+      contextTimezoneEnabled: () => expected.includes('context-timezone'),
+      contextGeolocationEnabled: () => expected.includes('context-geolocation'),
+      contextGeolocationPermissionEnabled: () => expected.includes('context-geolocation-permission'),
+      contextHttpCredentialsEnabled: () => expected.includes('context-http-credentials'),
       apiRequestEnabled: () => expected.includes('api-request'),
+      apiRequestTracingEnabled: () => expected.includes('api-request-tracing'),
       apiRequestClientCertificatesEnabled: () => expected.includes('api-request-client-certificates'),
       apiRequestHttpProxyEnabled: () => expected.includes('api-request-http-proxy'),
       apiRequestProxyBypassEnabled: () => expected.includes('api-request-proxy-bypass'),
       contextApiRequestEnabled: () => expected.includes('context-api-request'),
       contextCookiesEnabled: () => expected.includes('context-cookies'),
+      contextStorageStateEnabled: () => expected.includes('context-storage-state'),
+      ignoreHttpsErrorsEnabled: () => expected.includes('ignore-https-errors'),
+      browserRegistryEnabled: () => expected.includes('browser-registry'),
+      browserExecutablePathSnapshot: expected.includes('browser-registry') ? () => '/chromium' : undefined,
+      ownedLaunchEnabled: () => expected.includes('owned-launch'),
+      persistentContextPreflightEnabled: () => expected.includes('persistent-context-preflight'),
+      persistentContextCertificateError: expected.includes('persistent-context-preflight') ? () => null : undefined,
+      persistentContextArgumentError: expected.includes('persistent-context-preflight') ? () => null : undefined,
+      persistentContextLocaleEnabled: () => expected.includes('persistent-context-locale'),
+      persistentContextTimezoneEnabled: () => expected.includes('persistent-context-timezone'),
+      persistentContextGeolocationEnabled: () => expected.includes('persistent-context-geolocation'),
+      persistentContextGeolocationPermissionEnabled: () => expected.includes('persistent-context-geolocation-permission'),
+      persistentContextHttpCredentialsEnabled: () => expected.includes('persistent-context-http-credentials'),
+      persistentContextOfflineEnabled: () => expected.includes('persistent-context-offline'),
+      persistentContextBypassCspEnabled: () => expected.includes('persistent-context-bypass-csp'),
+      persistentContextJavascriptDisabledEnabled: () => expected.includes('persistent-context-javascript-disabled'),
       largeEvaluationInputsEnabled: () => expected.includes('large-evaluation-inputs'),
       largeRoutePostDataEnabled: () => expected.includes('large-route-post-data'),
       contextProxyEnabled: () => expected.includes('context-proxy'),
@@ -1089,6 +1719,10 @@ test('Page-event profiles keep lifecycle delivery independently selectable', () 
       assert.throws(() => verifyNativeArtifact({ ...binary, NativeSession: class {} }, selected), /profile mismatch/);
     if (expected.includes('page-bindings'))
       assert.throws(() => verifyNativeArtifact({ ...binary, pageBindingsEnabled: () => false }, selected), /profile mismatch/);
+    if (expected.includes('context-bindings')) {
+      assert.throws(() => verifyNativeArtifact({ ...binary, contextBindingsEnabled: () => false }, selected), /profile mismatch/);
+      assert.throws(() => verifyNativeArtifact({ ...binary, NativeSession: class {} }, selected), /profile mismatch/);
+    }
     if (expected.includes('init-scripts'))
       assert.throws(() => verifyNativeArtifact({ ...binary, initScriptsEnabled: () => false }, selected), /profile mismatch/);
     if (expected.includes('wait-for-function'))
@@ -1155,6 +1789,10 @@ test('Page-event profiles keep lifecycle delivery independently selectable', () 
       assert.throws(() => verifyNativeArtifact({ ...binary, contextCookiesEnabled: () => false }, selected), /profile mismatch/);
       assert.throws(() => verifyNativeArtifact({ ...binary, NativeSession: NativeSessionWithRouteHeaderUrlUnrouteCorsRegExpHistory }, selected), /profile mismatch/);
       assert.throws(() => verifyNativeArtifact(binary, resolveNativeArtifact('official-conformance-page-route-header-url-unroute-cors-regexp-history')), /profile mismatch/);
+    }
+    if (expected.includes('ignore-https-errors')) {
+      assert.throws(() => verifyNativeArtifact({ ...binary, ignoreHttpsErrorsEnabled: () => false }, selected), /profile mismatch/);
+      assert.throws(() => verifyNativeArtifact({ ...binary, NativeSession: NativeSessionWithContextCookies }, selected), /profile mismatch/);
     }
     if (expected.includes('fill-navigation-commit')) {
       assert.throws(() => verifyNativeArtifact({ ...binary, fillNavigationCommitEnabled: () => false }, selected), /profile mismatch/);
@@ -1230,6 +1868,30 @@ test('selector-registration profile proves its isolated Rust registry ports', ()
   assert.doesNotThrow(() => verifyNativeArtifact(binary, selected));
   assert.throws(() => verifyNativeArtifact(nativeBinary(), selected), /profile mismatch/);
   assert.throws(() => verifyNativeArtifact({ ...binary, NativeEnvironment: class {} }, selected), /profile mismatch/);
+  assert.throws(() => verifyNativeArtifact(binary, resolveNativeArtifact('default')), /profile mismatch/);
+});
+
+test('Page PDF profile proves its isolated Chromium export port', () => {
+  // Arrange
+  const { nativeFeatures, resolveNativeArtifact, verifyNativeArtifact } = createRequire(import.meta.url)('../src/native-artifact.cjs');
+  const selected = resolveNativeArtifact('page-pdf');
+  class PdfNativeSession extends NativeSession {
+    pagePdf() {}
+  }
+  const binary = nativeBinary({
+    NativeSession: PdfNativeSession,
+    pagePdfEnabled: () => true,
+  });
+
+  // Act
+  const features = nativeFeatures('page-pdf');
+
+  // Assert
+  assert.deepEqual(features, ['page-pdf']);
+  assert.ok(selected.path.endsWith('/native/page-pdf/playwright_rust.node'));
+  assert.doesNotThrow(() => verifyNativeArtifact(binary, selected));
+  assert.throws(() => verifyNativeArtifact(nativeBinary(), selected), /profile mismatch/);
+  assert.throws(() => verifyNativeArtifact({ ...binary, NativeSession }, selected), /profile mismatch/);
   assert.throws(() => verifyNativeArtifact(binary, resolveNativeArtifact('default')), /profile mismatch/);
 });
 
@@ -1948,8 +2610,10 @@ test('ESM and CommonJS share the public API and error identity', () => {
   const cjs = require('@shuozeli/playwright-rust');
   // Assert
   assert.equal(cjs.chromium, api.chromium);
-  assert.equal(cjs.firefox, api.firefox);
-  assert.equal(cjs.webkit, api.webkit);
+  assert.equal('firefox' in cjs, false);
+  assert.equal('webkit' in cjs, false);
+  assert.equal('firefox' in api, false);
+  assert.equal('webkit' in api, false);
   assert.equal(cjs.request, api.request);
   assert.equal(cjs.devices, api.devices);
   assert.equal(cjs.errors.TimeoutError, api.errors.TimeoutError);
@@ -1959,52 +2623,14 @@ test('ESM and CommonJS share the public API and error identity', () => {
     'import alone must not load the native runtime');
 });
 
-test('browser type metadata names all public engines without launching them', () => {
+test('Chromium is the only public browser type', () => {
   // Arrange
-  const browserTypes = [api.chromium, api.firefox, api.webkit];
+  const browserTypes = [api.chromium];
   // Act
   const names = browserTypes.map(browserType => browserType.name());
   // Assert
-  assert.deepEqual(names, ['chromium', 'firefox', 'webkit']);
-  assert.notEqual(api.firefox, api.webkit);
-});
-
-test('Firefox CDP connection rejects with the upstream error before native access', async () => {
-  // Arrange
-  const endpoint = { endpointURL: 'ws://foo' };
-  // Act
-  const connection = api.firefox.connectOverCDP(endpoint);
-  // Assert
-  await assert.rejects(connection, error =>
-    error.constructor === Error && error.message === 'Connecting over CDP is only supported in Chromium.');
-});
-
-test('WebKit CDP connection string overload rejects with the upstream error', async () => {
-  // Arrange
-  const endpoint = 'ws://foo';
-  // Act
-  const connection = api.webkit.connectOverCDP(endpoint);
-  // Assert
-  await assert.rejects(connection, error =>
-    error.constructor === Error && error.message === 'Connecting over CDP is only supported in Chromium.');
-});
-
-test('non-Chromium CDP object overload still requires an endpoint', async () => {
-  // Arrange
-  const options = {};
-  // Act
-  const connection = api.firefox.connectOverCDP(options);
-  // Assert
-  await assert.rejects(connection, { message: 'Cannot connect over CDP without wsEndpoint.' });
-});
-
-test('Firefox launch remains unsupported without a browser implementation', async () => {
-  // Arrange
-  const browserType = api.firefox;
-  // Act
-  const launch = browserType.launch();
-  // Assert
-  await assert.rejects(launch, { code: 'PLAYWRIGHT_RUST_UNSUPPORTED' });
+  assert.deepEqual(names, ['chromium']);
+  assert.deepEqual(api.chromium._playwright, { _defaultTracesDir: undefined });
 });
 
 test('launchServer rejects null channel with Playwright pre-launch validation and no native load', async () => {
@@ -2061,9 +2687,9 @@ test('launchServer with a valid channel remains explicitly unsupported', async (
 
 test('launchServer accepts boxed string channels before the unsupported capability boundary', async () => {
   // Arrange
-  const browserType = api.firefox;
+  const browserType = api.chromium;
   // Act
-  const launch = browserType.launchServer({ channel: new String('firefox') });
+  const launch = browserType.launchServer({ channel: new String('chrome') });
   // Assert
   await assert.rejects(launch, { code: 'PLAYWRIGHT_RUST_UNSUPPORTED' });
 });
@@ -2126,7 +2752,7 @@ test('launch rejects a truthy userDataDir option before launcher side effects', 
 test('launch rejects a truthy port option before launcher side effects', async () => {
   await assertNoLauncherSideEffects(async () => {
     // Arrange
-    const browserType = api.firefox;
+    const browserType = api.chromium;
     // Act
     const launch = browserType.launch({ port: 1234 });
     // Assert
@@ -2171,43 +2797,10 @@ test('launch rejects a non-string proxy server before launcher side effects', as
   });
 });
 
-test('Firefox launch rejects a nonexistent executable before launcher side effects', async () => {
-  await assertNoLauncherSideEffects(async () => {
-    // Arrange
-    const browserType = api.firefox;
-    // Act
-    const launch = browserType.launch({ executablePath: 'random-invalid-path' });
-    // Assert
-    await assert.rejects(launch, error => error.constructor === Error &&
-      error.message === "browserType.launch: Failed to launch firefox because executable doesn't exist at random-invalid-path");
-  });
-});
-
-test('WebKit launch rejects a nonexistent executable before launcher side effects', async () => {
-  await assertNoLauncherSideEffects(async () => {
-    // Arrange
-    const browserType = api.webkit;
-    // Act
-    const launch = browserType.launch({ executablePath: 'random-invalid-path' });
-    // Assert
-    await assert.rejects(launch, error => error.constructor === Error &&
-      error.message === "browserType.launch: Failed to launch webkit because executable doesn't exist at random-invalid-path");
-  });
-});
-
-test('valid Firefox executable still cannot enter an unsupported launch provider', async () => {
-  // Arrange
-  const browserType = api.firefox;
-  // Act
-  const launch = browserType.launch({ executablePath: process.execPath });
-  // Assert
-  await assert.rejects(launch, { code: 'PLAYWRIGHT_RUST_UNSUPPORTED' });
-});
-
 test('launchPersistentContext rejects a truthy port before launcher side effects', async () => {
   await assertNoLauncherSideEffects(async () => {
     // Arrange
-    const browserType = api.webkit;
+    const browserType = api.chromium;
     // Act
     const launch = browserType.launchPersistentContext('foo', { port: 1234 });
     // Assert
@@ -2225,7 +2818,7 @@ for (const { name, browserType, options, message } of [
   },
   {
     name: 'mixed PFX and PEM material after reading paths',
-    browserType: api.webkit,
+    browserType: api.chromium,
     options: { clientCertificates: [{
       origin: 'test',
       certPath: fileURLToPath(import.meta.url),
@@ -2239,18 +2832,6 @@ for (const { name, browserType, options, message } of [
     name: 'Chromium page argument',
     browserType: api.chromium,
     options: { args: ['http://example.test/page'] },
-    message: 'browserType.launchPersistentContext: Arguments can not specify page to be opened',
-  },
-  {
-    name: 'WebKit page argument',
-    browserType: api.webkit,
-    options: { args: ['http://example.test/page'] },
-    message: 'browserType.launchPersistentContext: Arguments can not specify page to be opened',
-  },
-  {
-    name: 'BiDi Firefox page argument with explicit channel',
-    browserType: api.firefox,
-    options: { channel: 'moz-firefox', args: ['http://example.test/page'] },
     message: 'browserType.launchPersistentContext: Arguments can not specify page to be opened',
   },
   {
@@ -2315,66 +2896,6 @@ test('launchPersistentContext retains the client port error before certificate a
     // Assert
     await assert.rejects(launch, error => error.constructor === Error &&
       error.message === 'Cannot specify a port without launching as a server.');
-  });
-});
-
-test('plain Firefox page argument remains outside the pre-spawn rejection', async () => {
-  // Arrange
-  const options = { args: ['http://example.test/page'] };
-
-  // Act
-  const launch = api.firefox.launchPersistentContext('unused-profile', options);
-
-  // Assert
-  await assert.rejects(launch, { code: 'PLAYWRIGHT_RUST_UNSUPPORTED' });
-});
-
-test('inherited fixture channel defaults enable BiDi Firefox page-argument validation', async () => {
-  await assertNoLauncherSideEffects(async () => {
-    // Arrange
-    const implementation = createRequire(import.meta.url)('../src/index.cjs');
-    const adapted = Object.assign(Object.create(implementation), implementation);
-    adapted._defaultLaunchOptions = { channel: 'moz-firefox' };
-
-    try {
-      // Act
-      const launch = adapted.firefox.launchPersistentContext('unused-profile', {
-        args: ['http://example.test/page'],
-      });
-
-      // Assert
-      await assert.rejects(launch, {
-        message: 'browserType.launchPersistentContext: Arguments can not specify page to be opened',
-      });
-      assert.equal(Object.hasOwn(adapted, '_defaultLaunchOptions'), false);
-    } finally {
-      adapted._defaultLaunchOptions = undefined;
-    }
-  });
-});
-
-test('explicit persistent-context options override inherited fixture defaults', async () => {
-  await assertNoLauncherSideEffects(async () => {
-    // Arrange
-    const implementation = createRequire(import.meta.url)('../src/index.cjs');
-    const adapted = Object.assign(Object.create(implementation), implementation);
-    adapted._defaultLaunchOptions = {
-      channel: 'moz-firefox',
-      args: ['http://example.test/default-page'],
-    };
-
-    try {
-      // Act
-      const launch = adapted.firefox.launchPersistentContext('unused-profile', {
-        channel: 'firefox',
-        args: ['http://example.test/explicit-page'],
-      });
-
-      // Assert
-      await assert.rejects(launch, { code: 'PLAYWRIGHT_RUST_UNSUPPORTED' });
-    } finally {
-      adapted._defaultLaunchOptions = undefined;
-    }
   });
 });
 

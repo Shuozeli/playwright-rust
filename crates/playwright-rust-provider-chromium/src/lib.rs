@@ -37,6 +37,8 @@ const ACTIVE_PORT_FILE: &str = "DevToolsActivePort";
 const LOOPBACK_DEBUGGING_ADDRESS: &str = "127.0.0.1";
 const PERSISTENT_PROFILE_MARKER_FILE: &str = ".playwright-rust-chromium-profile";
 const PERSISTENT_PROFILE_MARKER: &[u8] = b"playwright-rust-chromium-profile-v1\n";
+const DISABLE_COMPONENT_EXTENSION_BACKGROUNDS: &str =
+    "--disable-component-extensions-with-background-pages";
 const RESERVED_ARGUMENTS: &[&str] = &[
     "--remote-debugging-address",
     "--remote-debugging-pipe",
@@ -646,9 +648,13 @@ impl ChromiumLaunchRequest {
     }
 
     fn command_arguments(&self) -> Vec<OsString> {
-        let mut arguments = Vec::with_capacity(self.additional_arguments.len().saturating_add(7));
+        let mut arguments = Vec::with_capacity(self.additional_arguments.len().saturating_add(8));
         arguments.push(OsString::from("--no-first-run"));
         arguments.push(OsString::from("--no-default-browser-check"));
+        // Match the pinned Playwright Chromium launcher before user arguments
+        // are appended. Otherwise Chrome component extensions can publish
+        // unrelated service workers into the default persistent Context.
+        arguments.push(OsString::from(DISABLE_COMPONENT_EXTENSION_BACKGROUNDS));
         arguments.push(OsString::from(format!(
             "--remote-debugging-address={LOOPBACK_DEBUGGING_ADDRESS}"
         )));
@@ -2705,6 +2711,11 @@ mod tests {
                 .contains(&format!("--user-data-dir={}", profile.display()))
         );
         assert!(state.arguments.contains(&"--disable-gpu".to_string()));
+        assert!(
+            state
+                .arguments
+                .contains(&super::DISABLE_COMPONENT_EXTENSION_BACKGROUNDS.to_string())
+        );
         assert!(!state.arguments.contains(&"--headless=new".to_string()));
         assert_eq!(
             state.arguments.last().map(String::as_str),

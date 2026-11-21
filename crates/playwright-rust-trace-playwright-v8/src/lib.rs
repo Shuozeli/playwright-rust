@@ -170,6 +170,152 @@ pub struct LogEvent<'a> {
 }
 
 #[derive(Clone, Copy, Debug, Serialize)]
+pub struct ScreencastFrame<'a> {
+    #[serde(rename = "type")]
+    event_type: &'static str,
+    #[serde(rename = "pageId")]
+    pub page_id: &'a str,
+    pub sha1: &'a str,
+    pub width: u32,
+    pub height: u32,
+    pub timestamp: f64,
+    #[serde(rename = "frameSwapWallTime", skip_serializing_if = "Option::is_none")]
+    pub frame_swap_wall_time: Option<f64>,
+}
+
+#[derive(Clone, Copy, Debug, Serialize)]
+pub struct FrameSnapshot<'a> {
+    #[serde(rename = "snapshotName", skip_serializing_if = "Option::is_none")]
+    pub snapshot_name: Option<&'a str>,
+    #[serde(rename = "callId")]
+    pub call_id: &'a str,
+    #[serde(rename = "pageId")]
+    pub page_id: &'a str,
+    #[serde(rename = "frameId")]
+    pub frame_id: &'a str,
+    #[serde(rename = "frameUrl")]
+    pub frame_url: &'a str,
+    pub timestamp: f64,
+    #[serde(rename = "wallTime", skip_serializing_if = "Option::is_none")]
+    pub wall_time: Option<f64>,
+    #[serde(rename = "collectionTime")]
+    pub collection_time: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub doctype: Option<&'a str>,
+    pub html: &'a Value,
+    #[serde(rename = "resourceOverrides")]
+    pub resource_overrides: &'a [Value],
+    pub viewport: FrameSnapshotViewport,
+    #[serde(rename = "isMainFrame")]
+    pub is_main_frame: bool,
+}
+
+#[derive(Clone, Copy, Debug, Serialize)]
+pub struct FrameSnapshotViewport {
+    pub width: u32,
+    pub height: u32,
+}
+
+#[derive(Clone, Copy, Debug, Serialize)]
+struct FrameSnapshotEvent<'a> {
+    #[serde(rename = "type")]
+    event_type: &'static str,
+    snapshot: FrameSnapshot<'a>,
+}
+
+#[derive(Clone, Copy, Debug, Serialize)]
+pub struct ConsoleArgument<'a> {
+    pub preview: &'a str,
+    pub value: &'a Value,
+}
+
+#[derive(Clone, Copy, Debug, Serialize)]
+pub struct ConsoleLocation<'a> {
+    pub url: &'a str,
+    #[serde(rename = "lineNumber")]
+    pub line_number: u32,
+    #[serde(rename = "columnNumber")]
+    pub column_number: u32,
+}
+
+#[derive(Clone, Copy, Debug, Serialize)]
+pub struct ConsoleMessageEvent<'a> {
+    #[serde(rename = "type")]
+    event_type: &'static str,
+    pub time: f64,
+    #[serde(rename = "pageId", skip_serializing_if = "Option::is_none")]
+    pub page_id: Option<&'a str>,
+    #[serde(rename = "messageType")]
+    pub message_type: &'a str,
+    pub text: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub args: Option<&'a [ConsoleArgument<'a>]>,
+    pub location: ConsoleLocation<'a>,
+}
+
+impl<'a> ConsoleMessageEvent<'a> {
+    pub const fn new(
+        time: f64,
+        page_id: Option<&'a str>,
+        message_type: &'a str,
+        text: &'a str,
+        args: Option<&'a [ConsoleArgument<'a>]>,
+        location: ConsoleLocation<'a>,
+    ) -> Self {
+        Self {
+            event_type: "console",
+            time,
+            page_id,
+            message_type,
+            text,
+            args,
+            location,
+        }
+    }
+
+    fn validate(self) -> Result<(), TraceWriterError> {
+        timestamp("console time", self.time)?;
+        nonempty("console message type", self.message_type)?;
+        Ok(())
+    }
+}
+
+impl<'a> ScreencastFrame<'a> {
+    pub const fn new(
+        page_id: &'a str,
+        sha1: &'a str,
+        width: u32,
+        height: u32,
+        timestamp: f64,
+    ) -> Self {
+        Self {
+            event_type: "screencast-frame",
+            page_id,
+            sha1,
+            width,
+            height,
+            timestamp,
+            frame_swap_wall_time: None,
+        }
+    }
+
+    fn validate(self) -> Result<(), TraceWriterError> {
+        nonempty("page ID", self.page_id)?;
+        nonempty("screencast resource", self.sha1)?;
+        if self.width == 0 || self.height == 0 {
+            return Err(TraceWriterError::InvalidField(
+                "screencast dimensions must be non-zero",
+            ));
+        }
+        timestamp("screencast time", self.timestamp)?;
+        if let Some(wall_time) = self.frame_swap_wall_time {
+            timestamp("screencast frame-swap wall time", wall_time)?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone, Copy, Debug, Serialize)]
 #[serde(tag = "type")]
 pub enum ApiTraceEvent<'a> {
     #[serde(rename = "before")]
@@ -311,6 +457,60 @@ impl<W: Write> PlaywrightV8TraceWriter<W> {
     }
 
     pub fn write_api_event(&mut self, event: ApiTraceEvent<'_>) -> Result<(), TraceWriterError> {
+        match self.state {
+            WriterState::New => return Err(TraceWriterError::ContextMissing),
+            WriterState::Ready => {}
+            WriterState::Poisoned => return Err(TraceWriterError::WriterPoisoned),
+        }
+        event.validate()?;
+        self.write_record(&event)
+    }
+
+    pub fn write_screencast_frame(
+        &mut self,
+        event: ScreencastFrame<'_>,
+    ) -> Result<(), TraceWriterError> {
+        match self.state {
+            WriterState::New => return Err(TraceWriterError::ContextMissing),
+            WriterState::Ready => {}
+            WriterState::Poisoned => return Err(TraceWriterError::WriterPoisoned),
+        }
+        event.validate()?;
+        self.write_record(&event)
+    }
+
+    pub fn write_frame_snapshot(
+        &mut self,
+        snapshot: FrameSnapshot<'_>,
+    ) -> Result<(), TraceWriterError> {
+        match self.state {
+            WriterState::New => return Err(TraceWriterError::ContextMissing),
+            WriterState::Ready => {}
+            WriterState::Poisoned => return Err(TraceWriterError::WriterPoisoned),
+        }
+        nonempty("snapshot call ID", snapshot.call_id)?;
+        nonempty("snapshot page ID", snapshot.page_id)?;
+        nonempty("snapshot frame ID", snapshot.frame_id)?;
+        timestamp("snapshot time", snapshot.timestamp)?;
+        timestamp("snapshot collection time", snapshot.collection_time)?;
+        if let Some(wall_time) = snapshot.wall_time {
+            timestamp("snapshot wall time", wall_time)?;
+        }
+        if snapshot.viewport.width == 0 || snapshot.viewport.height == 0 {
+            return Err(TraceWriterError::InvalidField(
+                "snapshot viewport dimensions must be non-zero",
+            ));
+        }
+        self.write_record(&FrameSnapshotEvent {
+            event_type: "frame-snapshot",
+            snapshot,
+        })
+    }
+
+    pub fn write_console_event(
+        &mut self,
+        event: ConsoleMessageEvent<'_>,
+    ) -> Result<(), TraceWriterError> {
         match self.state {
             WriterState::New => return Err(TraceWriterError::ContextMissing),
             WriterState::Ready => {}
@@ -509,8 +709,9 @@ mod tests {
     use serde_json::{Value, json};
 
     use super::{
-        AfterAction, ApiTraceEvent, BeforeAction, ContextOptions, LogEvent,
-        PlaywrightV8TraceWriter, Point, SdkLanguage, TRACE_VERSION, TraceOrigin, TraceWriterError,
+        AfterAction, ApiTraceEvent, BeforeAction, ConsoleArgument, ConsoleLocation,
+        ConsoleMessageEvent, ContextOptions, LogEvent, PlaywrightV8TraceWriter, Point,
+        ScreencastFrame, SdkLanguage, TRACE_VERSION, TraceOrigin, TraceWriterError,
         TraceWriterLimits,
     };
 
@@ -605,6 +806,94 @@ mod tests {
         assert_eq!(lines[3]["callId"], lines[1]["callId"]);
         assert_eq!(lines[3]["result"], result);
         assert_eq!(lines[3]["point"], json!({"x": -5.0, "y": 3.0}));
+    }
+
+    #[test]
+    fn writes_a_pinned_screencast_frame_reference_after_the_context_header() {
+        // Arrange
+        let options = json!({});
+        let mut writer =
+            PlaywrightV8TraceWriter::new(Vec::new(), TraceWriterLimits::new(1024, 2048, 2))
+                .unwrap();
+        writer.write_context(&context(&options)).unwrap();
+
+        // Act
+        writer
+            .write_screencast_frame(ScreencastFrame::new(
+                "page@1",
+                "frame.jpeg",
+                500,
+                400,
+                201.5,
+            ))
+            .unwrap();
+        let bytes = writer.finish().unwrap();
+
+        // Assert
+        let event: Value = serde_json::from_slice(
+            bytes
+                .split(|byte| *byte == b'\n')
+                .filter(|line| !line.is_empty())
+                .nth(1)
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(event["type"], "screencast-frame");
+        assert_eq!(event["pageId"], "page@1");
+        assert_eq!(event["sha1"], "frame.jpeg");
+        assert_eq!(event["width"], 500);
+        assert_eq!(event["height"], 400);
+    }
+
+    #[test]
+    fn writes_a_pinned_console_event_after_the_context_header() {
+        // Arrange
+        let options = json!({});
+        let value = json!("hello");
+        let args = [ConsoleArgument {
+            preview: "hello",
+            value: &value,
+        }];
+        let mut writer =
+            PlaywrightV8TraceWriter::new(Vec::new(), TraceWriterLimits::new(2048, 4096, 2))
+                .unwrap();
+        writer.write_context(&context(&options)).unwrap();
+
+        // Act
+        writer
+            .write_console_event(ConsoleMessageEvent::new(
+                201.5,
+                Some("page@1"),
+                "log",
+                "hello",
+                Some(&args),
+                ConsoleLocation {
+                    url: "https://example.test/console.html",
+                    line_number: 7,
+                    column_number: 11,
+                },
+            ))
+            .unwrap();
+        let bytes = writer.finish().unwrap();
+
+        // Assert
+        let event: Value = serde_json::from_slice(
+            bytes
+                .split(|byte| *byte == b'\n')
+                .filter(|line| !line.is_empty())
+                .nth(1)
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(event["type"], "console");
+        assert_eq!(event["pageId"], "page@1");
+        assert_eq!(event["messageType"], "log");
+        assert_eq!(
+            event["args"][0],
+            json!({"preview": "hello", "value": "hello"})
+        );
+        assert_eq!(event["location"]["lineNumber"], 7);
+        assert_eq!(event["location"]["columnNumber"], 11);
     }
 
     #[test]

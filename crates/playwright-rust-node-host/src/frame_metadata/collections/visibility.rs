@@ -1,11 +1,9 @@
 //! Immutable membership visibility over an already admitted revision. Changing
 //! a view allocates nothing and does not mutate another reader's membership.
 //! This is not an event dispatcher or a Page-closed-flag transition.
-use super::{CONTEXTS, CollectionContext, CollectionPage, CollectionRevision, PAGES};
+use super::{CollectionContext, CollectionPage, CollectionRevision};
 use playwright_rust_core::ObjectId;
-use std::{error::Error, fmt, iter::FusedIterator, ops::Index};
-
-const _: () = assert!(CONTEXTS == 16 && PAGES == 16);
+use std::{error::Error, fmt, iter::FusedIterator, ops::Index, sync::Arc};
 
 mod rebase;
 pub use rebase::CollectionRebaseError;
@@ -13,8 +11,8 @@ pub use rebase::CollectionRebaseError;
 #[derive(Clone)]
 pub struct CollectionView {
     revision: CollectionRevision,
-    contexts: u16,
-    pages: u16,
+    contexts: Arc<[bool]>,
+    pages: Arc<[bool]>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -30,6 +28,7 @@ pub enum CollectionVisibilityError {
     NotVisible(CollectionMember),
     ContextHasVisiblePages(ObjectId),
     ParentNotVisible(ObjectId),
+    Allocation,
 }
 
 impl fmt::Display for CollectionVisibilityError {
@@ -43,8 +42,8 @@ impl fmt::Display for CollectionVisibilityError {
 
 impl Error for CollectionVisibilityError {}
 
-fn full_mask(len: usize) -> u16 {
-    if len == 0 { 0 } else { u16::MAX >> (16 - len) }
+fn mask(len: usize, visible: bool) -> Arc<[bool]> {
+    vec![visible; len].into()
 }
 
 impl CollectionView {
@@ -67,32 +66,34 @@ impl CollectionView {
 
     pub fn full(revision: CollectionRevision) -> Self {
         Self {
-            contexts: full_mask(revision.contexts().len()),
-            pages: full_mask(revision.pages().len()),
+            contexts: mask(revision.contexts().len(), true),
+            pages: mask(revision.pages().len(), true),
             revision,
         }
     }
 
     /// All descriptors remain retained/charged, but none is publicly visible.
     pub fn hidden(revision: CollectionRevision) -> Self {
+        let context_count = revision.contexts().len();
+        let page_count = revision.pages().len();
         Self {
             revision,
-            contexts: 0,
-            pages: 0,
+            contexts: mask(context_count, false),
+            pages: mask(page_count, false),
         }
     }
 
     pub fn contexts(&self) -> CollectionMembers<'_, CollectionContext> {
         CollectionMembers {
             entries: self.revision.contexts(),
-            visible: self.contexts,
+            visible: &self.contexts,
         }
     }
 
     pub fn pages(&self) -> CollectionMembers<'_, CollectionPage> {
         CollectionMembers {
             entries: self.revision.pages(),
-            visible: self.pages,
+            visible: &self.pages,
         }
     }
 
@@ -103,25 +104,24 @@ impl CollectionView {
         member: CollectionMember,
         visible: bool,
     ) -> Result<Self, CollectionVisibilityError> {
-        let (position, mask) = match member {
+        let (position, visible_now) = match member {
             CollectionMember::Context(id) => (
                 self.revision
                     .contexts()
                     .iter()
                     .position(|entry| entry.id == id),
-                self.contexts,
+                self.contexts.as_ref(),
             ),
             CollectionMember::Page(id) => (
                 self.revision
                     .pages()
                     .iter()
                     .position(|entry| entry.id == id),
-                self.pages,
+                self.pages.as_ref(),
             ),
         };
         let position = position.ok_or(CollectionVisibilityError::Unknown(member))?;
-        let bit = 1u16 << position;
-        if (mask & bit != 0) == visible {
+        if visible_now[position] == visible {
             return Err(if visible {
                 CollectionVisibilityError::AlreadyVisible(member)
             } else {
@@ -142,15 +142,16 @@ impl CollectionView {
             }
             CollectionMember::Context(_) | CollectionMember::Page(_) => {}
         }
+        let mut flags = Vec::new();
+        flags
+            .try_reserve_exact(visible_now.len())
+            .map_err(|_| CollectionVisibilityError::Allocation)?;
+        flags.extend_from_slice(visible_now);
+        flags[position] = visible;
         let mut next = self.clone();
-        let mask = match member {
-            CollectionMember::Context(_) => &mut next.contexts,
-            CollectionMember::Page(_) => &mut next.pages,
-        };
-        if visible {
-            *mask |= bit;
-        } else {
-            *mask &= !bit;
+        match member {
+            CollectionMember::Context(_) => next.contexts = flags.into(),
+            CollectionMember::Page(_) => next.pages = flags.into(),
         }
         Ok(next)
     }
@@ -160,20 +161,23 @@ impl CollectionView {
 /// validated revision/view, so its set bits cannot exceed the admitted slice.
 pub struct CollectionMembers<'a, T> {
     entries: &'a [T],
-    visible: u16,
+    visible: &'a [bool],
 }
 
 impl<'a, T> CollectionMembers<'a, T> {
     pub fn len(&self) -> usize {
-        self.visible.count_ones() as usize
+        self.visible.iter().filter(|visible| **visible).count()
     }
     pub fn is_empty(&self) -> bool {
-        self.visible == 0
+        !self.visible.iter().any(|visible| *visible)
     }
     pub fn iter(&self) -> VisibleMembers<'a, T> {
         VisibleMembers {
             entries: self.entries,
-            remaining: self.visible,
+            visible: self.visible,
+            front: 0,
+            back: self.entries.len(),
+            remaining: self.len(),
         }
     }
     pub fn get(&self, index: usize) -> Option<&'a T> {
@@ -199,33 +203,40 @@ impl<'a, T> IntoIterator for CollectionMembers<'a, T> {
 
 pub struct VisibleMembers<'a, T> {
     entries: &'a [T],
-    remaining: u16,
+    visible: &'a [bool],
+    front: usize,
+    back: usize,
+    remaining: usize,
 }
 
 impl<'a, T> Iterator for VisibleMembers<'a, T> {
     type Item = &'a T;
     fn next(&mut self) -> Option<Self::Item> {
-        if self.remaining == 0 {
-            return None;
+        while self.front < self.back {
+            let index = self.front;
+            self.front += 1;
+            if self.visible[index] {
+                self.remaining -= 1;
+                return Some(&self.entries[index]);
+            }
         }
-        let index = self.remaining.trailing_zeros() as usize;
-        self.remaining &= self.remaining - 1;
-        Some(&self.entries[index])
+        None
     }
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let len = self.remaining.count_ones() as usize;
-        (len, Some(len))
+        (self.remaining, Some(self.remaining))
     }
 }
 
 impl<T> DoubleEndedIterator for VisibleMembers<'_, T> {
     fn next_back(&mut self) -> Option<Self::Item> {
-        if self.remaining == 0 {
-            return None;
+        while self.front < self.back {
+            self.back -= 1;
+            if self.visible[self.back] {
+                self.remaining -= 1;
+                return Some(&self.entries[self.back]);
+            }
         }
-        let index = 15 - self.remaining.leading_zeros() as usize;
-        self.remaining &= !(1u16 << index);
-        Some(&self.entries[index])
+        None
     }
 }
 

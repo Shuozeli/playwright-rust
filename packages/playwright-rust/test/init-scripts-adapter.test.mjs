@@ -53,3 +53,22 @@ test('BrowserContext init-script adapter delegates the Context identity', async 
   // Assert
   assert.deepEqual(calls, [['context-3', 'globalThis.ready = true\n']]);
 });
+
+test('init-script adapter preserves a source beyond the retired native byte cap', async () => {
+  // Arrange
+  const calls = [];
+  const session = { async pageAddInitScript(...args) { calls.push(args); } };
+  const page = {
+    _id: 'page-7',
+    context() { return { browser() { return { _session: session }; } }; },
+  };
+  const source = 'x'.repeat(2 * 1024 * 1024);
+
+  // Act
+  await adapter.add(page, source, false);
+
+  // Assert
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0][1].length, source.length + 1);
+  assert.equal(calls[0][1], `${source}\n`);
+});

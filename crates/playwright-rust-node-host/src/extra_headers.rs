@@ -28,33 +28,13 @@ use playwright_rust_network_model::extra_headers::settings::{
 use playwright_rust_network_model::extra_headers::{
     HeaderError, HeaderPool, HeaderProfile, HeaderSyntaxError, PageHeaders,
 };
-use std::sync::{
-    Arc, Mutex,
-    atomic::{AtomicUsize, Ordering},
-};
+use std::sync::{Arc, Mutex};
 use tokio::sync::oneshot;
 
 const MAX_HEADERS: usize = 256;
 const HEADER_BYTES: usize = 64 * 1024;
 pub const MAX_EXTRA_HEADERS: usize = MAX_HEADERS;
 pub const MAX_EXTRA_HEADER_BYTES: usize = HEADER_BYTES;
-const MAX_ROUTES: usize = 80; // 16 Pages and at most 64 Frame sessions.
-const ID_BYTES: usize = 256;
-const MAX_REQUESTS: usize = 9; // Shared by queued, executing and draining owners.
-const REQUEST_PLAN_BYTES: usize = 128 * 1024;
-const REQUEST_BYTES: usize = REQUEST_PLAN_BYTES
-    + jobs::FUTURE_BYTES
-    + 2 * MAX_ROUTES * (fanout::FUTURE_BYTES + fanout::NODE_BYTES);
-const NATIVE_BYTES: usize = 160 * 1024;
-const MAX_APPLIED: usize = 2 * MAX_ROUTES;
-const MAX_FAILED_PAGES: usize = 16;
-// Sparse settings (32), nine prior/input + per-Page dispatch owners, up to
-// 80 initializers, nine 16-Page compensation plans and a temporary proposal.
-const MAX_VALUE_OWNERS: usize = 2 * MAX_FAILED_PAGES
-    + MAX_REQUESTS * (MAX_FAILED_PAGES + 2)
-    + MAX_ROUTES
-    + MAX_REQUESTS * MAX_FAILED_PAGES
-    + 1;
 
 /// Bounded owned launch input. Native installation later transfers these
 /// values into the existing resource-accounted header pool without retaining
@@ -146,17 +126,15 @@ impl PersistentDefault {
 struct InitializationFailures(Vec<(ObjectId, HeaderSyntaxError)>);
 impl InitializationFailures {
     fn new() -> Self {
-        Self(Vec::with_capacity(MAX_FAILED_PAGES))
+        Self(Vec::new())
     }
     fn record(&mut self, page: ObjectId, error: HeaderSyntaxError) -> Result<(), HostError> {
         if self.0.iter().any(|(id, _)| *id == page) {
             return Ok(()); // First initialization failure stays latched.
         }
-        if self.0.len() == MAX_FAILED_PAGES {
-            return Err(HostError::ResourceExhausted(
-                "header initialization failure capacity exhausted".into(),
-            ));
-        }
+        self.0
+            .try_reserve(1)
+            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
         self.0.push((page, error));
         Ok(())
     }
@@ -172,38 +150,20 @@ impl InitializationFailures {
 }
 
 fn value_profile() -> Result<HeaderProfile, HostError> {
-    HeaderProfile::new(
-        ResourceScope::extension(127, 0),
-        MAX_VALUE_OWNERS,
-        MAX_HEADERS,
-        HEADER_BYTES,
-    )
-    .map_err(HostError::backend)
+    HeaderProfile::new_allocator_backed(ResourceScope::extension(127, 0), MAX_HEADERS, HEADER_BYTES)
+        .map_err(HostError::backend)
 }
 fn settings_profile() -> Result<HeaderSettingsProfile, HostError> {
-    HeaderSettingsProfile::new(ResourceScope::extension(127, 1), 16, 16)
-        .and_then(|profile| profile.with_concurrent_writers(MAX_REQUESTS))
+    HeaderSettingsProfile::new_allocator_backed(ResourceScope::extension(127, 1))
         .map_err(HostError::backend)
 }
 fn body_requirements() -> ResourceRequirements {
-    // Snapshot-cell/group queues fit inside the existing request-plan allowance.
-    debug_assert!(native::plan_scratch_bytes() <= 16 * 1024);
-    debug_assert!(MAX_ROUTES * session_retirement::route_bytes() <= 96 * 1024);
-    // Fixed reservation, not a claim that these bytes are resident RAM. Covers
-    // registry wrapper/Arc metadata; nine request bodies, borrowed header arrays,
-    // bounded route copies; and 80 simultaneous initialization/application
-    // scratch areas (header strings + 256 bytes/map entry + 32 KiB future/error
-    // allowance). Native encoded wire/response owners have the CDP profile.
+    // Fixed reservation covers the installation itself. Driver jobs, route
+    // lists, fanout nodes, snapshots, applied-session identities and
+    // failure/watch registries are allocator-backed and owned by their exact
+    // live operations instead of projecting a browser-object count here.
     // Allocator padding, task stacks and foreign-runtime values remain external.
-    let bytes = (std::mem::size_of::<Installation>()
-        + 1024
-        + MAX_APPLIED * (std::mem::size_of::<String>() + ID_BYTES)
-        + MAX_FAILED_PAGES * std::mem::size_of::<(ObjectId, HeaderSyntaxError)>()
-        + session_retirement::registry_bytes()
-        + navigation::MAX_OPERATIONS * navigation::OPERATION_BYTES
-        + REQUEST_BYTES // Driver-only obsolete-session reconciliation scratch.
-        + MAX_REQUESTS * REQUEST_BYTES
-        + MAX_ROUTES * NATIVE_BYTES) as u64;
+    let bytes = (std::mem::size_of::<Installation>() + 1024) as u64;
     ResourceRequirements::none()
         .with_class(ResourceClass::BackendStateBytes, bytes, bytes)
         .with_metadata(1, 1)
@@ -223,9 +183,6 @@ pub(crate) struct Installation {
     // synchronous transaction. Initializers cannot observe a rejected plan.
     // Never held across native awaits. The model retains its own portable lock.
     settings: Arc<Mutex<HeaderSettings>>,
-    requests: AtomicUsize,
-    navigations: AtomicUsize,
-    native: tokio::sync::Semaphore,
     applied: Mutex<Vec<String>>,
     watches: session_retirement::Watches,
     failed_initializations: Mutex<InitializationFailures>,
@@ -261,10 +218,7 @@ impl Installation {
             connection,
             pool,
             settings: Arc::new(Mutex::new(settings)),
-            requests: AtomicUsize::new(0),
-            navigations: AtomicUsize::new(0),
-            native: tokio::sync::Semaphore::new(MAX_ROUTES),
-            applied: Mutex::new(Vec::with_capacity(MAX_APPLIED)),
+            applied: Mutex::new(Vec::new()),
             failed_initializations: Mutex::new(InitializationFailures::new()),
             watches: session_retirement::Watches::new(),
             persistent_default: PersistentDefault::new(persistent_default),
@@ -279,7 +233,6 @@ impl Installation {
         input: &[HeaderRef<'_>],
         reply: oneshot::Sender<Result<(), HostError>>,
     ) -> Result<Request, HostError> {
-        admit(&self.requests, MAX_REQUESTS)?;
         let permit = RequestPermit(self.clone());
         let (context, routes) = routes(live, target)?;
         let settings = self.settings.lock().map_err(HostError::backend)?;
@@ -309,7 +262,6 @@ impl Installation {
         self: &Arc<Self>,
         input: &[HeaderRef<'_>],
     ) -> Result<CreationHeaders, HostError> {
-        admit(&self.requests, MAX_REQUESTS)?;
         let permit = RequestPermit(self.clone());
         let input = self.pool.page(input).map_err(input_error)?;
         Ok(CreationHeaders { input, permit })
@@ -480,14 +432,18 @@ pub(crate) async fn reconcile_native(state: &Mutex<Option<LiveSession>>) -> Resu
         // of a scratch allocation, including when no headers were ever set.
         let mut stale = Vec::new();
         for session in applied.iter() {
-            if !topology
+            let page_session = topology
                 .topology()
                 .target_session_routes()
-                .any(|route| route.session_id() == session)
-            {
-                if stale.is_empty() {
-                    stale.reserve_exact(MAX_APPLIED);
-                }
+                .any(|route| route.session_id() == session);
+            #[cfg(all(feature = "worker-events", feature = "service-worker-events"))]
+            let service_worker_session = live.worker_events.contains_service_worker(session)?;
+            #[cfg(not(all(feature = "worker-events", feature = "service-worker-events")))]
+            let service_worker_session = false;
+            if !page_session && !service_worker_session {
+                stale
+                    .try_reserve(1)
+                    .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
                 stale.push(session.clone());
             }
         }
@@ -499,22 +455,7 @@ pub(crate) async fn reconcile_native(state: &Mutex<Option<LiveSession>>) -> Resu
     Ok(())
 }
 
-fn admit(counter: &AtomicUsize, limit: usize) -> Result<(), HostError> {
-    counter
-        .fetch_update(Ordering::AcqRel, Ordering::Acquire, |active| {
-            (active < limit).then_some(active + 1)
-        })
-        .map(|_| ())
-        .map_err(|_| {
-            HostError::ResourceExhausted("extra header operation capacity exhausted".into())
-        })
-}
 struct RequestPermit(Arc<Installation>);
-impl Drop for RequestPermit {
-    fn drop(&mut self) {
-        self.0.requests.fetch_sub(1, Ordering::AcqRel);
-    }
-}
 #[derive(Clone, Copy)]
 enum Target {
     Context(ObjectId),
@@ -550,7 +491,7 @@ impl CreationHeaders {
 #[derive(Clone)]
 struct Route {
     context: ObjectId,
-    page: ObjectId,
+    page: Option<ObjectId>,
     watch: Arc<session_retirement::Watch>,
 }
 
@@ -568,7 +509,7 @@ fn routes(live: &LiveSession, target: Target) -> Result<(ObjectId, Vec<Route>), 
             .map(|route| route.browser_context_object_id()),
     }
     .ok_or(HostError::TargetClosed)?;
-    let mut routes = Vec::with_capacity(MAX_ROUTES);
+    let mut routes = Vec::new();
     for native in topology.target_session_routes() {
         let page = topology
             .page_session_routes()
@@ -581,20 +522,35 @@ fn routes(live: &LiveSession, target: Target) -> Result<(ObjectId, Vec<Route>), 
         if !selected {
             continue;
         }
-        if routes.len() == MAX_ROUTES || native.session_id().len() > ID_BYTES {
-            return Err(HostError::ResourceExhausted(
-                "extra header native route bound exceeded".into(),
-            ));
-        }
+        routes
+            .try_reserve(1)
+            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
         routes.push(Route {
             context,
-            page: page.object_id(),
+            page: Some(page.object_id()),
             watch: live.extra_headers.watches.insert(
                 native.session_id(),
                 page.session_id(),
                 native.target_id(),
             )?,
         });
+    }
+    #[cfg(all(feature = "worker-events", feature = "service-worker-events"))]
+    if matches!(target, Target::Context(_)) {
+        for worker in live.worker_events.service_worker_snapshot(context)? {
+            routes
+                .try_reserve(1)
+                .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
+            routes.push(Route {
+                context,
+                page: None,
+                watch: live.extra_headers.watches.insert(
+                    worker.id(),
+                    worker.id(),
+                    worker.target_id(),
+                )?,
+            });
+        }
     }
     Ok((context, routes))
 }
@@ -725,17 +681,6 @@ impl HostSession {
             NativeHeaderTarget::Context(id) | NativeHeaderTarget::Page(id) => id,
         };
         let (id, _, _operation) = self.admit_operation(id)?;
-        // Reserve queue capacity before publishing anything. A full queue is
-        // a pure admission failure, not a published-and-abandoned update.
-        let slot = self
-            .topology_barriers
-            .try_reserve()
-            .map_err(|error| match error {
-                tokio::sync::mpsc::error::TrySendError::Full(_) => HostError::ResourceExhausted(
-                    "topology/lifecycle request capacity exceeded (8)".into(),
-                ),
-                tokio::sync::mpsc::error::TrySendError::Closed(_) => HostError::TargetClosed,
-            })?;
         let (reply, completion) = oneshot::channel();
         let request = {
             let state = self.state.lock().map_err(HostError::backend)?;
@@ -746,7 +691,7 @@ impl HostSession {
             };
             live.extra_headers.request(live, target, input, reply)?
         };
-        slot.send(DriverRequest::ExtraHeaders(request));
+        self.send_driver_request(DriverRequest::ExtraHeaders(request))?;
         Ok(Completion {
             receiver: completion,
             _operation,

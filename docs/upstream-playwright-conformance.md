@@ -1,10 +1,185 @@
-<!-- agent-updated: 2026-11-14T05:28:56Z -->
+<!-- agent-updated: 2026-11-19T23:50:00Z -->
 
 # Full upstream Playwright conformance
+
+## BrowserContext cookie and persistent-profile checkpoint (2026-11-19)
+
+The source-bound `playwright-core-browsercontext-cookies-chromium-v1` manifest
+pins four complete, unchanged Playwright 1.58.0 Chromium library files at Core
+commit `961381ec73a9fa2661d92504eab1a6bd6eaffc75`. The final candidate repeat
+records 15 expected plus one upstream skip for `browsercontext-cookies`, 7/7
+for `clearcookies`, 23/23 for `add-cookies`, and 11/11 for third-party cookies:
+55 passed, one upstream skip, and zero unexpected across 56 tests.
+
+The candidate uses the Rust-owned cookie and storage-state leaves, removes the
+former aggregate eight-Context/eight-Page network adapter rejection, and runs
+the upstream persistent-profile case through a real Rust-owned non-video
+`launchPersistentContext()` with `ignoreHTTPSErrors`. It does not substitute
+the official Playwright package for browser logic. The official fixture and
+instrumentation still drive the unchanged assertions through the package
+adapter.
+
+Final result SHA-256 values, in cookies/clear/add/third-party order, are
+`9d629f1fdd0d0e2f8400c9f8b27f36002cebd9c9cb1b4197aaef038e3a0eb2d0`,
+`ca65157155c8ad66cd2280b4243c90178c319d0c26aef0d7a1b0506fa52cbf79`,
+`6bb5b765df08f2421e5ff50316d7c77b41d4b60493ba5e943b078c4180872392`,
+and `2672f8a76c88bb16caa6c3ba449a2ef5b96cdec0627fba5003c1ae9486a21072`.
+Each has a schema-2 provenance sidecar. The shared native artifact is
+`dc548bd981b6f23af2bb54f4405751fa6fde4e4568115631084bfbee23abbc2d`,
+candidate source is
+`d2d54c6c4384b66e83e89429b2518904f63dc8199478513b4636f3e5c6da5b00`,
+and manifest SHA-256 is
+`427b71a41fe8e6a7a36d66673416de19b36fbb370f85ea921de3021e012228a0`.
+This is focused file evidence, not a pass claim for the 3,199-row Chromium
+public-library slice or the full 48,477-row Core inventory.
+
+> Scope correction (2026-11-15): only pinned upstream Chromium behavior is in
+> scope. Historical Firefox/WebKit "provider gap" rows are out-of-scope and
+> non-applicable; they do not count against parity and will not be implemented.
 
 Status: inventory and collection baseline established; candidate execution is
 not complete. The historical seven-case Python lane is only a bootstrap check
 and cannot satisfy this conformance target.
+
+The new source-bound `library-tracing-chromium-v1` manifest pins the complete
+unchanged Playwright 1.58.0 `tests/library/tracing.spec.ts`: 35 exact cases,
+commit `961381ec73a9fa2661d92504eab1a6bd6eaffc75`, source SHA-256
+`7757232728c1b62b43f4c5aed96a2d5ccb94adcc38b1692dc3f93e88a81ab7ba`,
+and spec-ID SHA-256
+`ae6a094d9aaa58c7383b4a646586ba0d6143eec378776a1cdf0dba3e71057110`.
+The initial candidate RED result was 3 passed / three upstream fixmes skipped /
+29 failed. The stable rebuilt [candidate result](../.work/official-conformance/results/core-tracing-full-current-candidate-20261119-v38-final-stable.json)
+is 32 passed / three skipped / zero failed; its
+[schema-2 provenance](../.work/official-conformance/results/core-tracing-full-current-candidate-20261119-v38-final-stable.provenance.json)
+binds the exact profile, harness, result, candidate-package source, and addon. Result
+SHA-256 is
+`c013069c6a0c983e30454994158dd4ac629ae890d3f6e3d90179c1ed2e33117a`;
+provenance SHA-256 is
+`1e1530f0657cfb6551a63d7566bc74eade9ccb5aaa9e5e89b3ac32d57b27f083`;
+artifact SHA-256 is
+`19cfd6a17a90dcaa2feca83a4ded79c06e579bd8728e76e94ae0f838f871138a`;
+candidate-source SHA-256 is
+`8acb5da00174123c48b1ea3ca616dba4765767ff86a8b0d237730af3b93646db`;
+manifest SHA-256 is
+`ae8f82cf25ab19246c4f4925f2912d9a244c9c26ee62dcd9698b092201f99509`.
+
+The green rows now include the official `group/groupEnd` anytime/auto-close
+case, callback titles, internal-page exclusion, stop-time console flushing,
+network failures, `tracesDir`/name handling, overwrite, pending action
+lifecycle, browser-close teardown, and concurrent export during a second
+navigation. Independent
+Rust leaves own chunk state, nested groups, parent IDs, automatic close,
+export/discard, action call IDs, and titles for the currently bracketed Page
+route/navigation/set-content/click/double-click/hover/evaluation/reload/close,
+Mouse movement/double-click, Keyboard insert-text, Locator input-file
+selection, timeout waits, Route continue, public Dialog accept/dismiss, and
+BrowserContext storage-state/API-request calls. The independent storage-state leaf reuses
+the Rust host and supports `indexedDB`; path persistence remains unsupported.
+The internal-page row now proves that the public Page close action remains in
+the trace without leaking storage-state scratch pages. The separate console
+composition records the existing Rust CDP Page console stream and serializes
+type, text, arguments, location, timestamp, and Page ownership at stop without
+a JavaScript trace buffer. The independent Rust request-tracing recorder spools
+typed `resource-snapshot` JSONL and content blobs per global request context,
+then packages `trace.network`; the official basic, isolation, and post-data
+rows all pass. Rust also retains all tracing start options and now passes
+repeated-start, browser-close, dialog, two-trace, and interrupted-action
+lifecycle cases. The independent BrowserContext network leaf writes
+`trace.network` and resources through Rust HAR recording, named live trace
+files are flushed under the launch `tracesDir`, and a narrowly recoverable
+final-screenshot failure no longer blocks concurrent export. Source collection
+is also independently green: Node captures external callsites only while
+requested, and Rust owns per-chunk deduplication, file reads, official SHA-1
+names, and ZIP resources. Both source rows pass. Context-owned API requests
+reuse the exact active Rust trace HAR registration. Rust also writes the
+Playwright-compatible numeric-call-ID `trace.stacks` table from the first
+external Node callsite. DOM/action frame snapshots, Page screenshot
+buffer/result tracing, expect-title execution/tracing, and both internal-stack
+rows now pass. A two-phase owned-browser shutdown drains Handle disposal while
+CDP is still available, then closes Chromium, so the final no-after-without-before
+case is stable rather than accepting transport loss as cleanup success. The
+three skips are upstream full-Chromium fixmes, not local filters. This green
+file is exact evidence for the pinned Chromium library tracing slice; it is not
+a claim that the complete Playwright corpus passes.
+
+The focused Playwright Python v1.58.0 creation-time HAR manifest now pins 19
+unchanged Chromium cases and both source hashes. Oracle and the installed
+ABI140 candidate each pass 19/19, including glob and RegExp URL filters. This
+closes only that fixed Python slice: its raw XML/provenance reports have not
+been promoted into the immutable ledger, no full Core Node/TypeScript HAR spec
+has been executed here, and complete-corpus status remains unchanged.
+
+The current ABI140 Python module and official Playwright 1.58.0 Oracle now
+each pass the seven source-pinned Chromium Service Worker rows already covered
+by repository manifests: sync network 2/2, async/sync policy 4/4, and
+Page-route precedence 1/1. Each row ran in an isolated process using the
+trusted Tailscale HTTPS fixture; all eight candidate/Oracle provenance
+sidecars verify. A second isolated slice passes the previously open navigation
+and two async-network rows 3/3 in each lane with independently verified
+provenance. This closes the historical candidate 1/2 network discrepancy and
+the candidate-only body-read discrepancy for a Page response fulfilled by a
+Service Worker. It does not inventory or execute every Service Worker row in
+the full Python or Core Node/TypeScript corpora. The canonical Python inventory
+contains 14 matching Chromium IDs; all 14 are now green in both lanes. The
+additional async/sync extension rows pass 2/2 in the current candidate and
+Oracle owned-launch reports after aligning bundled `chromium` channel
+selection, component-extension isolation, persistent-owned teardown, and the
+deprecated always-empty `background_pages` property. The final async/sync
+video-recording rows now pass 2/2 in both candidate and Oracle owned-launch
+reports. The corrected candidate
+[report](../.work/official-conformance/results/python-sw-extension-video2-owned-current-candidate-20261119-v3.xml)
+has SHA-256
+`81d49330f6abdd7f58a59cfc0cbb3fca5e8646c5be351ad4913e4bd498418dfc`
+and independently verified schema-5 provenance. A repository live E2E also
+proves that the candidate emits a nonempty VP8 WebM at the requested 640x360
+size, rather than merely accepting the option. The new Rust leaf owns CDP
+screencast frames, acknowledgement, pinned `ffmpeg-1011`, and close-time
+finalization. ABI141 extends Python `Page.video` and Video artifact methods to
+persistent and ordinary owned Contexts, including the implicit Context from
+`Browser.new_page()`. The complete unchanged async/sync video files pass 11/11
+in the installed candidate. Its verified report SHA-256 is
+`3298de552a9011b3c3c6d3345a7f72d49f84c1675be0b333d550e9d014b0e934`.
+The independently verified Playwright 1.58.0 Oracle run passes 9/11, report
+SHA-256
+`302a5dbce7d4d9e42d26b679d6a54b3f01410f994011ef36e6edc98cacec3569`;
+its two failures are official `Video.save_as()` calls rejected as `Page closed`
+after Page close. The local Node Video facade now covers ordinary owned and
+implicit `Browser.newPage()` Contexts. The complete unchanged Core
+`tests/library/video.spec.ts` file is pinned by the
+`library-video-chromium-v1` manifest and passes 24 with five skipped and zero
+failed in the final [candidate result](../.work/official-conformance/results/core-video-full-current-candidate-20261119-v14-tracing-discard.json).
+Its schema-2 [provenance](../.work/official-conformance/results/core-video-full-current-candidate-20261119-v14-tracing-discard.provenance.json)
+pins Playwright v1.58.0 commit
+`961381ec73a9fa2661d92504eab1a6bd6eaffc75`, the complete source manifest,
+candidate profile, harness inputs, result, and artifact. The result SHA-256 is
+`eb0b5712dac71c3c0a32d4c14a83c87ae4ae1c44593c5668b5229d43bcac506a`;
+the selected candidate artifact SHA-256 is
+`5a1d29364e4551749b22546841ffe071d1b1e93e4afccca390f3a27c2c530fc8`.
+
+The manifest pins `channel: chromium` because the registry launches full
+Google Chrome for Testing. All five skipped rows are Playwright's own fixmes:
+four are selected by the full-Chromium classification (scale, full-viewport,
+and video-plus-trace variants), while the internal-page row is unconditionally
+fixme upstream. They are not candidate passes and are not local filters. Before this
+classification correction, an unset channel falsely identified the executable
+as headless shell. A separate diagnostic run without the full-Chrome fixme
+proved the current screenshot trace shape against the upstream video-plus-trace
+assertions, but that diagnostic is not source-bound conformance evidence.
+
+The composed profile contains a test-only real browser-process kill and
+default-off Context tracing screenshot, chunk/group, and first action leaves. The screenshot
+leaf writes a real JPEG resource and Playwright-v8 `trace.trace` entry into a
+ZIP, but captures only one screenshot at stop. The chunk leaf owns chunk
+export/discard and nested group events. The action leaf covers only the six
+currently bracketed API families named above. Continuous frames, snapshots,
+sources, `.network`, complete action/API instrumentation, and other Tracing
+options remain open.
+Omitting `stop()`'s path now discards an active trace in Rust, and an
+omitted-path stop before start is the upstream no-op; exporting without start
+still returns the official lifecycle error.
+Remote Video artifacts, Node
+persistent-context recording, and the Core Node/TypeScript Service Worker
+denominator also remain open.
 
 The complete pinned Chromium `frame-hierarchy.spec.ts` file has 13 cases,
 verified by a 4/4 source/ID/asset manifest checker. Its unchanged full-file
@@ -5542,9 +5717,11 @@ no other change. The complete Python ledger is now 1,178 passed / eight skipped
 `bfb8e95031d10240bc110b16ba18a800711f0e5e4cc513cef4e8cfd0f14198bd`.
 
 The initial candidate diagnostic found two real compatibility gaps: teardown
-needs a stable inactive `BrowserContext.tracing.stop()` no-op, and a nested
+needed a stable inactive `BrowserContext.tracing.stop()` no-op, and a nested
 arrow inside an expression must not classify the whole evaluation source as a
-function. Tracing recording/output remains explicitly unsupported. A separate
+function. The Node screenshot-tracing leaf now implements the no-op plus
+active-trace discard when no path is supplied; the broader tracing and
+evaluation gaps in this historical diagnostic were not promoted. A separate
 initial oracle diagnostic records Chrome 154 rejecting
 `Browser.setDownloadBehavior` when no default Page exists; creating one
 task-owned `about:blank` Page through Playwright Rust restores the documented

@@ -33,6 +33,15 @@ impl CdpSession {
         Ok(())
     }
 
+    pub async fn network_emulate_network_conditions(
+        &self,
+        params: serde_json::Value,
+    ) -> Result<()> {
+        self.send("Network.emulateNetworkConditions", params)
+            .await?;
+        Ok(())
+    }
+
     pub async fn network_disable(&self) -> Result<()> {
         self.send("Network.disable", serde_json::json!({})).await?;
         Ok(())

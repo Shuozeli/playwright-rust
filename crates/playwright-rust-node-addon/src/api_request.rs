@@ -31,7 +31,17 @@ use playwright_rust_api_request_connector_rustls::RustlsApiConnector;
 use playwright_rust_api_request_connector_socks5::Socks5ProxyConnector;
 use playwright_rust_api_request_cookie::MemoryCookieStore;
 use playwright_rust_api_request_decompress::StandardBodyDecoder;
+#[cfg(feature = "api-request-tracing")]
+use playwright_rust_api_request_tracing::{
+    ApiRequestTraceRecorder, TraceHeader, TraceRequest, TraceResponse,
+};
 use playwright_rust_api_request_transport::{ApiConnector, ConnectionApiRequestTransport};
+#[cfg(all(
+    feature = "api-request-tracing",
+    feature = "context-api-request",
+    feature = "context-tracing-network"
+))]
+use playwright_rust_node_host::ContextApiRequestTrace;
 #[cfg(feature = "context-api-request")]
 use playwright_rust_node_host::{
     ContextApiRequestOptions, HostError, HostSession,
@@ -174,6 +184,25 @@ pub struct NativeApiRequestMetrics {
 pub struct NativeApiRequestContext {
     context: ApiRequestContext,
     storage_origins_json: String,
+    #[cfg(feature = "api-request-tracing")]
+    trace_recorder: ApiRequestTraceRecorder,
+    #[cfg(all(
+        feature = "api-request-tracing",
+        feature = "context-api-request",
+        feature = "context-tracing-network"
+    ))]
+    context_trace: Option<BrowserContextTrace>,
+}
+
+#[cfg(all(
+    feature = "api-request-tracing",
+    feature = "context-api-request",
+    feature = "context-tracing-network"
+))]
+#[derive(Clone)]
+struct BrowserContextTrace {
+    host: Arc<HostSession>,
+    context_id: String,
 }
 
 #[cfg(feature = "context-api-request")]
@@ -203,8 +232,8 @@ impl NativeApiRequestContext {
             })
             .transpose()?;
         let cookie_store: Arc<dyn ApiCookieStore> = Arc::new(BrowserContextCookieStore {
-            host,
-            context_id: context_id.into_boxed_str(),
+            host: Arc::clone(&host),
+            context_id: context_id.clone().into_boxed_str(),
         });
         let rustls_connector =
             Arc::new(RustlsApiConnector::new().map_err(api_request_display_error)?);
@@ -253,6 +282,14 @@ impl NativeApiRequestContext {
         Ok(Self {
             context,
             storage_origins_json: "[]".into(),
+            #[cfg(feature = "api-request-tracing")]
+            trace_recorder: ApiRequestTraceRecorder::system(),
+            #[cfg(all(
+                feature = "api-request-tracing",
+                feature = "context-api-request",
+                feature = "context-tracing-network"
+            ))]
+            context_trace: Some(BrowserContextTrace { host, context_id }),
         })
     }
 }
@@ -471,6 +508,14 @@ impl NativeApiRequestContext {
         Ok(Self {
             context,
             storage_origins_json,
+            #[cfg(feature = "api-request-tracing")]
+            trace_recorder: ApiRequestTraceRecorder::system(),
+            #[cfg(all(
+                feature = "api-request-tracing",
+                feature = "context-api-request",
+                feature = "context-tracing-network"
+            ))]
+            context_trace: None,
         })
     }
 
@@ -513,13 +558,82 @@ impl NativeApiRequestContext {
                     .collect::<napi::Result<Vec<_>>>()
             })
             .transpose()?;
+        #[cfg(all(
+            feature = "api-request-tracing",
+            feature = "context-api-request",
+            feature = "context-tracing-network"
+        ))]
+        let context_trace_recording = self.context_trace.is_some();
+        #[cfg(all(
+            feature = "api-request-tracing",
+            not(all(feature = "context-api-request", feature = "context-tracing-network"))
+        ))]
+        let context_trace_recording = false;
+        #[cfg(feature = "api-request-tracing")]
+        let trace_request =
+            (self.trace_recorder.is_recording() || context_trace_recording).then(|| TraceRequest {
+                method: request.method.clone(),
+                headers: request.headers.iter().map(trace_header).collect(),
+                body: match &request.body {
+                    ApiRequestBody::None => None,
+                    ApiRequestBody::Bytes(bytes) => Some(bytes.clone()),
+                    ApiRequestBody::Json(text) => Some(text.as_bytes().to_vec()),
+                    ApiRequestBody::Form(_) | ApiRequestBody::Multipart(_) => None,
+                },
+            });
         let context = self.context.clone();
+        #[cfg(feature = "api-request-tracing")]
+        let trace_recorder = self.trace_recorder.clone();
+        #[cfg(all(
+            feature = "api-request-tracing",
+            feature = "context-api-request",
+            feature = "context-tracing-network"
+        ))]
+        let context_trace = self.context_trace.clone();
         env.spawn_future(async move {
-            context
-                .execute(request)
-                .await
-                .map(|response| NativeApiResponse { response })
-                .map_err(api_request_error)
+            let response = context.execute(request).await.map_err(api_request_error)?;
+            #[cfg(feature = "api-request-tracing")]
+            if let Some(trace_request) = trace_request {
+                let trace_response = TraceResponse {
+                    url: response.url().to_owned(),
+                    status: response.status(),
+                    status_text: response.status_text().to_owned(),
+                    headers: response.headers().iter().map(trace_header).collect(),
+                    body: response.body().map_err(api_request_error)?,
+                };
+                #[cfg(all(feature = "context-api-request", feature = "context-tracing-network"))]
+                if let Some(context_trace) = context_trace {
+                    context_trace
+                        .host
+                        .context_tracing_record_api_request(
+                            &context_trace.context_id,
+                            ContextApiRequestTrace {
+                                method: trace_request.method.clone(),
+                                url: trace_response.url.clone(),
+                                request_headers: trace_request
+                                    .headers
+                                    .iter()
+                                    .map(|header| (header.name.clone(), header.value.clone()))
+                                    .collect(),
+                                request_body: trace_request.body.clone(),
+                                response_status: trace_response.status,
+                                response_status_text: trace_response.status_text.clone(),
+                                response_headers: trace_response
+                                    .headers
+                                    .iter()
+                                    .map(|header| (header.name.clone(), header.value.clone()))
+                                    .collect(),
+                                response_body: trace_response.body.clone(),
+                            },
+                        )
+                        .map_err(api_request_display_error)?;
+                }
+                let _ = tokio::task::spawn_blocking(move || {
+                    trace_recorder.record(trace_request, trace_response)
+                })
+                .await;
+            }
+            Ok(NativeApiResponse { response })
         })
     }
 
@@ -564,6 +678,8 @@ impl NativeApiRequestContext {
 
     #[napi]
     pub fn dispose(&self, reason: Option<String>) {
+        #[cfg(feature = "api-request-tracing")]
+        self.trace_recorder.discard();
         self.context.dispose(reason);
     }
 
@@ -582,6 +698,37 @@ impl NativeApiRequestContext {
                 metrics.retained_log_bytes,
                 "retained response log bytes",
             )?,
+        })
+    }
+}
+
+#[cfg(feature = "api-request-tracing")]
+#[napi]
+impl NativeApiRequestContext {
+    #[napi]
+    pub fn trace_start(&self, snapshots: bool) -> napi::Result<()> {
+        self.trace_recorder
+            .start(snapshots)
+            .map_err(api_request_trace_error)
+    }
+
+    #[napi]
+    pub fn trace_stop<'env>(
+        &self,
+        env: &'env Env,
+        path: String,
+    ) -> napi::Result<PromiseRaw<'env, ()>> {
+        let recorder = self.trace_recorder.clone();
+        env.spawn_future(async move {
+            tokio::task::spawn_blocking(move || recorder.stop(path))
+                .await
+                .map_err(|error| {
+                    napi::Error::new(
+                        napi::Status::GenericFailure,
+                        format!("API request trace task failed: {error}"),
+                    )
+                })?
+                .map_err(api_request_trace_error)
         })
     }
 }
@@ -615,8 +762,25 @@ fn client_certificate_input(
 
 impl Drop for NativeApiRequestContext {
     fn drop(&mut self) {
+        #[cfg(feature = "api-request-tracing")]
+        self.trace_recorder.discard();
         self.context.dispose(None);
     }
+}
+
+#[cfg(feature = "api-request-tracing")]
+fn trace_header(header: &ApiHeader) -> TraceHeader {
+    TraceHeader {
+        name: header.name.clone(),
+        value: header.value.clone(),
+    }
+}
+
+#[cfg(feature = "api-request-tracing")]
+fn api_request_trace_error(
+    error: playwright_rust_api_request_tracing::ApiRequestTraceError,
+) -> napi::Error {
+    napi::Error::new(napi::Status::GenericFailure, error.to_string())
 }
 
 #[napi]

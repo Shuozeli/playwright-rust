@@ -109,34 +109,33 @@ async fn pending_results_survive_conversion_wait_but_not_session_shutdown() {
         check(aborted.is_err_and(|error| error.is_cancelled()), "creation was not abandoned")?;
         wait_for_cleanup(&host).await?;
 
-        // Retain all 64 Ready results across close. A 65th request must fail
-        // before changing the browser, independently of native route capacity.
+        // Retain more than the legacy 64 Ready results across close. The next
+        // request remains allocator-backed and executes normally.
         let mut pending = Vec::new();
         for _ in 0..MAX_HANDLES {
             pending.push(host.frame_prepare_handle(&frame, EvaluateHandleParams::expression(
                 "(++globalThis.__pendingCount, document.createElement('input'))",
             )).await?);
         }
-        check(host.handle_metrics()?.current == MAX_HANDLES, "native result capacity was not filled")?;
-        let overflow = host.frame_prepare_handle(&frame, EvaluateHandleParams::expression("(++globalThis.__pendingCount, {})")).await;
-        check(matches!(overflow, Err(HostError::ResourceExhausted(_))), "result overflow was not rejected")?;
+        check(host.handle_metrics()?.current == MAX_HANDLES, "native results were not retained")?;
+        pending.push(host.frame_prepare_handle(&frame, EvaluateHandleParams::expression("(++globalThis.__pendingCount, {})")).await?);
         let count = observer.frame_evaluate(&page.main_frame_id, EvaluateParams::expression("globalThis.__pendingCount")).await?;
-        check(count == EvaluationValue::number(MAX_HANDLES as f64).unwrap(), "overflow executed browser code")?;
+        check(count == EvaluationValue::number((MAX_HANDLES + 1) as f64).unwrap(), "allocator-backed request did not execute")?;
         tokio::time::timeout(Duration::from_secs(10), host.close()).await
             .map_err(|_| HostError::backend("session close waited for retained result collection"))??;
-        check(pending.len() == MAX_HANDLES, "test dropped result owners before close")?;
+        check(pending.len() == MAX_HANDLES + 1, "test dropped result owners before close")?;
         let metrics = host.metrics()?;
-        eprintln!("Closed host with 64 retained portable results: {metrics:?}");
+        eprintln!("Closed host with allocator-backed retained portable results: {metrics:?}");
         check(metrics == crate::SessionMetrics {
-            active_leases: MAX_HANDLES as u32 + 1,
+            active_leases: 1,
             live_scopes: 1,
             ..crate::SessionMetrics::default()
-        }, "closed host must retain only the 64 descriptor leases and owner-table state")?;
+        }, "closed host must retain only owner-table state")?;
         let title = observer.frame_title(&page.main_frame_id).await?;
         check(title == "NODE154-owned-results", "subject close destroyed the borrowed Page")?;
         drop(pending);
         check(host.metrics()? == crate::SessionMetrics::default(), "descriptor drop did not return its storage leases")?;
-        eprintln!("Pending Handle host: unpolled/drop-started/drop-Ready, 64 retained results, pre-I/O overflow and shutdown without descriptor collection pass; borrowed Page survives");
+        eprintln!("Pending Handle host: unpolled/drop-started/drop-Ready, allocator-backed retained results and shutdown without descriptor collection pass; borrowed Page survives");
         Ok(())
     }.await;
     // All terminal paths attempt only this test's connection/Context cleanup.

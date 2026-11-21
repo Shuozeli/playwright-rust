@@ -32,6 +32,7 @@ function locatorWithCount(count) {
 
 function locatorWithEvaluation() {
   const calls = [];
+  const tracingCalls = [];
   const native = {
     async evaluate(timeout, converter) {
       calls.push(['evaluate', timeout, await converter()]);
@@ -97,6 +98,10 @@ function locatorWithEvaluation() {
       calls.push(['expectString', timeout, kind, expected, flags, isNot]);
       return { matches: true, received: expected, missing: false, timedOut: false };
     },
+    async expectCss(timeout, name, expected, flags, isNot) {
+      calls.push(['expectCss', timeout, name, expected, flags, isNot]);
+      return { matches: true, received: expected, missing: false, timedOut: false };
+    },
     async expectClassMatchers(timeout, expected, isNot) {
       calls.push(['expectClassMatchers', timeout, expected, isNot]);
       return { matches: true, received: expected.map(value => value.expected), timedOut: false };
@@ -116,8 +121,14 @@ function locatorWithEvaluation() {
     mapError: error => error,
     validateOptions() {},
     UnsupportedOperationError: class UnsupportedOperationError extends Error {},
+    async runTracingAction(owner, action, detail, operation) {
+      tracingCalls.push(['begin', owner, action, detail]);
+      const result = await operation();
+      tracingCalls.push(['end', owner, action]);
+      return result;
+    },
   });
-  return { calls, locator: api.create(frame, 'p') };
+  return { calls, tracingCalls, page, locator: api.create(frame, 'p') };
 }
 
 test('Locator all derives one bounded nth recipe per Rust count result', async () => {
@@ -506,6 +517,10 @@ test('Locator visibility expectation delegates polling and negation to Rust', as
   // Assert
   assert.deepEqual(result, { matches: true, received: true, timedOut: false });
   assert.deepEqual(value.calls, [['expectVisibility', 91, true, true]]);
+  assert.deepEqual(value.tracingCalls, [
+    ['begin', value.page, 'locator-expect', 'to.be.visible'],
+    ['end', value.page, 'locator-expect'],
+  ]);
 });
 
 test('Locator state expectation delegates semantics to Rust', async () => {
@@ -690,6 +705,32 @@ test('Locator class and value expectations delegate exact and RegExp matching to
   assert.deepEqual(value.calls, [
     ['expectString', 12, 'class', '^active', 'i', false],
     ['expectString', 13, 'value', 'ready', undefined, true],
+  ]);
+});
+
+test('Locator CSS expectation delegates the property and matcher to Rust', async () => {
+  // Arrange
+  const value = locatorWithEvaluation();
+
+  // Act
+  const exact = await value.locator._expect('to.have.css', {
+    expressionArg: 'background-color',
+    expectedText: [{ string: 'rgb(255, 0, 0)' }],
+    timeout: 16,
+  });
+  const regex = await value.locator._expect('to.have.css', {
+    expressionArg: 'display',
+    expectedText: [{ regexSource: '^block$', regexFlags: 'i' }],
+    isNot: true,
+    timeout: 17,
+  });
+
+  // Assert
+  assert.deepEqual(exact, { matches: true, received: 'rgb(255, 0, 0)', timedOut: false });
+  assert.deepEqual(regex, { matches: true, received: '^block$', timedOut: false });
+  assert.deepEqual(value.calls, [
+    ['expectCss', 16, 'background-color', 'rgb(255, 0, 0)', undefined, false],
+    ['expectCss', 17, 'display', '^block$', 'i', true],
   ]);
 });
 

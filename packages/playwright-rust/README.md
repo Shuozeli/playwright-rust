@@ -1,4 +1,143 @@
-<!-- agent-updated: 2026-11-14T05:28:56Z -->
+<!-- agent-updated: 2026-11-21T03:41:33Z -->
+
+This package targets Chromium over CDP only. Its CommonJS, ESM, and TypeScript
+surfaces export only `chromium`; there are no executable `firefox` or `webkit`
+providers. Device-descriptor `defaultBrowserType` values remain upstream data
+and do not create browser objects. Shared Rust registry, installation,
+backend-manifest, startup, persistent-context preflight, and connect-header
+admission paths accept only Chromium. The optional
+`page-pdf` native profile implements the complete pinned 1.58.0 Chromium
+`Page.pdf()` option surface; PDF parsing, protocol work, stream cleanup,
+directory creation, and file persistence remain in Rust rather than JavaScript.
+
+The optional `video-recording` profile exposes
+`browser.newContext({ recordVideo })`, `browser.newPage({ recordVideo })`,
+`Page.video()`, and local `Video.path()`, `saveAs()`, and `delete()`. Chromium
+screencast frames, acknowledgement, FFmpeg, finalization, copies, and deletion
+remain Rust-owned. The lean profile composes only browser registry metadata and
+video recording; `official-conformance-page-video-recording` adds the existing
+official Page fixture closure. Native E2E passes both explicit 640x360 Context
+and default 800x450 implicit-Context recordings with zero retained leases. The
+complete unchanged pinned Core `video.spec.ts` file now runs through the
+source-bound `library-video-chromium-v1` manifest: the candidate passes 24,
+skips five upstream-declared fixmes, and fails zero. Four skips are selected by
+the full-Chromium classification; the internal-page row is unconditionally
+fixme upstream. The manifest sets `channel: chromium` because the registry
+executable is full Google Chrome for Testing, not Chromium headless shell;
+omitting that channel would incorrectly run four assertions that upstream
+skips for full Chrome. The composed profile
+also contains a test-only Rust-owned browser-kill port and the independent
+Context-tracing leaves required by the file. The separate
+`context-tracing-chunks` profile adds Rust-owned chunk export/discard and
+nested group events without changing the screenshot-only profile. The separate
+`context-tracing-actions` profile composes that chunk leaf with Rust-owned call
+IDs and titles for Page route/navigation/set-content/click/double-click/
+evaluation/reload/close, Route continue, Dialog accept, and BrowserContext
+storage state. The separate
+`context-storage-state` leaf reuses the Rust host, supports the `indexedDB`
+option, and deliberately leaves path persistence unsupported. The independent
+`context-tracing-console` composition records Page console type, text,
+arguments, location, and ownership in Rust and flushes those events into an
+exported v8 trace at stop. The independent `api-request-tracing` composition
+spools global request events and request/response bodies in Rust and writes a
+Playwright-compatible `trace.network` ZIP at stop; concurrent request contexts
+have separate recorders. Remote artifact transfer and Node
+persistent-context recording remain open. Non-video persistent Context launch
+is now supported by the `owned-launch` composition through Rust-owned process,
+profile, session, and default-Context lifecycle.
+
+The independent `context-geolocation` profile exposes
+`browser.newContext({ geolocation })` and
+`browserContext.setGeolocation(value | null)`. Rust owns validation, retained
+Context state, CDP initialization, runtime update, and clear. The separate
+`persistent-context-geolocation` profile composes the same owner into ordinary
+and video persistent launch; the combined `persistent-context-policies`
+artifact carries geolocation with locale, timezone, offline, CSP, JavaScript,
+and HTTPS policy through one typed defaults object. These profiles pass release
+Clippy, native export/load smoke, strict TypeScript, and the 956-test Node
+suite. No live-Chromium Node geolocation claim is made by those gates.
+
+The independent `context-permissions` profile exposes creation-time
+`permissions`, `BrowserContext.grantPermissions()` with an optional origin,
+and `clearPermissions()`. The complete Chromium permission mapping,
+per-origin merge, browser-session commands, and retained state remain in Rust.
+`persistent-context-permissions` composes the same owner into ordinary and
+video persistent launch. Language validation rejects non-array/non-string
+input, and the facade verifies the exact feature leaf even when another policy
+already provides the generic Context-creation port.
+Both standalone profiles and the rebuilt combined persistent-policy artifact
+pass native ABI loading; 12 focused Rust owner tests and all 956 Node tests
+pass. A live-Chromium Node permission proof was not run in this change.
+
+The independent `context-http-credentials` profile exposes
+`browser.newContext({ httpCredentials })` with username, password, optional
+origin, and `send: 'unauthorized' | 'always'`. Rust owns credential validation,
+retention, exact-origin matching, Fetch authentication challenges, repeated-
+challenge cancellation, and cleanup; JavaScript keeps no credential mirror.
+The deprecated Playwright-compatible `context.setHTTPCredentials(credentials)`
+replaces that retained value and `setHTTPCredentials(null)` clears it. Rust
+refreshes current Page/OOPIF and Service Worker sessions through the same Fetch
+owner and serializes Page/OOPIF initialization with the update.
+`persistent-context-http-credentials` composes the same owner into ordinary
+and video persistent launch, while `persistent-context-policies` composes it
+with the other default-Context policies. All three rebuilt artifacts pass the
+native ABI/load smoke; thirteen focused Rust tests, strict TypeScript, both
+release Clippy profiles, and all 967 Node tests pass. A live-Chromium Node
+authentication proof was not run in this change.
+
+The independent `context-bindings` profile exposes
+`BrowserContext.exposeBinding()` and `exposeFunction()` by extending the
+existing Page binding transport and Handle support. Rust owns Context
+registration, application to current and future Page/OOPIF sessions, exact
+Page/Context conflict diagnostics, publication, and teardown. JavaScript keeps
+only the callback that must execute in the language runtime and resolves Page
+scope before Context scope. Build with
+`PLAYWRIGHT_RUST_NATIVE_PROFILE=context-bindings pnpm run build`; the matching
+native smoke, 39 Rust tests, strict Clippy/types/boundaries, all 973 Node tests,
+and `pnpm run test:context-bindings-live` against Chrome 157 pass. The full
+`official-conformance-page-bindings` artifact also builds with the composed
+Context API-request features: locale creation now uses the stable typed policy
+port instead of a host signature that changed under Cargo feature unification.
+The unchanged pinned Playwright 1.58.0
+`tests/library/browsercontext-expose-function.spec.ts` passes 6/6 through that
+artifact, including init-script, handle, duplicate-registration, and CSP cases.
+
+The optional `har-recording` profile exposes creation-time
+`browser.newContext({ recordHar })` through the Rust Context recorder. Its
+normalization matches pinned Playwright 1.58.0: full mode by default, embedded
+plain HAR, attached ZIP content, and explicit `content` precedence over
+`omitContent`. String globs are in the base profile; JavaScript RegExp source
+and supported flags use the independent `har-recording-regexp` profile. The
+base artifact native-loads without the RegExp export, while the composed
+`official-conformance-page-har-recording` profile adds both RegExp and the
+ordinary Page surface without bloating the lean leaf. Eight HAR adapter tests,
+845/845 default Node tests, strict TypeScript, both native-load profiles,
+complete-profile Clippy, and a real Chrome 157 HTTPS full-mode capture pass
+with zero retained native resources. The fixed Playwright Python HAR manifest
+passes candidate 19/19 and Oracle 19/19 through this recorder. Rust regex does
+not yet implement every ECMAScript lookaround, backreference, or flag.
+
+The optional routing profiles expose Page and BrowserContext `route()`,
+`unroute()`, and `unrouteAll()` with Rust-owned registrations and settlement.
+Context routes accept string and RegExp matchers, keep Context identity, and
+defer to a matching Page route for Page requests. `unrouteAll({ behavior:
+'wait' })` drains active callbacks before CDP interception is updated; the
+`ignoreErrors` behavior suppresses only failures from already-running
+callbacks. The minimal `page-unroute` and `route-regexp` artifacts native-load
+independently, and `pnpm run test:context-routes-live` verifies the composed
+surface against the dedicated external Chrome. Service Worker-originated
+requests are available through the separate `service-worker-routes` profile:
+only BrowserContext handlers apply, Page handlers cannot intercept them, and
+`Request.serviceWorker()` retains the exact Worker while `Request.frame()`
+throws the upstream-compatible no-Frame error. The repository-owned live test
+verifies both runtime update of an already-active Worker and pre-resume setup
+of a newly attached Worker, with Context fulfillment and zero Page-route hits.
+
+The current default CDP User-Agent native port accepts a bounded
+`[platform, architecture, release]` tuple and proves that binding shape with
+`cdpDefaultUserAgentAbiShape() == 2`. This is internal to the addon; the public
+`chromium.connectOverCDP()` API remains unchanged. The loader rejects older
+profile artifacts before dispatch.
 
 An optional `official-conformance-page-check-light-v1` addon adds Rust-owned,
 non-shadow-piercing `id:light` and `data-testid:light` page.$/$$ queries,
@@ -198,17 +337,15 @@ unadapted or complete Playwright public-API parity. The binding-source guard
 is global; a binding on another Page may still cause an unwanted evaluation
 on a navigating Page. See the [conformance record](../../docs/upstream-playwright-conformance.md).
 
-The default-off `bidi-startup-failure` profile is a failure-only diagnostic
-for `BrowserType.launch()` with an explicitly supplied absolute executable.
-It selects only `bidi-chromium`, `bidi-chrome-canary`,
-`bidi-chrome-stable`, `moz-firefox`, `moz-firefox-beta`, and
-`moz-firefox-nightly`. Build it with
+The default-off `bidi-startup-failure` profile is a Chromium failure-only
+diagnostic for `BrowserType.launch()` with an explicitly supplied absolute
+executable. Its public Node route selects only `bidi-chromium`,
+`bidi-chrome-canary`, and `bidi-chrome-stable`. Build it with
 `CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 PLAYWRIGHT_RUST_NATIVE_PROFILE=bidi-startup-failure pnpm run build`
 and select the same profile at runtime. Its Rust observer creates an owned
 temporary profile, watches the child for at most two seconds with 3 KiB of
 combined logs, and kills/reaps its process group before returning a launch
-failure. It accepts inherited `firefoxUserPrefs` on this narrow route but
-does not apply them or establish a browser protocol. It cannot return a
+failure. It does not establish a browser protocol and cannot return a
 usable Browser. Local Rust leaf release tests pass 8/8, the Node adapter
 46/46, native integration 3/3, native ABI/load smoke, full browserless package
 829/829, strict TypeScript, and focused addon Clippy. Full-dependency strict
@@ -566,8 +703,47 @@ then use the same profile when importing the package. The default and legacy
 `owned-launch` profiles stay unchanged. A browserless native suite verifies
 the directory and cleanup behavior (4/4); the pinned Core dummy-process
 diagnostic passes 1/1 in both official and selected candidate lanes, but is
-not strict-ledger parity evidence. Context trace start/stop, `.network` and
-ZIP output are not implemented. See [the conformance record](../../docs/upstream-playwright-conformance.md).
+not strict-ledger parity evidence. The separate
+`context-tracing-screenshots` profile adds `context.tracing.start({ screenshots:
+true })` and `stop({ path })`: Rust captures a real JPEG and writes a
+Playwright-v8 ZIP containing `trace.trace` plus the SHA-1-addressed resource.
+Calling `stop()` without a path discards an active trace in Rust and is a no-op
+when tracing was not active; `stop({ path })` still requires a prior start.
+The additive `context-tracing-chunks` profile exposes `startChunk`,
+`stopChunk`, `group`, and `groupEnd`. Rust owns the active chunk, optional
+chunk name/title, nested group stack, parent IDs, automatic group close,
+export, and discard. Trace paths and
+chunk/group titles have no private public byte ceiling; FFI input admission,
+fallible allocation, and checked writer accounting remain resource boundaries.
+The additive `context-tracing-actions` profile brackets Page `route`, `goto`,
+`setContent`, `click`, `dblclick`, `hover`, `evaluate`, `evaluateHandle`,
+`waitForEvent`, `waitForTimeout`, `reload`, and `close`, Mouse move/double
+click, Keyboard insert-text, Locator input-file selection, `Route.continue`,
+public Dialog accept/dismiss, `BrowserContext.storageState`, and Context-owned
+API requests. Rust owns call IDs, class/method labels,
+Playwright-compatible titles, primitive results, URL path/query title
+extraction, and pending-action lifecycle. The independent
+`context-storage-state` leaf reuses the Rust
+host and supports `indexedDB`; its Node facade fails closed for unsupported
+path persistence. The complete unchanged pinned Core `tracing.spec.ts` file
+now has all 32 runnable cases passed / three upstream fixmes skipped / zero
+failed, versus the initial 3/3/29 RED baseline. The independent
+`context-tracing-network`
+composition records BrowserContext network failures and writes
+`trace.network` plus resources. Named `.trace`/`.network` files under launch
+`tracesDir`, overwrite behavior, console buffering/flush ordering, pending
+actions, browser-close teardown, and concurrent export during navigation now
+match their official rows. Node captures the external callsite only while
+`sources` is enabled; Rust owns per-chunk deduplication, file reads, SHA-1
+resource naming, and ZIP persistence, so both official source rows are green.
+Context-owned requests now reuse the exact active Rust trace HAR registration,
+and `trace.stacks` stores first external callsites by numeric action ID.
+DOM/action frame snapshots, Page screenshot buffer/result tracing, and
+expect-title execution/tracing now pass their unchanged official rows. This is
+evidence for the pinned Chromium library file, not complete Playwright tracing
+or full-suite parity. Continuous screencast-frame rows remain upstream
+full-Chromium fixmes. Start and chunk titles are Rust-owned.
+See [the conformance record](../../docs/upstream-playwright-conformance.md).
 
 The new opt-in `persistent-context-preflight` profile moves ordered
 certificate-shape and browser-argument decisions into the independent,
@@ -576,30 +752,29 @@ still performs `Promise.all` certificate file reads, boxed-string conversion,
 truthiness mapping and public `Error` construction. Build it with
 `CARGO_BUILD_JOBS=2 PLAYWRIGHT_RUST_NATIVE_PROFILE=persistent-context-preflight pnpm run build`,
 then use the same profile when importing. The default profile retains its
-existing JS preflight; no successful persistent Context or browser launch is
-claimed. Default and opt-in profile package tests each pass 512/512, the real
-native bridge passes 4/4, and the pinned v1.58.0 browserless public-method
-comparison covers 16 rejection and three accepted-preflight inputs in the
-opt-in profile. Classic Firefox now rejects `-juggler*` in that Rust profile;
-`moz-*` BiDi Firefox does not. The default JS profile deliberately retains
-its earlier behavior, including its remaining `-juggler*` discrepancy. The
-dependency proof adds only this pure Rust leaf; the addon still carries its
-pre-existing host tree.
+existing JS preflight; successful launch additionally requires the
+`owned-launch` profile. Default and opt-in profile package tests cover the Chromium rejection
+and accepted-preflight inputs, and the real native bridge passes 4/4. The leaf
+no longer contains Firefox `-juggler*` or WebKit branches. The dependency proof
+adds only this pure Rust leaf; the addon still carries its pre-existing host
+tree.
 
-Current checkpoint (2026-10-10): `firefox` and `webkit` expose `name()` beside
-`chromium`; the selected `browser-registry` profile also exposes synchronous
-`BrowserType.executablePath()` for all three engines using Rust-owned expected
-path metadata. It does not install or launch a browser. Build/select it with
+Current checkpoint (2026-11-15): `chromium` is the only public BrowserType.
+The selected `browser-registry` profile exposes synchronous
+`chromium.executablePath()` using Rust-owned expected-path metadata. It does
+not install or launch a browser. Build/select it with
 `CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 PLAYWRIGHT_RUST_NATIVE_PROFILE=browser-registry pnpm run build`,
 then the same profile when importing; `pnpm run test:browser-registry-native` checks its native path
 surface. The opt-in `owned-launch` profile supports fresh Chromium
 `BrowserType.launch()` only with an explicit existing executable and a
-temporary profile. Firefox/WebKit positive launch, valid
-`launchPersistentContext()`, `launchServer()` and `connect()` remain unsupported;
+temporary profile. It also supports a non-video
+`launchPersistentContext()` with an explicit or registry-resolved executable,
+caller profile directory, one default Context, and composed headless, timeout,
+base URL, and HTTPS-error policy. Firefox/WebKit objects are absent.
+`launchServer()` and unselected `connect()` remain unsupported;
 pre-spawn rejection paths now include persistent-Context certificate and
 engine-argument validation in the default JS or opt-in Rust leaf. Invalid inputs can match
-Playwright before acquisition; valid persistent launch still stops at the
-unsupported boundary. Default CDP attach is separate.
+Playwright before acquisition. Default CDP attach is separate.
 Each of default, owned-launch and browser-registry passes 512/512 browserless
 package units, with type and dependency-boundary checks green. Fresh-process
 public-method comparisons match pinned upstream `playwright-core@1.58.0`
@@ -610,13 +785,14 @@ Registry paths do not prove an installed browser, and the Node addon retains
 its pre-existing host dependency tree. Full official conformance remains open;
 see [the conformance ledger](../../docs/upstream-playwright-conformance.md).
 The separate `pnpm run test:persistent-context-preflight` suite covers boxed
-JavaScript string arguments, empty boxed certificate strings and Firefox
-`-juggler*` ordering. With `PLAYWRIGHT_RUST_PINNED_PLAYWRIGHT_CORE` pointing to the
-pinned upstream package, the selected profile passes 23 focused checks with
-one intentional default-only skip; the default profile passes 15 with nine
-intentional opt-in skips. `pnpm run test:persistent-context-preflight-native`
-checks its release binary. None of these checks proves valid persistent
-launch or adds an official-test outcome.
+JavaScript strings, empty boxed certificate strings, Chromium argument
+ordering, and rejection of non-Chromium names at the native boundary.
+`pnpm run test:persistent-context-preflight-native` checks its release binary.
+Those preflight checks alone do not prove valid launch. The newer source-bound
+BrowserContext cookie manifest does: its four complete pinned Chromium files
+run 56 tests with 55 passed, one upstream skip, and zero unexpected, including
+the real persistent-profile case. That is a focused result, not full Core
+parity.
 Older checkpoint records below are historical.
 
 The subsequent exact-source Core454 Firefox/WebKit invalid-numeric-proxy

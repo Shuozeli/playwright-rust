@@ -128,6 +128,33 @@ fn state_and_call_admissions_have_independent_capacity_and_explicit_resources() 
 }
 
 #[test]
+fn allocator_backed_state_and_call_admissions_grow_past_legacy_counts() {
+    // Arrange
+    let profile = TargetMarkingProfile::new_allocator_backed(ResourceScope::extension(182, 90));
+    let resources = ledger(profile.requirements());
+    let service = CdpTargetMarkingService::new(
+        profile,
+        &resources,
+        Arc::new(AtomicObjectIdSource::new(1).unwrap()),
+    )
+    .unwrap();
+    let client = Arc::new(FakeCdpClient::from_html(""));
+
+    // Act
+    let states: Vec<_> = (0..129)
+        .map(|_| service.create(world(&client)).unwrap())
+        .collect();
+    let calls: Vec<_> = (0..129).map(|_| service.admit().unwrap()).collect();
+
+    // Assert
+    assert!(profile.allocator_backed());
+    assert_eq!(resources.metrics().unwrap().active_leases, 1);
+    assert!(client.calls().is_empty());
+    drop((states, calls));
+    assert!(service.is_cleanup_healthy());
+}
+
+#[test]
 fn unpolled_creation_reclaims_capacity_without_native_work() {
     // Arrange
     let (service, resources, client) = fixture();

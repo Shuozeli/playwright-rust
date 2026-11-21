@@ -27,6 +27,11 @@ impl CdpInputProductionProfile {
             states,
         }
     }
+    /// Uses allocator failure as the retained Page-state boundary. The
+    /// machine-word maximum is a sentinel and is never preallocated.
+    pub const fn new_allocator_backed(scope: ResourceScope, policy: CdpInputPolicy) -> Self {
+        Self::new(scope, policy, usize::MAX)
+    }
     pub const fn scope(self) -> ResourceScope {
         self.scope
     }
@@ -42,7 +47,7 @@ impl CdpInputProductionProfile {
             + 2 * std::mem::size_of::<usize>()) as u64
     }
     pub fn requirements(self) -> ResourceRequirements {
-        if self.states == 0 {
+        if self.states == 0 || self.states == usize::MAX {
             return ResourceRequirements::none();
         }
         let bytes = self
@@ -115,19 +120,23 @@ impl CdpInputServiceFactory {
             .map_err(|_| CdpInputAdmissionError::Capacity {
                 limit: self.profile.states,
             })?;
-        let lease = match self.ledger.reserve(
-            self.profile.scope,
-            ResourceClass::BackendStateBytes,
-            self.profile.state_bytes(),
-        ) {
-            Ok(lease) => lease,
-            Err(error) => {
-                self.active.fetch_sub(1, Ordering::AcqRel);
-                return Err(CdpInputAdmissionError::Resource(error));
+        let lease = if self.profile.states == usize::MAX {
+            None
+        } else {
+            match self.ledger.reserve(
+                self.profile.scope,
+                ResourceClass::BackendStateBytes,
+                self.profile.state_bytes(),
+            ) {
+                Ok(lease) => Some(lease),
+                Err(error) => {
+                    self.active.fetch_sub(1, Ordering::AcqRel);
+                    return Err(CdpInputAdmissionError::Resource(error));
+                }
             }
         };
         let admission = Arc::new(InputAdmission {
-            lease: Some(lease),
+            lease,
             active: self.active.clone(),
         });
         Ok(CdpInputCoordinator::with_admission(

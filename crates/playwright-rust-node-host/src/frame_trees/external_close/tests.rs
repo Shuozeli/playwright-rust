@@ -35,11 +35,12 @@ fn external_close_uses_preallocated_storage_and_publishes_stepwise() {
     let first = fixture.owner.get(FIRST).unwrap();
     let second = fixture.owner.get(SECOND).unwrap();
     let before = fixture.owner.factory.metrics().unwrap();
+    let admitted = remaining(&fixture);
     // Act
     fixture.owner.external_disposals(&dispose(CONTEXT)).unwrap();
     // Assert
     assert_eq!(fixture.owner.factory.metrics().unwrap(), before);
-    assert_eq!(remaining(&fixture), NOTICES - 3);
+    assert_eq!(remaining(&fixture), admitted - 3);
     assert!(!first.is_closed().unwrap());
     assert!(!second.is_closed().unwrap());
     let mut drain = fixture.book.fence().unwrap().try_begin().unwrap();
@@ -113,11 +114,12 @@ fn duplicate_external_receipt_does_not_consume_another_slot() {
 fn explicit_close_receipt_is_not_replayed_by_external_followup() {
     // Arrange
     let fixture = Fixture::external();
+    let admitted = remaining(&fixture);
     fixture.explicit_close(&[FIRST]);
     // Act
     fixture.owner.external_disposals(&dispose(FIRST)).unwrap();
     // Assert
-    assert_eq!(remaining(&fixture), NOTICES);
+    assert_eq!(remaining(&fixture), admitted);
     assert_eq!(fixture.drain().len(), 1);
 }
 
@@ -126,13 +128,14 @@ fn abandoned_creation_restores_previous_external_capacity() {
     // Arrange
     let fixture = Fixture::external();
     fixture.owner.external_disposals(&dispose(FIRST)).unwrap();
+    let prior = remaining(&fixture);
     let before = fixture.owner.factory.metrics().unwrap();
     let creation = fixture.owner.reserve_creation_collection().unwrap();
-    assert_eq!(remaining(&fixture), NOTICES);
+    assert_eq!(remaining(&fixture), prior + 2);
     // Act
     drop(creation);
     // Assert
-    assert_eq!(remaining(&fixture), NOTICES - 1);
+    assert_eq!(remaining(&fixture), prior);
     assert_eq!(fixture.owner.factory.metrics().unwrap(), before);
 }
 
@@ -141,32 +144,35 @@ fn successful_creation_keeps_replenished_external_capacity() {
     // Arrange
     let fixture = Fixture::external();
     fixture.owner.external_disposals(&dispose(FIRST)).unwrap();
+    let prior = remaining(&fixture);
     let creation = fixture.owner.reserve_creation_collection().unwrap();
     // Act
     creation.commit().unwrap();
     // Assert
-    assert_eq!(remaining(&fixture), NOTICES);
+    assert_eq!(remaining(&fixture), prior + 2);
 }
 
 #[test]
-fn partial_external_pool_selection_failure_releases_all_new_storage() {
+fn partial_external_pool_replenishment_failure_releases_all_new_storage() {
     // Arrange
     let fixture = Fixture::external();
     let mut held = Vec::new();
     while let Ok(reserved) = fixture.book.reserve_lifecycle(&fixture.owner.factory) {
         held.push(reserved);
     }
-    assert!(held.len() > 3);
-    for _ in 0..3 {
+    assert!(held.len() > 2);
+    for _ in 0..2 {
         held.pop();
     }
     let before = fixture.owner.factory.metrics().unwrap();
+    let mut pool = ExternalClosePool::reserve(&fixture.book, &fixture.owner.factory).unwrap();
     // Act
-    let result = ExternalClosePool::reserve(&fixture.book, &fixture.owner.factory);
+    let result = pool.replenish(3, &fixture.book, &fixture.owner.factory);
     // Assert
     assert!(result.is_err());
+    assert_eq!(pool.len(), 0);
+    drop(pool);
     assert_eq!(fixture.owner.factory.metrics().unwrap(), before);
-    assert_eq!(remaining(&fixture), NOTICES);
 }
 
 #[test]

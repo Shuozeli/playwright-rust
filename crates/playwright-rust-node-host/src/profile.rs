@@ -10,9 +10,11 @@ use playwright_rust_backend_cdp_locator::CdpLocatorProductionProfile;
 use playwright_rust_backend_cdp_navigation::{CdpNavigationLimits, CdpNavigationProductionProfile};
 use playwright_rust_backend_cdp_page_creation::CdpPageCreationLimits;
 use playwright_rust_backend_cdp_page_lifecycle::CdpPageCloseLimits;
-use playwright_rust_backend_cdp_topology::{CdpTopologyLimits, CdpTopologyProductionProfile};
+use playwright_rust_backend_cdp_topology::CdpTopologyProductionProfile;
 use playwright_rust_cdp::CdpConnectionProductionProfile;
 use playwright_rust_cdp::connection::ConnectionConfig;
+#[cfg(feature = "cdp-session")]
+use playwright_rust_cdp::connection::{UNBOUNDED_CDP_BYTES, UNBOUNDED_CDP_EVENTS};
 #[cfg(feature = "network-events")]
 use playwright_rust_composition_chromium::ChromiumNetworkEventsProductionProfile;
 #[cfg(feature = "locator-screenshot")]
@@ -37,33 +39,55 @@ use playwright_rust_transport::FrameLimits;
 
 use crate::{HostError, evaluation};
 
-const MAX_TOPOLOGY_OBJECTS: usize = 64;
-#[cfg(not(feature = "network-events"))]
-const BASE_RUNTIME_LIVE_OBJECTS: usize = 256;
 /// One bounded connection replay window large enough for the declared
 /// 16-Page/128-session/256-world authoritative reattach burst and the small
 /// historical console events that `Runtime.enable` can replay while the
 /// caller-driven topology cursor is still initializing existing Pages.
+#[cfg(feature = "cdp-session")]
+const MAX_CONNECTION_EVENT_BACKLOG: usize = UNBOUNDED_CDP_EVENTS;
+#[cfg(not(feature = "cdp-session"))]
 const MAX_CONNECTION_EVENT_BACKLOG: usize = 8192;
+/// Fair initialization drain guard; unlike retained fanout capacity, this does
+/// not reject or discard an event from the connection.
+pub(crate) const MAX_INITIAL_TOPOLOGY_SNAPSHOT_EVENTS: usize = 8192;
 /// Raising the item bound must not multiply the selected single-event maximum
 /// into an unbounded allocation plan. Retained event payloads keep a fixed
 /// 512 MiB aggregate ceiling; exact byte leases can therefore fail earlier
 /// than the item bound when unusually large events dominate the queue.
+#[cfg(not(feature = "cdp-session"))]
 const MAX_CONNECTION_RETAINED_EVENT_BYTES: u64 = 512 * 1024 * 1024;
 #[cfg(feature = "large-evaluation-inputs")]
 const MAX_CDP_COMMAND_BYTES: usize = 8 * 1024 * 1024;
 #[cfg(not(feature = "large-evaluation-inputs"))]
 const MAX_CDP_COMMAND_BYTES: usize = 4 * 1024 * 1024;
-#[cfg(feature = "large-route-post-data")]
+#[cfg(feature = "cdp-session")]
+const MAX_CDP_EVENT_BYTES: usize = UNBOUNDED_CDP_BYTES;
+#[cfg(all(not(feature = "cdp-session"), feature = "large-route-post-data"))]
 // A 3 MiB decoded POST may carry a 4 MiB base64 postDataEntries copy as
 // well as an unescaped plain postData copy. Leave finite JSON-envelope room;
 // pathological escaping is still rejected at this independent transport cap.
 const MAX_CDP_EVENT_BYTES: usize = 8 * 1024 * 1024;
-#[cfg(not(feature = "large-route-post-data"))]
+#[cfg(all(not(feature = "cdp-session"), not(feature = "large-route-post-data")))]
 const MAX_CDP_EVENT_BYTES: usize = 256 * 1024;
-#[cfg(any(feature = "large-evaluation-inputs", feature = "large-route-post-data"))]
+#[cfg(feature = "cdp-session")]
+const MAX_CDP_RESPONSE_BYTES: usize = UNBOUNDED_CDP_BYTES;
+#[cfg(not(feature = "cdp-session"))]
+const MAX_CDP_RESPONSE_BYTES: usize = 4 * 1024 * 1024;
+#[cfg(feature = "cdp-session")]
+const MAX_CDP_PROTOCOL_ERROR_BYTES: usize = UNBOUNDED_CDP_BYTES;
+#[cfg(not(feature = "cdp-session"))]
+const MAX_CDP_PROTOCOL_ERROR_BYTES: usize = 4096;
+#[cfg(feature = "cdp-session")]
+const MAX_CDP_WEBSOCKET_BYTES: usize = UNBOUNDED_CDP_BYTES;
+#[cfg(all(
+    not(feature = "cdp-session"),
+    any(feature = "large-evaluation-inputs", feature = "large-route-post-data")
+))]
 const MAX_CDP_WEBSOCKET_BYTES: usize = 8 * 1024 * 1024;
-#[cfg(not(any(feature = "large-evaluation-inputs", feature = "large-route-post-data")))]
+#[cfg(all(
+    not(feature = "cdp-session"),
+    not(any(feature = "large-evaluation-inputs", feature = "large-route-post-data"))
+))]
 const MAX_CDP_WEBSOCKET_BYTES: usize = 4 * 1024 * 1024;
 #[cfg(feature = "network-events")]
 // Upstream Playwright retains active Chromium Requests in dynamically sized
@@ -71,8 +95,6 @@ const MAX_CDP_WEBSOCKET_BYTES: usize = 4 * 1024 * 1024;
 // that disables the portable tracker's finite-count rejection without
 // allocating or pre-sizing storage.
 const UNBOUNDED_NETWORK_ACTIVE_REQUESTS: usize = usize::MAX;
-#[cfg(feature = "network-events")]
-const MAX_NETWORK_PAGE_LANES: usize = 8;
 #[cfg(feature = "network-events")]
 const MAX_NETWORK_POST_DATA_BYTES: usize = 256 * 1024;
 #[cfg(all(feature = "large-route-post-data", feature = "route-request-history"))]
@@ -103,16 +125,19 @@ pub(crate) fn attach_factory_with_native_close(
             // backpressure is unchanged; no serializing click scheduler is added.
             pending_command_capacity: 32 + crate::mouse::MAX_PENDING_COMMANDS,
             max_command_bytes: MAX_CDP_COMMAND_BYTES,
-            max_response_bytes: 4 * 1024 * 1024,
+            max_response_bytes: MAX_CDP_RESPONSE_BYTES,
             max_event_bytes: MAX_CDP_EVENT_BYTES,
             max_websocket_bytes: MAX_CDP_WEBSOCKET_BYTES,
-            max_protocol_error_bytes: 4096,
+            max_protocol_error_bytes: MAX_CDP_PROTOCOL_ERROR_BYTES,
         },
-    )
-    .with_retained_event_byte_capacity(MAX_CONNECTION_RETAINED_EVENT_BYTES)
-    .map_err(HostError::backend)?
-    .with_pending_session_retirement(256)
-    .map_err(HostError::backend)?;
+    );
+    #[cfg(not(feature = "cdp-session"))]
+    let connection = connection
+        .with_retained_event_byte_capacity(MAX_CONNECTION_RETAINED_EVENT_BYTES)
+        .map_err(HostError::backend)?;
+    let connection = connection
+        .with_pending_session_retirement(256)
+        .map_err(HostError::backend)?;
     // A public browser-root session must receive raw events from its own
     // native session, including worlds outside Playwright Rust's frame inventory.
     #[cfg(not(feature = "browser-cdp-session"))]
@@ -122,15 +147,27 @@ pub(crate) fn attach_factory_with_native_close(
             playwright_rust_composition_chromium::chromium_frame_world_event_admission(),
         )
         .map_err(HostError::backend)?;
-    let topology = CdpTopologyProductionProfile::new(
-        CdpTopologyLimits::new(MAX_TOPOLOGY_OBJECTS, 16, 16, 64, 128, 256),
-        ResourceScope::extension(120, 1),
-    )
-    .map_err(HostError::backend)?;
+    let topology =
+        CdpTopologyProductionProfile::new_allocator_backed(256, ResourceScope::extension(120, 1))
+            .map_err(HostError::backend)?;
     #[cfg(feature = "file-input")]
-    // Keep ordinary connection limits unchanged when selecting uploads.
+    // Keep ordinary connection limits unchanged while selected large commands
+    // use allocator-backed fragmented writes. File-input retains its own
+    // per-operation payload policy; init scripts have no upstream byte cap.
     let connection = connection
         .with_large_commands(crate::file_input::profile::large_commands()?)
+        .map_err(HostError::backend)?;
+    #[cfg(all(not(feature = "file-input"), feature = "init-scripts"))]
+    let connection = connection
+        .with_large_commands(crate::init_scripts::large_commands()?)
+        .map_err(HostError::backend)?;
+    #[cfg(all(
+        not(feature = "file-input"),
+        not(feature = "init-scripts"),
+        feature = "cdp-session"
+    ))]
+    let connection = connection
+        .with_large_commands(crate::cdp_sessions::large_commands()?)
         .map_err(HostError::backend)?;
     let routes =
         CdpPageRouteProductionProfile::from_topology(ResourceScope::extension(120, 2), topology);
@@ -142,21 +179,9 @@ pub(crate) fn attach_factory_with_native_close(
     .and_then(ChromiumTopologyEventDriverProductionProfile::with_parallel_recursive_attachment)
     .map_err(HostError::backend)?;
     let discovery = ChromiumPageDiscoveryProductionProfile::from_profiles(&connection, topology);
-    #[cfg(not(feature = "network-events"))]
-    let runtime_live_objects = BASE_RUNTIME_LIVE_OBJECTS;
-    #[cfg(feature = "network-events")]
     let runtime_live_objects = usize::MAX;
-    let runtime_limits = RuntimeLimits::new(runtime_live_objects, 16).with_active_commands(8);
-    #[cfg(feature = "concurrent-close")]
-    let runtime_limits = if native_close {
-        RuntimeLimits::new(
-            runtime_live_objects.max(crate::close_jobs::MAX_OBJECTS),
-            16usize.max(crate::close_jobs::MAX_CALLS),
-        )
-        .with_active_commands(8)
-    } else {
-        runtime_limits
-    };
+    let runtime_limits =
+        RuntimeLimits::new(runtime_live_objects, usize::MAX).with_active_commands(8);
     let profile = ChromiumAttachProductionProfile::new(
         connection,
         topology,
@@ -167,10 +192,9 @@ pub(crate) fn attach_factory_with_native_close(
     .with_controlled_target_concurrency(NonZeroUsize::new(8).expect("fixed positive concurrency"))
     // Current plus retained/replaced Page state; independent of Locator selection.
     .with_page_input(
-        playwright_rust_composition_chromium::CdpInputProductionProfile::new(
+        playwright_rust_composition_chromium::CdpInputProductionProfile::new_allocator_backed(
             ResourceScope::extension(120, 17),
             playwright_rust_composition_chromium::CdpInputPolicy::Interleaved,
-            32,
         ),
     )
     .with_utility_world(ChromiumUtilityWorldProfile::playwright_compatible())
@@ -180,26 +204,13 @@ pub(crate) fn attach_factory_with_native_close(
         NonZeroUsize::new(8).expect("fixed positive world-wait capacity"),
     ))
     .with_content(ContentInstallationProfile::new(
-        playwright_rust_backend_cdp_content::CdpScreenshotProductionProfile::new(
-            crate::screenshot::MAX_BYTES,
-            crate::screenshot::MAX_CONCURRENT_CAPTURES,
-        )
-        .with_viewport_clip_intersection(),
-        playwright_rust_codec_content::ContentCodecLimits::new(crate::screenshot::MAX_BYTES, 4096),
+        playwright_rust_backend_cdp_content::CdpScreenshotProductionProfile::new_allocator_backed()
+            .with_viewport_clip_intersection(),
+        playwright_rust_codec_content::ContentCodecLimits::new(usize::MAX, 4096),
         CapabilityWireProfile::new(
             ProtocolVersion::new(1, 0),
-            FrameLimits::new(
-                16 * 1024,
-                1,
-                crate::screenshot::MAX_BYTES,
-                crate::screenshot::MAX_BYTES + 16 * 1024,
-            ),
-            FrameLimits::new(
-                16 * 1024,
-                1,
-                crate::screenshot::MAX_BYTES,
-                crate::screenshot::MAX_BYTES + 16 * 1024,
-            ),
+            FrameLimits::new(16 * 1024, 1, usize::MAX, usize::MAX),
+            FrameLimits::new(16 * 1024, 1, usize::MAX, usize::MAX),
         ),
     ))
     .with_locator(LocatorInstallationProfile::new(
@@ -247,10 +258,9 @@ pub(crate) fn attach_factory_with_native_close(
         ),
     ))
     .with_navigation(NavigationInstallationProfile::new(
-        CdpNavigationProductionProfile::new(
+        CdpNavigationProductionProfile::new_allocator_backed(
             ResourceScope::extension(120, 5),
             CdpNavigationLimits::new(16 * 1024, 256, 256, 128, 64 * 1024, 4096),
-            8,
         ),
         playwright_rust_codec_navigation::NavigationCodecLimits::new(16 * 1024, 128, 64 * 1024),
         CapabilityWireProfile::new(
@@ -272,30 +282,17 @@ pub(crate) fn attach_factory_with_native_close(
     #[cfg(feature = "locator-screenshot")]
     let profile = profile.with_locator_screenshot(LocatorScreenshotInstallationProfile::new(
         CdpLocatorProductionProfile::new(ResourceScope::extension(120, 18), 8),
-        playwright_rust_backend_cdp_content::CdpScreenshotProductionProfile::new(
-            crate::screenshot::MAX_BYTES,
-            crate::screenshot::MAX_CONCURRENT_CAPTURES,
-        ),
+        playwright_rust_backend_cdp_content::CdpScreenshotProductionProfile::new_allocator_backed(),
         playwright_rust_codec_locator_screenshot::LocatorScreenshotCodecLimits::new(
-            crate::screenshot::MAX_BYTES,
+            usize::MAX,
             1024 * 1024,
             32,
             64,
         ),
         CapabilityWireProfile::new(
             ProtocolVersion::new(1, 0),
-            FrameLimits::new(
-                1024 * 1024 + 16 * 1024,
-                1,
-                crate::screenshot::MAX_BYTES,
-                crate::screenshot::MAX_BYTES + 1024 * 1024 + 16 * 1024,
-            ),
-            FrameLimits::new(
-                16 * 1024,
-                1,
-                crate::screenshot::MAX_BYTES,
-                crate::screenshot::MAX_BYTES + 16 * 1024,
-            ),
+            FrameLimits::new(1024 * 1024 + 16 * 1024, 1, usize::MAX, usize::MAX),
+            FrameLimits::new(16 * 1024, 1, usize::MAX, usize::MAX),
         ),
     ));
     let evaluation_limits = CdpEvaluationLimits::new(
@@ -326,10 +323,9 @@ pub(crate) fn attach_factory_with_native_close(
     };
     let profile = profile
         .with_evaluation(EvaluationInstallationProfile::new(
-            CdpEvaluationProductionProfile::new(
+            CdpEvaluationProductionProfile::new_allocator_backed(
                 ResourceScope::extension(120, 7),
                 evaluation_limits,
-                8,
             )
             .with_user_gesture(true),
             playwright_rust_codec_evaluation::EvaluationCodecLimits::new(
@@ -473,21 +469,11 @@ pub(crate) fn attach_factory_with_native_close(
             ResourceScope::extension(135, 2),
         )
         .map_err(HostError::backend)?;
-        #[cfg(not(feature = "worker-network-events"))]
-        let network = ChromiumNetworkEventsProductionProfile::new_with_context_limit(
-            adapter,
-            MAX_NETWORK_PAGE_LANES,
-            MAX_NETWORK_PAGE_LANES,
-        )
-        .map_err(HostError::backend)?;
         #[cfg(feature = "worker-network-events")]
-        let network =
-            ChromiumNetworkEventsProductionProfile::new_with_context_and_related_session_limit(
-                adapter,
-                MAX_NETWORK_PAGE_LANES,
-                MAX_NETWORK_PAGE_LANES,
-                crate::worker_events::MAX_WORKERS,
-            )
+        let network = ChromiumNetworkEventsProductionProfile::new_allocator_backed_with_unbounded_related_sessions(adapter)
+            .map_err(HostError::backend)?;
+        #[cfg(not(feature = "worker-network-events"))]
+        let network = ChromiumNetworkEventsProductionProfile::new_allocator_backed(adapter)
             .map_err(HostError::backend)?;
         profile
             .with_network_events(network)
@@ -503,8 +489,7 @@ pub(crate) fn attach_factory_with_native_close(
     let profile = profile
         .with_extension_requirements(crate::drag::host::requirements()?)
         .with_extension_requirements(crate::locator::keyboard::requirements())
-        .with_extension_event_subscribers(crate::drag::host::EVENT_SUBSCRIBERS)
-        .map_err(HostError::backend)?;
+        .with_allocator_backed_extension_event_subscribers();
     #[cfg(feature = "cdp-session")]
     let profile = profile
         .with_extension_requirements(crate::cdp_sessions::requirements())
@@ -525,6 +510,49 @@ pub(crate) fn attach_factory_with_native_close(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn allocator_backed_topology_has_allocator_backed_runtime_ownership() {
+        // Arrange
+        let factory = attach_factory(Duration::from_secs(5)).unwrap();
+
+        // Act
+        let profile = factory.profile();
+
+        // Assert
+        assert_eq!(profile.topology().limits().objects, usize::MAX);
+        assert_eq!(profile.runtime().live_objects, usize::MAX);
+        assert_eq!(profile.runtime().pending_calls, usize::MAX);
+        assert!(profile.page_routes().allocator_backed());
+        assert_eq!(profile.page_routes().maximum_retained_bytes(), 0);
+        let evaluation = profile
+            .evaluation()
+            .expect("base profile should install evaluation")
+            .backend();
+        assert!(evaluation.context_routes_allocator_backed());
+        assert_eq!(evaluation.maximum_route_retained_bytes(), 0);
+        let dom_content = profile
+            .dom_content()
+            .expect("base profile should install DOM content")
+            .backend();
+        assert!(dom_content.context_routes_allocator_backed());
+        assert_eq!(dom_content.maximum_route_retained_bytes(), 0);
+        assert_eq!(
+            profile
+                .page_routes()
+                .requirements()
+                .class(ResourceClass::BackendStateBytes)
+                .global,
+            0
+        );
+        assert_ne!(
+            profile
+                .requirements()
+                .class(ResourceClass::BackendStateBytes)
+                .global,
+            u64::MAX
+        );
+    }
 
     #[cfg(feature = "network-events")]
     #[test]
@@ -566,15 +594,12 @@ mod tests {
                 MAX_NETWORK_LARGE_POST_DATA_REQUESTS_PER_PAGE
             );
         }
-        assert_eq!(network.max_page_lanes(), MAX_NETWORK_PAGE_LANES);
-        assert_eq!(network.max_browser_contexts(), MAX_NETWORK_PAGE_LANES);
+        assert_eq!(network.max_page_lanes(), usize::MAX);
+        assert_eq!(network.max_browser_contexts(), usize::MAX);
         #[cfg(not(feature = "worker-network-events"))]
         assert_eq!(network.max_related_sessions(), 0);
         #[cfg(feature = "worker-network-events")]
-        assert_eq!(
-            network.max_related_sessions(),
-            crate::worker_events::MAX_WORKERS
-        );
+        assert_eq!(network.max_related_sessions(), usize::MAX);
         assert_eq!(factory.profile().runtime().live_objects, usize::MAX);
         assert!(network.adapter().maximum_retained_bytes() > 0);
     }
@@ -599,29 +624,42 @@ mod tests {
         let factory = attach_factory(Duration::from_secs(5)).unwrap();
         let profile = factory.profile();
         let built_in_subscribers = usize::from(profile.topology_events().is_some())
-            + usize::from(profile.page_events())
-            + profile
-                .network_events()
-                .map_or(0, |network| network.max_page_lanes())
-            + profile.navigation().map_or(0, |navigation| {
-                navigation.backend().max_concurrent_operations()
-            })
-            + profile
-                .locator()
-                .map_or(0, |locator| locator.backend().max_concurrent_actions());
-        #[cfg(feature = "drag-and-drop")]
-        let other_extension_subscribers = crate::drag::host::EVENT_SUBSCRIBERS;
-        #[cfg(not(feature = "drag-and-drop"))]
-        let other_extension_subscribers = 0;
+            .saturating_add(usize::from(profile.page_events()))
+            .saturating_add(
+                profile
+                    .network_events()
+                    .map_or(0, |network| network.max_page_lanes()),
+            )
+            .saturating_add(profile.navigation().map_or(0, |navigation| {
+                navigation
+                    .backend()
+                    .max_concurrent_operations()
+                    .min(profile.runtime().active_commands)
+            }))
+            .saturating_add(profile.locator().map_or(0, |locator| {
+                locator
+                    .backend()
+                    .max_concurrent_actions()
+                    .min(profile.runtime().active_commands)
+            }));
+        #[cfg(not(feature = "drag-runtime"))]
+        let extension_subscribers = usize::from(cfg!(any(
+            feature = "page-routes",
+            feature = "context-http-credentials"
+        ))) + usize::from(cfg!(feature = "cdp-session"));
 
         // Act
         let required = profile.required_reclaiming_event_subscribers();
 
         // Assert
+        #[cfg(feature = "drag-runtime")]
+        assert_eq!(required, usize::MAX);
+        #[cfg(not(feature = "drag-runtime"))]
         assert_eq!(
             required,
-            built_in_subscribers + other_extension_subscribers + 1
+            built_in_subscribers.saturating_add(extension_subscribers)
         );
+        assert!(built_in_subscribers > 0);
         assert_eq!(
             profile.connection().reclaiming_event_subscribers(),
             Some(required)
@@ -651,7 +689,7 @@ mod tests {
                 .profile()
                 .connection()
                 .reclaiming_event_subscribers()
-                .map(|count| count + additional),
+                .map(|count| count.saturating_add(additional)),
         );
         let bytes = confirmation
             .requirements()
@@ -679,9 +717,6 @@ mod tests {
     fn native_lifecycle_attachments_need_no_control_outbox() {
         // Arrange
         let ordinary = attach_factory(Duration::from_secs(5)).unwrap();
-        #[cfg(not(feature = "network-events"))]
-        let expected_live_objects = crate::close_jobs::MAX_OBJECTS;
-        #[cfg(feature = "network-events")]
         let expected_live_objects = usize::MAX;
         // Act
         let selected = attach_factory_with_native_close(Duration::from_secs(5), true).unwrap();
@@ -692,10 +727,7 @@ mod tests {
             selected.profile().runtime().live_objects,
             expected_live_objects
         );
-        assert_eq!(
-            selected.profile().runtime().pending_calls,
-            crate::close_jobs::MAX_CALLS
-        );
+        assert_eq!(selected.profile().runtime().pending_calls, usize::MAX);
     }
 
     #[test]
@@ -710,10 +742,12 @@ mod tests {
         assert_eq!(config.pending_command_capacity, 552);
         assert_eq!(config.write_channel_capacity, 32);
         assert_eq!(config.event_channel_capacity, MAX_CONNECTION_EVENT_BACKLOG);
+        #[cfg(not(feature = "cdp-session"))]
         assert_eq!(
             factory.profile().connection().retained_event_bytes(),
             MAX_CONNECTION_RETAINED_EVENT_BYTES
         );
+        #[cfg(not(feature = "cdp-session"))]
         assert_eq!(
             factory
                 .profile()
@@ -724,11 +758,44 @@ mod tests {
             MAX_CONNECTION_RETAINED_EVENT_BYTES + config.max_event_bytes as u64
         );
         assert_eq!(config.max_command_bytes, MAX_CDP_COMMAND_BYTES);
+        assert_eq!(config.max_response_bytes, MAX_CDP_RESPONSE_BYTES);
+        assert_eq!(
+            config.max_protocol_error_bytes,
+            MAX_CDP_PROTOCOL_ERROR_BYTES
+        );
         assert_eq!(config.max_event_bytes, MAX_CDP_EVENT_BYTES);
         assert_eq!(config.max_websocket_bytes, MAX_CDP_WEBSOCKET_BYTES);
-        #[cfg(not(feature = "large-route-post-data"))]
+        #[cfg(feature = "cdp-session")]
+        {
+            assert_eq!(config.max_response_bytes, UNBOUNDED_CDP_BYTES);
+            assert_eq!(config.max_event_bytes, UNBOUNDED_CDP_BYTES);
+            assert_eq!(config.max_websocket_bytes, UNBOUNDED_CDP_BYTES);
+            assert_eq!(config.max_protocol_error_bytes, UNBOUNDED_CDP_BYTES);
+            assert_eq!(factory.profile().connection().reader_wire_bytes(), 0);
+            assert_eq!(factory.profile().connection().retained_event_bytes(), 0);
+            assert_eq!(config.event_channel_capacity, UNBOUNDED_CDP_EVENTS);
+            assert_eq!(
+                factory
+                    .profile()
+                    .connection()
+                    .requirements()
+                    .class(ResourceClass::EventBytes)
+                    .global,
+                0
+            );
+            assert_eq!(
+                factory
+                    .profile()
+                    .connection()
+                    .requirements()
+                    .class(ResourceClass::EventItem)
+                    .global,
+                0
+            );
+        }
+        #[cfg(all(not(feature = "cdp-session"), not(feature = "large-route-post-data")))]
         assert_eq!(config.max_event_bytes, 256 * 1024);
-        #[cfg(feature = "large-route-post-data")]
+        #[cfg(all(feature = "large-route-post-data", not(feature = "cdp-session")))]
         {
             assert_eq!(config.max_event_bytes, 8 * 1024 * 1024);
             assert_eq!(config.max_websocket_bytes, config.max_event_bytes);

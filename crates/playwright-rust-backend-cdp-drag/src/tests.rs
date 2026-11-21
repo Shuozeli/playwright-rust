@@ -272,6 +272,51 @@ fn invalid_profiles_and_exhausted_identifiers_fail_before_allocation_or_io() {
     assert!(client.calls().is_empty());
 }
 
+#[test]
+fn allocator_backed_listener_ownership_grows_past_legacy_world_count() {
+    // Arrange
+    let required = DragListenerFactory::allocator_backed_requirements();
+    let bytes = required.class(ResourceClass::BackendStateBytes);
+    let resources = ProductionResourceLedger::new(
+        ResourceLimits::deny_all(required.scopes, required.leases).with_class(
+            ResourceClass::BackendStateBytes,
+            bytes.global,
+            bytes.per_scope,
+        ),
+        required,
+    )
+    .unwrap();
+    let namespace = "dynamic/page:".repeat(32);
+    let factory = DragListenerFactory::new_allocator_backed(
+        &namespace,
+        ResourceScope::extension(14, 60),
+        &resources,
+    )
+    .unwrap();
+    let client: Arc<dyn CdpClient> = Arc::new(FakeCdpClient::from_html(""));
+
+    // Act
+    let listeners = (0..130)
+        .map(|index| {
+            let context = format!("world/{index}/{}", "x".repeat(256));
+            factory.start(client.clone(), &context).unwrap()
+        })
+        .collect::<Vec<_>>();
+
+    // Assert
+    assert_eq!(listeners.len(), 130);
+    assert!(namespace.len() > MAX_NAMESPACE);
+    assert!(
+        listeners
+            .iter()
+            .all(|listener| listener.context.len() > MAX_CONTEXT)
+    );
+    assert_eq!(factory.active_listeners(), 130);
+    assert_eq!(resources.metrics().unwrap().active_leases, 1);
+    drop(listeners);
+    assert_eq!(factory.active_listeners(), 0);
+}
+
 #[tokio::test]
 async fn explicit_no_install_receipt_never_cleans_another_owners_token() {
     // Arrange

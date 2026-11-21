@@ -10,7 +10,7 @@ use std::error::Error;
 
 use playwright_rust_backend_cdp_topology::CdpTopology;
 use playwright_rust_backend_cdp_topology::{CdpContextOwnership, CdpTopologyEffect};
-use playwright_rust_cdp::{CdpEvent, generated::page};
+use playwright_rust_cdp::{CdpEvent, ServiceWorkerInitializationCommand, generated::page};
 use playwright_rust_core::ObjectId;
 
 pub type FrameObservationResult = Result<(), Box<dyn Error + Send + Sync>>;
@@ -31,6 +31,14 @@ pub trait ChromiumFrameEventObserver: Send + Sync {
         false
     }
 
+    /// Keep browser-root service-worker targets attached so an opt-in
+    /// BrowserContext observer can publish and drive them. Service workers are
+    /// Context-owned, not Page-owned, and therefore use a separate capability
+    /// from dedicated workers.
+    fn retains_service_worker_targets(&self) -> bool {
+        false
+    }
+
     /// Whether a retained Worker session is itself the parent of a nested
     /// dedicated Worker attachment. Page/OOPIF parents are resolved by the
     /// topology driver and do not use this callback.
@@ -43,6 +51,40 @@ pub trait ChromiumFrameEventObserver: Send + Sync {
     /// Worker-only installation does not pay for network observation.
     fn enables_worker_network(&self) -> bool {
         false
+    }
+
+    /// Enable Chromium's Network domain in every retained Service Worker
+    /// before releasing its debugger pause. Context policies that may be
+    /// toggled after worker creation need this even when their initial state
+    /// does not emit a pre-resume command.
+    fn enables_service_worker_network(&self) -> bool {
+        self.enables_worker_network()
+    }
+
+    /// Reserve the Context-owned native network route for a retained Service
+    /// Worker before Chromium's Network domain is enabled and its debugger
+    /// pause is released. The ordinary `event` callback still publishes the
+    /// attachment after native initialization, so implementations must be
+    /// idempotent.
+    fn prepare_service_worker(
+        &self,
+        _topology: &CdpTopology,
+        _event: &CdpEvent,
+    ) -> FrameObservationResult {
+        Ok(())
+    }
+
+    /// Append Context-owned native policy commands that must be admitted after
+    /// `Network.enable` and before a retained Service Worker is resumed.
+    /// Wrappers compose downstream-first to preserve deterministic order. This
+    /// callback runs under the topology lock and must not perform I/O.
+    fn service_worker_initialization_commands(
+        &self,
+        _topology: &CdpTopology,
+        _event: &CdpEvent,
+        _commands: &mut Vec<ServiceWorkerInitializationCommand>,
+    ) -> FrameObservationResult {
+        Ok(())
     }
 
     /// Admit selected Page storage before enabling native domains. Newly

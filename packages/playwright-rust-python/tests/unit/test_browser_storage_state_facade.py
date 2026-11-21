@@ -74,7 +74,7 @@ def _browser(native: NativeStorageState) -> Browser:
     browser._contexts = {}
     browser._pending_context_ids = set()
     browser._pending_context_cleanup_tasks = {}
-    browser._unidentified_storage_state_creations = 0
+    browser._unidentified_context_creations = 0
     browser._persistent_context_viewport = None
     browser._closed = False
     return browser

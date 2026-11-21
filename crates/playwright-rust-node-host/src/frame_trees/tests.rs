@@ -69,6 +69,30 @@ fn project(trees: &FrameTrees, rows: &[ChromiumFrameOwnership]) {
         .unwrap();
 }
 
+#[test]
+fn allocator_backed_production_assembly_projects_past_legacy_frame_capacity() {
+    // Arrange
+    let urls = Arc::new(FrameMetadata::new_allocator_backed(64).unwrap());
+    let trees = FrameTrees::new_allocator_backed(urls.clone()).unwrap();
+    let rows: Vec<_> = std::iter::once(row(2, 1, None))
+        .chain((3..=131).map(|id| row(id, 1, Some(2))))
+        .collect();
+
+    // Act
+    project(&trees, &rows);
+    urls.publications().fence().unwrap().publish().unwrap();
+
+    // Assert
+    assert_eq!(trees.state.lock().unwrap().nodes.len(), 130);
+    assert_eq!(
+        trees.get(ObjectId::new(1)).unwrap().frames().unwrap().len(),
+        130
+    );
+    assert_eq!(trees.metrics().unwrap().states, 0);
+    assert_eq!(trees.metrics().unwrap().revisions, 0);
+    assert_eq!(urls.metrics().unwrap().active_frames, 130);
+}
+
 #[cfg(feature = "frame-events")]
 #[test]
 fn attached_child_is_published_after_tree_with_portable_identity() {
@@ -333,7 +357,11 @@ fn selected_detach_publication_is_child_first_and_binds_retired_identity() {
         .owner
         .reconcile(attached.into_iter(), |_| true)
         .unwrap();
-    fixture.book.fence().unwrap().publish().unwrap();
+    let attached_notices = fixture.drain();
+    assert_eq!(
+        attached_notices.len(),
+        if cfg!(feature = "frame-events") { 2 } else { 0 }
+    );
     let tree = fixture.owner.get(ObjectId::new(1)).unwrap();
     let nodes = tree.frames().unwrap();
     let child = nodes
@@ -429,7 +457,11 @@ fn detach_uses_reserved_tree_queue_and_binding_at_resource_capacity() {
             true
         })
         .unwrap();
-    fixture.book.fence().unwrap().publish().unwrap();
+    let attached_notices = fixture.drain();
+    assert_eq!(
+        attached_notices.len(),
+        if cfg!(feature = "frame-events") { 1 } else { 0 }
+    );
     let tree = fixture.owner.get(ObjectId::new(1)).unwrap();
     let child = tree.frames().unwrap()[1].clone();
     let mut held_bindings = Vec::new();
@@ -497,7 +529,10 @@ fn opt_in_capacity_accounts_for_all_live_child_detach_reservations() {
 
     // Arrange
     assert_eq!(STATES, 383);
-    assert_eq!(super::REVISIONS, 510 + super::FRAME_EVENT_RESERVATIONS);
+    assert_eq!(
+        super::REVISIONS,
+        super::BASE_REVISIONS + 2 * super::DETACH_RESERVATIONS + super::FRAME_EVENT_RESERVATIONS
+    );
     let urls = Arc::new(
         FrameMetadata::new(FrameMetadataLimits {
             entries: 128,
@@ -526,7 +561,10 @@ fn opt_in_capacity_accounts_for_all_live_child_detach_reservations() {
     assert_eq!(after.states - before.states, 2 * 127);
     assert_eq!(after.revisions - before.revisions, 2 * 127);
     assert_eq!(remaining.len(), 255);
-    assert_eq!(trees.metrics().unwrap().revisions, super::REVISIONS as u64);
+    assert_eq!(
+        trees.metrics().unwrap().revisions,
+        u64::try_from(256 + 2 * 127).unwrap()
+    );
 }
 
 #[cfg(feature = "frame-detach-events")]

@@ -106,12 +106,27 @@ pub fn decode_screenshot_attachment(
         });
     }
     validate_screenshot_length(bytes.len(), limit)?;
-    let bytes = playwright_rust_core::BudgetedBytes::copy_from_slice(
-        result_ledger,
-        ResourceScope::Call(call_id),
-        ResourceClass::ScreenshotBytes,
-        bytes,
-    )
+    let bytes = if limit == usize::MAX {
+        let mut owned = Vec::new();
+        owned.try_reserve_exact(bytes.len()).map_err(|_| {
+            ScreenshotAttachmentError::InvalidLength {
+                actual: bytes.len(),
+                limit,
+            }
+        })?;
+        owned.extend_from_slice(bytes);
+        playwright_rust_core::BudgetedBytes::from_vec_allocator_backed(
+            ResourceClass::ScreenshotBytes,
+            owned,
+        )
+    } else {
+        playwright_rust_core::BudgetedBytes::copy_from_slice(
+            result_ledger,
+            ResourceScope::Call(call_id),
+            ResourceClass::ScreenshotBytes,
+            bytes,
+        )
+    }
     .map_err(ScreenshotAttachmentError::Resource)?;
     Ok(ScreenshotData::new(bytes, metadata.format))
 }

@@ -27,7 +27,7 @@ fn fixture(publications: usize) -> (Arc<FrameMetadata>, FrameTrees, ContextMetad
 }
 
 #[test]
-fn selected_retirement_pool_is_preallocated_and_reclaimed_on_native_clear() {
+fn selected_retirement_pool_grows_with_creation_and_is_reclaimed_on_native_clear() {
     // Arrange
     let (book, trees, contexts) = fixture(64);
     let factory = trees.factory.clone();
@@ -35,14 +35,12 @@ fn selected_retirement_pool_is_preallocated_and_reclaimed_on_native_clear() {
     let trees = trees.with_collections(contexts).unwrap();
     let selected = factory.metrics().unwrap();
     let reserved = trees.reserve_creation_collection().unwrap();
+    let admitted = factory.metrics().unwrap();
     reserved.commit().unwrap();
     // Act
     trees.clear();
     // Assert
-    assert_eq!(
-        selected.revisions,
-        before.revisions + RETIREMENTS as u64 + 1
-    );
+    assert!(admitted.revisions > selected.revisions);
     assert_eq!(factory.metrics().unwrap(), before);
     assert!(
         book.publications()
@@ -58,7 +56,7 @@ fn selected_retirement_pool_is_preallocated_and_reclaimed_on_native_clear() {
 }
 
 #[test]
-fn selection_failure_releases_partial_retirement_admission() {
+fn collection_selection_does_not_preallocate_a_fixed_retirement_count() {
     // Arrange
     let (book, trees, contexts) = fixture(16);
     let factory = trees.factory.clone();
@@ -66,28 +64,33 @@ fn selection_failure_releases_partial_retirement_admission() {
     // Act
     let result = trees.with_collections(contexts);
     // Assert
-    assert!(matches!(result, Err(HostError::ResourceExhausted(_))));
-    assert_eq!(factory.metrics().unwrap(), before);
+    assert!(result.is_ok());
+    assert!(factory.metrics().unwrap().revisions <= before.revisions + 1);
     assert_eq!(book.metrics().unwrap().pending_publications, 0);
 }
 
 #[test]
-fn creation_cannot_proceed_until_retirement_pool_can_be_replenished() {
+fn abandoned_creation_rolls_back_dynamic_retirement_admission() {
     // Arrange
-    let (book, trees, contexts) = fixture(33);
+    let (_book, trees, contexts) = fixture(33);
     let trees = trees.with_collections(contexts).unwrap();
-    {
-        let mut state = trees.state.lock().unwrap();
-        let collection = state.collections.as_mut().unwrap();
-        while let Some(reserved) = collection.retirements.pop() {
-            book.publications().stage_collection(reserved).unwrap();
-        }
-    }
     let before = trees.factory.metrics().unwrap();
     // Act
-    let result = trees.reserve_creation_collection();
+    let creation = trees.reserve_creation_collection().unwrap();
     // Assert
-    assert!(matches!(result, Err(HostError::ResourceExhausted(_))));
+    assert_eq!(
+        trees
+            .state
+            .lock()
+            .unwrap()
+            .collections
+            .as_ref()
+            .unwrap()
+            .retirements
+            .len(),
+        1
+    );
+    drop(creation);
     assert_eq!(trees.factory.metrics().unwrap(), before);
     assert_eq!(
         trees
@@ -101,40 +104,10 @@ fn creation_cannot_proceed_until_retirement_pool_can_be_replenished() {
             .len(),
         0
     );
-    book.publications().fence().unwrap().publish().unwrap();
-    let before_creation = trees.factory.metrics().unwrap();
-    let creation = trees.reserve_creation_collection().unwrap();
-    assert!(creation.reserved.is_some());
-    assert_eq!(
-        trees
-            .state
-            .lock()
-            .unwrap()
-            .collections
-            .as_ref()
-            .unwrap()
-            .retirements
-            .len(),
-        RETIREMENTS
-    );
-    drop(creation);
-    assert_eq!(trees.factory.metrics().unwrap(), before_creation);
-    assert_eq!(
-        trees
-            .state
-            .lock()
-            .unwrap()
-            .collections
-            .as_ref()
-            .unwrap()
-            .retirements
-            .len(),
-        0
-    );
 }
 
 #[test]
-fn terminal_selection_admits_every_group_before_initialization_and_releases_on_clear() {
+fn terminal_selection_admits_groups_dynamically_and_releases_on_clear() {
     // Arrange
     let (book, trees, contexts) = fixture(96);
     let factory = trees.factory.clone();
@@ -146,7 +119,7 @@ fn terminal_selection_admits_every_group_before_initialization_and_releases_on_c
     let selected = factory.metrics().unwrap();
     trees.clear();
     // Assert
-    assert_eq!(selected.revisions - collections_only.revisions, 33);
+    assert!(selected.revisions <= collections_only.revisions + 1);
     assert!(selected.bytes > collections_only.bytes);
     assert_eq!(factory.metrics().unwrap(), baseline);
     assert!(book.publications().is_drained().unwrap());
@@ -158,7 +131,7 @@ fn terminal_selection_admits_every_group_before_initialization_and_releases_on_c
 }
 
 #[test]
-fn terminal_selection_failure_reclaims_partial_groups_and_collection_pools() {
+fn terminal_selection_succeeds_without_a_fixed_group_reservation() {
     // Arrange
     let (book, trees, contexts) = fixture(33);
     let factory = trees.factory.clone();
@@ -167,7 +140,8 @@ fn terminal_selection_failure_reclaims_partial_groups_and_collection_pools() {
     // Act
     let result = trees.with_terminal_publication();
     // Assert
-    assert!(matches!(result, Err(HostError::ResourceExhausted(_))));
+    assert!(result.is_ok());
+    drop(result);
     assert_eq!(factory.metrics().unwrap(), baseline);
     assert_eq!(book.metrics().unwrap().pending_publications, 0);
 }

@@ -512,7 +512,7 @@ impl NativeSession {
         strict: bool,
         timeout_ms: Option<u32>,
     ) -> napi::Result<PromiseRaw<'env, Unknown<'env>>> {
-        let wait_permit = self.wait_admissions.admit().map_err(binding_error)?;
+        self.wait_admissions.admit().map_err(binding_error)?;
         let execution = self
             .ffi
             .admit(FfiLane::Command, FFI_ALLOWANCE)
@@ -530,22 +530,16 @@ impl NativeSession {
         let policy = handle.policy.clone();
         let handle = handle.read()?;
         let host = self.host.clone();
-        boundary::spawn_published_wait(
-            env,
-            execution,
-            self.publications.clone(),
-            wait_permit,
-            async move {
-                host.element_handle_wait_for_selector(&handle, query, state, strict, timeout_ms)
-                    .await
-                    .map(|value| match value {
-                        Some(value) => EvaluationResult::Handle(value, policy),
-                        None => EvaluationResult::Value(EvaluationOutput(
-                            playwright_rust_node_host::evaluation::EvaluationValue::Null,
-                        )),
-                    })
-            },
-        )
+        boundary::spawn_published_wait(env, execution, self.publications.clone(), (), async move {
+            host.element_handle_wait_for_selector(&handle, query, state, strict, timeout_ms)
+                .await
+                .map(|value| match value {
+                    Some(value) => EvaluationResult::Handle(value, policy),
+                    None => EvaluationResult::Value(EvaluationOutput(
+                        playwright_rust_node_host::evaluation::EvaluationValue::Null,
+                    )),
+                })
+        })
     }
 }
 
@@ -560,7 +554,7 @@ impl NativeSession {
         value: JsString<'env>,
         timeout_ms: Option<u32>,
     ) -> napi::Result<PromiseRaw<'env, Unknown<'env>>> {
-        let wait_permit = self.wait_admissions.admit().map_err(binding_error)?;
+        self.wait_admissions.admit().map_err(binding_error)?;
         let execution = self
             .ffi
             .admit(FfiLane::Command, FFI_ALLOWANCE)
@@ -568,16 +562,10 @@ impl NativeSession {
         let value = boundary::bounded_string(value, SELECTOR_BYTES, "selectOption value")?;
         let handle = handle.read()?;
         let host = self.host.clone();
-        boundary::spawn_published_wait(
-            env,
-            execution,
-            self.publications.clone(),
-            wait_permit,
-            async move {
-                host.element_handle_select_option_value(&handle, value, timeout_ms)
-                    .await
-            },
-        )
+        boundary::spawn_published_wait(env, execution, self.publications.clone(), (), async move {
+            host.element_handle_select_option_value(&handle, value, timeout_ms)
+                .await
+        })
     }
 }
 

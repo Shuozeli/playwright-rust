@@ -13,8 +13,6 @@ use playwright_rust_runtime::disposal_reservations::DisposalReservationProfile;
 use std::num::{NonZeroU16, NonZeroUsize};
 
 pub(super) const MAX_CLOSES: usize = 8;
-pub(crate) const MAX_OBJECTS: usize = 256;
-pub(crate) const MAX_CALLS: usize = 16;
 const OWNER_SCOPE: ResourceScope = ResourceScope::extension(138, 6);
 
 pub(crate) struct Profile {
@@ -51,16 +49,11 @@ impl Profile {
                 pending,
             )
             .map_err(HostError::backend)?,
-            runtime: DisposalReservationProfile::new_in_process(
-                NonZeroUsize::new(MAX_OBJECTS).expect("positive graph bound"),
+            runtime: DisposalReservationProfile::new_allocator_backed_in_process(
                 pending,
                 ResourceScope::extension(138, 5),
             )
-            .and_then(|profile| {
-                profile.with_deferred_commit(
-                    NonZeroUsize::new(MAX_CALLS).expect("positive call bound"),
-                )
-            })
+            .and_then(DisposalReservationProfile::with_allocator_backed_deferred_commit)
             .map_err(HostError::backend)?,
         })
     }

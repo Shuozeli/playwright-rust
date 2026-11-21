@@ -26,9 +26,8 @@ use crate::frame_trees::FrameTrees;
 use crate::worker_events::Installation as WorkerInstallation;
 use crate::{HostError, HostSession, PageError};
 
-const MAX_PAGES: usize = 16;
 pub(crate) const MAX_PAGE_ERRORS_PER_PAGE: usize = 200;
-const MAX_PAGE_ERROR_HISTORY_ITEMS: u64 = (MAX_PAGES * MAX_PAGE_ERRORS_PER_PAGE) as u64;
+const MAX_PAGE_ERROR_HISTORY_ITEMS: u64 = 16 * MAX_PAGE_ERRORS_PER_PAGE as u64;
 const MAX_PAGE_ERROR_HISTORY_BYTES: u64 = 16 * 1024 * 1024;
 const HISTORY_SCOPE: ResourceScope = ResourceScope::extension(175, 1);
 
@@ -65,17 +64,13 @@ struct HistoryState {
 }
 
 pub(crate) const fn requirements() -> ResourceRequirements {
-    let storage_bytes = (std::mem::size_of::<Installation>()
-        + std::mem::size_of::<HistoryState>()
-        + MAX_PAGES
-            * (std::mem::size_of::<PageHistory>()
-                + MAX_PAGE_ERRORS_PER_PAGE * std::mem::size_of::<StoredError>()))
-        as u64;
+    let storage_bytes =
+        (std::mem::size_of::<Installation>() + std::mem::size_of::<HistoryState>()) as u64;
     ResourceRequirements::none()
         .with_class(
             ResourceClass::EventItem,
             MAX_PAGE_ERROR_HISTORY_ITEMS,
-            MAX_PAGE_ERRORS_PER_PAGE as u64,
+            MAX_PAGE_ERROR_HISTORY_ITEMS,
         )
         .with_class(
             ResourceClass::EventBytes,
@@ -87,7 +82,7 @@ pub(crate) const fn requirements() -> ResourceRequirements {
             storage_bytes,
             storage_bytes,
         )
-        .with_metadata(MAX_PAGES + 1, MAX_PAGE_ERROR_HISTORY_ITEMS as usize + 1)
+        .with_metadata(1, MAX_PAGE_ERROR_HISTORY_ITEMS as usize + 1)
 }
 
 pub(crate) struct Installation {
@@ -107,18 +102,11 @@ impl Installation {
                 plan.class(ResourceClass::BackendStateBytes).global,
             )
             .map_err(HostError::backend)?;
-        let mut pages = Vec::new();
-        pages
-            .try_reserve_exact(MAX_PAGES)
-            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
-        for _ in 0..MAX_PAGES {
-            pages.push(PageHistory::new()?);
-        }
         Ok(Arc::new(Self {
             resources: ledger,
             state: std::sync::Mutex::new(HistoryState {
                 next_sequence: 1,
-                pages,
+                pages: Vec::new(),
                 closed: false,
             }),
             _storage: storage,
@@ -160,27 +148,29 @@ impl Installation {
         if state.closed {
             return Err(HostError::TargetClosed);
         }
-        let page_index = state
+        let page_index = if let Some(index) = state
             .pages
             .iter()
             .position(|history| history.page == Some(page))
-            .or_else(|| {
-                state
-                    .pages
-                    .iter()
-                    .position(|history| history.page.is_none())
-            })
-            .ok_or_else(|| {
+        {
+            index
+        } else {
+            state.pages.try_reserve(1).map_err(|error| {
                 HostError::ResourceExhausted(format!(
-                    "Page error history exceeds {MAX_PAGES} live Pages"
+                    "Page error history registry allocation failed: {error}"
                 ))
             })?;
+            let mut history = PageHistory::new()?;
+            history.page = Some(page);
+            state.pages.push(history);
+            state.pages.len() - 1
+        };
         let sequence = state
             .next_sequence
             .checked_add(1)
             .ok_or_else(|| HostError::ResourceExhausted("Page error sequence exhausted".into()))?;
         let sequence = std::mem::replace(&mut state.next_sequence, sequence);
-        let scope = ResourceScope::Object(page);
+        let scope = HISTORY_SCOPE;
 
         if state.pages[page_index].errors.len() == MAX_PAGE_ERRORS_PER_PAGE {
             let mut oldest = state.pages[page_index]
@@ -212,7 +202,6 @@ impl Installation {
                 }
             }
         };
-        state.pages[page_index].page = Some(page);
         state.pages[page_index].errors.push_back(StoredError {
             sequence,
             error,
@@ -545,7 +534,7 @@ impl ChromiumFrameEventObserver for Observer {
                 .workers
                 .owner(session_id)
                 .map_err(|error| Box::new(error) as Box<dyn Error + Send + Sync>)?
-                .map(|owner| owner.page()),
+                .and_then(|owner| owner.page()),
         };
         let Some(page) = page else {
             return Ok(());
@@ -647,6 +636,32 @@ mod tests {
             MAX_PAGE_ERRORS_PER_PAGE as u64
         );
         assert_eq!(metrics.rejected_reservations, 0);
+    }
+
+    #[test]
+    fn history_registry_grows_past_the_legacy_page_capacity() {
+        // Arrange
+        let resources = resources();
+        let history = Installation::new(&resources).unwrap();
+
+        // Act
+        for value in 1..=129 {
+            let (error, storage) = error(format!("page{value}"));
+            history
+                .record(ObjectId::new(value), storage, error)
+                .expect("Page histories should use allocator-backed ownership");
+        }
+
+        // Assert
+        assert_eq!(
+            history
+                .snapshot(ObjectId::new(129))
+                .unwrap()
+                .first()
+                .unwrap()
+                .message(),
+            "page129"
+        );
     }
 
     #[test]

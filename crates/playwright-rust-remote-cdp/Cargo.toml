@@ -1,0 +1,26 @@
+[package]
+name = "playwright-rust-remote-cdp"
+description = "High-level attach-safe remote CDP client for Playwright Rust"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[features]
+default = []
+cdp-handshake-headers = [
+    "dep:playwright-rust-cdp",
+    "playwright-rust-node-host/cdp-handshake-headers",
+    "playwright-rust-cdp/cdp-handshake-headers",
+]
+
+[dependencies]
+playwright-rust-node-host = { workspace = true }
+playwright-rust-cdp = { workspace = true, optional = true }
+tokio = { workspace = true }
+
+[dev-dependencies]
+futures-util = { workspace = true }
+tokio = { workspace = true, features = ["test-util"] }
+tokio-tungstenite = { workspace = true }

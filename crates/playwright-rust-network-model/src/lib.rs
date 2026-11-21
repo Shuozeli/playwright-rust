@@ -498,6 +498,7 @@ pub struct NetworkLifecycleTracker {
     limits: NetworkLifecycleLimits,
     active: BTreeMap<NativeRequestKey, ActiveRequest>,
     pending_request_headers: BTreeMap<NativeRequestKey, Vec<HttpHeader>>,
+    pending_response_headers: BTreeMap<NativeRequestKey, Vec<HttpHeader>>,
 }
 
 impl NetworkLifecycleTracker {
@@ -507,6 +508,7 @@ impl NetworkLifecycleTracker {
             limits,
             active: BTreeMap::new(),
             pending_request_headers: BTreeMap::new(),
+            pending_response_headers: BTreeMap::new(),
         })
     }
 
@@ -532,6 +534,7 @@ impl NetworkLifecycleTracker {
         self.active
             .keys()
             .chain(self.pending_request_headers.keys())
+            .chain(self.pending_response_headers.keys())
             .map(|key| {
                 key.scope
                     .capacity()
@@ -561,7 +564,7 @@ impl NetworkLifecycleTracker {
         &mut self,
         scope: &str,
         mut request: RequestStart,
-        redirect: Option<RedirectResponse>,
+        mut redirect: Option<RedirectResponse>,
     ) -> Result<Vec<NetworkLifecycleEffect>, NetworkLifecycleError> {
         self.validate_scope(scope)?;
         self.validate_request(&request)?;
@@ -578,6 +581,12 @@ impl NetworkLifecycleTracker {
         validate_object_id("Request parent", request.parent)?;
 
         let key = NativeRequestKey::new(scope, &request.native_request_id);
+        if let Some(redirect) = redirect.as_mut()
+            && let Some(headers) = self.pending_response_headers.remove(&key)
+        {
+            redirect.metadata.headers = headers;
+            self.validate_response(&redirect.metadata)?;
+        }
         let previous = self.active.get(&key);
         match (previous, redirect.as_ref()) {
             (Some(_), None) => {
@@ -765,6 +774,56 @@ impl NetworkLifecycleTracker {
         Ok(())
     }
 
+    pub fn response_received_extra_info_in_scope(
+        &mut self,
+        scope: &str,
+        native_request_id: &str,
+        mut headers: Vec<HttpHeader>,
+    ) -> Result<(), NetworkLifecycleError> {
+        self.validate_scope(scope)?;
+        validate_bounded(
+            "native request ID bytes",
+            native_request_id.len(),
+            self.limits.native_id_bytes,
+        )?;
+        validate_headers(&headers, self.limits)?;
+        headers.iter_mut().for_each(HttpHeader::compact);
+        headers.shrink_to_fit();
+
+        let key = NativeRequestKey::new(scope, native_request_id);
+        if let Some(response) = self
+            .active
+            .get_mut(&key)
+            .and_then(|active| active.response.as_mut())
+        {
+            response.headers = headers;
+            return Ok(());
+        }
+        if !self.pending_response_headers.contains_key(&key)
+            && self.pending_response_headers.len() >= self.limits.active_requests
+        {
+            self.pending_response_headers.pop_first();
+        }
+        self.pending_response_headers.insert(key, headers);
+        Ok(())
+    }
+
+    pub fn discard_pending_response_headers_in_scope(
+        &mut self,
+        scope: &str,
+        native_request_id: &str,
+    ) -> Result<(), NetworkLifecycleError> {
+        self.validate_scope(scope)?;
+        validate_bounded(
+            "native request ID bytes",
+            native_request_id.len(),
+            self.limits.native_id_bytes,
+        )?;
+        self.pending_response_headers
+            .retain(|key, _| key.scope != scope || key.request_id != native_request_id);
+        Ok(())
+    }
+
     pub fn response_received(
         &mut self,
         native_request_id: &str,
@@ -787,11 +846,16 @@ impl NetworkLifecycleTracker {
         )?;
         self.validate_response(&response)?;
         let key = NativeRequestKey::new(scope, native_request_id);
-        let active = self.active.get_mut(&key).ok_or_else(|| {
-            NetworkLifecycleError::UnknownNativeRequest {
+        if !self.active.contains_key(&key) {
+            return Err(NetworkLifecycleError::UnknownNativeRequest {
                 native_request_id: native_request_id.to_owned(),
-            }
-        })?;
+            });
+        }
+        let pending_response_headers = self.pending_response_headers.remove(&key);
+        let active = self
+            .active
+            .get_mut(&key)
+            .expect("validated active request remains present");
         if active.response.is_some() {
             return Err(NetworkLifecycleError::DuplicateResponse {
                 native_request_id: native_request_id.to_owned(),
@@ -799,9 +863,10 @@ impl NetworkLifecycleTracker {
         }
         #[cfg(feature = "request-timing")]
         let response_timing = response.timing;
-        let response = compact_response(response, active.request.request);
-        #[cfg(feature = "request-timing")]
-        let mut response = response;
+        let mut response = compact_response(response, active.request.request);
+        if let Some(headers) = pending_response_headers {
+            response.headers = headers;
+        }
         #[cfg(feature = "request-timing")]
         {
             let timing = if active.served_from_cache {
@@ -949,6 +1014,7 @@ impl NetworkLifecycleTracker {
 
     pub fn drain_active(&mut self) -> Vec<(ObjectId, Option<ObjectId>)> {
         self.pending_request_headers.clear();
+        self.pending_response_headers.clear();
         let drained = std::mem::take(&mut self.active);
         drained
             .into_values()
@@ -963,6 +1029,8 @@ impl NetworkLifecycleTracker {
 
     pub fn drain_scope(&mut self, scope: &str) -> Vec<(ObjectId, Option<ObjectId>)> {
         self.pending_request_headers
+            .retain(|key, _| key.scope != scope);
+        self.pending_response_headers
             .retain(|key, _| key.scope != scope);
         let keys = self
             .active

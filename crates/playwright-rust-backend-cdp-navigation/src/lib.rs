@@ -8,6 +8,8 @@ use std::collections::HashSet;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
+#[cfg(feature = "history-navigation")]
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
@@ -196,6 +198,25 @@ impl CdpNavigationProductionProfile {
         }
     }
 
+    /// Uses allocator failure, rather than an arbitrary operation count, as
+    /// the production admission boundary. Protocol payload limits still apply.
+    pub fn new_allocator_backed(
+        resource_scope: ResourceScope,
+        limits: CdpNavigationLimits,
+    ) -> Self {
+        Self {
+            resource_scope,
+            limits,
+            max_concurrent_operations: usize::MAX,
+            maximum_retained_bytes_per_operation: limits.maximum_retained_bytes_per_operation(),
+            requirements: ResourceRequirements::none(),
+        }
+    }
+
+    const fn allocator_backed(self) -> bool {
+        self.max_concurrent_operations == usize::MAX
+    }
+
     pub const fn resource_scope(self) -> ResourceScope {
         self.resource_scope
     }
@@ -243,6 +264,18 @@ pub struct CdpNavigationService {
     network_idle_delay: Duration,
     limits: CdpNavigationLimits,
     resources: Option<NavigationResourceBudget>,
+    #[cfg(feature = "history-navigation")]
+    history_responses: Arc<Mutex<Vec<HistoryResponseEntry>>>,
+}
+
+#[cfg(feature = "history-navigation")]
+#[derive(Clone)]
+struct HistoryResponseEntry {
+    frame_id: String,
+    id: Option<i64>,
+    url: String,
+    loader_id: Option<String>,
+    response: NavigationResponse,
 }
 
 /// Creates per-target navigation services that share one production
@@ -252,6 +285,8 @@ pub struct CdpNavigationServiceFactory {
     network_idle_delay: Duration,
     limits: CdpNavigationLimits,
     resources: NavigationResourceBudget,
+    #[cfg(feature = "history-navigation")]
+    history_responses: Arc<Mutex<Vec<HistoryResponseEntry>>>,
 }
 
 impl CdpNavigationServiceFactory {
@@ -280,16 +315,25 @@ impl CdpNavigationServiceFactory {
                 profile,
                 active_operations: Arc::new(AtomicUsize::new(0)),
             },
+            #[cfg(feature = "history-navigation")]
+            history_responses: Arc::new(Mutex::new(Vec::new())),
         })
     }
 
     pub fn bind(&self, client: Arc<dyn CdpClient>) -> CdpNavigationService {
-        CdpNavigationService::from_parts(
+        let service = CdpNavigationService::from_parts(
             client,
             self.network_idle_delay,
             self.limits,
             Some(self.resources.clone()),
-        )
+        );
+        #[cfg(feature = "history-navigation")]
+        let service = {
+            let mut service = service;
+            service.history_responses = Arc::clone(&self.history_responses);
+            service
+        };
+        service
     }
 }
 
@@ -369,6 +413,8 @@ impl CdpNavigationService {
             network_idle_delay,
             limits,
             resources,
+            #[cfg(feature = "history-navigation")]
+            history_responses: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -394,11 +440,16 @@ impl CdpNavigationService {
         let Some(resources) = &self.resources else {
             return Ok(None);
         };
+        let allocator_backed = resources.profile.allocator_backed();
         let limit = resources.profile.max_concurrent_operations();
         if resources
             .active_operations
             .fetch_update(Ordering::AcqRel, Ordering::Acquire, |current| {
-                (current < limit).then_some(current + 1)
+                if allocator_backed {
+                    current.checked_add(1)
+                } else {
+                    (current < limit).then_some(current + 1)
+                }
             })
             .is_err()
         {
@@ -406,20 +457,24 @@ impl CdpNavigationService {
                 "navigation operation concurrency limit was reached",
             ));
         }
-        let resource = match resources.ledger.reserve(
-            resources.profile.resource_scope(),
-            ResourceClass::BackendStateBytes,
-            resources.profile.maximum_retained_bytes_per_operation(),
-        ) {
-            Ok(resource) => resource,
-            Err(error) => {
-                let previous = resources.active_operations.fetch_sub(1, Ordering::AcqRel);
-                debug_assert!(previous > 0);
-                return Err(map_navigation_resource_error(error));
+        let resource = if allocator_backed {
+            None
+        } else {
+            match resources.ledger.reserve(
+                resources.profile.resource_scope(),
+                ResourceClass::BackendStateBytes,
+                resources.profile.maximum_retained_bytes_per_operation(),
+            ) {
+                Ok(resource) => Some(resource),
+                Err(error) => {
+                    let previous = resources.active_operations.fetch_sub(1, Ordering::AcqRel);
+                    debug_assert!(previous > 0);
+                    return Err(map_navigation_resource_error(error));
+                }
             }
         };
         Ok(Some(NavigationOperationLease {
-            resource: Some(resource),
+            resource,
             active_operations: resources.active_operations.clone(),
         }))
     }
@@ -543,7 +598,10 @@ impl Service<GotoParams> for CdpNavigationService {
                 idle_delay: self.network_idle_delay,
                 limits: self.limits,
             };
-            wait_for_new_document(&mut events, wait).await
+            let result = wait_for_new_document(&mut events, wait).await?;
+            #[cfg(feature = "history-navigation")]
+            self.remember_current_history_response(&result).await;
+            Ok(result)
         })
     }
 }

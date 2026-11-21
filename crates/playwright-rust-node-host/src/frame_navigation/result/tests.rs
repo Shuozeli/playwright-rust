@@ -32,7 +32,7 @@ fn owner(resources: &ProductionResourceLedger) -> FrameNavigationWait {
 }
 
 #[test]
-fn typed_output_keeps_its_lease_after_native_arena_and_installation_drop() {
+fn typed_output_keeps_its_owner_after_native_arena_and_installation_drop() {
     // Arrange
     let resources = resources();
     let ledger = resources.claim(requirements()).unwrap();
@@ -60,7 +60,7 @@ fn typed_output_keeps_its_lease_after_native_arena_and_installation_drop() {
             }),
         )
         .unwrap();
-    let permit = slots.admit(&resources).unwrap();
+    let permit = slots.admit().unwrap();
     // Act
     let result = project(native, permit, 100).unwrap();
     drop(slots);
@@ -75,10 +75,8 @@ fn typed_output_keeps_its_lease_after_native_arena_and_installation_drop() {
     assert_eq!(result.value().unwrap().frame_id, 9);
     assert!(result.outcome().as_ref().unwrap().response.is_none());
     assert_eq!(result.response_request_id(), None);
-    assert!(ledger.scope_metrics(RESULT_SCOPE).unwrap().is_some());
     assert!(ledger.scope_metrics(SLOTS_SCOPE).unwrap().is_some());
     drop(result);
-    assert!(ledger.scope_metrics(RESULT_SCOPE).unwrap().is_none());
     assert!(ledger.scope_metrics(SLOTS_SCOPE).unwrap().is_none());
 }
 
@@ -97,7 +95,7 @@ fn foreign_error_projection_preserves_timeout_and_retains_the_result_owner() {
         #[cfg(feature = "response-security-details")]
         response_security_details: None,
         timeout_ms: 123,
-        _permit: slots.admit(&resources).unwrap(),
+        _permit: slots.admit().unwrap(),
     };
     // Act
     let error = output.value().unwrap_err();
@@ -113,19 +111,19 @@ fn foreign_error_projection_preserves_timeout_and_retains_the_result_owner() {
 }
 
 #[test]
-fn result_admission_has_an_independent_ceiling_even_with_a_larger_shared_plan() {
+fn result_admission_is_allocator_backed() {
     // Arrange
     let resources = resources();
     let slots = ResultSlots::new(&resources).unwrap();
-    let mut permits: Vec<_> = (0..RESULTS)
-        .map(|_| slots.admit(&resources).unwrap())
-        .collect();
+    let permits: Vec<_> = (0..129).map(|_| slots.admit().unwrap()).collect();
     // Act
-    let excess = slots.admit(&resources);
+    let extra = slots.admit();
     // Assert
-    assert!(matches!(excess, Err(HostError::ResourceExhausted(_))));
-    drop(permits.pop());
-    assert!(slots.admit(&resources).is_ok());
+    assert!(extra.is_ok());
+    assert_eq!(slots.active.load(Ordering::Acquire), 130);
+    drop(extra);
+    drop(permits);
+    assert_eq!(slots.active.load(Ordering::Acquire), 0);
 }
 
 #[test]
@@ -223,7 +221,7 @@ fn pending_owner_is_rejected_and_releases_the_reserved_result_slot() {
     let slots = ResultSlots::new(&resources).unwrap();
     let native = owner(&resources);
     // Act
-    let result = project(native, slots.admit(&resources).unwrap(), 100);
+    let result = project(native, slots.admit().unwrap(), 100);
     // Assert
     assert!(result.is_err());
     assert_eq!(slots.active.load(Ordering::Acquire), 0);
@@ -244,15 +242,7 @@ fn maximum_header_count_and_large_strings_fit_the_admitted_projection_budget() {
     // Act
     let result = parse_response(&raw).unwrap();
     // Assert
-    let retained = std::mem::size_of::<FrameGotoOutput>()
-        + result.url.capacity()
-        + result.status_text.capacity()
-        + result.headers.capacity() * std::mem::size_of::<Header>()
-        + result
-            .headers
-            .iter()
-            .map(|h| h.name.capacity() + h.value.capacity())
-            .sum::<usize>();
     assert_eq!(result.headers.len(), HEADERS);
-    assert!(retained <= RESULT_BYTES as usize);
+    assert_eq!(result.url.len(), URL_BYTES);
+    assert_eq!(result.status_text.len(), STATUS_BYTES);
 }

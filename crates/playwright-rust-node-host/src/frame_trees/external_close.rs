@@ -4,8 +4,6 @@ use super::*;
 use crate::{CollectionMember, FramePublications, LifecycleReservation};
 use playwright_rust_backend_cdp_topology::CdpTopologyEffect;
 
-const NOTICES: usize = 32;
-
 pub(super) struct ExternalClosePool {
     reserved: Vec<LifecycleReservation>,
     _storage: Storage,
@@ -13,17 +11,14 @@ pub(super) struct ExternalClosePool {
 
 impl ExternalClosePool {
     fn reserve(
-        book: &FramePublications,
+        _book: &FramePublications,
         factory: &FrameTreeFactory,
     ) -> Result<Box<Self>, HostError> {
-        let storage = factory.reserve_collection_storage(
-            std::mem::size_of::<Self>() + NOTICES * std::mem::size_of::<LifecycleReservation>(),
-        )?;
-        let mut pool = Self {
-            reserved: Vec::with_capacity(NOTICES),
+        let storage = factory.reserve_collection_storage(std::mem::size_of::<Self>())?;
+        let pool = Self {
+            reserved: Vec::new(),
             _storage: storage,
         };
-        pool.replenish(book, factory)?;
         Ok(Box::new(pool))
     }
 
@@ -37,11 +32,15 @@ impl ExternalClosePool {
 
     pub(super) fn replenish(
         &mut self,
+        target: usize,
         book: &FramePublications,
         factory: &FrameTreeFactory,
     ) -> Result<(), HostError> {
         let before = self.reserved.len();
-        while self.reserved.len() < NOTICES {
+        self.reserved
+            .try_reserve(target.saturating_sub(before))
+            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
+        while self.reserved.len() < target {
             match book.reserve_lifecycle(factory) {
                 Ok(reserved) => self.reserved.push(reserved),
                 Err(error) => {

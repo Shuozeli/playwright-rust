@@ -219,11 +219,12 @@ fn caller_maximum_rejects_the_whole_batch_instead_of_truncating() {
             .existing_page_utility_worlds(ObjectId::new(3), 0)
             .is_err()
     );
-    assert!(
-        access
-            .existing_page_utility_worlds(ObjectId::new(3), 33)
-            .is_err()
-    );
+    let expanded = access
+        .existing_page_utility_worlds(ObjectId::new(3), 33)
+        .unwrap();
+    assert_eq!(expanded.worlds().len(), 2);
+    drop(expanded);
+    assert_eq!(bytes(&fixture), baseline);
 }
 
 #[test]
@@ -262,7 +263,7 @@ async fn paired_and_utility_snapshots_share_the_same_admission() {
     // Arrange
     let (mut fixture, access) = access_fixture(1);
     pair(&mut fixture, "frame-a", 11);
-    let pending = access.snapshot(ObjectId::new(4));
+    let paired = access.snapshot(ObjectId::new(4)).await.unwrap();
     // Act
     let limited = access.existing_page_utility_worlds(ObjectId::new(3), 1);
     // Assert
@@ -270,7 +271,7 @@ async fn paired_and_utility_snapshots_share_the_same_admission() {
         limited,
         Err(FrameWorldAccessError::Capacity { limit: 1 })
     ));
-    drop(pending);
+    drop(paired);
     let batch = access
         .existing_page_utility_worlds(ObjectId::new(3), 1)
         .unwrap();

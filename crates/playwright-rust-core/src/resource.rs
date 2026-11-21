@@ -1275,6 +1275,24 @@ pub struct BudgetedBytes {
 }
 
 impl BudgetedBytes {
+    /// Owns allocator-backed bytes without charging a finite resource ledger.
+    /// Use only for compatibility surfaces whose upstream contract has no
+    /// result-size ceiling; allocation failure remains the admission boundary.
+    pub fn from_vec_allocator_backed(
+        class: ResourceClass,
+        bytes: Vec<u8>,
+    ) -> Result<Self, ResourceError> {
+        if !class.is_byte_class() {
+            return Err(ResourceError::ClassIsNotBytes { class });
+        }
+        Ok(Self {
+            scope: ResourceScope::Connection,
+            class,
+            bytes: bytes.into_boxed_slice(),
+            _lease: None,
+        })
+    }
+
     pub fn copy_from_slice(
         ledger: &ResourceLedger,
         scope: ResourceScope,

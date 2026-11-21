@@ -35,8 +35,16 @@ impl NativeSession {
             .map(|value| boundary::bounded_string(value, 16 * 1024, "dialog prompt text"))
             .transpose()?;
         let action = Arc::clone(&dialog.action);
-        boundary::spawn_published(env, execution, self.publications.clone(), async move {
-            action.handle(accept, prompt_text.as_deref()).await
-        })
+        // A consumer may call dismiss() in the microtask resumed by
+        // waitForEvent('dialog'). Waiting for the ordinary publication fence
+        // here would include the dialog notice that resumed that same
+        // microtask, creating a self-deadlock. Handling the opaque dialog
+        // owner publishes no follow-up value, so settle this command directly.
+        boundary::spawn_with_env(
+            env,
+            execution,
+            async move { action.handle(accept, prompt_text.as_deref()).await },
+            |_env, ()| Ok(()),
+        )
     }
 }

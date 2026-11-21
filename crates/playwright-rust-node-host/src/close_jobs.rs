@@ -14,11 +14,12 @@ use playwright_rust_composition_chromium::native_close_authority::scheduler::{
 use playwright_rust_composition_chromium::{
     AttachedChromiumComposition, ChromiumCloseObserver, ChromiumCloseTarget,
 };
-use playwright_rust_core::{ObjectId, ResourceLease};
+use playwright_rust_core::ResourceLease;
 use playwright_rust_runtime::disposal_reservations::DisposalReservations;
 use profile::MAX_CLOSES;
-pub(crate) use profile::{MAX_CALLS, MAX_OBJECTS, Profile};
+pub(crate) use profile::Profile;
 use std::{
+    collections::VecDeque,
     future::{Future, poll_fn},
     sync::{Arc, Mutex},
     task::{Context, Poll},
@@ -44,8 +45,30 @@ impl Reply {
 }
 struct PendingClose {
     capacity: ChromiumCloseCapacityBundle,
-    scratch: [ObjectId; MAX_OBJECTS],
     reply: Reply,
+}
+#[derive(Default)]
+struct Waiting {
+    replies: VecDeque<Reply>,
+}
+impl Waiting {
+    fn push(&mut self, reply: Reply) -> Result<(), HostError> {
+        self.replies.try_reserve(1).map_err(HostError::backend)?;
+        self.replies.push_back(reply);
+        Ok(())
+    }
+    fn pop_live(&mut self) -> Option<Reply> {
+        while let Some(reply) = self.replies.pop_front() {
+            if !reply.sender.is_closed() {
+                return Some(reply);
+            }
+        }
+        None
+    }
+    #[cfg(test)]
+    fn len(&self) -> usize {
+        self.replies.len()
+    }
 }
 struct Selected {
     native: NativeCloseScheduler<PendingClose>,
@@ -55,13 +78,15 @@ struct Selected {
     ready: [Option<NativeCloseCompletion<PendingClose>>; MAX_CLOSES],
     head: usize,
     len: usize,
+    inflight: usize,
+    waiting: Waiting,
+    settled: VecDeque<DriverReply>,
     wakeup: Arc<Notify>,
     _storage: ResourceLease,
 }
 pub(crate) struct Jobs(Option<Box<Selected>>);
 pub(crate) enum Admission {
     Queued,
-    Reply(DriverReply),
     Other(DriverRequest),
 }
 impl Jobs {
@@ -108,6 +133,9 @@ impl Jobs {
             ready: std::array::from_fn(|_| None),
             head: 0,
             len: 0,
+            inflight: 0,
+            waiting: Waiting::default(),
+            settled: VecDeque::new(),
             wakeup: Arc::new(Notify::new()),
             _storage: storage,
         }))))
@@ -140,8 +168,8 @@ impl Jobs {
             }
             _ => return Ok(Admission::Other(request)),
         };
-        let state = state.lock().map_err(HostError::backend)?;
-        let live = state.as_ref().ok_or(HostError::TargetClosed)?;
+        let state_guard = state.lock().map_err(HostError::backend)?;
+        let live = state_guard.as_ref().ok_or(HostError::TargetClosed)?;
         let topology = live.composition.topology().map_err(HostError::backend)?;
         let context = match target {
             ChromiumCloseTarget::Page(page) => topology
@@ -167,46 +195,24 @@ impl Jobs {
             return Ok(Admission::Queued);
         }
         let reply = Reply { target, sender };
-        let capacity = match ChromiumCloseCapacityBundle::reserve(
-            target,
-            &topology,
-            &jobs.topology,
-            &jobs.runtime,
-            jobs.observer.as_ref(),
-        ) {
-            Ok(capacity) => capacity,
-            Err(error) => return Ok(Admission::Reply(reply.finish(Err(capacity_error(error))))),
-        };
-        // Scheduler admission obtains the same topology mutex. No lifecycle
-        // mutation gate or outer host lock is retained across native polling.
+        jobs.waiting.push(reply)?;
         drop(topology);
-        drop(state);
-        let payload = PendingClose {
-            capacity,
-            scratch: [ObjectId::new(0); MAX_OBJECTS],
-            reply,
-        };
-        let result = match target {
-            ChromiumCloseTarget::Page(page) => jobs.native.push_page(page, payload),
-            ChromiumCloseTarget::BrowserContext(context) => {
-                jobs.native.push_context(context, payload)
-            }
-        };
-        Ok(match result {
-            Ok(()) => Admission::Queued,
-            Err((payload, error)) => {
-                Admission::Reply(payload.reply.finish(Err(HostError::operation(error, 0))))
-            }
-        })
+        drop(state_guard);
+        self.promote_waiting(state)?;
+        Ok(Admission::Queued)
     }
     pub(crate) fn finish_next(
         &mut self,
         state: &Mutex<Option<LiveSession>>,
     ) -> Result<Option<DriverReply>, HostError> {
+        if let Some(reply) = self.0.as_mut().and_then(|jobs| jobs.settled.pop_front()) {
+            return Ok(Some(reply));
+        }
         let Some(completion) = self.0.as_mut().and_then(|jobs| jobs.pop_ready()) else {
-            return Ok(None);
+            self.promote_waiting(state)?;
+            return Ok(self.0.as_mut().and_then(|jobs| jobs.settled.pop_front()));
         };
-        completion.consume(|payload, result| {
+        let reply = completion.consume(|payload, result| {
             let evidence = match result {
                 Ok(evidence) => evidence,
                 Err(error) => {
@@ -220,11 +226,7 @@ impl Jobs {
                     )))));
                 }
             };
-            let PendingClose {
-                capacity,
-                mut scratch,
-                reply,
-            } = payload;
+            let PendingClose { capacity, reply } = payload;
             let runtime = state
                 .lock()
                 .map_err(HostError::backend)?
@@ -236,14 +238,75 @@ impl Jobs {
                 let state = state.lock().map_err(HostError::backend)?;
                 let live = state.as_ref().ok_or(HostError::TargetClosed)?;
                 live.composition
-                    .retire_native_close(evidence, capacity, &runtime, &mut scratch, None)
+                    .retire_native_close(evidence, capacity, &runtime, None)
                     .map_err(HostError::backend)?
             };
             // Publication failure after native success is terminal, never a
             // recoverable operation error followed by more lifecycle mutations.
             committed.notify().map_err(HostError::backend)?;
             Ok(Some(reply.finish(Ok(()))))
-        })
+        })?;
+        if let Some(jobs) = &mut self.0 {
+            jobs.inflight = jobs
+                .inflight
+                .checked_sub(1)
+                .expect("ready close completion owns one in-flight slot");
+        }
+        self.promote_waiting(state)?;
+        Ok(reply)
+    }
+    fn promote_waiting(&mut self, state: &Mutex<Option<LiveSession>>) -> Result<(), HostError> {
+        let Some(jobs) = &mut self.0 else {
+            return Ok(());
+        };
+        while jobs.inflight < MAX_CLOSES {
+            let Some(reply) = jobs.waiting.pop_live() else {
+                break;
+            };
+            jobs.settled.try_reserve(1).map_err(HostError::backend)?;
+            let target = reply.target;
+            let capacity = {
+                let state = state.lock().map_err(HostError::backend)?;
+                let Some(live) = state.as_ref() else {
+                    jobs.settled
+                        .push_back(reply.finish(Err(HostError::TargetClosed)));
+                    continue;
+                };
+                let topology = live.composition.topology().map_err(HostError::backend)?;
+                ChromiumCloseCapacityBundle::reserve(
+                    target,
+                    &topology,
+                    &jobs.topology,
+                    &jobs.runtime,
+                    jobs.observer.as_ref(),
+                )
+            };
+            let capacity = match capacity {
+                Ok(capacity) => capacity,
+                Err(error) => {
+                    jobs.settled
+                        .push_back(reply.finish(Err(capacity_error(error))));
+                    continue;
+                }
+            };
+            let payload = PendingClose { capacity, reply };
+            let result = match target {
+                ChromiumCloseTarget::Page(page) => jobs.native.push_page(page, payload),
+                ChromiumCloseTarget::BrowserContext(context) => {
+                    jobs.native.push_context(context, payload)
+                }
+            };
+            match result {
+                Ok(()) => jobs.inflight += 1,
+                Err((payload, error)) => jobs
+                    .settled
+                    .push_back(payload.reply.finish(Err(HostError::operation(error, 0)))),
+            }
+        }
+        if !jobs.settled.is_empty() {
+            jobs.wakeup.notify_one();
+        }
+        Ok(())
     }
     pub(crate) async fn drain(&mut self) {
         let Some(jobs) = &mut self.0 else {
@@ -251,6 +314,12 @@ impl Jobs {
         };
         // Stop is already signalled. Do not locally publish successful close
         // evidence during terminal teardown, but retain every written command.
+        while let Some(reply) = jobs.waiting.replies.pop_front() {
+            let _ = reply.finish(Err(HostError::TargetClosed)).send();
+        }
+        while let Some(reply) = jobs.settled.pop_front() {
+            let _ = reply.send();
+        }
         while jobs.pop_ready().is_some() {}
         while poll_fn(|cx| jobs.native.poll_next(cx)).await.is_some() {}
     }
@@ -318,9 +387,66 @@ fn capacity_error(
 mod tests {
     use super::*;
     use playwright_rust_composition_chromium::ChromiumCloseCapacityBundleError as Capacity;
+    use playwright_rust_core::ObjectId;
     use playwright_rust_runtime::{
         RuntimeStateError, disposal_reservations::DisposalReservationError,
     };
+
+    #[test]
+    fn waiting_close_ownership_grows_past_the_execution_lane() {
+        // Arrange
+        let mut waiting = Waiting::default();
+        let mut receivers = Vec::new();
+
+        // Act
+        for id in 1..=129 {
+            let (sender, receiver) = oneshot::channel();
+            waiting
+                .push(Reply {
+                    target: ChromiumCloseTarget::Page(ObjectId::new(id)),
+                    sender,
+                })
+                .unwrap();
+            receivers.push(receiver);
+        }
+
+        // Assert
+        assert_eq!(waiting.len(), 129);
+        assert_eq!(receivers.len(), 129);
+        assert_eq!(
+            waiting.pop_live().unwrap().target,
+            ChromiumCloseTarget::Page(ObjectId::new(1))
+        );
+        assert_eq!(waiting.len(), 128);
+    }
+
+    #[test]
+    fn cancelled_waiter_is_removed_before_native_admission() {
+        // Arrange
+        let mut waiting = Waiting::default();
+        let (cancelled_sender, cancelled_receiver) = oneshot::channel();
+        let (live_sender, _live_receiver) = oneshot::channel();
+        waiting
+            .push(Reply {
+                target: ChromiumCloseTarget::Page(ObjectId::new(1)),
+                sender: cancelled_sender,
+            })
+            .unwrap();
+        waiting
+            .push(Reply {
+                target: ChromiumCloseTarget::Page(ObjectId::new(2)),
+                sender: live_sender,
+            })
+            .unwrap();
+        drop(cancelled_receiver);
+
+        // Act
+        let next = waiting.pop_live().unwrap();
+
+        // Assert
+        assert_eq!(next.target, ChromiumCloseTarget::Page(ObjectId::new(2)));
+        assert_eq!(waiting.len(), 0);
+    }
 
     #[test]
     fn full_outbox_is_an_admission_error_not_terminal_peer_loss() {

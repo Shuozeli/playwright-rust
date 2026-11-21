@@ -6,18 +6,36 @@ use playwright_rust_backend_cdp_navigation::frame_lifecycle::navigation::{
 use playwright_rust_cap_navigation::WaitUntil;
 use tokio::sync::Notify;
 
-/// The caller includes this plan in its operation budget before registration.
-/// The Page profile independently admits the fixed registration index.
+/// Finite embeddings include this plan in their operation budget before
+/// registration. The production allocator-backed profile owns rows directly.
 #[derive(Clone, Copy, Debug)]
 pub struct NavigationRegistrationProfile {
     wait: FrameNavigationWaitProfile,
     scope: ResourceScope,
+    allocator_backed: bool,
 }
 impl NavigationRegistrationProfile {
     pub const fn new(wait: FrameNavigationWaitProfile, scope: ResourceScope) -> Self {
-        Self { wait, scope }
+        Self {
+            wait,
+            scope,
+            allocator_backed: false,
+        }
+    }
+    pub const fn new_allocator_backed(
+        wait: FrameNavigationWaitProfile,
+        scope: ResourceScope,
+    ) -> Self {
+        Self {
+            wait,
+            scope,
+            allocator_backed: true,
+        }
     }
     fn owner_requirements(self) -> ResourceRequirements {
+        if self.allocator_backed {
+            return ResourceRequirements::none();
+        }
         // Arc counters/alignment plus one consumer's notification future/waker
         // allowance. Foreign executor task stacks/queues remain caller-owned.
         let bytes = (size_of::<RegisteredNavigation>() + 2 * size_of::<usize>() + 256) as u64;
@@ -36,7 +54,7 @@ pub(super) struct RegisteredNavigation {
     frame: ObjectId,
     wait: Mutex<Option<FrameNavigationWait>>,
     changed: Notify,
-    _lease: ResourceLease,
+    _lease: Option<ResourceLease>,
     // Drop last, after the wait arena and owner lease release their budget.
     _shared_permit: Option<SharedNavigationPermit>,
 }
@@ -108,6 +126,7 @@ pub(super) struct NavigationSlotsProfile {
     scope: ResourceScope,
     slots: usize,
     bytes: u64,
+    allocator_backed: bool,
 }
 impl NavigationSlotsProfile {
     pub(super) fn new(scope: ResourceScope, slots: usize) -> Result<Self> {
@@ -122,9 +141,24 @@ impl NavigationSlotsProfile {
             scope,
             slots,
             bytes,
+            allocator_backed: false,
+        })
+    }
+    pub(super) fn new_allocator_backed(scope: ResourceScope, slots: usize) -> Result<Self> {
+        if slots == 0 {
+            return Err("navigation registration capacity must be positive".into());
+        }
+        Ok(Self {
+            scope,
+            slots,
+            bytes: 0,
+            allocator_backed: true,
         })
     }
     pub(super) fn requirements(self) -> ResourceRequirements {
+        if self.allocator_backed {
+            return ResourceRequirements::none();
+        }
         ResourceRequirements::none()
             .with_class(ResourceClass::BackendStateBytes, self.bytes, self.bytes)
             .with_metadata(1, 1)
@@ -133,7 +167,8 @@ impl NavigationSlotsProfile {
 pub(super) struct NavigationSlots {
     entries: Vec<Option<Arc<RegisteredNavigation>>>,
     shared_pool: Option<Arc<SharedNavigationPool>>,
-    _lease: ResourceLease,
+    allocator_backed: bool,
+    _lease: Option<ResourceLease>,
 }
 impl NavigationSlots {
     pub(super) fn new(
@@ -141,20 +176,29 @@ impl NavigationSlots {
         resources: &ProductionResourceLedger,
         shared_pool: Option<Arc<SharedNavigationPool>>,
     ) -> Result<Self> {
-        let lease = resources.claim(profile.requirements())?.reserve(
-            profile.scope,
-            ResourceClass::BackendStateBytes,
-            profile.bytes,
-        )?;
+        let lease = if profile.allocator_backed {
+            None
+        } else {
+            Some(resources.claim(profile.requirements())?.reserve(
+                profile.scope,
+                ResourceClass::BackendStateBytes,
+                profile.bytes,
+            )?)
+        };
         let mut entries = Vec::new();
-        entries.try_reserve_exact(profile.slots)?;
-        if entries.capacity() != profile.slots {
-            return Err("navigation registration index capacity mismatch".into());
+        if profile.allocator_backed {
+            entries.try_reserve(profile.slots)?;
+        } else {
+            entries.try_reserve_exact(profile.slots)?;
+            if entries.capacity() != profile.slots {
+                return Err("navigation registration index capacity mismatch".into());
+            }
         }
         entries.resize_with(profile.slots, || None);
         Ok(Self {
             entries,
             shared_pool,
+            allocator_backed: profile.allocator_backed,
             _lease: lease,
         })
     }
@@ -172,22 +216,30 @@ impl NavigationSlots {
     }
     fn register(&mut self, params: Registration<'_>) -> Result<Arc<RegisteredNavigation>> {
         self.reclaim();
-        let slot = self
-            .entries
-            .iter_mut()
-            .find(|slot| slot.is_none())
-            .ok_or("navigation registration capacity exhausted")?;
+        let slot = if let Some(slot) = self.entries.iter().position(Option::is_none) {
+            slot
+        } else if self.allocator_backed {
+            self.entries.try_reserve(1)?;
+            self.entries.push(None);
+            self.entries.len() - 1
+        } else {
+            return Err("navigation registration capacity exhausted".into());
+        };
         let shared_permit = self
             .shared_pool
             .as_ref()
             .map(SharedNavigationPool::admit)
             .transpose()?;
         let plan = params.profile.owner_requirements();
-        let lease = params.resources.claim(plan)?.reserve(
-            params.profile.scope,
-            ResourceClass::BackendStateBytes,
-            plan.class(ResourceClass::BackendStateBytes).global,
-        )?;
+        let lease = if params.profile.allocator_backed {
+            None
+        } else {
+            Some(params.resources.claim(plan)?.reserve(
+                params.profile.scope,
+                ResourceClass::BackendStateBytes,
+                plan.class(ResourceClass::BackendStateBytes).global,
+            )?)
+        };
         let wait = FrameNavigationWait::new(
             params.profile.wait,
             params.resources,
@@ -202,7 +254,7 @@ impl NavigationSlots {
             _lease: lease,
             _shared_permit: shared_permit,
         });
-        *slot = Some(entry.clone());
+        self.entries[slot] = Some(entry.clone());
         Ok(entry)
     }
     pub(super) fn checkpoint(
@@ -532,6 +584,45 @@ mod tests {
             ResourceScope::extension(240, 2),
         );
         (slots, registration)
+    }
+
+    #[test]
+    fn allocator_backed_slots_retain_129_registrations_without_ledger_capacity() {
+        // Arrange
+        let slot_profile =
+            NavigationSlotsProfile::new_allocator_backed(ResourceScope::extension(242, 0), 1)
+                .unwrap();
+        let registration = NavigationRegistrationProfile::new_allocator_backed(
+            FrameNavigationWaitProfile::new_allocator_backed(
+                ResourceScope::extension(242, 1),
+                1,
+                1,
+                8,
+                8,
+                64,
+            )
+            .unwrap(),
+            ResourceScope::extension(242, 2),
+        );
+        let resources = resources(ResourceRequirements::none());
+        let mut slots = NavigationSlots::new(slot_profile, &resources, None).unwrap();
+        let params = || Registration {
+            profile: registration,
+            resources: &resources,
+            frame: ObjectId::new(1),
+            wait: WaitUntil::Load,
+            deadline: None,
+        };
+
+        // Act
+        let tickets: Vec<_> = (0..129)
+            .map(|_| slots.register(params()).unwrap())
+            .collect();
+
+        // Assert
+        assert_eq!(tickets.len(), 129);
+        assert_eq!(slots.entries.iter().flatten().count(), 129);
+        assert_eq!(resources.metrics().unwrap().active_leases, 0);
     }
 
     #[test]

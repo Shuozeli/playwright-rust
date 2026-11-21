@@ -35,8 +35,8 @@ pub use session::{ScopedTimeoutSettings, TimeoutPolicySession};
 ///
 /// Clones share the same 1024-slot limit for cells and issued scoped bindings.
 /// Cells/bindings may outlive the factory; their allowances are returned only
-/// after their last references drop. Session indices have a separate 16-slot
-/// ledger so unused index bytes cannot widen this metadata limit.
+/// after their last references drop. Session and membership indexes are
+/// allocator-backed and do not impose a browser-object count limit.
 #[derive(Clone)]
 pub struct TimeoutPolicyBudget {
     inner: Arc<BudgetInner>,
@@ -45,7 +45,7 @@ pub struct TimeoutPolicyBudget {
 struct BudgetInner {
     resources: ResourceLedger,
     indexes: ResourceLedger,
-    sessions: Mutex<[Option<session::SessionSlot>; session::MAX_SESSIONS]>,
+    sessions: Mutex<Vec<session::SessionSlot>>,
     _storage: ResourceLease,
 }
 
@@ -109,7 +109,7 @@ impl TimeoutPolicyBudget {
             inner: Arc::new(BudgetInner {
                 resources,
                 indexes,
-                sessions: Mutex::new(std::array::from_fn(|_| None)),
+                sessions: Mutex::new(Vec::new()),
                 _storage: storage,
             }),
         })

@@ -9,13 +9,14 @@ homepage.workspace = true
 
 [features]
 default = []
-mouse-dispatch = ["dep:playwright-rust-backend-cdp-input"]
+mouse-dispatch = ["dep:playwright-rust-backend-cdp-input", "dep:tokio"]
 
 [dependencies]
 playwright-rust-backend-cdp-input = { workspace = true, optional = true }
 playwright-rust-cdp = { workspace = true }
 playwright-rust-core = { workspace = true }
 serde_json = { workspace = true }
+tokio = { workspace = true, features = ["sync"], optional = true }
 
 [dev-dependencies]
 playwright-rust-fake = { workspace = true }

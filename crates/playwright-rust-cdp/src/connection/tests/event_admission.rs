@@ -123,6 +123,137 @@ async fn thousands_of_omitted_events_do_not_need_a_slot_or_block_the_following_r
 }
 
 #[tokio::test]
+async fn allocator_backed_response_crosses_the_retired_four_megabyte_limit() {
+    // Arrange
+    let profile = CdpConnectionProductionProfile::new(
+        ResourceScope::Connection,
+        ConnectionConfig {
+            pending_command_capacity: 1,
+            write_channel_capacity: 1,
+            event_channel_capacity: 1,
+            max_command_bytes: 256,
+            max_response_bytes: UNBOUNDED_CDP_BYTES,
+            max_event_bytes: 256,
+            max_websocket_bytes: UNBOUNDED_CDP_BYTES,
+            ..ConnectionConfig::default()
+        },
+    );
+    let resources = production_resources(&profile);
+    let (connection, _writer) = test_production_connection_with_writer(&profile, &resources);
+    let mut call = Box::pin(connection.send_command("Test.command", Value::Null));
+    assert!(
+        call.as_mut()
+            .poll(&mut Context::from_waker(Waker::noop()))
+            .is_pending()
+    );
+    let payload = "x".repeat(5 * 1024 * 1024);
+    let response = serde_json::json!({"id": 1, "result": {"payload": payload}});
+
+    // Act
+    read(&connection, std::iter::once(message(response))).await;
+    let result = call.await.unwrap();
+
+    // Assert
+    assert_eq!(result["payload"].as_str().unwrap().len(), 5 * 1024 * 1024);
+    assert!(connection.pending.is_empty());
+}
+
+#[tokio::test]
+async fn allocator_backed_protocol_error_crosses_the_retired_four_kibibyte_limit() {
+    // Arrange
+    let profile = CdpConnectionProductionProfile::new(
+        ResourceScope::Connection,
+        ConnectionConfig {
+            pending_command_capacity: 1,
+            write_channel_capacity: 1,
+            event_channel_capacity: 1,
+            max_command_bytes: 256,
+            max_response_bytes: UNBOUNDED_CDP_BYTES,
+            max_event_bytes: 256,
+            max_websocket_bytes: UNBOUNDED_CDP_BYTES,
+            max_protocol_error_bytes: UNBOUNDED_CDP_BYTES,
+            ..ConnectionConfig::default()
+        },
+    );
+    let resources = production_resources(&profile);
+    let (connection, _writer) = test_production_connection_with_writer(&profile, &resources);
+    let mut call = Box::pin(connection.send_command("Test.command", Value::Null));
+    assert!(
+        call.as_mut()
+            .poll(&mut Context::from_waker(Waker::noop()))
+            .is_pending()
+    );
+    let message_text = "x".repeat(8 * 1024);
+    let response = serde_json::json!({
+        "id": 1,
+        "error": {"code": -32000, "message": message_text}
+    });
+
+    // Act
+    read(&connection, std::iter::once(message(response))).await;
+    let error = call.await.unwrap_err();
+
+    // Assert
+    match error {
+        CdpError::Protocol { code, message } => {
+            assert_eq!(code, -32000);
+            assert_eq!(message.len(), 8 * 1024);
+        }
+        other => panic!("expected protocol error, got {other:?}"),
+    }
+    assert!(connection.pending.is_empty());
+}
+
+#[tokio::test]
+async fn allocator_backed_event_crosses_the_retired_event_byte_limit() {
+    // Arrange
+    let profile = CdpConnectionProductionProfile::new(
+        ResourceScope::Connection,
+        ConnectionConfig {
+            event_channel_capacity: 1,
+            max_event_bytes: UNBOUNDED_CDP_BYTES,
+            max_websocket_bytes: UNBOUNDED_CDP_BYTES,
+            ..ConnectionConfig::default()
+        },
+    )
+    .with_reclaiming_event_fanout(1)
+    .unwrap();
+    let resources = production_resources(&profile);
+    let connection = test_production_connection(&profile, &resources);
+    let mut receiver = connection.subscribe_composable_events().unwrap();
+    let payload = "x".repeat(5 * 1024 * 1024);
+    let input = serde_json::json!({
+        "method": "Test.large",
+        "sessionId": "exact",
+        "params": {"payload": payload}
+    });
+
+    // Act
+    read(&connection, std::iter::once(message(input))).await;
+    let event = receiver.try_recv().unwrap();
+
+    // Assert
+    assert_eq!(event.method, "Test.large");
+    assert_eq!(event.session_id.as_deref(), Some("exact"));
+    assert_eq!(
+        event.params["payload"].as_str().unwrap().len(),
+        5 * 1024 * 1024
+    );
+    let retained = resources.metrics().unwrap();
+    assert_eq!(retained.class(ResourceClass::EventItem).current, 1);
+    assert_eq!(retained.class(ResourceClass::EventBytes).current, 0);
+    drop(event);
+    assert_eq!(
+        resources
+            .metrics()
+            .unwrap()
+            .class(ResourceClass::EventItem)
+            .current,
+        0
+    );
+}
+
+#[tokio::test]
 async fn selected_events_retain_their_original_payload_session_and_lease() {
     // Arrange
     let profile = profile(true);

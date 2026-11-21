@@ -145,11 +145,11 @@ pub struct PathServices<'a, F, M> {
 pub struct PreparedPaths<R> {
     entries: Vec<Resolved>,
     plan: UploadPlan,
-    ledger: ResourceLedger,
+    ledger: Option<ResourceLedger>,
     scope: ResourceScope,
     limits: FileInputLimits,
     reader: std::marker::PhantomData<fn() -> R>,
-    _lease: ResourceLease,
+    _lease: Option<ResourceLease>,
 }
 pub enum PreparedInput<R> {
     Payloads(PreparedPayloads),
@@ -164,6 +164,33 @@ impl<R: Read> PreparedPaths<R> {
     }
     pub fn prepare(
         ledger: &ResourceLedger,
+        scope: ResourceScope,
+        limits: FileInputLimits,
+        paths: &[&str],
+        location: BrowserLocation,
+        services: PathServices<'_, impl FileSystem<Reader = R>, impl MimeLookup>,
+    ) -> Result<Self, FsError> {
+        Self::prepare_impl(Some(ledger), scope, limits, paths, location, services)
+    }
+
+    pub fn prepare_allocator_backed(
+        limits: FileInputLimits,
+        paths: &[&str],
+        location: BrowserLocation,
+        services: PathServices<'_, impl FileSystem<Reader = R>, impl MimeLookup>,
+    ) -> Result<Self, FsError> {
+        Self::prepare_impl(
+            None,
+            ResourceScope::Connection,
+            limits,
+            paths,
+            location,
+            services,
+        )
+    }
+
+    fn prepare_impl(
+        ledger: Option<&ResourceLedger>,
         scope: ResourceScope,
         limits: FileInputLimits,
         paths: &[&str],
@@ -214,13 +241,16 @@ impl<R: Read> PreparedPaths<R> {
             .and_then(|n| n.checked_add(1))
             .ok_or(SourceError::SizeOverflow)?;
         let lease = ledger
-            .reserve_many(
-                scope,
-                &[
-                    ResourceRequest::new(ResourceClass::LiveObject, handles),
-                    ResourceRequest::new(ResourceClass::BackendStateBytes, bytes),
-                ],
-            )
+            .map(|ledger| {
+                ledger.reserve_many(
+                    scope,
+                    &[
+                        ResourceRequest::new(ResourceClass::LiveObject, handles),
+                        ResourceRequest::new(ResourceClass::BackendStateBytes, bytes),
+                    ],
+                )
+            })
+            .transpose()
             .map_err(SourceError::Budget)?;
         let mut entries = Vec::new();
         entries
@@ -283,7 +313,7 @@ impl<R: Read> PreparedPaths<R> {
         Ok(Self {
             entries,
             plan,
-            ledger: ledger.clone(),
+            ledger: ledger.cloned(),
             scope,
             limits,
             reader: std::marker::PhantomData,
@@ -328,8 +358,11 @@ impl<R: Read> PreparedPaths<R> {
                 },
             });
         }
-        let mut payloads =
-            PreparedPayloads::materialize(&self.ledger, self.scope, self.limits, &mut sources)?;
+        let mut payloads = if let Some(ledger) = &self.ledger {
+            PreparedPayloads::materialize(ledger, self.scope, self.limits, &mut sources)?
+        } else {
+            PreparedPayloads::materialize_allocator_backed(self.limits, &mut sources)?
+        };
         // Upstream observes path mtime after reading, not the initial size stat.
         for (index, entry) in self.entries.iter().enumerate() {
             payloads

@@ -75,18 +75,12 @@ function verifyDefaultArguments(browserName, options, getNative) {
     if (reason) throw browserError(reason);
     return;
   }
-  const profileArg = browserName === 'firefox' ? '--profile' : '--user-data-dir';
-  if (args.some(arg => typeof arg === 'string' &&
-      (browserName === 'firefox'
-        ? arg.startsWith('-profile') || arg.startsWith('--profile')
-        : arg.startsWith('--user-data-dir')))) {
-    throw browserError(`Pass userDataDir parameter to 'browserType.launchPersistentContext(userDataDir, options)' instead of specifying '${profileArg}' argument`);
+  if (args.some(arg => typeof arg === 'string' && arg.startsWith('--user-data-dir'))) {
+    throw browserError("Pass userDataDir parameter to 'browserType.launchPersistentContext(userDataDir, options)' instead of specifying '--user-data-dir' argument");
   }
-  if (browserName === 'chromium' && args.some(arg => typeof arg === 'string' && arg.startsWith('--remote-debugging-pipe')))
+  if (args.some(arg => typeof arg === 'string' && arg.startsWith('--remote-debugging-pipe')))
     throw browserError('Playwright manages remote debugging connection itself.');
-  const rejectsPageArgument = browserName !== 'firefox'
-    || (typeof channel === 'string' && channel.startsWith('moz-'));
-  if (rejectsPageArgument && args.some(arg => typeof arg === 'string' && !arg.startsWith('-')))
+  if (args.some(arg => typeof arg === 'string' && !arg.startsWith('-')))
     throw browserError('Arguments can not specify page to be opened');
 }
 

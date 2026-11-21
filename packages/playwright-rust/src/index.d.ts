@@ -5,6 +5,17 @@ export interface ConnectOverCDPOptions {
   /** Requires the opt-in cdp-handshake-headers native profile. */
   headers?: Record<string, string>;
 }
+export interface Geolocation {
+  longitude: number;
+  latitude: number;
+  accuracy?: number;
+}
+export interface HttpCredentials {
+  username: string;
+  password: string;
+  origin?: string;
+  send?: 'unauthorized' | 'always';
+}
 /** Opt-in Playwright Server connection options. Legacy diagnostic profiles always reject. */
 export interface ConnectServerErrorOptions {
   /** The successful-session profile currently caps timeout 0 at 120000 ms. */
@@ -20,6 +31,41 @@ export interface ChromiumLaunchOptions {
   handleSIGINT?: false;
   /** Requires the opt-in playwright-trace native profile; recording is not installed yet. */
   tracesDir?: string;
+}
+/** Owned persistent Chromium profile options currently composed by the Node adapter. */
+export interface ChromiumPersistentContextOptions {
+  executablePath?: string;
+  headless?: boolean;
+  timeout?: number;
+  baseURL?: string;
+  locale?: string;
+  timezoneId?: string;
+  geolocation?: Geolocation;
+  permissions?: string[];
+  httpCredentials?: HttpCredentials;
+  offline?: boolean;
+  bypassCSP?: boolean;
+  javaScriptEnabled?: boolean;
+  ignoreHTTPSErrors?: boolean;
+  /** Requires the independently selectable video-recording native profile. */
+  recordVideo?: {
+    dir: string;
+    size?: { width: number; height: number };
+  };
+  /** @deprecated Use recordVideo.dir. */
+  videosPath?: string;
+  /** @deprecated Use recordVideo.size. Requires videosPath. */
+  videoSize?: { width: number; height: number };
+  /** Accepted for Playwright-compatible pre-launch validation. */
+  port?: unknown;
+  /** Accepted for Playwright-compatible pre-launch validation. */
+  args?: string[];
+  /** Accepted for Playwright-compatible pre-launch validation. */
+  ignoreDefaultArgs?: boolean | string[];
+  /** Only the Chromium channel is currently launchable. */
+  channel?: string;
+  /** Accepted for Playwright-compatible pre-launch validation. */
+  clientCertificates?: APIRequestClientCertificate[];
 }
 export interface DeviceDescriptor {
   userAgent: string;
@@ -39,12 +85,34 @@ export interface BrowserNewContextOptions {
   colorScheme?: 'light';
   hasTouch?: boolean;
   ignoreHTTPSErrors?: false;
-  isMobile?: false;
+  isMobile?: boolean;
   javaScriptEnabled?: true;
-  locale?: 'en-US';
+  locale?: string;
+  geolocation?: Geolocation;
+  permissions?: string[];
+  httpCredentials?: HttpCredentials;
   offline?: boolean;
   serviceWorkers?: 'allow';
-  viewport?: { width: 1280; height: 720 };
+  userAgent?: string;
+  viewport?: { width: number; height: number } | null;
+  screen?: { width: number; height: number };
+  deviceScaleFactor?: number;
+  recordHar?: {
+    path: string;
+    omitContent?: boolean;
+    content?: 'omit' | 'embed' | 'attach';
+    mode?: 'full' | 'minimal';
+    urlFilter?: string | RegExp;
+  };
+  /** Requires the independently selectable video-recording native profile. */
+  recordVideo?: {
+    dir: string;
+    size?: { width: number; height: number };
+  };
+  /** @deprecated Use recordVideo.dir. */
+  videosPath?: string;
+  /** @deprecated Use recordVideo.size. Requires videosPath. */
+  videoSize?: { width: number; height: number };
 }
 export interface EmulateMediaOptions {
   media?: 'screen' | 'print' | null;
@@ -52,6 +120,29 @@ export interface EmulateMediaOptions {
   reducedMotion?: 'reduce' | 'no-preference' | null;
   forcedColors?: 'active' | 'none' | null;
   contrast?: 'more' | 'no-preference' | null;
+}
+/** Chromium-only PDF options installed by the opt-in page-pdf native profile. */
+export interface PagePdfOptions {
+  displayHeaderFooter?: boolean;
+  footerTemplate?: string;
+  format?: string;
+  headerTemplate?: string;
+  height?: string | number;
+  landscape?: boolean;
+  margin?: {
+    top?: string | number;
+    right?: string | number;
+    bottom?: string | number;
+    left?: string | number;
+  };
+  outline?: boolean;
+  pageRanges?: string;
+  path?: string;
+  preferCSSPageSize?: boolean;
+  printBackground?: boolean;
+  scale?: number;
+  tagged?: boolean;
+  width?: string | number;
 }
 export type URLMatch = string | RegExp | ((url: URL) => boolean);
 export type RequestMatch = string | RegExp | ((request: Request) => boolean | Promise<boolean>);
@@ -123,24 +214,18 @@ export interface SessionMetrics {
   activeOperations: number;
   cleanupInFlight: number;
 }
-export interface BrowserType<Name extends 'chromium' | 'firefox' | 'webkit' = 'chromium' | 'firefox' | 'webkit'> {
-  name(): Name;
+export interface BrowserType {
+  name(): 'chromium';
   /** Expected pinned browser path; requires the opt-in browser-registry native profile and does not prove installation. */
   executablePath(): string;
   connectOverCDP(endpointURL: string, options?: ConnectOverCDPOptions): Promise<Browser>;
   connectOverCDP(options: ConnectOverCDPOptions & ({ endpointURL: string; wsEndpoint?: never } | { wsEndpoint: string; endpointURL?: never })): Promise<Browser>;
   /** Requires the opt-in owned-launch native profile and an explicit Chromium executable. */
-  launch(options: Name extends 'chromium' ? ChromiumLaunchOptions : never): Promise<Browser>;
+  launch(options: ChromiumLaunchOptions): Promise<Browser>;
   /** Only pre-launch channel validation is available; valid launches reject as unsupported. */
   launchServer(options?: { channel?: string }): Promise<never>;
-  /** Only invalid-option preflight is available; valid launches reject as unsupported. */
-  launchPersistentContext(userDataDir: string, options?: {
-    port?: unknown;
-    args?: string[];
-    ignoreDefaultArgs?: boolean | string[];
-    channel?: string;
-    clientCertificates?: APIRequestClientCertificate[];
-  }): Promise<never>;
+  /** Requires the opt-in owned-launch native profile and an explicit or registry-resolved Chromium executable. */
+  launchPersistentContext(userDataDir: string, options?: ChromiumPersistentContextOptions): Promise<BrowserContext>;
   /** Requires the opt-in successful-session profile. Supports connection lifecycle, empty-option newContext, Context.newPage, and explicit empty-option Context.close with a current addon; most Context/Page methods remain unsupported. */
   connect(wsEndpoint: string, options?: ConnectServerErrorOptions): Promise<Browser>;
   connect(options: ConnectServerErrorOptions & { wsEndpoint: string }): Promise<Browser>;
@@ -160,7 +245,7 @@ export interface Browser extends EventEmitter {
   contexts(): BrowserContext[];
   /** Requires the opt-in browser-cdp-session native profile. */
   newBrowserCDPSession(): Promise<CDPSession>;
-  close(): Promise<void>;
+  close(options?: { reason?: string }): Promise<void>;
   playwrightRustMetrics(): SessionMetrics;
   playwrightRustMetadataMetrics(): { entries: number; urlBytes: number; nameBytes?: number; activeFrames: number; pendingPublications: number };
   playwrightRustFrameTreeMetrics(): { states: number; revisions: number; bytes: number };
@@ -171,25 +256,58 @@ export interface Browser extends EventEmitter {
   playwrightRustLocatorMetrics(): { recipes: number; bytes: number };
   newContext(options?: BrowserNewContextOptions): Promise<BrowserContext>;
   /** The opt-in Playwright Server session supports only empty options and closes its implicit Context with this Page. */
-  newPage(options?: Pick<BrowserNewContextOptions, 'baseURL'> & { acceptDownloads?: false }): Promise<Page>;
+  newPage(options?: Pick<BrowserNewContextOptions, 'baseURL' | 'recordVideo'> & { acceptDownloads?: false }): Promise<Page>;
 }
 export interface BrowserContext extends EventEmitter {
   readonly request: APIRequestContext;
+  readonly tracing: Tracing;
+  cookies(urls?: string | ReadonlyArray<string>): Promise<BrowserContextCookie[]>;
   addCookies(cookies: ReadonlyArray<BrowserContextCookieInput>): Promise<void>;
+  clearCookies(options?: BrowserContextClearCookieOptions): Promise<void>;
+  /** Requires the opt-in context-storage-state native profile; path export is not yet supported. */
+  storageState(options?: { indexedDB?: boolean }): Promise<APIRequestStorageState>;
   setDefaultTimeout(timeout: number | undefined): void;
   setDefaultNavigationTimeout(timeout: number | undefined): void;
   setExtraHTTPHeaders(headers: { [key: string]: string }): Promise<void>;
   setOffline(offline: boolean): Promise<void>;
+  /** @deprecated Create a new context with httpCredentials instead. */
+  setHTTPCredentials(httpCredentials: Pick<HttpCredentials, 'username' | 'password'> | null): Promise<void>;
+  setGeolocation(geolocation: Geolocation | null): Promise<void>;
+  grantPermissions(permissions: ReadonlyArray<string>, options?: { origin?: string }): Promise<void>;
+  clearPermissions(): Promise<void>;
   addInitScript(script: string | (() => unknown) | { path?: string; content?: string }): Promise<void>;
+  exposeBinding(name: string, callback: (source: BindingSource, ...args: unknown[]) => unknown | Promise<unknown>, options?: { handle?: boolean }): Promise<void>;
+  exposeFunction(name: string, callback: (...args: unknown[]) => unknown | Promise<unknown>): Promise<void>;
+  /** RegExp matchers require the opt-in route-regexp native profile. */
+  route(url: string | RegExp, handler: (route: Route, request: Request) => unknown | Promise<unknown>, options?: { times?: number }): Promise<void>;
+  /** Replay requires har-replay; update requires har-recording; RegExp filters require the corresponding RegExp composition. */
+  routeFromHAR(har: string, options?: RouteFromHAROptions): Promise<void>;
+  /** Requires the opt-in page-unroute native profile; RegExp matchers also require route-regexp. */
+  unroute(url: string | RegExp, handler?: (route: Route, request: Request) => unknown | Promise<unknown>): Promise<void>;
+  /** Requires the opt-in page-unroute native profile. */
+  unrouteAll(options?: { behavior?: 'wait' | 'ignoreErrors' | 'default' }): Promise<void>;
   browser(): Browser;
   on(event: 'dialog', listener: (dialog: Dialog) => void): this;
+  on(event: 'serviceworker', listener: (worker: Worker) => void): this;
+  on(event: 'request' | 'requestfinished' | 'requestfailed', listener: (request: Request) => void): this;
+  on(event: 'response', listener: (response: Response) => void): this;
   waitForEvent(event: 'dialog', optionsOrPredicate?: { predicate?: (dialog: Dialog) => boolean | Promise<boolean>; timeout?: number } | ((dialog: Dialog) => boolean | Promise<boolean>)): Promise<Dialog>;
   waitForEvent(event: string, optionsOrPredicate?: { predicate?: (value: unknown) => boolean | Promise<boolean>; timeout?: number } | ((value: unknown) => boolean | Promise<boolean>)): Promise<unknown>;
   pages(): Page[];
+  serviceWorkers(): Worker[];
   newPage(): Promise<Page>;
   /** Opt-in Chromium CDP for Page/main Frame, including idle events; OOPIF child sessions are unsupported. */
   newCDPSession(page: Page | Frame): Promise<CDPSession>;
   close(options?: { reason?: string }): Promise<void>;
+}
+export interface Tracing {
+  /** Capture producers are independently composable; omit path from stop to discard. */
+  start(options?: { screenshots?: boolean; snapshots?: boolean; sources?: boolean; name?: string; title?: string }): Promise<void>;
+  stop(options?: { path?: string }): Promise<void>;
+  startChunk(options?: { title?: string }): Promise<void>;
+  stopChunk(options?: { path?: string }): Promise<void>;
+  group(name: string): Promise<void>;
+  groupEnd(): Promise<void>;
 }
 export interface CDPSession extends EventEmitter {
   send(method: string, params?: Record<string, unknown>): Promise<Record<string, unknown>>;
@@ -216,6 +334,22 @@ export interface BrowserContextCookieInput {
   sameSite?: 'Strict' | 'Lax' | 'None';
   partitionKey?: string;
 }
+export interface BrowserContextCookie {
+  name: string;
+  value: string;
+  domain: string;
+  path: string;
+  expires: number;
+  httpOnly: boolean;
+  secure: boolean;
+  sameSite: 'Strict' | 'Lax' | 'None';
+  partitionKey?: string;
+}
+export interface BrowserContextClearCookieOptions {
+  name?: string | RegExp;
+  domain?: string | RegExp;
+  path?: string | RegExp;
+}
 export interface Page extends EventEmitter, SemanticLocators {
   readonly request: APIRequestContext;
   setDefaultTimeout(timeout: number): void;
@@ -231,6 +365,7 @@ export interface Page extends EventEmitter, SemanticLocators {
   readonly mouse: Mouse;
   readonly touchscreen: Touchscreen;
   context(): BrowserContext;
+  video(): Video | null;
   opener(): Promise<Page | null>;
   waitForEvent(event: 'dialog', optionsOrPredicate?: { predicate?: (dialog: Dialog) => boolean | Promise<boolean>; timeout?: number } | ((dialog: Dialog) => boolean | Promise<boolean>)): Promise<Dialog>;
   waitForEvent(event: string, optionsOrPredicate?: { predicate?: (value: unknown) => boolean | Promise<boolean>; timeout?: number } | ((value: unknown) => boolean | Promise<boolean>)): Promise<unknown>;
@@ -243,8 +378,12 @@ export interface Page extends EventEmitter, SemanticLocators {
   exposeFunction(name: string, callback: (...args: unknown[]) => unknown | Promise<unknown>): Promise<void>;
   /** RegExp matchers require the opt-in route-regexp native profile. */
   route(url: string | RegExp, handler: (route: Route, request: Request) => unknown | Promise<unknown>, options?: { times?: number }): Promise<void>;
+  /** Replay requires har-replay; update requires har-recording; RegExp filters require the corresponding RegExp composition. */
+  routeFromHAR(har: string, options?: RouteFromHAROptions): Promise<void>;
   /** Requires the opt-in page-unroute native profile; RegExp matchers also require route-regexp. */
   unroute(url: string | RegExp, handler?: (route: Route, request: Request) => unknown | Promise<unknown>): Promise<void>;
+  /** Requires the opt-in page-unroute native profile. */
+  unrouteAll(options?: { behavior?: 'wait' | 'ignoreErrors' | 'default' }): Promise<void>;
   addInitScript(script: string | (() => unknown) | { path?: string; content?: string }): Promise<void>;
   addScriptTag(options?: { url?: string; path?: string; content?: string; type?: string }): Promise<ElementHandle<HTMLScriptElement>>;
   $(selector: string): Promise<ElementHandle<HTMLElement | SVGElement> | null>;
@@ -274,6 +413,7 @@ export interface Page extends EventEmitter, SemanticLocators {
   frame(options: { name?: string; url?: string | RegExp | ((url: URL) => boolean) }): Frame | null;
   frames(): Frame[];
   screenshot(options?: ScreenshotOptions): Promise<Buffer>;
+  pdf(options?: PagePdfOptions): Promise<Buffer>;
   setViewportSize(viewportSize: { width: number; height: number }): Promise<void>;
   goto(url: string, options?: { waitUntil?: 'commit' | 'domcontentloaded' | 'load' | 'networkidle'; timeout?: number; referer?: string }): Promise<Response | null>;
   reload(options?: { waitUntil?: 'commit' | 'domcontentloaded' | 'load' | 'networkidle'; timeout?: number }): Promise<Response | null>;
@@ -290,6 +430,7 @@ export interface Page extends EventEmitter, SemanticLocators {
   focus(selector: string, options?: LocatorReadOptions): Promise<void>;
   click(selector: string, options?: PageClickOptions): Promise<void>;
   dblclick(selector: string, options?: PageDblclickOptions): Promise<void>;
+  hover(selector: string, options?: PageHoverOptions): Promise<void>;
   tap(selector: string, options?: LocatorTapOptions): Promise<void>;
   check(selector: string, options?: PageCheckedOptions): Promise<void>;
   uncheck(selector: string, options?: PageCheckedOptions): Promise<void>;
@@ -309,6 +450,12 @@ export interface Page extends EventEmitter, SemanticLocators {
   locator(selector: string, options?: LocatorFilterOptions): Locator;
   frameLocator(selector: string): FrameLocator;
 }
+
+export interface Video {
+  delete(): Promise<void>;
+  path(): Promise<string>;
+  saveAs(path: string): Promise<void>;
+}
 export interface BindingSource { context: BrowserContext; page: Page; frame: Frame; }
 export interface Request {
   url(): string;
@@ -321,11 +468,18 @@ export interface Request {
   postDataBuffer(): Buffer | null;
   postDataJSON(): unknown;
   isNavigationRequest(): boolean;
-  frame(): Frame | null;
+  frame(): Frame;
+  serviceWorker(): Worker | null;
   response(): Promise<Response | null>;
   failure(): { errorText: string } | null;
   redirectedFrom(): Request | null;
   redirectedTo(): Request | null;
+}
+export interface Worker extends EventEmitter {
+  url(): string;
+  evaluate<Result, Arg>(pageFunction: PageFunction<Arg, Result>, arg: Arg): Promise<Awaited<Result>>;
+  evaluate<Result>(pageFunction: string | (() => Result | Promise<Result>)): Promise<Awaited<Result>>;
+  on(event: 'close', listener: (worker: Worker) => void): this;
 }
 export interface Route {
   request(): Request;
@@ -337,8 +491,20 @@ export interface Route {
 }
 /** Requires the opt-in route-header-url-overrides native profile. */
 export interface RouteContinueOptions { headers?: Record<string, string>; }
+export interface RouteFromHAROptions {
+  url?: string | RegExp;
+  notFound?: 'abort' | 'fallback';
+  update?: boolean;
+  updateContent?: 'attach' | 'embed';
+  updateMode?: 'minimal' | 'full';
+}
 /** Requires the opt-in route-header-url-overrides native profile. */
-export interface RouteFallbackOptions { url?: string; }
+export interface RouteFallbackOptions {
+  headers?: Record<string, string>;
+  method?: string;
+  postData?: string | Buffer | Record<string, unknown> | unknown[] | number | boolean | null;
+  url?: string;
+}
 export interface RouteFulfillOptions {
   status?: number;
   headers?: Record<string, string>;
@@ -423,6 +589,7 @@ export interface Frame extends SemanticLocators {
   focus(selector: string, options?: LocatorReadOptions): Promise<void>;
   click(selector: string, options?: PageClickOptions): Promise<void>;
   dblclick(selector: string, options?: PageDblclickOptions): Promise<void>;
+  hover(selector: string, options?: PageHoverOptions): Promise<void>;
   tap(selector: string, options?: LocatorTapOptions): Promise<void>;
   fill(selector: string, value: string, options?: LocatorFillOptions): Promise<void>;
   /** ElementHandle input requires a handles-capable native profile and the same session and select. */
@@ -485,6 +652,7 @@ export interface LocatorClickOptions extends LocatorPointerOptions {
 }
 export interface PageClickOptions extends Omit<LocatorClickOptions, 'steps'> { strict?: boolean; }
 export interface PageDblclickOptions extends Omit<LocatorClickOptions, 'clickCount' | 'steps'> { strict?: boolean; }
+export interface PageHoverOptions extends LocatorPointerOptions { strict?: boolean; }
 export interface LocatorTapOptions extends LocatorPointerOptions {}
 export interface LocatorFillOptions extends LocatorReadOptions { force?: boolean; noWaitAfter?: boolean; }
 export interface LocatorPressOptions extends LocatorReadOptions { delay?: number; noWaitAfter?: boolean; }
@@ -596,6 +764,7 @@ export interface Response {
   headerValue(name: string): Promise<string | null>;
   request(): Request;
   frame(): Frame;
+  fromServiceWorker(): boolean;
   body(): Promise<Buffer>;
   text(): Promise<string>;
   json(): Promise<unknown>;
@@ -609,12 +778,7 @@ export interface APIRequestNewContextOptions {
   failOnStatusCode?: boolean;
   ignoreHTTPSErrors?: boolean;
   maxRedirects?: number;
-  httpCredentials?: {
-    username: string;
-    password: string;
-    origin?: string;
-    send?: 'unauthorized' | 'always';
-  };
+  httpCredentials?: HttpCredentials;
   storageState?: string | APIRequestStorageState;
   clientCertificates?: APIRequestClientCertificate[];
   proxy?: {
@@ -695,11 +859,9 @@ export interface APIRequest {
 declare class TimeoutError extends Error {}
 declare class UnsupportedOperationError extends Error { code: 'PLAYWRIGHT_RUST_UNSUPPORTED'; }
 export const errors: { readonly TimeoutError: typeof TimeoutError; readonly UnsupportedOperationError: typeof UnsupportedOperationError };
-export const chromium: BrowserType<'chromium'>;
-export const firefox: BrowserType<'firefox'>;
-export const webkit: BrowserType<'webkit'>;
+export const chromium: BrowserType;
 export const request: APIRequest;
 export const selectors: Selectors;
 export const devices: { [name: string]: DeviceDescriptor };
-export type NativeProfile = 'frame-events' | 'official-conformance-page-frame-events' | 'official-conformance-page-frame-hierarchy' | 'frame-element' | 'official-conformance-page-frame-element' | 'playwright-server-connect-session' | 'playwright-server-connect-close-error' | 'playwright-server-connect-ws-error' | 'playwright-server-connect-headers' | 'default' | 'cdp-session' | 'browser-cdp-session' | 'official-conformance-page-cdp-session' | 'browser-registry' | 'owned-launch' | 'playwright-trace' | 'handles' | 'element-handle-dom' | 'element-handle-select-option-value' | 'element-handle-scroll-into-view' | 'retained-file-input' | 'retained-file-input-combined' | 'retained-target-marking' | 'retained-target-marking-combined' | 'retained-target-prevalidation' | 'retained-target-prevalidation-combined' | 'retained-input-instrumentation' | 'retained-input-instrumentation-combined' | 'retained-call-argument-serialization' | 'retained-call-argument-serialization-combined' | 'retained-serialized-payload-import' | 'retained-serialized-payload-import-combined' | 'retained-serialized-payload-mutation' | 'retained-serialized-payload-mutation-combined' | 'file-input' | 'file-input-concurrent-close-drag-frame-extra-headers' | 'drag-runtime' | 'frame-navigation' | 'frame-navigation-burst-20' | 'response-request' | 'route-header-url-overrides' | 'route-fulfill-cors' | 'route-regexp' | 'route-request-history' | 'context-cookies' | 'route-large-post-data' | 'page-unroute' | 'request-events' | 'request-post-data-json' | 'history-navigation' | 'drag-frame-navigation' | 'extra-headers' | 'drag-extra-headers' | 'frame-extra-headers' | 'concurrent-close' | 'concurrent-close-drag-frame-extra-headers' | 'set-content' | 'page-events' | 'set-content-page-events' | 'set-content-page-events-console' | 'set-content-page-events-console-bindings' | 'device-emulation' | 'touchscreen-input' | 'selector-registration' | 'bypass-csp' | 'api-request' | 'api-request-http-proxy' | 'api-request-socks5-proxy' | 'api-request-socks5-proxy-bypass' | 'api-request-client-certificates' | 'api-request-client-certificates-http-proxy' | 'api-request-client-certificates-socks5-proxy' | 'context-api-request-proxy' | 'init-scripts' | 'official-conformance-page-bindings' | 'official-conformance-page-check' | 'official-conformance-page-check-light-v1' | 'official-conformance-page-dispatch-event' | 'official-conformance-page-goto-burst-20' | 'official-conformance-page-goto-frame-detach' | 'official-conformance-page-route-header-url' | 'official-conformance-page-route-header-url-unroute' | 'official-conformance-page-route-header-url-unroute-cors' | 'official-conformance-page-route-header-url-unroute-cors-regexp' | 'official-conformance-page-route-header-url-unroute-cors-regexp-history' | 'official-conformance-page-route-header-url-unroute-cors-regexp-history-cookies' | 'official-conformance-page-route-header-url-unroute-cors-regexp-history-cookies-large-post-data' | 'fill-navigation-commit' | 'official-conformance-page-fill-navigation-commit' | 'select-option-navigation-commit' | 'select-option-timeout-progress' | 'official-conformance-page-select-option-timeout-progress' | 'official-conformance-page-select-option-navigation-commit' | 'react-selectors' | 'official-conformance-page-react-selectors' | 'official-conformance-page-retained-scroll' | 'official-conformance-page-retained-wait' | 'official-conformance-page-retained-select-option-value' | 'cdp-handshake-headers' | 'cdp-default-user-agent' | 'official-conformance-page-cdp-handshake-headers' | 'official-conformance-page-cdp-default-user-agent';
+export type NativeProfile = 'official-conformance-page-har-replay' | 'har-replay-regexp' | 'har-replay' | 'context-bindings' | 'persistent-context-policies' | 'persistent-context-http-credentials' | 'context-http-credentials' | 'persistent-context-permissions' | 'context-permissions' | 'persistent-context-geolocation' | 'context-geolocation' | 'persistent-context-bypass-csp' | 'persistent-context-javascript-disabled' | 'persistent-context-offline' | 'persistent-context-timezone' | 'persistent-context-locale' | 'context-timezone' | 'context-locale' | 'api-request-tracing' | 'context-storage-state' | 'context-tracing-network' | 'context-tracing-console' | 'context-tracing-actions' | 'context-tracing-chunks' | 'official-conformance-page-context-tracing' | 'context-tracing-screenshots' | 'official-conformance-page-video-recording' | 'video-recording' | 'owned-launch-video-recording' | 'har-recording' | 'official-conformance-page-har-recording' | 'service-worker-routes' | 'worker-network-events' | 'page-pdf' | 'frame-events' | 'official-conformance-page-frame-events' | 'official-conformance-page-frame-hierarchy' | 'frame-element' | 'official-conformance-page-frame-element' | 'playwright-server-connect-session' | 'playwright-server-connect-close-error' | 'playwright-server-connect-ws-error' | 'playwright-server-connect-headers' | 'default' | 'cdp-session' | 'browser-cdp-session' | 'official-conformance-page-cdp-session' | 'browser-registry' | 'owned-launch' | 'playwright-trace' | 'handles' | 'element-handle-dom' | 'element-handle-select-option-value' | 'element-handle-scroll-into-view' | 'retained-file-input' | 'retained-file-input-combined' | 'retained-target-marking' | 'retained-target-marking-combined' | 'retained-target-prevalidation' | 'retained-target-prevalidation-combined' | 'retained-input-instrumentation' | 'retained-input-instrumentation-combined' | 'retained-call-argument-serialization' | 'retained-call-argument-serialization-combined' | 'retained-serialized-payload-import' | 'retained-serialized-payload-import-combined' | 'retained-serialized-payload-mutation' | 'retained-serialized-payload-mutation-combined' | 'file-input' | 'file-input-concurrent-close-drag-frame-extra-headers' | 'drag-runtime' | 'frame-navigation' | 'frame-navigation-burst-20' | 'response-request' | 'route-header-url-overrides' | 'route-fulfill-cors' | 'route-regexp' | 'route-request-history' | 'context-cookies' | 'route-large-post-data' | 'page-unroute' | 'request-events' | 'request-post-data-json' | 'history-navigation' | 'drag-frame-navigation' | 'extra-headers' | 'drag-extra-headers' | 'frame-extra-headers' | 'concurrent-close' | 'concurrent-close-drag-frame-extra-headers' | 'set-content' | 'page-events' | 'set-content-page-events' | 'set-content-page-events-console' | 'set-content-page-events-console-bindings' | 'device-emulation' | 'touchscreen-input' | 'selector-registration' | 'bypass-csp' | 'api-request' | 'api-request-http-proxy' | 'api-request-socks5-proxy' | 'api-request-socks5-proxy-bypass' | 'api-request-client-certificates' | 'api-request-client-certificates-http-proxy' | 'api-request-client-certificates-socks5-proxy' | 'context-api-request-proxy' | 'init-scripts' | 'official-conformance-page-bindings' | 'official-conformance-page-check' | 'official-conformance-page-check-light-v1' | 'official-conformance-page-dispatch-event' | 'official-conformance-page-goto-burst-20' | 'official-conformance-page-goto-frame-detach' | 'official-conformance-page-route-header-url' | 'official-conformance-page-route-header-url-unroute' | 'official-conformance-page-route-header-url-unroute-cors' | 'official-conformance-page-route-header-url-unroute-cors-regexp' | 'official-conformance-page-route-header-url-unroute-cors-regexp-history' | 'official-conformance-page-route-header-url-unroute-cors-regexp-history-cookies' | 'official-conformance-page-route-header-url-unroute-cors-regexp-history-cookies-large-post-data' | 'fill-navigation-commit' | 'official-conformance-page-fill-navigation-commit' | 'select-option-navigation-commit' | 'select-option-timeout-progress' | 'official-conformance-page-select-option-timeout-progress' | 'official-conformance-page-select-option-navigation-commit' | 'react-selectors' | 'official-conformance-page-react-selectors' | 'official-conformance-page-retained-scroll' | 'official-conformance-page-retained-wait' | 'official-conformance-page-retained-select-option-value' | 'cdp-handshake-headers' | 'cdp-default-user-agent' | 'official-conformance-page-cdp-handshake-headers' | 'official-conformance-page-cdp-default-user-agent';
 export const compatibility: Readonly<{ oracle: string; profile: string; nativeProfile: NativeProfile; browserOwnership: 'external' | 'external-and-owned'; apiCoverage: 'experimental-subset' }>;

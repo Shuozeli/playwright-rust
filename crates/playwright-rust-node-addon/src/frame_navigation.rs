@@ -127,6 +127,9 @@ impl ToNapiValue for NavigationOutput {
                 request: response_request,
                 #[cfg(not(feature = "response-request"))]
                 request: None,
+                context_id: None,
+                service_worker_id: None,
+                from_service_worker: false,
                 url: response.url.clone(),
                 status: response.status,
                 status_text: response.status_text.clone(),

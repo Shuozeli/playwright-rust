@@ -175,7 +175,9 @@ impl ChromiumFrameWorldAccess {
     /// Atomically selects existing utility routes of this exact Page (including
     /// local children and OOPIFs). Missing worlds are omitted immediately, even
     /// when their main world is missing too. Never creates worlds or waits for
-    /// readiness. `maximum` is 1..=32; overflow fails, never truncates the Page.
+    /// readiness. `maximum` must be nonzero; overflow fails, never truncates the
+    /// Page. Playwright-compatible callers use an allocator-backed accessor and
+    /// `usize::MAX`; constrained embedders may select an explicit finite maximum.
     ///
     /// Reserves one shared 8192-byte snapshot slot per selected world BEFORE
     /// allocating the result vector or cloning native identities. This includes
@@ -186,9 +188,9 @@ impl ChromiumFrameWorldAccess {
         page_id: ObjectId,
         maximum: usize,
     ) -> Result<ChromiumPageUtilityWorldSnapshot> {
-        if !(1..=32).contains(&maximum) {
+        if maximum == 0 {
             return Err(FrameWorldAccessError::Setup(
-                "utility snapshot maximum must be 1..=32",
+                "utility snapshot maximum must be nonzero",
             ));
         }
         let routes = self
@@ -223,20 +225,19 @@ impl ChromiumFrameWorldAccess {
         for (_, world) in selected() {
             validate_utility_world(world)?;
         }
-        let mut permits: [Option<Permit>; 32] = std::array::from_fn(|_| None);
-        for permit in &mut permits[..count] {
-            *permit = Some(self.admit()?);
+        let mut permits = Vec::new();
+        permits.try_reserve(count).map_err(|_| {
+            FrameWorldAccessError::Setup("utility snapshot permit allocation failed")
+        })?;
+        for _ in 0..count {
+            permits.push(self.admit()?);
         }
-        let mut worlds = Vec::with_capacity(count);
-        for ((frame, world), permit) in selected().zip(&mut permits[..count]) {
-            worlds.push(self.retain_utility_world(
-                &routes,
-                page,
-                page_id,
-                frame,
-                world,
-                permit.take().expect("pre-admitted utility world"),
-            )?);
+        let mut worlds = Vec::new();
+        worlds.try_reserve(count).map_err(|_| {
+            FrameWorldAccessError::Setup("utility snapshot world allocation failed")
+        })?;
+        for ((frame, world), permit) in selected().zip(permits) {
+            worlds.push(self.retain_utility_world(&routes, page, page_id, frame, world, permit)?);
         }
         Ok(ChromiumPageUtilityWorldSnapshot { worlds })
     }

@@ -131,14 +131,10 @@ impl ChromiumKeyboardPage {
         interceptor: Option<Arc<dyn CdpKeyDownInterceptor>>,
     ) -> Result<Arc<Self>, ChromiumKeyboardInstallError> {
         let requirements = Self::route_requirements();
-        // A route lives concurrently with its backend operations. Checking only
-        // the smaller route subtotal could accidentally reuse a backend-only plan.
-        resources.claim(
-            factory
-                .profile()
-                .requirements()
-                .combine_concurrent(requirements),
-        )?;
+        // The factory already owns and claims its backend budget from the
+        // ledger selected at factory construction. A Page route may use an
+        // independent ledger and therefore claims only its own storage here.
+        resources.claim(requirements)?;
         let ledger = resources.claim(requirements)?;
         let route = ledger.reserve(
             ResourceScope::Object(page_id),

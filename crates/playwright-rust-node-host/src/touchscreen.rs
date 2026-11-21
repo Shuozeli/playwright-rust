@@ -1,4 +1,4 @@
-//! Host-owned bounded Touchscreen invocations and independent native retirement.
+//! Host-owned allocator-backed Touchscreen invocations and independent native retirement.
 
 use crate::{HostError, HostSession};
 use playwright_rust_backend_cdp_input::{CdpInputCoordinator, CdpModifiers};
@@ -14,43 +14,33 @@ use playwright_rust_composition_chromium::CdpPageServices;
 use playwright_rust_composition_chromium_touchscreen::ChromiumTouchscreenPage;
 use playwright_rust_core::{
     ObjectId, OperationError, ProductionResourceLedger, ResourceClass, ResourceLease,
-    ResourceLedger, ResourceRequirements, ResourceScope,
+    ResourceRequirements, ResourceScope,
 };
-use std::{
-    num::NonZeroUsize,
-    sync::{
-        Arc, Mutex,
-        atomic::{AtomicUsize, Ordering},
-    },
+use std::sync::{
+    Arc, Mutex,
+    atomic::{AtomicUsize, Ordering},
 };
 use tokio::sync::oneshot;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
-const RETAINED: usize = 8;
 const OPERATION_BYTES: usize = 16 * 1024;
 const STATE_BYTES: u64 = 8 * 1024;
+#[cfg(test)]
 const CALL_BYTES: u64 = 12 * 1024;
 const STATE_SCOPE: ResourceScope = ResourceScope::extension(120, 29);
-const BACKEND_SCOPE: ResourceScope = ResourceScope::extension(120, 30);
 
-fn backend_profile() -> Result<CdpTouchscreenProductionProfile, HostError> {
-    CdpTouchscreenProductionProfile::new(
-        BACKEND_SCOPE,
-        OPERATION_BYTES,
-        NonZeroUsize::new(RETAINED).expect("positive Touchscreen capacity"),
-    )
-    .map_err(HostError::backend)
+fn backend_profile() -> CdpTouchscreenProductionProfile {
+    CdpTouchscreenProductionProfile::new_allocator_backed(OPERATION_BYTES)
 }
 
 fn storage_requirements() -> ResourceRequirements {
-    let bytes = STATE_BYTES + RETAINED as u64 * CALL_BYTES;
     ResourceRequirements::none()
-        .with_class(ResourceClass::BackendStateBytes, bytes, bytes)
-        .with_metadata(1, RETAINED + 1)
+        .with_class(ResourceClass::BackendStateBytes, STATE_BYTES, STATE_BYTES)
+        .with_metadata(1, 1)
 }
 
 pub(crate) fn requirements() -> Result<ResourceRequirements, HostError> {
-    Ok(storage_requirements().combine_concurrent(backend_profile()?.requirements()))
+    Ok(storage_requirements().combine_concurrent(backend_profile().requirements()))
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -78,13 +68,11 @@ struct Shared {
 }
 
 struct CallLease {
-    storage: Option<ResourceLease>,
     shared: Arc<Shared>,
 }
 
 impl Drop for CallLease {
     fn drop(&mut self) {
-        drop(self.storage.take());
         let previous = self.shared.active.fetch_sub(1, Ordering::AcqRel);
         debug_assert!(previous > 0);
     }
@@ -92,7 +80,6 @@ impl Drop for CallLease {
 
 pub(crate) struct Installation {
     factory: CdpTouchscreenServiceFactory,
-    ledger: ResourceLedger,
     shared: Arc<Shared>,
 }
 
@@ -109,11 +96,10 @@ impl Installation {
             .map_err(HostError::backend)?;
         Ok(Self {
             factory: CdpTouchscreenServiceFactory::new_with_production_resources(
-                backend_profile()?,
+                backend_profile(),
                 resources,
             )
             .map_err(HostError::backend)?,
-            ledger,
             shared: Arc::new(Shared {
                 status: Mutex::new(Status::default()),
                 active: AtomicUsize::new(0),
@@ -129,18 +115,17 @@ impl Installation {
             if status.closed {
                 return Err(HostError::TargetClosed);
             }
-            if self.shared.active.load(Ordering::Acquire) >= RETAINED {
-                return Err(HostError::ResourceExhausted(
-                    "Touchscreen retained invocation capacity exceeded".into(),
-                ));
-            }
-            let storage = self
-                .ledger
-                .reserve(STATE_SCOPE, ResourceClass::BackendStateBytes, CALL_BYTES)
-                .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
-            self.shared.active.fetch_add(1, Ordering::AcqRel);
+            self.shared
+                .active
+                .fetch_update(Ordering::AcqRel, Ordering::Acquire, |active| {
+                    active.checked_add(1)
+                })
+                .map_err(|_| {
+                    HostError::ResourceExhausted(
+                        "Touchscreen retained invocation count overflow".into(),
+                    )
+                })?;
             Arc::new(CallLease {
-                storage: Some(storage),
                 shared: self.shared.clone(),
             })
         };
@@ -426,5 +411,30 @@ mod tests {
                     > 2 * playwright_rust_backend_cdp_touchscreen::TOUCHSCREEN_ERROR_MAX_BYTES
             );
         }
+    }
+
+    #[test]
+    fn allocator_backed_invocation_ownership_grows_past_legacy_count() {
+        // Arrange
+        let required = requirements().unwrap();
+        let mut limits =
+            playwright_rust_core::ResourceLimits::deny_all(required.scopes, required.leases);
+        for class in ResourceClass::ALL {
+            let bound = required.class(class);
+            limits = limits.with_class(class, bound.global, bound.per_scope);
+        }
+        let resources = ProductionResourceLedger::new(limits, required).unwrap();
+        let installation = Installation::new(&resources).unwrap();
+
+        // Act
+        let leases: Vec<_> = (0..129)
+            .map(|_| installation.reserve_call().unwrap())
+            .collect();
+
+        // Assert
+        assert_eq!(installation.metrics().unwrap().retained_invocations, 129);
+        assert_eq!(resources.metrics().unwrap().active_leases, 1);
+        drop(leases);
+        assert_eq!(installation.metrics().unwrap().retained_invocations, 0);
     }
 }

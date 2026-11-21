@@ -2,7 +2,13 @@
 
 // Playwright's matcher serializes string/RegExp semantics in JavaScript. Rust
 // owns the URL observation, lifecycle ordering, admission and timeout loop.
-module.exports = function frameUrlExpectation({ enabled, mapError, validateOptions, UnsupportedOperationError }) {
+module.exports = function frameUrlExpectation({
+  enabled,
+  mapError,
+  validateOptions,
+  UnsupportedOperationError,
+  runTracingAction = (_owner, _action, _detail, operation) => operation(),
+}) {
   function setContextBaseURL(context, baseURL) {
     context._baseURL = baseURL;
     if (enabled) context._options = Object.freeze({ baseURL });
@@ -53,7 +59,8 @@ module.exports = function frameUrlExpectation({ enabled, mapError, validateOptio
 
   async function expect(frame, expression, options = {}) {
     if (!enabled) throw new UnsupportedOperationError('frame._expect (select wait-for-url native profile)');
-    if (expression !== 'to.have.url') throw new UnsupportedOperationError(`frame._expect ${expression}`);
+    if (expression !== 'to.have.url' && expression !== 'to.have.title')
+      throw new UnsupportedOperationError(`frame._expect ${expression}`);
     validateOptions(options, ['expectedText', 'isNot', 'timeout', 'signal', 'title'], 'frame._expect');
     if (options.signal !== undefined)
       throw new UnsupportedOperationError('frame._expect to.have.url signal');
@@ -68,24 +75,33 @@ module.exports = function frameUrlExpectation({ enabled, mapError, validateOptio
     const isNot = options.isNot ?? false;
     const page = frame._page;
     const session = page._context._browser._session;
-    if (typeof session.frameWaitForUrl !== 'function')
+    const titleExpectation = expression === 'to.have.title';
+    if (titleExpectation && typeof session.frameWaitForTitle !== 'function')
+      throw new UnsupportedOperationError('frame._expect to.have.title (select frame-expect-title native profile)');
+    if (!titleExpectation && typeof session.frameWaitForUrl !== 'function')
       throw new UnsupportedOperationError('frame._expect to.have.url (rebuild wait-for-url native profile)');
 
     let received;
     let matches;
     try {
-      const url = await session.frameWaitForUrl(page._id, frame._id, candidate => {
+      const wait = candidate => {
         received = candidate;
         matches = match(candidate);
         return matches !== isNot;
-      }, 'commit', timeout);
-      return { matches, received: { value: url } };
+      };
+      const operation = () => titleExpectation
+        ? session.frameWaitForTitle(page._id, frame._id, wait, timeout)
+        : session.frameWaitForUrl(page._id, frame._id, wait, 'commit', timeout);
+      const value = titleExpectation
+        ? await runTracingAction(page, 'frame-expect-title', undefined, operation)
+        : await operation();
+      return { matches, received: { value } };
     } catch (error) {
       const mapped = mapError(error, 'frame._expect');
       if (mapped?.code !== 'PLAYWRIGHT_RUST_TIMEOUT') throw mapped;
       return {
         matches: isNot,
-        received: { value: received ?? frame.url() },
+        received: { value: received ?? (titleExpectation ? '' : frame.url()) },
         timedOut: true,
         log: [`Timeout ${timeout}ms exceeded`],
       };

@@ -100,6 +100,7 @@ pub struct TargetMarkingProfile {
     scope: ResourceScope,
     states: usize,
     calls: usize,
+    allocator_backed: bool,
     bytes: u64,
 }
 impl TargetMarkingProfile {
@@ -131,10 +132,25 @@ impl TargetMarkingProfile {
             scope,
             states,
             calls,
+            allocator_backed: false,
             bytes,
         })
     }
+    pub fn new_allocator_backed(scope: ResourceScope) -> Self {
+        Self {
+            scope,
+            states: usize::MAX,
+            calls: usize::MAX,
+            allocator_backed: true,
+            bytes: ADMIN_BYTES,
+        }
+    }
     pub fn requirements(self) -> ResourceRequirements {
+        if self.allocator_backed {
+            return ResourceRequirements::none()
+                .with_class(ResourceClass::BackendStateBytes, ADMIN_BYTES, ADMIN_BYTES)
+                .with_metadata(1, 1);
+        }
         let count = self.states + self.calls;
         ResourceRequirements::none()
             .with_class(
@@ -144,6 +160,9 @@ impl TargetMarkingProfile {
             )
             .with_class(ResourceClass::BackendStateBytes, self.bytes, self.bytes)
             .with_metadata(1, count + 1)
+    }
+    pub const fn allocator_backed(self) -> bool {
+        self.allocator_backed
     }
 }
 
@@ -238,7 +257,7 @@ impl CdpTargetMarkingService {
         self.control.healthy.load(Ordering::Acquire)
     }
 
-    fn reserve(&self, state: bool) -> Result<(ResourceLease, Slot), TargetMarkingError> {
+    fn reserve(&self, state: bool) -> Result<(Option<ResourceLease>, Slot), TargetMarkingError> {
         if !self.is_cleanup_healthy() {
             return Err(TargetMarkingError::Unhealthy);
         }
@@ -249,23 +268,29 @@ impl CdpTargetMarkingService {
         };
         counter
             .fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| {
-                (n < capacity).then(|| n + 1)
+                n.checked_add(1)
+                    .filter(|next| self.profile.allocator_backed || *next <= capacity)
             })
             .map_err(|_| TargetMarkingError::Capacity)?;
         let slot = Slot {
             control: self.control.clone(),
             state,
         };
-        let lease = self
-            .ledger
-            .reserve_many(
-                self.profile.scope,
-                &[
-                    ResourceRequest::new(ResourceClass::RemoteHandle, NATIVE_UNITS),
-                    ResourceRequest::new(ResourceClass::BackendStateBytes, bytes),
-                ],
+        let lease = if self.profile.allocator_backed {
+            None
+        } else {
+            Some(
+                self.ledger
+                    .reserve_many(
+                        self.profile.scope,
+                        &[
+                            ResourceRequest::new(ResourceClass::RemoteHandle, NATIVE_UNITS),
+                            ResourceRequest::new(ResourceClass::BackendStateBytes, bytes),
+                        ],
+                    )
+                    .map_err(TargetMarkingError::Budget)?,
             )
-            .map_err(TargetMarkingError::Budget)?;
+        };
         Ok((lease, slot))
     }
 
@@ -360,7 +385,7 @@ pub struct MarkerState {
     world: MarkerWorld,
     group: String,
     object_id: Box<str>,
-    _lease: ResourceLease,
+    _lease: Option<ResourceLease>,
     // Keep shared admission administration alive until after the owner lease.
     _slot: Slot,
 }
@@ -425,7 +450,7 @@ impl MarkerState {
 pub struct MarkerAdmission {
     cleanup: CleanupGuard,
     used: bool,
-    _lease: ResourceLease,
+    _lease: Option<ResourceLease>,
     _slot: Slot,
 }
 impl MarkerAdmission {

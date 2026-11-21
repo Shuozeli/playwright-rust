@@ -16,7 +16,6 @@ from playwright_rust import _native
 from playwright_rust._errors import (
     Error,
     InvalidArgumentError,
-    ResourceExhaustedError,
     TargetClosedError,
     UnsupportedError,
 )
@@ -92,6 +91,7 @@ class _NativeSession:
         self.watch_waiters = 0
         self.max_watch_waiters = 0
         self.closed = False
+        self.send_result: dict[str, object] = {"result": {"value": 3}}
 
     @property
     def watch_started(self) -> asyncio.Event:
@@ -133,7 +133,7 @@ class _NativeSession:
         self.calls.append(("send", token, method, json.loads(params_json)))
         if method == "Runtime.evaluate":
             self.events.append(("Runtime.consoleAPICalled", {"value": "log"}))
-        return {"result": {"value": 3}}
+        return self.send_result
 
     async def cdp_session_claim(self, token: int, max_events: int) -> _NativeBatch:
         self.calls.append(("claim", token, max_events))
@@ -267,6 +267,128 @@ async def test_async_cdp_session_sends_and_delivers_prior_events(
         ("send", 7, "Runtime.evaluate", {"expression": "1 + 2"}),
     ]
     assert native.acked_events == [("Runtime.consoleAPICalled", {"value": "log"})]
+
+
+@pytest.mark.asyncio
+async def test_async_cdp_session_forwards_params_beyond_retired_one_megabyte_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Arrange
+    monkeypatch.setattr(_native, "selected_features", lambda: ["cdp-session"])
+    native = _NativeSession()
+    context, page = _context_and_page(native)
+    session = await context.new_cdp_session(page)
+    payload = "x" * (2 * 1024 * 1024)
+
+    # Act
+    await session.send("Runtime.evaluate", {"payload": payload})
+
+    # Assert
+    send = next(call for call in native.calls if call[0] == "send")
+    assert send[3] == {"payload": payload}
+
+
+@pytest.mark.asyncio
+async def test_async_cdp_session_forwards_method_beyond_retired_256_byte_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Arrange
+    monkeypatch.setattr(_native, "selected_features", lambda: ["cdp-session"])
+    native = _NativeSession()
+    context, page = _context_and_page(native)
+    session = await context.new_cdp_session(page)
+    method = f"{'CustomDomain' * 32}.command"
+
+    # Act
+    await session.send(method, {})
+
+    # Assert
+    assert len(method) > 256
+    send = next(call for call in native.calls if call[0] == "send")
+    assert send == ("send", 7, method, {})
+
+
+@pytest.mark.asyncio
+async def test_async_cdp_session_leaves_empty_method_and_non_mapping_params_to_chromium(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Arrange
+    monkeypatch.setattr(_native, "selected_features", lambda: ["cdp-session"])
+    native = _NativeSession()
+    context, page = _context_and_page(native)
+    session = await context.new_cdp_session(page)
+    params = ["value", 7, None]
+
+    # Act
+    await session.send("", cast(Any, params))
+
+    # Assert
+    send = next(call for call in native.calls if call[0] == "send")
+    assert send == ("send", 7, "", params)
+
+
+@pytest.mark.asyncio
+async def test_async_cdp_session_returns_result_beyond_retired_four_megabyte_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Arrange
+    monkeypatch.setattr(_native, "selected_features", lambda: ["cdp-session"])
+    native = _NativeSession()
+    context, page = _context_and_page(native)
+    session = await context.new_cdp_session(page)
+    native.send_result = {"payload": "x" * (5 * 1024 * 1024)}
+
+    # Act
+    result = await session.send("Runtime.getHeapUsage")
+
+    # Assert
+    assert len(cast(str, result["payload"])) == 5 * 1024 * 1024
+
+
+@pytest.mark.asyncio
+async def test_async_cdp_session_forwards_event_beyond_retired_connection_byte_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Arrange
+    monkeypatch.setattr(_native, "selected_features", lambda: ["cdp-session"])
+    native = _NativeSession()
+    context, page = _context_and_page(native)
+    session = await context.new_cdp_session(page)
+    payload = "x" * (512 * 1024)
+    delivered: list[str] = []
+    native.events.append(("Runtime.largeEvent", {"payload": payload}))
+    session.on("Runtime.largeEvent", lambda params: delivered.append(cast(str, params["payload"])))
+
+    # Act
+    await session._drain_events()
+
+    # Assert
+    assert delivered == [payload]
+    assert native.acked_events == [("Runtime.largeEvent", {"payload": payload})]
+    assert native.events == []
+
+
+@pytest.mark.asyncio
+async def test_async_cdp_session_preserves_non_mapping_event_params(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Arrange
+    monkeypatch.setattr(_native, "selected_features", lambda: ["cdp-session"])
+    native = _NativeSession()
+    context, page = _context_and_page(native)
+    session = await context.new_cdp_session(page)
+    params = ["value", 7, None]
+    delivered: list[object] = []
+    native.events.append(cast(Any, ("Runtime.customEvent", params)))
+    session.on("Runtime.customEvent", cast(Any, delivered.append))
+
+    # Act
+    await session._drain_events()
+
+    # Assert
+    assert delivered == [params]
+    assert native.acked_events == [("Runtime.customEvent", params)]
+    assert native.events == []
 
 
 @pytest.mark.asyncio
@@ -443,7 +565,7 @@ async def test_cdp_retirement_cancels_owned_async_handlers(
 
 
 @pytest.mark.asyncio
-async def test_cdp_async_handler_capacity_preserves_unacknowledged_event(
+async def test_cdp_async_handler_ownership_grows_past_legacy_pending_limit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Arrange
@@ -451,24 +573,35 @@ async def test_cdp_async_handler_capacity_preserves_unacknowledged_event(
     native = _NativeSession()
     context, page = _context_and_page(native)
     session = await context.new_cdp_session(page)
-    native.events.extend(("Runtime.event", {"index": index}) for index in range(65))
+    native.events.extend(("Runtime.event", {"index": index}) for index in range(129))
+    started = 0
+    cancelled = 0
+    pending = asyncio.Event()
 
     async def handler(_params: dict[str, object]) -> None:
-        await asyncio.Event().wait()
+        nonlocal started, cancelled
+        started += 1
+        try:
+            await pending.wait()
+        except asyncio.CancelledError:
+            cancelled += 1
+            raise
 
     session.on("Runtime.event", handler)
 
     # Act
-    with pytest.raises(ResourceExhaustedError, match="pending async event handler limit"):
-        await session._drain_events()
+    await session._drain_events()
+    await asyncio.sleep(0)
 
     # Assert
-    assert len(native.acked_events) == 64
-    assert native.events == [("Runtime.event", {"index": 64})]
-    assert len(session._pending_event_handlers) == 64
+    assert len(native.acked_events) == 129
+    assert native.events == []
+    assert len(session._pending_event_handlers) == 129
+    assert started == 129
     context._retire_cdp_session(session._token)
     await asyncio.sleep(0)
     assert session._pending_event_handlers == set()
+    assert cancelled == 129
 
 
 @pytest.mark.asyncio
@@ -1171,38 +1304,28 @@ def test_sync_cdp_session_reuses_async_owner_and_event_boundary(
     assert native.calls[-1] == ("detach", 7)
 
 
-@pytest.mark.parametrize("registration", ["on", "once"])
-def test_sync_cdp_session_rejected_listener_is_not_retained(registration: str) -> None:
+def test_sync_cdp_session_listener_registration_grows_past_legacy_limit() -> None:
     # Arrange
-    context, page = _context_and_page(_NativeSession())
-    bridge, _owner, session = _bridged_cdp_session(context, page)
+    native = _NativeSession()
+    context, page = _context_and_page(native)
+    bridge, owner, session = _bridged_cdp_session(context, page)
+    observed: list[int] = []
+
     try:
-        for _ in range(64):
-            session.on("Runtime.event", lambda _params: None)
+        for index in range(129):
+            session.on(
+                "Runtime.consoleAPICalled",
+                lambda _params, current=index: observed.append(current),
+            )
 
-        def rejected_callback_reference() -> weakref.ReferenceType[
-            Callable[[dict[str, object]], None]
-        ]:
-            def rejected(_params: dict[str, object]) -> None:
-                pass
+        # Act
+        session.send("Runtime.evaluate", {"expression": "1 + 2"})
 
-            callback_reference = weakref.ref(rejected)
-
-            # Act
-            with pytest.raises(ResourceExhaustedError, match="handler limit"):
-                if registration == "on":
-                    session.on("Runtime.event", rejected)
-                else:
-                    session.once("Runtime.event", rejected)
-            return callback_reference
-
-        callback_reference = rejected_callback_reference()
+        # Assert
+        assert observed == list(range(129))
+        assert len(owner._event_handlers["Runtime.consoleAPICalled"]) == 129
     finally:
         bridge.close()
-
-    # Assert
-    gc.collect()
-    assert callback_reference() is None
 
 
 def test_sync_cdp_session_once_releases_callback_emitted_during_registration(

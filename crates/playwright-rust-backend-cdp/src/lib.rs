@@ -138,6 +138,8 @@ pub use locator::{
 };
 #[cfg(feature = "full")]
 pub use locator_screenshot::CdpLocatorScreenshotResolver;
+#[cfg(all(feature = "full", feature = "response-connection-details"))]
+pub use network_events::CdpResponseConnectionDetails;
 #[cfg(all(feature = "full", feature = "response-security-details"))]
 pub use network_events::CdpResponseSecurityDetails;
 #[cfg(feature = "full")]

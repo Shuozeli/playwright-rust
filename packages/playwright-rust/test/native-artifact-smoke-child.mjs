@@ -23,6 +23,20 @@ writeFileSync(process.stdout.fd, JSON.stringify({
     && addon.routeRequestHistoryEnabled(),
   contextCookiesEnabled: typeof addon.contextCookiesEnabled === 'function'
     && addon.contextCookiesEnabled(),
+  contextLocaleEnabled: typeof addon.contextLocaleEnabled === 'function'
+    && addon.contextLocaleEnabled(),
+  contextTimezoneEnabled: typeof addon.contextTimezoneEnabled === 'function'
+    && addon.contextTimezoneEnabled(),
+  contextGeolocationEnabled: typeof addon.contextGeolocationEnabled === 'function'
+    && addon.contextGeolocationEnabled(),
+  contextPermissionsEnabled: typeof addon.contextGeolocationPermissionEnabled === 'function'
+    && addon.contextGeolocationPermissionEnabled(),
+  contextHttpCredentialsEnabled: typeof addon.contextHttpCredentialsEnabled === 'function'
+    && addon.contextHttpCredentialsEnabled(),
+  contextBindingsEnabled: typeof addon.contextBindingsEnabled === 'function'
+    && addon.contextBindingsEnabled(),
+  ignoreHttpsErrorsEnabled: typeof addon.ignoreHttpsErrorsEnabled === 'function'
+    && addon.ignoreHttpsErrorsEnabled(),
   largeEvaluationInputsEnabled: typeof addon.largeEvaluationInputsEnabled === 'function'
     && addon.largeEvaluationInputsEnabled(),
   largeRoutePostDataEnabled: typeof addon.largeRoutePostDataEnabled === 'function'
@@ -37,6 +51,12 @@ writeFileSync(process.stdout.fd, JSON.stringify({
     && addon.lightSelectorsEnabled(),
   frameEventsEnabled: typeof addon.frameEventsEnabled === 'function'
     && addon.frameEventsEnabled(),
+  harReplayEnabled: typeof addon.harReplayEnabled === 'function'
+    && addon.harReplayEnabled(),
+  harRecordingEnabled: typeof addon.harRecordingEnabled === 'function'
+    && addon.harRecordingEnabled(),
+  harRecordingRegExpEnabled: typeof addon.harRecordingRegExpEnabled === 'function'
+    && addon.harRecordingRegExpEnabled(),
   cdpSessionLease: typeof addon.NativeCdpSessionLease,
   cdpEventBatch: typeof addon.NativeCdpEventBatch,
   methods: {
@@ -55,10 +75,26 @@ writeFileSync(process.stdout.fd, JSON.stringify({
     cdpBatchRollback: typeof addon.NativeCdpEventBatch?.prototype?.rollback,
     launchChromiumWithTracesDir: typeof addon.NativeEnvironment.prototype.launchChromiumWithTracesDir,
     contextRequest: typeof addon.NativeSession.prototype.contextRequest,
+    contextCookies: typeof addon.NativeSession.prototype.contextCookies,
     contextAddCookies: typeof addon.NativeSession.prototype.contextAddCookies,
+    contextClearCookies: typeof addon.NativeSession.prototype.contextClearCookies,
+    contextStorageState: typeof addon.NativeSession.prototype.contextStorageState,
+    contextSetStorageState: typeof addon.NativeSession.prototype.contextSetStorageState,
+    newContextWithIgnoreHttpsErrors: typeof addon.NativeSession.prototype.newContextWithIgnoreHttpsErrors,
+    newContextWithLocale: typeof addon.NativeSession.prototype.newContextWithLocale,
+    newContextWithPolicies: typeof addon.NativeSession.prototype.newContextWithPolicies,
+    newContextWithPoliciesAndExtraHttpHeaders: typeof addon.NativeSession.prototype.newContextWithPoliciesAndExtraHttpHeaders,
+    setContextGeolocation: typeof addon.NativeSession.prototype.setContextGeolocation,
+    setContextHttpCredentials: typeof addon.NativeSession.prototype.setContextHttpCredentials,
+    contextExposeBinding: typeof addon.NativeSession.prototype.contextExposeBinding,
+    grantContextPermissions: typeof addon.NativeSession.prototype.grantContextPermissions,
+    clearContextPermissions: typeof addon.NativeSession.prototype.clearContextPermissions,
+    newContextWithDeviceOptionsAndIgnoreHttpsErrors: typeof addon.NativeSession.prototype.newContextWithDeviceOptionsAndIgnoreHttpsErrors,
     pageGoBack: typeof addon.NativeSession.prototype.pageGoBack,
     pageGoForward: typeof addon.NativeSession.prototype.pageGoForward,
+    pagePdf: typeof addon.NativeSession.prototype.pagePdf,
     newContextWithHasTouch: typeof addon.NativeSession.prototype.newContextWithHasTouch,
+    newContextWithDeviceOptions: typeof addon.NativeSession.prototype.newContextWithDeviceOptions,
     touchscreenTap: typeof addon.NativeSession.prototype.touchscreenTap,
     elementHandleTap: typeof addon.NativeSession.prototype.elementHandleTap,
     elementHandleScrollIntoViewIfNeeded: typeof addon.NativeSession.prototype.elementHandleScrollIntoViewIfNeeded,
@@ -72,9 +108,18 @@ writeFileSync(process.stdout.fd, JSON.stringify({
       : {}),
     pageRouteContinueWithHeaders: typeof addon.NativeSession.prototype.pageRouteContinueWithHeaders,
     pageRouteFallbackWithUrl: typeof addon.NativeSession.prototype.pageRouteFallbackWithUrl,
+    pageRouteFallbackWithOverrides: typeof addon.NativeSession.prototype.pageRouteFallbackWithOverrides,
     pageUnroute: typeof addon.NativeSession.prototype.pageUnroute,
     responseRawHeaders: typeof addon.NativeSession.prototype.responseRawHeaders,
     newContextWithProxy: typeof addon.NativeSession.prototype.newContextWithProxy,
+    pageRouteFromHar: typeof addon.NativeSession.prototype.pageRouteFromHar,
+    contextRouteFromHar: typeof addon.NativeSession.prototype.contextRouteFromHar,
+    pageRouteFromHarRegExp: typeof addon.NativeSession.prototype.pageRouteFromHarRegExp,
+    contextRouteFromHarRegExp: typeof addon.NativeSession.prototype.contextRouteFromHarRegExp,
+    pageRecordHar: typeof addon.NativeSession.prototype.pageRecordHar,
+    contextRecordHar: typeof addon.NativeSession.prototype.contextRecordHar,
+    pageRecordHarRegExp: typeof addon.NativeSession.prototype.pageRecordHarRegExp,
+    contextRecordHarRegExp: typeof addon.NativeSession.prototype.contextRecordHarRegExp,
   },
 }));
 process.exit(0);

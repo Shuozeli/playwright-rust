@@ -414,7 +414,7 @@ class NativeCdpSessionLease:
     def claim(self) -> int: ...
 
 class NativeCdpEventBatch:
-    def peek(self) -> tuple[str, dict[str, object]] | None: ...
+    def peek(self) -> tuple[str, Any] | None: ...
     def ack_next(self) -> None: ...
     def rollback(self) -> None: ...
 
@@ -524,6 +524,9 @@ class NativeSession:
     def page_pause(self, page_id: str) -> Awaitable[None]: ...
     def wait_for_timeout(self, timeout_ms: int) -> Awaitable[None]: ...
     def page_request_gc(self, page_id: str) -> Awaitable[None]: ...
+    def page_video_path(self, page_id: str) -> Awaitable[str]: ...
+    def page_video_save_as(self, page_id: str, destination: str) -> Awaitable[None]: ...
+    def page_video_delete(self, page_id: str) -> Awaitable[None]: ...
     def page_pdf(
         self,
         page_id: str,
@@ -577,7 +580,7 @@ class NativeSession:
         locale: str | None = ...,
         timezone_id: str | None = ...,
         geolocation: tuple[float, float, float] | None = ...,
-        geolocation_permission: bool = ...,
+        permissions: list[str] | None = ...,
         http_credentials: tuple[str, str, str | None, bool] | None = ...,
         ignore_https_errors: bool = ...,
         offline: bool = ...,
@@ -588,6 +591,7 @@ class NativeSession:
         forced_colors: str | None = ...,
         strict_selectors: bool = ...,
         extra_http_headers: list[tuple[str, str]] | None = ...,
+        video: tuple[str, str, int, int] | None = ...,
     ) -> Awaitable[tuple[str, str | None]]: ...
     def new_page(self, context_id: str) -> Awaitable[tuple[str, str, str, str]]: ...
     def wait_for_navigation(
@@ -862,6 +866,13 @@ class NativeSession:
         self, context_id: str, headers: list[tuple[str, str]]
     ) -> Awaitable[None]: ...
     def set_context_offline(self, context_id: str, offline: bool) -> Awaitable[None]: ...
+    def set_context_geolocation(
+        self, context_id: str, geolocation: tuple[float, float, float] | None
+    ) -> Awaitable[None]: ...
+    def grant_context_permissions(
+        self, context_id: str, permissions: list[str], origin: str | None
+    ) -> Awaitable[None]: ...
+    def clear_context_permissions(self, context_id: str) -> Awaitable[None]: ...
     def page_route(self, page_id: str, pattern: str, times: int | None = ...) -> Awaitable[str]: ...
     def context_route(
         self, context_id: str, pattern: str, times: int | None = ...
@@ -878,6 +889,9 @@ class NativeSession:
         path: str,
         pattern: str | None,
         not_found: str | None,
+        update: bool = False,
+        update_content: str | None = None,
+        update_mode: str | None = None,
     ) -> Awaitable[str]: ...
     def context_route_from_har(
         self,
@@ -885,6 +899,17 @@ class NativeSession:
         path: str,
         pattern: str | None,
         not_found: str | None,
+        update: bool = False,
+        update_content: str | None = None,
+        update_mode: str | None = None,
+    ) -> Awaitable[str]: ...
+    def context_record_har_regexp(
+        self,
+        context_id: str,
+        path: str,
+        source: str,
+        flags: str,
+        policy: tuple[str, str],
     ) -> Awaitable[str]: ...
     def next_page_route_call(
         self,
@@ -893,7 +918,8 @@ class NativeSession:
             str,
             str,
             str,
-            str,
+            str | None,
+            str | None,
             str | None,
             str,
             str,
@@ -996,11 +1022,29 @@ class NativeSession:
     def next_worker_notice(
         self,
     ) -> Awaitable[tuple[int, str, str, str, NativeWorker]]: ...
+    def next_service_worker_notice(
+        self,
+    ) -> Awaitable[tuple[int, str, str, str, NativeWorker]]: ...
+    def set_worker_console_listener(self, worker: NativeWorker, enabled: bool) -> None: ...
     def next_worker_console_notice(
         self,
     ) -> Awaitable[
-        tuple[str, str, str, NativeWorker, str, str, str, str, int, int, int]
+        tuple[
+            str | None,
+            str,
+            str,
+            str,
+            NativeWorker,
+            str,
+            str,
+            str,
+            str,
+            int,
+            int,
+            int,
+        ]
         | tuple[
+            str | None,
             str,
             str,
             str,
@@ -1024,6 +1068,7 @@ class NativeSession:
         post_data: bytes | None = ...,
     ) -> Awaitable[None]: ...
     def page_workers(self, page_id: str) -> list[tuple[str, str, NativeWorker]]: ...
+    def context_service_workers(self, context_id: str) -> list[tuple[str, str, NativeWorker]]: ...
     def worker_evaluate(
         self, worker: NativeWorker, source: str, argument: object | None = ...
     ) -> Awaitable[object]: ...
@@ -1111,9 +1156,6 @@ class NativeEnvironment:
         channel: str | None = ...,
         timeout_ms: int = ...,
     ) -> Awaitable[NativeSession]: ...
-    def observe_nonchromium_startup(
-        self, engine: str, executable_path: str, timeout_ms: int = ...
-    ) -> Awaitable[None]: ...
     def observe_playwright_server_initialize(
         self, endpoint_url: str, timeout_ms: int = ...
     ) -> Awaitable[None]: ...
@@ -1130,7 +1172,7 @@ class NativeEnvironment:
                 str | None,
                 str | None,
                 tuple[float, float, float] | None,
-                bool,
+                list[str],
                 tuple[str, str, str | None, bool] | None,
                 bool,
                 bool,
@@ -1147,6 +1189,7 @@ class NativeEnvironment:
             ]
             | None,
             tuple[str | None, str | None, str | None] | None,
+            tuple[str, str, int, int] | None,
             list[tuple[str, str]] | None,
             list[str],
             str | None,
@@ -1162,6 +1205,7 @@ def native_abi_version() -> int: ...
 def package_version() -> str: ...
 def device_descriptors_json() -> str: ...
 def browser_executable_path(engine: str, package_root: str) -> str: ...
+def ffmpeg_executable_path(package_root: str) -> str: ...
 def build_profile() -> str: ...
 def selected_features() -> list[str]: ...
 def resource_limits() -> dict[str, int]: ...

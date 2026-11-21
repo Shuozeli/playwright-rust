@@ -99,6 +99,7 @@ pub struct CdpFrameLifecycleProfile {
     id_bytes: usize,
     arena_bytes: usize,
     bytes: u64,
+    allocator_backed: bool,
 }
 impl CdpFrameLifecycleProfile {
     pub fn new(
@@ -137,6 +138,24 @@ impl CdpFrameLifecycleProfile {
             id_bytes,
             arena_bytes,
             bytes,
+            allocator_backed: false,
+        })
+    }
+    pub fn new_allocator_backed(
+        lifecycle: FrameLifecycleProfile,
+        scope: ResourceScope,
+        id_bytes: usize,
+    ) -> std::result::Result<Self, LifecycleError> {
+        if !lifecycle.allocator_backed || id_bytes == 0 || scope == lifecycle.scope {
+            return Err(LifecycleError::InvalidProfile);
+        }
+        Ok(Self {
+            lifecycle,
+            scope,
+            id_bytes,
+            arena_bytes: 0,
+            bytes: 0,
+            allocator_backed: true,
         })
     }
     fn native_requirements(self) -> ResourceRequirements {
@@ -151,18 +170,19 @@ impl CdpFrameLifecycleProfile {
     }
 }
 
-#[derive(Clone, Copy)]
 struct NativeFrame {
     id: ObjectId,
     loader_len: usize,
+    loader: Option<Box<str>>,
     document: Option<DocumentGeneration>,
 }
-#[derive(Clone, Copy)]
 struct NativeRequest {
     id: ObjectId,
     frame: ObjectId,
     request_len: usize,
     session_len: usize,
+    native_id: Option<Box<str>>,
+    session: Option<Box<str>>,
     document: bool,
     favicon: bool,
 }
@@ -180,7 +200,8 @@ pub struct CdpFrameLifecycle {
     epoch: u64,
     next_request: u64,
     next_document: u64,
-    _lease: ResourceLease,
+    allocator_backed: bool,
+    _lease: Option<ResourceLease>,
 }
 impl CdpFrameLifecycle {
     pub fn new(
@@ -191,34 +212,51 @@ impl CdpFrameLifecycle {
         if epoch == 0 {
             return Err(LifecycleError::InvalidIdentity.into());
         }
-        let ledger = resources
-            .claim(profile.native_requirements())
-            .map_err(|_| LifecycleError::Resources)?;
-        let lease = ledger
-            .reserve(
-                profile.scope,
-                ResourceClass::BackendStateBytes,
-                profile.bytes,
+        let lease = if profile.allocator_backed {
+            None
+        } else {
+            let ledger = resources
+                .claim(profile.native_requirements())
+                .map_err(|_| LifecycleError::Resources)?;
+            Some(
+                ledger
+                    .reserve(
+                        profile.scope,
+                        ResourceClass::BackendStateBytes,
+                        profile.bytes,
+                    )
+                    .map_err(|_| LifecycleError::Resources)?,
             )
-            .map_err(|_| LifecycleError::Resources)?;
+        };
         let lifecycle = FrameLifecycleStore::new(profile.lifecycle, resources)?;
         let mut arena = Vec::new();
-        arena
-            .try_reserve_exact(profile.arena_bytes)
-            .map_err(|_| LifecycleError::Allocation)?;
-        if arena.capacity() != profile.arena_bytes {
-            return Err(LifecycleError::Allocation.into());
+        if !profile.allocator_backed {
+            arena
+                .try_reserve_exact(profile.arena_bytes)
+                .map_err(|_| LifecycleError::Allocation)?;
+            if arena.capacity() != profile.arena_bytes {
+                return Err(LifecycleError::Allocation.into());
+            }
+            arena.resize(profile.arena_bytes, 0);
         }
-        arena.resize(profile.arena_bytes, 0);
         Ok(Self {
             lifecycle,
-            frames: slots(profile.lifecycle.frames)?,
-            requests: slots(profile.lifecycle.requests)?,
+            frames: if profile.allocator_backed {
+                Vec::new()
+            } else {
+                slots(profile.lifecycle.frames)?
+            },
+            requests: if profile.allocator_backed {
+                Vec::new()
+            } else {
+                slots(profile.lifecycle.requests)?
+            },
             arena,
             id_bytes: profile.id_bytes,
             epoch,
             next_request: 0,
             next_document: 0,
+            allocator_backed: profile.allocator_backed,
             _lease: lease,
         })
     }
@@ -231,13 +269,24 @@ impl CdpFrameLifecycle {
         self.lifecycle
             .apply(now, LifecycleInput::Attach { frame, parent })?;
         if self.frame_index(frame).is_none() {
-            let Some(index) = self.frames.iter().position(Option::is_none) else {
-                self.invalidate();
-                return Err(LifecycleError::FrameCapacity.into());
+            let index = match self.frames.iter().position(Option::is_none) {
+                Some(index) => index,
+                None if self.allocator_backed => {
+                    self.frames
+                        .try_reserve(1)
+                        .map_err(|_| LifecycleError::Allocation)?;
+                    self.frames.push(None);
+                    self.frames.len() - 1
+                }
+                None => {
+                    self.invalidate();
+                    return Err(LifecycleError::FrameCapacity.into());
+                }
             };
             self.frames[index] = Some(NativeFrame {
                 id: frame,
                 loader_len: 0,
+                loader: None,
                 document: None,
             });
         }
@@ -309,7 +358,7 @@ impl CdpFrameLifecycle {
     pub fn retain_frames(&mut self, now: Duration, keep: impl Fn(ObjectId) -> bool) -> Result<()> {
         self.advance(now)?;
         for index in 0..self.frames.len() {
-            if let Some(frame) = self.frames[index]
+            if let Some(frame) = self.frames[index].as_ref()
                 && !keep(frame.id)
             {
                 self.detach(now, frame.id)?;
@@ -353,7 +402,7 @@ impl CdpFrameLifecycle {
     fn frame_index(&self, frame: ObjectId) -> Option<usize> {
         self.frames
             .iter()
-            .position(|row| row.is_some_and(|r| r.id == frame))
+            .position(|row| row.as_ref().is_some_and(|r| r.id == frame))
     }
     fn validate_id(&self, value: &str) -> Result<()> {
         if value.is_empty() || value.len() > self.id_bytes {
@@ -373,13 +422,37 @@ impl CdpFrameLifecycle {
     fn request_cell(&self, index: usize) -> usize {
         self.frames.len() + 2 * index
     }
+    fn owned_id(value: &str) -> Result<Box<str>> {
+        let mut owned = String::new();
+        owned
+            .try_reserve_exact(value.len())
+            .map_err(|_| LifecycleError::Allocation)?;
+        owned.push_str(value);
+        Ok(owned.into_boxed_str())
+    }
+    fn frame_loader<'a>(&'a self, index: usize, row: &'a NativeFrame) -> &'a str {
+        row.loader
+            .as_deref()
+            .unwrap_or_else(|| self.stored_id(index, row.loader_len))
+    }
+    fn request_native_id<'a>(&'a self, index: usize, row: &'a NativeRequest) -> &'a str {
+        row.native_id
+            .as_deref()
+            .unwrap_or_else(|| self.stored_id(self.request_cell(index), row.request_len))
+    }
+    fn request_session<'a>(&'a self, index: usize, row: &'a NativeRequest) -> &'a str {
+        row.session
+            .as_deref()
+            .unwrap_or_else(|| self.stored_id(self.request_cell(index) + 1, row.session_len))
+    }
     fn exact_request(&self, session: &str, native_id: &str) -> Option<usize> {
         self.requests.iter().enumerate().find_map(|(i, row)| {
-            row.filter(|row| {
-                self.stored_id(self.request_cell(i), row.request_len) == native_id
-                    && self.stored_id(self.request_cell(i) + 1, row.session_len) == session
-            })
-            .map(|_| i)
+            row.as_ref()
+                .filter(|row| {
+                    self.request_native_id(i, row) == native_id
+                        && self.request_session(i, row) == session
+                })
+                .map(|_| i)
         })
     }
     fn request_index(
@@ -396,10 +469,10 @@ impl CdpFrameLifecycle {
             .requests
             .iter()
             .enumerate()
-            .filter_map(|(i, row)| row.map(|r| (i, r)))
+            .filter_map(|(i, row)| row.as_ref().map(|r| (i, r)))
         {
             if row.document
-                && self.stored_id(self.request_cell(i), row.request_len) == native_id
+                && self.request_native_id(i, row) == native_id
                 && routes.accepts_document_handoff(row.frame, session)
             {
                 if found.is_some() {
@@ -419,7 +492,7 @@ impl CdpFrameLifecycle {
             }
         }
         for i in 0..self.requests.len() {
-            if self.requests[i].is_some_and(|row| {
+            if self.requests[i].as_ref().is_some_and(|row| {
                 self.frame_index(row.frame).is_none()
                     || commit
                         .is_some_and(|(frame, keep)| frame == row.frame && Some(row.id) != keep)

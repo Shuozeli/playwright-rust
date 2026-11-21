@@ -40,7 +40,7 @@ fn poll<T>(future: Pin<&mut impl Future<Output = T>>) -> Poll<T> {
 }
 
 #[test]
-fn wait_capacity_and_retained_bytes_return_on_future_drop() {
+fn waiters_queue_and_retained_bytes_return_on_future_drop() {
     // Arrange
     let (readiness, resources) = fixture(2);
     let baseline = resources.metrics().unwrap().active_leases;
@@ -48,20 +48,14 @@ fn wait_capacity_and_retained_bytes_return_on_future_drop() {
     let mut second = Box::pin(readiness.resolve(|| Ok::<Option<()>, _>(None)));
     assert!(poll(first.as_mut()).is_pending());
     assert!(poll(second.as_mut()).is_pending());
-    let mut excess = Box::pin(readiness.resolve(|| Ok::<Option<()>, _>(None)));
+    let mut queued = Box::pin(readiness.resolve(|| Ok::<Option<()>, _>(None)));
     // Act
-    let rejected = poll(excess.as_mut());
+    assert!(poll(queued.as_mut()).is_pending());
+    assert_eq!(readiness.waiters.load(Ordering::Acquire), 2);
     drop(first);
-    let mut replacement = Box::pin(readiness.resolve(|| Ok::<Option<()>, _>(None)));
-    let admitted = poll(replacement.as_mut());
-    drop((second, replacement));
+    let admitted = poll(queued.as_mut());
+    drop((second, queued));
     // Assert
-    assert!(matches!(
-        rejected,
-        Poll::Ready(Err(CdpPageRouteError::WorldReadinessCapacityExceeded {
-            limit: 2
-        }))
-    ));
     assert!(admitted.is_pending());
     assert_eq!(readiness.waiters.load(Ordering::Acquire), 0);
     assert_eq!(resources.metrics().unwrap().active_leases, baseline);

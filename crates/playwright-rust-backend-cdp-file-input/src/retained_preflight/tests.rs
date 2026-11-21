@@ -65,6 +65,26 @@ fn profile_is_separate_and_charges_both_native_wrappers_before_io() {
 }
 
 #[test]
+fn allocator_backed_admissions_grow_past_the_legacy_count_without_ledger_units() {
+    // Arrange
+    let profile =
+        RetainedPreflightProfile::new_allocator_backed(ResourceScope::extension(178, 2)).unwrap();
+    let resources =
+        ProductionResourceLedger::new(ResourceLimits::deny_all(1, 1), profile.requirements())
+            .unwrap();
+    let service = CdpFileInputPreflightService::new(profile, &resources).unwrap();
+
+    // Act
+    let admissions: Vec<_> = (0..129).map(|_| service.admit().unwrap()).collect();
+
+    // Assert
+    assert_eq!(profile.capacity(), usize::MAX);
+    assert!(profile.allocator_backed());
+    assert_eq!(resources.metrics().unwrap().active_leases, 0);
+    assert!(admissions.iter().all(|owner| owner.object_id().is_none()));
+}
+
+#[test]
 fn exhausted_admission_refuses_another_call_without_io() {
     // Arrange
     let (service, resources, client) = fixture();

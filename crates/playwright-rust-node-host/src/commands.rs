@@ -244,6 +244,11 @@ impl HostSession {
         feature = "context-bindings",
         feature = "init-scripts",
         feature = "download-events",
+        feature = "service-worker-events",
+        feature = "worker-handle-evaluation",
+        feature = "worker-console-events",
+        feature = "video-recording",
+        feature = "context-tracing-screenshots",
     ))]
     pub(crate) fn require_visible_context_id(&self, context: ObjectId) -> Result<(), HostError> {
         if !self.context_metadata.owned_contexts_only() {

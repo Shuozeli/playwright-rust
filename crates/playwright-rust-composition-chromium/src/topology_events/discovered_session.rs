@@ -92,7 +92,7 @@ impl ChromiumTopologyEventDriver {
                                     true,
                                     true,
                                     true,
-                                    self.auto_attach_target_types(),
+                                    self.nested_auto_attach_target_types(),
                                 )
                                 .await
                                 .map_err(ChromiumTopologyEventDriverError::from)
@@ -260,7 +260,12 @@ impl ChromiumTopologyEventDriver {
             };
             if !self.profile.parallel_recursive_attachment() {
                 client
-                    .target_set_auto_attach_types(true, true, true, self.auto_attach_target_types())
+                    .target_set_auto_attach_types(
+                        true,
+                        true,
+                        true,
+                        self.nested_auto_attach_target_types(),
+                    )
                     .await?;
             }
             if !self.resumes_with_utility_worlds() {

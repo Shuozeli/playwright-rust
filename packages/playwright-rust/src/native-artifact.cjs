@@ -2,7 +2,7 @@
 const { join } = require('node:path');
 
 const nativeAbiVersion = 1;
-const officialConformancePageFeatures = Object.freeze(['set-content', 'page-events', 'page-dialogs', 'page-routes', 'console-events', 'page-bindings', 'handles', 'element-handle-dom', 'file-input', 'frame-navigation', 'history-navigation', 'init-scripts', 'timeout-settings', 'wait-for-function', 'wait-for-url', 'wait-for-timeout', 'large-evaluation-results', 'emulate-media', 'device-emulation', 'touchscreen-input', 'page-viewport', 'request-gc', 'response-body', 'response-request', 'request-events', 'response-events', 'response-finished', 'request-frame', 'request-post-data-json', 'locator-bounding-box', 'locator-highlight', 'locator-screenshot', 'locator-dom-actions', 'extra-headers', 'selector-registration', 'bypass-csp', 'api-request', 'context-api-request']);
+const officialConformancePageFeatures = Object.freeze(['set-content', 'page-events', 'page-dialogs', 'page-routes', 'console-events', 'page-bindings', 'context-bindings', 'handles', 'element-handle-dom', 'file-input', 'frame-navigation', 'history-navigation', 'init-scripts', 'timeout-settings', 'wait-for-function', 'wait-for-url', 'wait-for-timeout', 'large-evaluation-results', 'emulate-media', 'device-emulation', 'touchscreen-input', 'page-viewport', 'request-gc', 'response-body', 'response-request', 'request-events', 'response-events', 'response-finished', 'request-frame', 'request-post-data-json', 'locator-bounding-box', 'locator-highlight', 'locator-screenshot', 'locator-dom-actions', 'extra-headers', 'selector-registration', 'bypass-csp', 'context-locale', 'context-timezone', 'context-geolocation', 'context-geolocation-permission', 'context-http-credentials', 'api-request', 'context-api-request']);
 const officialConformancePageLightFeatures = Object.freeze([...officialConformancePageFeatures, 'light-selectors']);
 const officialConformancePageFrameElementFeatures = Object.freeze([...officialConformancePageFeatures, 'frame-element']);
 const officialConformancePageFrameEventsFeatures = Object.freeze([...officialConformancePageFeatures, 'frame-events']);
@@ -19,6 +19,18 @@ const officialConformancePageRouteHeaderUrlUnrouteCorsFeatures = Object.freeze([
 const officialConformancePageRouteHeaderUrlUnrouteCorsRegexpFeatures = Object.freeze([...officialConformancePageRouteHeaderUrlUnrouteCorsFeatures, 'route-regexp']);
 const officialConformancePageRouteHeaderUrlUnrouteCorsRegexpHistoryFeatures = Object.freeze([...officialConformancePageRouteHeaderUrlUnrouteCorsRegexpFeatures, 'route-request-history']);
 const officialConformancePageRouteHeaderUrlUnrouteCorsRegexpHistoryCookiesFeatures = Object.freeze([...officialConformancePageRouteHeaderUrlUnrouteCorsRegexpHistoryFeatures, 'context-cookies']);
+const officialConformanceBrowserContextCookiesFeatures = Object.freeze([
+  ...officialConformancePageFeatures,
+  'browser-registry', 'owned-launch', 'persistent-context-preflight',
+  'persistent-context-ignore-https-errors', 'persistent-context-locale',
+  'persistent-context-timezone',
+  'persistent-context-geolocation',
+  'persistent-context-geolocation-permission',
+  'persistent-context-http-credentials',
+  'persistent-context-offline',
+  'persistent-context-bypass-csp', 'persistent-context-javascript-disabled',
+  'context-cookies', 'context-storage-state', 'ignore-https-errors',
+]);
 const officialConformancePageRouteHeaderUrlUnrouteCorsRegexpHistoryCookiesLargePostDataFeatures = Object.freeze([...officialConformancePageRouteHeaderUrlUnrouteCorsRegexpHistoryCookiesFeatures, 'large-evaluation-inputs', 'large-route-post-data']);
 const officialConformancePageFillNavigationCommitFeatures = Object.freeze([...officialConformancePageRouteHeaderUrlUnrouteFeatures, 'fill-navigation-commit']);
 const officialConformancePageSelectOptionTimeoutFeatures = Object.freeze([...officialConformancePageFeatures, 'select-option-timeout-progress']);
@@ -27,6 +39,32 @@ const officialConformancePageReactSelectorsFeatures = Object.freeze([...official
 const officialConformancePageRetainedScrollFeatures = Object.freeze([...officialConformancePageFeatures, 'element-handle-scroll-into-view']);
 const officialConformancePageRetainedWaitFeatures = Object.freeze([...officialConformancePageRetainedScrollFeatures, 'element-handle-wait-for-selector']);
 const officialConformancePageRetainedSelectOptionValueFeatures = Object.freeze([...officialConformancePageRetainedWaitFeatures, 'element-handle-select-option-value']);
+const officialConformancePageHarRecordingFeatures = Object.freeze([
+  ...officialConformancePageFeatures, 'har-recording', 'har-recording-regexp',
+]);
+const officialConformancePageHarReplayFeatures = Object.freeze([
+  ...officialConformancePageFeatures, 'har-recording', 'har-recording-regexp',
+  'page-unroute', 'route-regexp', 'route-header-url-overrides',
+]);
+const officialConformancePageVideoRecordingFeatures = Object.freeze([
+  ...officialConformancePageFeatures, 'browser-registry', 'owned-launch',
+  'persistent-context-ignore-https-errors', 'persistent-context-locale',
+  'persistent-context-timezone',
+  'persistent-context-geolocation',
+  'persistent-context-geolocation-permission',
+  'persistent-context-http-credentials',
+  'persistent-context-offline',
+  'persistent-context-bypass-csp', 'persistent-context-javascript-disabled',
+  'official-test-browser-kill', 'playwright-trace', 'context-tracing-screenshots',
+  'persistent-context-preflight', 'video-recording',
+]);
+const officialConformancePageContextTracingFeatures = Object.freeze([
+  ...officialConformancePageFeatures, 'browser-registry', 'owned-launch',
+  'playwright-trace', 'context-tracing-screenshots', 'context-tracing-chunks',
+  'context-tracing-actions', 'context-tracing-snapshots', 'context-tracing-console', 'context-tracing-network',
+  'api-request-tracing', 'context-cookies',
+  'context-storage-state', 'frame-expect-title',
+]);
 
 // Packaging selection only. Every browser operation remains in the Rust host.
 const profiles = Object.freeze({
@@ -45,7 +83,53 @@ const profiles = Object.freeze({
   'playwright-server-connect-page-events': Object.freeze(['playwright-server-connect-session', 'playwright-server-connect-page-events']),
   'persistent-context-preflight': Object.freeze(['persistent-context-preflight']),
   'owned-launch': Object.freeze(['owned-launch']),
+  'persistent-context-locale': Object.freeze(['owned-launch', 'persistent-context-locale']),
+  'persistent-context-timezone': Object.freeze(['owned-launch', 'persistent-context-timezone']),
+  'persistent-context-geolocation': Object.freeze(['owned-launch', 'context-geolocation', 'persistent-context-geolocation']),
+  'persistent-context-permissions': Object.freeze(['owned-launch', 'context-geolocation-permission', 'persistent-context-geolocation-permission']),
+  'persistent-context-http-credentials': Object.freeze(['owned-launch', 'context-http-credentials', 'persistent-context-http-credentials']),
+  'persistent-context-offline': Object.freeze(['owned-launch', 'persistent-context-offline']),
+  'persistent-context-bypass-csp': Object.freeze(['owned-launch', 'persistent-context-bypass-csp']),
+  'persistent-context-javascript-disabled': Object.freeze(['owned-launch', 'persistent-context-javascript-disabled']),
+  'persistent-context-policies': Object.freeze([
+    'owned-launch', 'persistent-context-ignore-https-errors',
+    'persistent-context-locale', 'persistent-context-timezone',
+    'context-geolocation', 'persistent-context-geolocation',
+    'context-geolocation-permission', 'persistent-context-geolocation-permission',
+    'context-http-credentials', 'persistent-context-http-credentials',
+    'persistent-context-offline',
+    'persistent-context-bypass-csp', 'persistent-context-javascript-disabled',
+  ]),
+  'page-pdf': Object.freeze(['page-pdf']),
   'playwright-trace': Object.freeze(['owned-launch', 'playwright-trace']),
+  'context-tracing-screenshots': Object.freeze([
+    'owned-launch', 'playwright-trace', 'context-tracing-screenshots',
+  ]),
+  'context-tracing-chunks': Object.freeze([
+    'owned-launch', 'playwright-trace', 'context-tracing-screenshots',
+    'context-tracing-chunks',
+  ]),
+  'context-tracing-actions': Object.freeze([
+    'owned-launch', 'playwright-trace', 'context-tracing-screenshots',
+    'context-tracing-chunks', 'context-tracing-actions',
+  ]),
+  'context-tracing-snapshots': Object.freeze([
+    'owned-launch', 'playwright-trace', 'context-tracing-screenshots',
+    'context-tracing-chunks', 'context-tracing-actions', 'context-tracing-snapshots',
+  ]),
+  'context-tracing-console': Object.freeze([
+    'owned-launch', 'playwright-trace', 'context-tracing-screenshots',
+    'console-events', 'context-tracing-console',
+  ]),
+  'context-tracing-network': Object.freeze([
+    'owned-launch', 'playwright-trace', 'context-tracing-screenshots',
+    'context-tracing-network',
+  ]),
+  'api-request-tracing': Object.freeze(['api-request', 'api-request-tracing']),
+  'context-storage-state': Object.freeze([
+    'context-cookies', 'context-storage-state',
+  ]),
+  'frame-expect-title': Object.freeze(['wait-for-url', 'frame-expect-title']),
   'bidi-startup-failure': Object.freeze(['owned-launch', 'playwright-trace', 'bidi-startup-failure']),
   handles: Object.freeze(['handles']),
   'frame-element': Object.freeze(['handles', 'frame-element']),
@@ -81,12 +165,33 @@ const profiles = Object.freeze({
   'context-cookies': Object.freeze(['context-cookies']),
   'route-large-post-data': Object.freeze(['frame-navigation', 'page-routes', 'large-evaluation-inputs', 'large-route-post-data']),
   'page-unroute': Object.freeze(['page-routes', 'page-unroute']),
+  'har-replay': Object.freeze(['page-routes', 'har-replay']),
+  'har-replay-regexp': Object.freeze(['page-routes', 'har-replay', 'route-regexp']),
+  'har-recording': Object.freeze(['page-routes', 'har-recording']),
+  'har-recording-regexp': Object.freeze([
+    'page-routes', 'har-recording', 'har-recording-regexp',
+  ]),
+  'video-recording': Object.freeze(['browser-registry', 'video-recording']),
+  'owned-launch-video-recording': Object.freeze([
+    'owned-launch', 'persistent-context-ignore-https-errors', 'persistent-context-locale',
+    'persistent-context-timezone',
+    'context-geolocation', 'persistent-context-geolocation',
+    'context-geolocation-permission', 'persistent-context-geolocation-permission',
+    'context-http-credentials', 'persistent-context-http-credentials',
+    'persistent-context-offline',
+    'persistent-context-bypass-csp', 'persistent-context-javascript-disabled',
+    'browser-registry', 'video-recording',
+  ]),
   'fill-navigation-commit': Object.freeze(['fill-navigation-commit']),
   'select-option-navigation-commit': Object.freeze(['select-option-navigation-commit']),
   'select-option-timeout-progress': Object.freeze(['select-option-timeout-progress']),
   'react-selectors': Object.freeze(['react-selectors']),
   'request-events': Object.freeze(['request-events']),
   'response-events': Object.freeze(['response-events']),
+  'worker-network-events': Object.freeze(['worker-network-events', 'service-worker-events', 'worker-events', 'page-events', 'context-network-events', 'request-history', 'request-events', 'response-events']),
+  'service-worker-offline': Object.freeze(['service-worker-events', 'worker-events', 'page-events', 'context-offline']),
+  'service-worker-extra-headers': Object.freeze(['worker-network-events', 'service-worker-events', 'worker-events', 'page-events', 'context-network-events', 'request-history', 'request-events', 'response-events', 'extra-headers']),
+  'service-worker-routes': Object.freeze(['service-worker-events', 'worker-events', 'page-events', 'page-routes', 'page-unroute', 'route-regexp', 'route-fulfill-cors']),
   'response-finished': Object.freeze(['response-events', 'response-finished']),
   'request-post-data-json': Object.freeze(['request-events', 'request-post-data-json']),
   'history-navigation': Object.freeze(['history-navigation']),
@@ -102,8 +207,15 @@ const profiles = Object.freeze({
   'set-content-page-events': Object.freeze(['set-content', 'page-events']),
   'set-content-page-events-console': Object.freeze(['set-content', 'page-events', 'console-events']),
   'set-content-page-events-console-bindings': Object.freeze(['set-content', 'page-events', 'console-events', 'page-bindings', 'handles']),
+  'context-bindings': Object.freeze(['page-bindings', 'context-bindings', 'handles']),
   'selector-registration': Object.freeze(['selector-registration']),
   'context-offline': Object.freeze(['context-offline']),
+  'context-locale': Object.freeze(['context-locale']),
+  'context-timezone': Object.freeze(['context-timezone']),
+  'context-geolocation': Object.freeze(['context-geolocation']),
+  'context-permissions': Object.freeze(['context-geolocation-permission']),
+  'context-http-credentials': Object.freeze(['context-http-credentials']),
+  'ignore-https-errors': Object.freeze(['ignore-https-errors']),
   'bypass-csp': Object.freeze(['bypass-csp']),
   'api-request': Object.freeze(['api-request']),
   'api-request-http-proxy': Object.freeze(['api-request', 'api-request-http-proxy']),
@@ -136,6 +248,7 @@ const profiles = Object.freeze({
   'official-conformance-page-route-header-url-unroute-cors-regexp': officialConformancePageRouteHeaderUrlUnrouteCorsRegexpFeatures,
   'official-conformance-page-route-header-url-unroute-cors-regexp-history': officialConformancePageRouteHeaderUrlUnrouteCorsRegexpHistoryFeatures,
   'official-conformance-page-route-header-url-unroute-cors-regexp-history-cookies': officialConformancePageRouteHeaderUrlUnrouteCorsRegexpHistoryCookiesFeatures,
+  'official-conformance-browsercontext-cookies': officialConformanceBrowserContextCookiesFeatures,
   'official-conformance-page-route-header-url-unroute-cors-regexp-history-cookies-large-post-data': officialConformancePageRouteHeaderUrlUnrouteCorsRegexpHistoryCookiesLargePostDataFeatures,
   'official-conformance-page-fill-navigation-commit': officialConformancePageFillNavigationCommitFeatures,
   'official-conformance-page-select-option-timeout-progress': officialConformancePageSelectOptionTimeoutFeatures,
@@ -144,6 +257,10 @@ const profiles = Object.freeze({
   'official-conformance-page-retained-scroll': officialConformancePageRetainedScrollFeatures,
   'official-conformance-page-retained-wait': officialConformancePageRetainedWaitFeatures,
   'official-conformance-page-retained-select-option-value': officialConformancePageRetainedSelectOptionValueFeatures,
+  'official-conformance-page-har-recording': officialConformancePageHarRecordingFeatures,
+  'official-conformance-page-har-replay': officialConformancePageHarReplayFeatures,
+  'official-conformance-page-video-recording': officialConformancePageVideoRecordingFeatures,
+  'official-conformance-page-context-tracing': officialConformancePageContextTracingFeatures,
 });
 function nativeFeatures(profile) {
   if (typeof profile !== 'string' || !Object.hasOwn(profiles, profile)) throw new TypeError('Unknown PLAYWRIGHT_RUST_NATIVE_PROFILE');
@@ -179,8 +296,11 @@ function verifyNativeArtifact(binary, selection) {
   const cdpDefaultUserAgent = typeof binary.cdpDefaultUserAgentEnabled === 'function'
     && binary.cdpDefaultUserAgentEnabled();
   const cdpDefaultUserAgentPort = typeof binary.NativeEnvironment?.prototype?.connectOverCDPWithDefaultUserAgent === 'function';
+  const cdpDefaultUserAgentShape = typeof binary.cdpDefaultUserAgentAbiShape === 'function'
+    && binary.cdpDefaultUserAgentAbiShape() === 2;
   if (cdpDefaultUserAgent !== features.includes('cdp-default-user-agent')
-      || cdpDefaultUserAgentPort !== features.includes('cdp-default-user-agent'))
+      || cdpDefaultUserAgentPort !== features.includes('cdp-default-user-agent')
+      || cdpDefaultUserAgentShape !== features.includes('cdp-default-user-agent'))
     throw new Error(`Playwright Rust native profile mismatch: expected ${selection.profile}. Rebuild this profile explicitly.`);
   const cdpDiscoveryErrors = typeof binary.cdpDiscoveryErrorsEnabled === 'function'
     && binary.cdpDiscoveryErrorsEnabled();
@@ -293,16 +413,84 @@ function verifyNativeArtifact(binary, selection) {
       || persistentContextCertificateError !== persistentContextPreflight
       || persistentContextArgumentError !== persistentContextPreflight)
     throw new Error(`Playwright Rust native profile mismatch: expected ${selection.profile}. Rebuild this profile explicitly.`);
+  const persistentContextLocale = typeof binary.persistentContextLocaleEnabled === 'function'
+    && binary.persistentContextLocaleEnabled();
+  const persistentContextTimezone = typeof binary.persistentContextTimezoneEnabled === 'function'
+    && binary.persistentContextTimezoneEnabled();
+  const persistentContextGeolocation = typeof binary.persistentContextGeolocationEnabled === 'function'
+    && binary.persistentContextGeolocationEnabled();
+  const persistentContextPermissions = typeof binary.persistentContextGeolocationPermissionEnabled === 'function'
+    && binary.persistentContextGeolocationPermissionEnabled();
+  const persistentContextHttpCredentials = typeof binary.persistentContextHttpCredentialsEnabled === 'function'
+    && binary.persistentContextHttpCredentialsEnabled();
+  const persistentContextOffline = typeof binary.persistentContextOfflineEnabled === 'function'
+    && binary.persistentContextOfflineEnabled();
+  const persistentContextBypassCsp = typeof binary.persistentContextBypassCspEnabled === 'function'
+    && binary.persistentContextBypassCspEnabled();
+  const persistentContextJavascriptDisabled = typeof binary.persistentContextJavascriptDisabledEnabled === 'function'
+    && binary.persistentContextJavascriptDisabledEnabled();
+  const persistentContextLocalePort = typeof binary.NativeEnvironment?.prototype?.launchPersistentChromiumWithContextDefaults === 'function';
+  const persistentContextLocaleVideoPort = typeof binary.NativeEnvironment?.prototype?.launchPersistentChromiumWithVideoAndContextDefaults === 'function';
+  const needsPersistentContextDefaults = persistentContextLocale || persistentContextTimezone
+    || persistentContextGeolocation || persistentContextPermissions || persistentContextHttpCredentials
+    || persistentContextOffline
+    || persistentContextBypassCsp || persistentContextJavascriptDisabled;
+  if (persistentContextLocale !== features.includes('persistent-context-locale')
+      || persistentContextTimezone !== features.includes('persistent-context-timezone')
+      || persistentContextGeolocation !== features.includes('persistent-context-geolocation')
+      || persistentContextPermissions !== features.includes('persistent-context-geolocation-permission')
+      || persistentContextHttpCredentials !== features.includes('persistent-context-http-credentials')
+      || persistentContextOffline !== features.includes('persistent-context-offline')
+      || persistentContextBypassCsp !== features.includes('persistent-context-bypass-csp')
+      || persistentContextJavascriptDisabled !== features.includes('persistent-context-javascript-disabled')
+      || persistentContextLocalePort !== needsPersistentContextDefaults
+      || persistentContextLocaleVideoPort !== (needsPersistentContextDefaults && features.includes('video-recording')))
+    throw new Error(`Playwright Rust native profile mismatch: expected ${selection.profile}. Rebuild this profile explicitly.`);
   const ownedLaunch = typeof binary.ownedLaunchEnabled === 'function'
     && binary.ownedLaunchEnabled()
-    && typeof binary.NativeEnvironment?.prototype?.launchChromium === 'function';
+    && typeof binary.NativeEnvironment?.prototype?.launchChromium === 'function'
+    && typeof binary.NativeEnvironment?.prototype?.launchPersistentChromium === 'function';
   if (ownedLaunch !== features.includes('owned-launch'))
+    throw new Error(`Playwright Rust native profile mismatch: expected ${selection.profile}. Rebuild this profile explicitly.`);
+  const officialTestBrowserKill = typeof binary.NativeSession?.prototype?.killOwnedBrowserForTests === 'function';
+  if (officialTestBrowserKill !== features.includes('official-test-browser-kill'))
     throw new Error(`Playwright Rust native profile mismatch: expected ${selection.profile}. Rebuild this profile explicitly.`);
   const playwrightTraceDir = typeof binary.playwrightTraceDirEnabled === 'function'
     && binary.playwrightTraceDirEnabled();
   const playwrightTraceDirLaunch = typeof binary.NativeEnvironment?.prototype?.launchChromiumWithTracesDir === 'function';
   if (playwrightTraceDir !== features.includes('playwright-trace')
       || playwrightTraceDirLaunch !== features.includes('playwright-trace'))
+    throw new Error(`Playwright Rust native profile mismatch: expected ${selection.profile}. Rebuild this profile explicitly.`);
+  const contextTracingScreenshots = [
+    binary.NativeSession?.prototype?.contextTracingStart,
+    binary.NativeSession?.prototype?.contextTracingStop,
+  ].every(binding => typeof binding === 'function');
+  if (contextTracingScreenshots !== features.includes('context-tracing-screenshots'))
+    throw new Error(`Playwright Rust native profile mismatch: expected ${selection.profile}. Rebuild this profile explicitly.`);
+  const contextTracingChunks = [
+    binary.NativeSession?.prototype?.contextTracingStartChunk,
+    binary.NativeSession?.prototype?.contextTracingStopChunk,
+    binary.NativeSession?.prototype?.contextTracingGroup,
+    binary.NativeSession?.prototype?.contextTracingGroupEnd,
+  ].every(binding => typeof binding === 'function');
+  if (contextTracingChunks !== features.includes('context-tracing-chunks'))
+    throw new Error(`Playwright Rust native profile mismatch: expected ${selection.profile}. Rebuild this profile explicitly.`);
+  const contextTracingActions = [
+    binary.NativeSession?.prototype?.contextTracingActionBegin,
+    binary.NativeSession?.prototype?.contextTracingActionEnd,
+  ].every(binding => typeof binding === 'function');
+  if (contextTracingActions !== features.includes('context-tracing-actions'))
+    throw new Error(`Playwright Rust native profile mismatch: expected ${selection.profile}. Rebuild this profile explicitly.`);
+  const contextTracingSnapshots = typeof binary.NativeSession?.prototype?.contextTracingCaptureSnapshot === 'function';
+  if (contextTracingSnapshots !== features.includes('context-tracing-snapshots'))
+    throw new Error(`Playwright Rust native profile mismatch: expected ${selection.profile}. Rebuild this profile explicitly.`);
+  const contextTracingConsole = typeof binary.contextTracingConsoleEnabled === 'function'
+    && binary.contextTracingConsoleEnabled();
+  if (contextTracingConsole !== features.includes('context-tracing-console'))
+    throw new Error(`Playwright Rust native profile mismatch: expected ${selection.profile}. Rebuild this profile explicitly.`);
+  const contextTracingNetwork = typeof binary.contextTracingNetworkEnabled === 'function'
+    && binary.contextTracingNetworkEnabled();
+  if (contextTracingNetwork !== features.includes('context-tracing-network'))
     throw new Error(`Playwright Rust native profile mismatch: expected ${selection.profile}. Rebuild this profile explicitly.`);
   const bidiStartupFailure = typeof binary.bidiStartupFailureEnabled === 'function'
     && binary.bidiStartupFailureEnabled();
@@ -339,18 +527,56 @@ function verifyNativeArtifact(binary, selection) {
     && typeof binary.NativeSession?.prototype?.handleDialog === 'function';
   const pageRoutes = typeof binary.pageRoutesEnabled === 'function' && binary.pageRoutesEnabled()
     && typeof binary.NativeSession?.prototype?.pageRoute === 'function'
+    && typeof binary.NativeSession?.prototype?.contextRoute === 'function'
     && typeof binary.NativeSession?.prototype?.nextPageRouteCall === 'function'
     && typeof binary.NativeSession?.prototype?.pageRouteContinue === 'function';
+  const expectsHarReplay = features.includes('har-replay') || features.includes('har-recording');
+  const harReplay = typeof binary.harReplayEnabled === 'function'
+    && binary.harReplayEnabled()
+    && typeof binary.NativeSession?.prototype?.pageRouteFromHar === 'function'
+    && typeof binary.NativeSession?.prototype?.contextRouteFromHar === 'function';
+  if (harReplay !== expectsHarReplay)
+    throw new Error(`Playwright Rust native profile mismatch: expected ${selection.profile}. Rebuild this profile explicitly.`);
+  const harReplayRegExp = typeof binary.NativeSession?.prototype?.pageRouteFromHarRegExp === 'function'
+    && typeof binary.NativeSession?.prototype?.contextRouteFromHarRegExp === 'function';
+  if (harReplayRegExp !== (expectsHarReplay && features.includes('route-regexp')))
+    throw new Error(`Playwright Rust native profile mismatch: expected ${selection.profile}. Rebuild this profile explicitly.`);
+  const harRecording = typeof binary.harRecordingEnabled === 'function'
+    && binary.harRecordingEnabled()
+    && typeof binary.NativeSession?.prototype?.pageRecordHar === 'function'
+    && typeof binary.NativeSession?.prototype?.contextRecordHar === 'function';
+  if (harRecording !== features.includes('har-recording'))
+    throw new Error(`Playwright Rust native profile mismatch: expected ${selection.profile}. Rebuild this profile explicitly.`);
+  const harRecordingRegExp = typeof binary.harRecordingRegExpEnabled === 'function'
+    && binary.harRecordingRegExpEnabled()
+    && typeof binary.NativeSession?.prototype?.pageRecordHarRegExp === 'function'
+    && typeof binary.NativeSession?.prototype?.contextRecordHarRegExp === 'function';
+  if (harRecordingRegExp !== features.includes('har-recording-regexp'))
+    throw new Error(`Playwright Rust native profile mismatch: expected ${selection.profile}. Rebuild this profile explicitly.`);
+  const videoRecording = typeof binary.videoRecordingEnabled === 'function'
+    && binary.videoRecordingEnabled()
+    && typeof binary.ffmpegExecutablePathSnapshot === 'function'
+    && typeof binary.NativeSession?.prototype?.installContextVideo === 'function'
+    && typeof binary.NativeSession?.prototype?.newBrowserPageWithVideo === 'function'
+    && typeof binary.NativeSession?.prototype?.pageVideoPath === 'function'
+    && typeof binary.NativeSession?.prototype?.pageVideoSaveAs === 'function'
+    && typeof binary.NativeSession?.prototype?.pageVideoDelete === 'function';
+  if (videoRecording !== features.includes('video-recording'))
+    throw new Error(`Playwright Rust native profile mismatch: expected ${selection.profile}. Rebuild this profile explicitly.`);
   const pageUnroute = typeof binary.pageUnrouteEnabled === 'function'
     && binary.pageUnrouteEnabled();
-  const pageUnrouteBinding = typeof binary.NativeSession?.prototype?.pageUnroute === 'function';
+  const pageUnrouteBinding = typeof binary.NativeSession?.prototype?.pageUnroute === 'function'
+    && typeof binary.NativeSession?.prototype?.contextUnroute === 'function'
+    && typeof binary.NativeSession?.prototype?.pageUnrouteAll === 'function'
+    && typeof binary.NativeSession?.prototype?.contextUnrouteAll === 'function';
   if (pageUnroute !== features.includes('page-unroute')
       || pageUnrouteBinding !== pageUnroute)
     throw new Error(`Playwright Rust native profile mismatch: expected ${selection.profile}. Rebuild this profile explicitly.`);
   const routeHeaderUrlOverrides = typeof binary.routeHeaderUrlOverridesEnabled === 'function'
     && binary.routeHeaderUrlOverridesEnabled();
   const routeHeaderUrlBindings = typeof binary.NativeSession?.prototype?.pageRouteContinueWithHeaders === 'function'
-    && typeof binary.NativeSession?.prototype?.pageRouteFallbackWithUrl === 'function';
+    && typeof binary.NativeSession?.prototype?.pageRouteFallbackWithUrl === 'function'
+    && typeof binary.NativeSession?.prototype?.pageRouteFallbackWithOverrides === 'function';
   if (routeHeaderUrlOverrides !== features.includes('route-header-url-overrides')
       || routeHeaderUrlBindings !== routeHeaderUrlOverrides)
     throw new Error(`Playwright Rust native profile mismatch: expected ${selection.profile}. Rebuild this profile explicitly.`);
@@ -362,7 +588,8 @@ function verifyNativeArtifact(binary, selection) {
     throw new Error(`Playwright Rust native profile mismatch: expected ${selection.profile}. Rebuild this profile explicitly.`);
   const routeRegExp = typeof binary.routeRegExpEnabled === 'function'
     && binary.routeRegExpEnabled();
-  const routeRegExpBinding = typeof binary.NativeSession?.prototype?.pageRouteRegExp === 'function';
+  const routeRegExpBinding = typeof binary.NativeSession?.prototype?.pageRouteRegExp === 'function'
+    && typeof binary.NativeSession?.prototype?.contextRouteRegExp === 'function';
   if (routeRegExp !== features.includes('route-regexp')
       || routeRegExpBinding !== routeRegExp)
     throw new Error(`Playwright Rust native profile mismatch: expected ${selection.profile}. Rebuild this profile explicitly.`);
@@ -375,9 +602,18 @@ function verifyNativeArtifact(binary, selection) {
     throw new Error(`Playwright Rust native profile mismatch: expected ${selection.profile}. Rebuild this profile explicitly.`);
   const contextCookies = typeof binary.contextCookiesEnabled === 'function'
     && binary.contextCookiesEnabled();
-  const contextCookiesBinding = typeof binary.NativeSession?.prototype?.contextAddCookies === 'function';
+  const contextCookiesBinding = typeof binary.NativeSession?.prototype?.contextCookies === 'function'
+    && typeof binary.NativeSession?.prototype?.contextAddCookies === 'function'
+    && typeof binary.NativeSession?.prototype?.contextClearCookies === 'function';
   if (contextCookies !== features.includes('context-cookies')
       || contextCookiesBinding !== contextCookies)
+    throw new Error(`Playwright Rust native profile mismatch: expected ${selection.profile}. Rebuild this profile explicitly.`);
+  const contextStorageState = typeof binary.contextStorageStateEnabled === 'function'
+    && binary.contextStorageStateEnabled();
+  const contextStorageStateBinding = typeof binary.NativeSession?.prototype?.contextStorageState === 'function'
+    && typeof binary.NativeSession?.prototype?.contextSetStorageState === 'function';
+  if (contextStorageState !== features.includes('context-storage-state')
+      || contextStorageStateBinding !== contextStorageState)
     throw new Error(`Playwright Rust native profile mismatch: expected ${selection.profile}. Rebuild this profile explicitly.`);
   const largeEvaluationInputs = typeof binary.largeEvaluationInputsEnabled === 'function'
     && binary.largeEvaluationInputsEnabled();
@@ -392,13 +628,22 @@ function verifyNativeArtifact(binary, selection) {
   const consoleListenerControls = typeof binary.NativeSession?.prototype?.setPageConsoleListener === 'function'
     && typeof binary.NativeSession?.prototype?.setContextConsoleListener === 'function';
   const pageBindings = typeof binary.pageBindingsEnabled === 'function' && binary.pageBindingsEnabled();
+  const contextBindings = typeof binary.contextBindingsEnabled === 'function'
+    && binary.contextBindingsEnabled()
+    && typeof binary.NativeSession?.prototype?.contextExposeBinding === 'function';
+  if (contextBindings !== features.includes('context-bindings'))
+    throw new Error(`Playwright Rust native profile mismatch: expected ${selection.profile}. Rebuild this profile explicitly.`);
   const initScripts = typeof binary.initScriptsEnabled === 'function' && binary.initScriptsEnabled();
   const waitForFunction = typeof binary.waitForFunctionEnabled === 'function' && binary.waitForFunctionEnabled();
   const waitForUrl = typeof binary.waitForUrlEnabled === 'function' && binary.waitForUrlEnabled();
+  const frameExpectTitle = typeof binary.NativeSession?.prototype?.frameWaitForTitle === 'function';
+  if (frameExpectTitle !== features.includes('frame-expect-title'))
+    throw new Error(`Playwright Rust native profile mismatch: expected ${selection.profile}. Rebuild this profile explicitly.`);
   const waitForTimeout = typeof binary.waitForTimeoutEnabled === 'function' && binary.waitForTimeoutEnabled();
   const timeoutSettings = typeof binary.timeoutSettingsEnabled === 'function' && binary.timeoutSettingsEnabled();
   const emulateMedia = typeof binary.emulateMediaEnabled === 'function' && binary.emulateMediaEnabled();
   const deviceEmulation = typeof binary.deviceEmulationEnabled === 'function' && binary.deviceEmulationEnabled()
+    && typeof binary.NativeSession?.prototype?.newContextWithDeviceOptions === 'function'
     && typeof binary.NativeSession?.prototype?.newContextWithHasTouch === 'function';
   const touchscreenInput = typeof binary.touchscreenInputEnabled === 'function' && binary.touchscreenInputEnabled()
     && typeof binary.NativeSession?.prototype?.touchscreenTap === 'function';
@@ -410,6 +655,8 @@ function verifyNativeArtifact(binary, selection) {
   const pageViewport = typeof binary.pageViewportEnabled === 'function' && binary.pageViewportEnabled()
     && typeof binary.NativeSession?.prototype?.pageSetViewportSize === 'function';
   const requestGc = typeof binary.requestGcEnabled === 'function' && binary.requestGcEnabled();
+  const pagePdf = typeof binary.pagePdfEnabled === 'function' && binary.pagePdfEnabled()
+    && typeof binary.NativeSession?.prototype?.pagePdf === 'function';
   const responseBody = typeof binary.responseBodyEnabled === 'function' && binary.responseBodyEnabled();
   const responseRequest = typeof binary.responseRequestEnabled === 'function' && binary.responseRequestEnabled();
   const requestEvents = typeof binary.requestEventsEnabled === 'function' && binary.requestEventsEnabled()
@@ -418,6 +665,13 @@ function verifyNativeArtifact(binary, selection) {
   const responseEvents = typeof binary.responseEventsEnabled === 'function' && binary.responseEventsEnabled()
     && typeof binary.NativeSession?.prototype?.nextResponseNotice === 'function'
     && typeof binary.NativeSession?.prototype?.pageUrlGlob === 'function';
+  const serviceWorkerEvents = typeof binary.serviceWorkerEventsEnabled === 'function'
+    && binary.serviceWorkerEventsEnabled()
+    && typeof binary.NativeSession?.prototype?.nextServiceWorkerNotice === 'function'
+    && typeof binary.NativeSession?.prototype?.contextServiceWorkers === 'function';
+  const workerNetworkEvents = typeof binary.workerNetworkEventsEnabled === 'function'
+    && binary.workerNetworkEventsEnabled()
+    && typeof binary.NativeSession?.prototype?.workerEvaluate === 'function';
   const responseFinished = typeof binary.responseFinishedEnabled === 'function' && binary.responseFinishedEnabled()
     && typeof binary.NativeSession?.prototype?.responseFinished === 'function';
   const requestFrame = typeof binary.requestFrameEnabled === 'function' && binary.requestFrameEnabled();
@@ -478,6 +732,12 @@ function verifyNativeArtifact(binary, selection) {
   const payloadImport = typeof binary.retainedSerializedPayloadImportEnabled === 'function' && binary.retainedSerializedPayloadImportEnabled();
   const payloadMutation = typeof binary.retainedSerializedPayloadMutationEnabled === 'function' && binary.retainedSerializedPayloadMutationEnabled();
   const apiRequest = typeof binary.apiRequestEnabled === 'function' && binary.apiRequestEnabled();
+  const apiRequestTracing = typeof binary.apiRequestTracingEnabled === 'function'
+    && binary.apiRequestTracingEnabled()
+    && typeof binary.NativeApiRequestContext?.prototype?.traceStart === 'function'
+    && typeof binary.NativeApiRequestContext?.prototype?.traceStop === 'function';
+  if (apiRequestTracing !== features.includes('api-request-tracing'))
+    throw new Error(`Playwright Rust native profile mismatch: expected ${selection.profile}. Rebuild this profile explicitly.`);
   const apiRequestClientCertificates = typeof binary.apiRequestClientCertificatesEnabled === 'function' && binary.apiRequestClientCertificatesEnabled();
   const apiRequestHttpProxy = typeof binary.apiRequestHttpProxyEnabled === 'function' && binary.apiRequestHttpProxyEnabled();
   const apiRequestSocks5Proxy = typeof binary.apiRequestSocks5ProxyEnabled === 'function' && binary.apiRequestSocks5ProxyEnabled();
@@ -487,6 +747,39 @@ function verifyNativeArtifact(binary, selection) {
   const contextOffline = typeof binary.contextOfflineEnabled === 'function' && binary.contextOfflineEnabled()
     && typeof binary.NativeSession?.prototype?.newContextWithOffline === 'function'
     && typeof binary.NativeSession?.prototype?.setContextOffline === 'function';
+  const contextLocale = typeof binary.contextLocaleEnabled === 'function' && binary.contextLocaleEnabled()
+    && typeof binary.NativeSession?.prototype?.newContextWithLocale === 'function';
+  const contextTimezone = typeof binary.contextTimezoneEnabled === 'function' && binary.contextTimezoneEnabled();
+  const contextGeolocation = typeof binary.contextGeolocationEnabled === 'function' && binary.contextGeolocationEnabled()
+    && typeof binary.NativeSession?.prototype?.setContextGeolocation === 'function';
+  const contextPermissions = typeof binary.contextGeolocationPermissionEnabled === 'function'
+    && binary.contextGeolocationPermissionEnabled()
+    && typeof binary.NativeSession?.prototype?.grantContextPermissions === 'function'
+    && typeof binary.NativeSession?.prototype?.clearContextPermissions === 'function';
+  const contextHttpCredentials = typeof binary.contextHttpCredentialsEnabled === 'function'
+    && binary.contextHttpCredentialsEnabled()
+    && typeof binary.NativeSession?.prototype?.setContextHttpCredentials === 'function';
+  const contextPolicies = typeof binary.NativeSession?.prototype?.newContextWithPolicies === 'function';
+  const contextPoliciesWithHeaders = typeof binary.NativeSession?.prototype?.newContextWithPoliciesAndExtraHttpHeaders === 'function';
+  const needsContextPolicies = features.some(feature => [
+    'extra-headers',
+    'context-locale',
+    'context-timezone',
+    'context-geolocation',
+    'context-geolocation-permission',
+    'context-http-credentials',
+    'context-offline',
+    'context-proxy',
+    'ignore-https-errors',
+    'bypass-csp',
+  ].includes(feature));
+  if ((needsContextPolicies && !contextPolicies)
+      || (features.includes('extra-headers') && !contextPoliciesWithHeaders))
+    throw new Error(`Playwright Rust native profile mismatch: expected ${selection.profile}. Rebuild this profile explicitly.`);
+  const ignoreHttpsErrors = typeof binary.ignoreHttpsErrorsEnabled === 'function' && binary.ignoreHttpsErrorsEnabled()
+    && typeof binary.NativeSession?.prototype?.newContextWithIgnoreHttpsErrors === 'function'
+    && (!features.includes('device-emulation')
+      || typeof binary.NativeSession?.prototype?.newContextWithDeviceOptionsAndIgnoreHttpsErrors === 'function');
   const bypassCsp = typeof binary.bypassCspEnabled === 'function' && binary.bypassCspEnabled()
     && typeof binary.NativeSession?.prototype?.newContextWithBypassCsp === 'function';
   const fillNavigationCommit = typeof binary.fillNavigationCommitEnabled === 'function' && binary.fillNavigationCommitEnabled();
@@ -512,12 +805,14 @@ function verifyNativeArtifact(binary, selection) {
     throw new Error(`Playwright Rust native profile mismatch: expected ${selection.profile}. Rebuild this profile explicitly.`);
   if (requestEvents !== features.includes('request-events')
       || responseEvents !== features.includes('response-events')
+      || serviceWorkerEvents !== features.includes('service-worker-events')
+      || workerNetworkEvents !== features.includes('worker-network-events')
       || responseFinished !== features.includes('response-finished')
       || requestFrame !== features.includes('request-frame')
       || !orderedNetwork || !requestLifecycle
       || requestPostDataJson !== features.includes('request-post-data-json'))
     throw new Error(`Playwright Rust native profile mismatch: expected ${selection.profile}. Rebuild this profile explicitly.`);
-  if (drag !== features.includes('drag-runtime') || frame !== features.includes('frame-navigation') || historyNavigation !== features.includes('history-navigation') || setContent !== features.includes('set-content') || pageEvents !== features.includes('page-events') || pageDialogs !== features.includes('page-dialogs') || pageRoutes !== features.includes('page-routes') || consoleEvents !== features.includes('console-events') || (consoleEvents && !consoleListenerControls) || pageBindings !== features.includes('page-bindings') || initScripts !== features.includes('init-scripts') || timeoutSettings !== features.includes('timeout-settings') || emulateMedia !== features.includes('emulate-media') || deviceEmulation !== features.includes('device-emulation') || touchscreenInput !== features.includes('touchscreen-input') || (needsElementHandleTap && !elementHandleTap) || pageViewport !== features.includes('page-viewport') || requestGc !== features.includes('request-gc') || responseBody !== features.includes('response-body') || locatorBoundingBox !== features.includes('locator-bounding-box') || locatorHighlight !== features.includes('locator-highlight') || locatorScreenshot !== features.includes('locator-screenshot') || locatorDomActions !== features.includes('locator-dom-actions') || selectorRegistration !== features.includes('selector-registration') || waitForFunction !== features.includes('wait-for-function') || waitForUrl !== features.includes('wait-for-url') || waitForTimeout !== features.includes('wait-for-timeout') || largeEvaluationResults !== features.includes('large-evaluation-results') || headers !== features.includes('extra-headers') || contextOffline !== features.includes('context-offline') || bypassCsp !== features.includes('bypass-csp') || close !== features.includes('concurrent-close') || upload !== features.includes('file-input') || handles !== features.includes('handles') || elementHandleDom !== features.includes('element-handle-dom') || retained !== features.includes('retained-file-input') || marking !== features.includes('retained-target-marking') || prevalidation !== features.includes('retained-target-prevalidation') || instrumentation !== features.includes('retained-input-instrumentation') || serialization !== features.includes('retained-call-argument-serialization') || payloadImport !== features.includes('retained-serialized-payload-import') || payloadMutation !== features.includes('retained-serialized-payload-mutation') || apiRequest !== features.includes('api-request') || apiRequestClientCertificates !== features.includes('api-request-client-certificates') || apiRequestHttpProxy !== features.includes('api-request-http-proxy') || apiRequestSocks5Proxy !== features.includes('api-request-socks5-proxy') || apiRequestProxyBypass !== features.includes('api-request-proxy-bypass') || contextApiRequest !== features.includes('context-api-request') || contextProxy !== features.includes('context-proxy'))
+  if (drag !== features.includes('drag-runtime') || frame !== features.includes('frame-navigation') || historyNavigation !== features.includes('history-navigation') || setContent !== features.includes('set-content') || pageEvents !== features.includes('page-events') || pageDialogs !== features.includes('page-dialogs') || pageRoutes !== features.includes('page-routes') || consoleEvents !== features.includes('console-events') || (consoleEvents && !consoleListenerControls) || pageBindings !== features.includes('page-bindings') || initScripts !== features.includes('init-scripts') || timeoutSettings !== features.includes('timeout-settings') || emulateMedia !== features.includes('emulate-media') || deviceEmulation !== features.includes('device-emulation') || touchscreenInput !== features.includes('touchscreen-input') || (needsElementHandleTap && !elementHandleTap) || pageViewport !== features.includes('page-viewport') || requestGc !== features.includes('request-gc') || pagePdf !== features.includes('page-pdf') || responseBody !== features.includes('response-body') || locatorBoundingBox !== features.includes('locator-bounding-box') || locatorHighlight !== features.includes('locator-highlight') || locatorScreenshot !== features.includes('locator-screenshot') || locatorDomActions !== features.includes('locator-dom-actions') || selectorRegistration !== features.includes('selector-registration') || waitForFunction !== features.includes('wait-for-function') || waitForUrl !== features.includes('wait-for-url') || waitForTimeout !== features.includes('wait-for-timeout') || largeEvaluationResults !== features.includes('large-evaluation-results') || headers !== features.includes('extra-headers') || contextOffline !== features.includes('context-offline') || contextLocale !== features.includes('context-locale') || contextTimezone !== features.includes('context-timezone') || contextGeolocation !== features.includes('context-geolocation') || contextPermissions !== features.includes('context-geolocation-permission') || contextHttpCredentials !== features.includes('context-http-credentials') || ignoreHttpsErrors !== features.includes('ignore-https-errors') || bypassCsp !== features.includes('bypass-csp') || close !== features.includes('concurrent-close') || upload !== features.includes('file-input') || handles !== features.includes('handles') || elementHandleDom !== features.includes('element-handle-dom') || retained !== features.includes('retained-file-input') || marking !== features.includes('retained-target-marking') || prevalidation !== features.includes('retained-target-prevalidation') || instrumentation !== features.includes('retained-input-instrumentation') || serialization !== features.includes('retained-call-argument-serialization') || payloadImport !== features.includes('retained-serialized-payload-import') || payloadMutation !== features.includes('retained-serialized-payload-mutation') || apiRequest !== features.includes('api-request') || apiRequestClientCertificates !== features.includes('api-request-client-certificates') || apiRequestHttpProxy !== features.includes('api-request-http-proxy') || apiRequestSocks5Proxy !== features.includes('api-request-socks5-proxy') || apiRequestProxyBypass !== features.includes('api-request-proxy-bypass') || contextApiRequest !== features.includes('context-api-request') || contextProxy !== features.includes('context-proxy'))
     throw new Error(`Playwright Rust native profile mismatch: expected ${selection.profile}. Rebuild this profile explicitly.`);
 }
 module.exports = { nativeAbiVersion, nativeArtifact, resolveNativeArtifact, verifyNativeArtifact, nativeFeatures };

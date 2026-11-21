@@ -14,8 +14,6 @@ const differentialAvailable = macArm64 && upstreamPackage && existsSync(join(ups
 
 const expectedMacArm64Suffixes = {
   chromium: 'chromium-1208/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing',
-  firefox: 'firefox-1509/firefox/Nightly.app/Contents/MacOS/firefox',
-  webkit: 'webkit-2248/pw_run.sh',
 };
 
 const childSource = `
@@ -31,7 +29,7 @@ const childSource = `
     }
   }
   function paths() {
-    return Object.fromEntries(['chromium', 'firefox', 'webkit'].map(engine => [engine, api[engine].executablePath()]));
+    return { chromium: api.chromium.executablePath() };
   }
   change(JSON.parse(process.argv[2]));
   const first = paths();
@@ -142,7 +140,7 @@ test('package configuration fallback applies when higher-priority names are abse
   const paths = compareWithOracle({ npm_package_config_playwright_browsers_path: registry });
 
   // Assert
-  assert.equal(paths.first.webkit, join(registry, expectedMacArm64Suffixes.webkit));
+  assert.equal(paths.first.chromium, join(registry, expectedMacArm64Suffixes.chromium));
 });
 
 test('direct empty browser path chooses the platform cache rather than npm fallback', { skip: !differentialAvailable }, () => {
@@ -217,7 +215,7 @@ test('absolute browser path ignores a relative INIT_CWD', { skip: !differentialA
   const paths = compareWithOracle({ PLAYWRIGHT_BROWSERS_PATH: registry, INIT_CWD: 'relative-root' });
 
   // Assert
-  assert.equal(paths.first.firefox, join(registry, expectedMacArm64Suffixes.firefox));
+  assert.equal(paths.first.chromium, join(registry, expectedMacArm64Suffixes.chromium));
 });
 
 test('Mac cache home is fixed at import and ignores XDG_CACHE_HOME', { skip: !differentialAvailable }, () => {
@@ -229,7 +227,7 @@ test('Mac cache home is fixed at import and ignores XDG_CACHE_HOME', { skip: !di
   const paths = compareWithOracle(environment, { HOME: join(tmpdir(), 'playwright-rust-home-B-not-installed') });
 
   // Assert
-  assert.equal(paths.first.webkit, join(home, 'Library/Caches/ms-playwright', expectedMacArm64Suffixes.webkit));
+  assert.equal(paths.first.chromium, join(home, 'Library/Caches/ms-playwright', expectedMacArm64Suffixes.chromium));
 });
 
 test('host override changes executable layout but not Mac cache root', { skip: !differentialAvailable }, () => {
@@ -245,6 +243,4 @@ test('host override changes executable layout but not Mac cache root', { skip: !
   // Assert
   const cache = join(home, 'Library/Caches/ms-playwright');
   assert.equal(paths.first.chromium, join(cache, 'chromium-1208/chrome-linux/chrome'));
-  assert.equal(paths.first.firefox, join(cache, 'firefox-1509/firefox/firefox'));
-  assert.equal(paths.first.webkit, join(cache, 'webkit_debian11_arm64_special-2105/pw_run.sh'));
 });

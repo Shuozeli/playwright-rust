@@ -172,7 +172,7 @@ pub struct TokioCleanupExecutor {
 
 struct TokioCleanupState {
     capacity: usize,
-    permits: Arc<Semaphore>,
+    permits: Option<Arc<Semaphore>>,
     reserved: AtomicUsize,
     peak_reserved: AtomicUsize,
     in_flight: AtomicUsize,
@@ -221,7 +221,7 @@ impl Error for TokioCleanupPolicyError {}
 
 struct TokioCleanupAdmission {
     handle: Handle,
-    permit: OwnedSemaphorePermit,
+    permit: Option<OwnedSemaphorePermit>,
 }
 
 pub struct TokioCleanupReservation {
@@ -256,7 +256,48 @@ impl TokioCleanupExecutor {
         Self {
             shared: Arc::new(TokioCleanupState {
                 capacity,
-                permits: Arc::new(Semaphore::new(capacity)),
+                permits: Some(Arc::new(Semaphore::new(capacity))),
+                reserved: AtomicUsize::new(0),
+                peak_reserved: AtomicUsize::new(0),
+                in_flight: AtomicUsize::new(0),
+                peak_in_flight: AtomicUsize::new(0),
+                next_job_id: AtomicU64::new(1),
+                accepted: AtomicU64::new(0),
+                rejected: AtomicU64::new(0),
+                attempts: AtomicU64::new(0),
+                retries: AtomicU64::new(0),
+                completed: AtomicU64::new(0),
+                failed: AtomicU64::new(0),
+                timed_out: AtomicU64::new(0),
+                cancelled: AtomicU64::new(0),
+                drain_timeouts: AtomicU64::new(0),
+                reporter_panics: AtomicU64::new(0),
+                gate: Mutex::new(TokioCleanupGate {
+                    accepting: true,
+                    drained_reported: false,
+                }),
+                drained: Notify::new(),
+                reporter: Arc::new(reporter),
+            }),
+            job_timeout: None,
+        }
+    }
+
+    /// Creates a cleanup executor whose reservations grow with allocator
+    /// availability instead of exposing a fabricated public object-count cap.
+    /// Shutdown still closes admission and drains every accepted reservation.
+    pub fn new_allocator_backed() -> Self {
+        Self::new_allocator_backed_with_reporter(DiscardTokioCleanupEvents)
+    }
+
+    pub fn new_allocator_backed_with_reporter<Reporter>(reporter: Reporter) -> Self
+    where
+        Reporter: TokioCleanupReporter,
+    {
+        Self {
+            shared: Arc::new(TokioCleanupState {
+                capacity: usize::MAX,
+                permits: None,
                 reserved: AtomicUsize::new(0),
                 peak_reserved: AtomicUsize::new(0),
                 in_flight: AtomicUsize::new(0),
@@ -489,14 +530,17 @@ impl TokioCleanupExecutor {
             Ok(handle) => handle,
             Err(_) => return Err(CleanupSubmitError::Unavailable),
         };
-        let permit = match Arc::clone(&self.shared.permits).try_acquire_owned() {
-            Ok(permit) => permit,
-            Err(TryAcquireError::NoPermits) => {
-                return Err(CleanupSubmitError::CapacityExceeded {
-                    limit: self.shared.capacity,
-                });
-            }
-            Err(TryAcquireError::Closed) => return Err(CleanupSubmitError::Unavailable),
+        let permit = match self.shared.permits.as_ref() {
+            Some(permits) => match Arc::clone(permits).try_acquire_owned() {
+                Ok(permit) => Some(permit),
+                Err(TryAcquireError::NoPermits) => {
+                    return Err(CleanupSubmitError::CapacityExceeded {
+                        limit: self.shared.capacity,
+                    });
+                }
+                Err(TryAcquireError::Closed) => return Err(CleanupSubmitError::Unavailable),
+            },
+            None => None,
         };
         Ok(TokioCleanupAdmission { handle, permit })
     }
@@ -732,7 +776,7 @@ fn start_cleanup_job(
     let mut guard = TokioCleanupTaskGuard {
         shared,
         job_id,
-        permit: Some(admission.permit),
+        permit: admission.permit,
         terminal: false,
     };
     admission.handle.spawn(async move {
@@ -1132,6 +1176,27 @@ mod tests {
         assert_eq!(metrics.accepted, 1);
         assert_eq!(metrics.rejected, 1);
         assert_eq!(metrics.completed, 1);
+    }
+
+    #[tokio::test]
+    async fn allocator_backed_cleanup_reserves_past_legacy_object_counts() {
+        // Arrange
+        let executor = TokioCleanupExecutor::new_allocator_backed();
+
+        // Act
+        let reservations = (0..129)
+            .map(|_| {
+                executor
+                    .try_reserve()
+                    .expect("allocator-backed cleanup should not expose a count cap")
+            })
+            .collect::<Vec<_>>();
+
+        // Assert
+        assert_eq!(executor.metrics().capacity, usize::MAX);
+        assert_eq!(executor.metrics().reserved, 129);
+        drop(reservations);
+        assert_eq!(executor.metrics().reserved, 0);
     }
 
     #[tokio::test]

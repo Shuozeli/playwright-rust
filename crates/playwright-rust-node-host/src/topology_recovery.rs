@@ -14,7 +14,7 @@ pub(super) async fn initialize_snapshot(
     driver: &mut ChromiumTopologyEventDriver,
     runtime: &CommandRuntime,
 ) -> Result<ChromiumTopologyEventDriverOutcome, HostError> {
-    let snapshot_event_limit = driver.profile().event_channel_capacity();
+    let snapshot_event_limit = crate::profile::MAX_INITIAL_TOPOLOGY_SNAPSHOT_EVENTS;
     let result = driver
         .initialize_snapshot(runtime, snapshot_event_limit)
         .await;

@@ -1,4 +1,275 @@
-<!-- agent-updated: 2026-11-14T22:25:00Z -->
+<!-- agent-updated: 2026-11-21T03:28:53Z -->
+
+## Current allocator-backed compatibility policy (2026-11-14)
+
+The ABI133 Node and Python environments impose no fabricated count on published
+or pending sessions, binding-owned Context/Page registries, core topology,
+public browser CDP sessions, or browser-produced screenshot/PDF/body results.
+The Node environment's weak publication-port registry is allocator-backed as
+well; its fixed administrative lease covers only the registry header. A
+129-owner regression crosses the former 16-port cap and prunes dead ownership.
+Node and Python FFI Connect ownership is allocator-backed too. The existing
+sixteen-slot value now limits only native network/process startup through a
+fair semaphore; callers waiting to start and results awaiting foreign
+conversion consume no slot. Each admitted call still owns its arguments,
+future, ticket, shutdown registration, and result until cancellation or exact
+delivery. A 129-caller regression proves the former count is not a public
+admission cap, while separate tests prove FIFO cancellation, promotion before
+foreign delivery, and shutdown of both active and waiting Connect work.
+Node Page and browser-root CDP-session maps are allocator-backed, as are Node
+and Python CDP listener collections and Python remote Page/Context/Browser
+lifecycle listeners. Node's ordered promise tail retains simultaneous sends
+without a separate 32-call rejection. Python retains asynchronous callback
+tasks in the exact session and cancels unfinished tasks on session retirement;
+it does not cancel caller-owned futures returned by handlers. Native public-CDP
+unread-event queues now grow with actual retained events. The 64-event adapter
+batch and eight-batch flush quantum remain scheduling fairness controls, not
+queue capacity or payload limits. Regressions cross every former facade count
+at 129 owners or calls.
+Public raw CDP parameters have no fabricated 1 MiB ceiling. Node and Python
+reserve FFI bytes from the observed serialized JSON; the Rust host accepts the
+channel's optional-`any` parameter value and sends through one allocator-backed
+large-command pool with 64 KiB fragments. Node uses ordinary `JSON.stringify`
+semantics, including its `NaN`/infinity-to-`null` projection, rather than a
+private finite-number rule. `cdp-session`, `init-scripts`, and
+`file-input` share that single selected pool rather than stacking three
+standing resources. Public raw responses, protocol errors, and trusted-browser
+WebSocket frames now use the same allocator-backed compatibility policy when
+`cdp-session` is selected. The explicit sentinel disables the parser limit but
+contributes zero finite reader/result/topology bytes; no `usize::MAX`
+reservation or pre-sizing occurs. Constrained profiles keep finite limits.
+Public CDP event payloads now use the same explicit allocator-backed sentinel
+at the shared connection. The reader does not reject a valid event at the old
+256 KiB ceiling or reserve a fictitious `usize::MAX` byte lease; constrained
+profiles keep exact finite `EventBytes` accounting. The Python projection uses
+an explicit conversion stack and no longer rejects at 64 nesting levels or
+65,536 JSON nodes. The session owner does not reserialize events or reject at
+64 items or 1 MiB aggregate; one FFI claim still moves at most 64 events so a
+hot session cannot monopolize a language-runtime turn. The public compatibility
+profile's reclaim-after-all-read fanout also grows fallibly through the
+allocator and no longer evicts at 8,192 unread events; finite profiles preserve
+their selected capacity and explicit lag behavior.
+The host's production Context metadata book is allocator-backed as well. Its
+registry reserves fallibly from observed pending creation count, and settings,
+bindings and conversion owners maintain checked live counters rather than the
+former 16-Context, 128-conversion and 256-state ledger ceilings. A regression
+holds 129 pending creations, 129 conversions and 258 settings/binding owners,
+commits all Contexts and observes exact last-reference reclamation after the
+book is dropped. Per-value base URLs remain limited to 16 KiB; constrained
+embedders retain the finite constructor and aggregate byte ledger.
+The topology/lifecycle request queue is allocator-backed. Locator evaluation,
+Worker Handle calls, and world-readiness waits use cancellation-safe scheduling
+under finite execution lanes; queued world waits do not retain a world snapshot
+before both worlds exist. Python omits removed counts from its finite resource-
+limit report while preserving actual payload, unread-queue, and retained-byte
+budgets.
+
+Context locale ownership follows the same compatibility rule. Pinned
+Playwright accepts an optional string and leaves locale validity to Chromium;
+there is no public 256-byte or live-Context count boundary. Node and Python FFI
+lanes reserve from the observed UTF-8 input length, and Rust stores the exact
+string in allocator-backed Context ownership. An empty string installs no
+Chromium locale or accept-language override. Explicitly constrained embedders
+may provide their own admission policy, but the compatibility composition does
+not select the retired per-locale or 16-Context ceilings.
+
+This policy is not yet fully implemented across every opt-in leaf. The audited
+outer drag layer no longer has a persistent Page-owner count: its controller
+inventory grows through the allocator, each controller owns an independent
+local finite ledger, and CDP subscriber bookkeeping is allocator-backed. The
+inner audit is complete: queued operations and protocol identities are
+allocator-backed, while the one capture/data record is serialized Page-local
+execution state rather than a public admission count. Aggregate frame-navigation registration ownership
+and per-invocation event/request rows are allocator-backed. The retained file-input invocation
+registry, exact-element resolver, and cleanup continuations are allocator-
+backed. The ordinary in-memory file-payload lane is allocator-backed through
+host source/call ownership, materialization, encoding, upload ownership,
+cleanup, and its large-command pool. Its per-operation file count, metadata,
+source-byte, and encoded-command validations remain finite; they are not public
+aggregate concurrency limits. Path preparation retains allocator-backed jobs
+through blocking I/O, result delivery, cancellation, and drain. Native-path
+preflight/mutation and retained marker state, calls, composition owners,
+cleanup continuations, and exact-world cache entries are allocator-backed.
+The marker cache dynamically owns current, retiring, and waiter records while
+preserving exact-route generation checks and fail-closed cleanup. Ordinary network
+Page/Context/Worker adapters, main-Frame/Handle call-admission/publication
+ownership, and retained
+Frame-world snapshots are allocator-backed. Native-retirement receipts grow in
+the same weak registry and keep exact snapshot ownership until their last
+clone drops; a finite profile remains available only for explicitly constrained
+embedders. The
+remaining finite leaves must be redesigned or proven
+to be non-public scheduling/retention boundaries before the compatibility audit
+can close.
+
+The host Frame-tree leaf now has an allocator-backed factory mode covering
+Frame nodes, Page trees, revisions, conversions, reserved Pages, detach
+revisions and bindings created from both live and immutable-read paths. A
+130-node/129-revision regression crosses the legacy projection threshold.
+Production Frame metadata now dynamically owns URL/name entries, pending
+publications, close permits, detach/collection/lifecycle event admissions and
+queue allocation. It retains the 16 KiB per-URL and per-name validations; the
+allocator profile does not misreport those dynamic allocations as finite
+ledger usage. A second regression simultaneously retains 130 metadata entries,
+129 pending URL revisions and 129 close permits. Production `FrameTrees` now
+selects this allocator factory and grows snapshot, node, Page, attachment,
+detach and desired-projection vectors through fallible reservations. Explicit
+Context close receipts allocate their exact lifecycle notices instead of
+predeclaring 129 descendants. A production-assembly regression publishes 130
+Frame nodes without finite ledger usage.
+
+The production frame-lifecycle registry is also allocator-backed across Page
+owners, reduced/native Frame and request rows, and exact loader/request/session
+ID storage. Page ObjectIds select lifecycle scopes instead of fixed owner-slot
+arithmetic. Regressions retain 129 Pages, 130 Frames and 257 requests, while
+explicit finite constructors remain available for constrained embedders.
+Navigation registration is deliberately separate and now allocator-backed too.
+Page indexes, registration owners and wait arenas grow on demand; a regression
+retains 129 registrations without ledger capacity. Each wait also dynamically
+owns exact loader/error/URL/response payloads and grows event/request rows; a
+second regression retains 130 of each and selects the last response. The 16/8
+values are initial capacities only. Explicit finite profiles and their optional
+shared pool remain available for constrained embedders.
+
+The optional drag host now treats discovered Page/session controllers as
+persistent identities rather than connection-wide capacity consumers. Its
+inventory reserves fallibly as it grows, stale controllers retain their exact
+native lifetime rules, and each new controller receives an isolated local
+resource ledger for fixed controller state and its one executing capture.
+Composition selects
+allocator-backed reclaiming-event cursor storage (`usize::MAX` is the internal
+dynamic-mode sentinel); later fixed subscriber additions cannot collapse that
+selection back to a finite count. Regressions retain 129 independent controller
+budgets, compose a later fixed cursor after dynamic selection, and reuse the
+CDP fanout's existing 129-subscriber growth proof. Event queue item/byte
+backpressure is unchanged.
+
+The compatibility controller does not apply the finite profile's 48-byte CDP
+session, 64-byte listener namespace, or 128-byte unique-context envelopes.
+Those browser-generated protocol strings are retained at their observed length
+by allocator-backed listener and drag-data profiles. Explicit finite profiles
+keep the old validation and lease accounting for constrained embedders.
+
+World/listener ownership is allocator-backed as well. Pinned Playwright 1.58.0
+uses `safeNonStallingEvaluateInAllFrames` for setup and enumerates the Page's
+complete Frame list for cleanup, so the former 32-world rejection was not a
+valid backpressure boundary. The production utility-world snapshot, listener
+factory, `DragMove` vector and injected world-local registry now grow from the
+observed Frame set. Explicit finite snapshot/listener/move profiles remain for
+constrained embedders. Backend regressions retain 130 listeners and one move
+covering 130 worlds. The single retained move/capture/data record represents
+one Page `_dragState` and one native interception interval, so it must not be
+made concurrently allocator-backed. The dispatcher now acquires a fair,
+cancellation-safe Page-local gate before snapshot/listener/capture creation,
+keeps it through dirty native retirement, and removes a cancelled waiter without
+native work. A woken move rechecks Page `_dragState`, becoming `dragOver` rather
+than starting a second capture when an earlier move established a drag. The
+Page command-owner and dispatcher-operation registries are allocator-backed in
+the production host too. Dispatcher slots, quarantine masks, and the cleanup
+driver's round mask grow through fallible reservations; there is no Playwright-
+visible rejection at 1,024 owners. Explicit finite constructors keep the
+1..=1024 profile for constrained embedders and retain ledger-backed operation
+leases. Separate regressions hold 1,025 Page command owners and 1,025 pending
+dispatcher owners, then quarantine and retire the latter without leakage. The
+all-feature drag backend passes 106/106; the complete Node host passes 1,558 / 27
+ignored plus all non-browser integration tests.
+
+Ordinary Mouse retained invocation ownership is allocator-backed too. The host
+no longer rejects invocation 17 or reserves sixteen call/route envelopes in the
+connection ledger. Each invocation owns an independent one-record Page route
+ledger through result cancellation and native retirement; the shared backend
+factory keeps its own ledger. The controlled runtime queues work before backend
+admission and admits at most eight active commands, so the finite backend
+profile is an internal execution bound rather than a public concurrency error.
+The connection's 520 pending-command allowance covers exactly those eight active
+maximum 65-command clicks; queued calls own no CDP commands. A regression retains
+129 unpolled invocations without native input or connection-level synthetic
+leases. Mouse composition passes 39/39 and the complete Node host remains
+1,558 / 27 ignored plus all non-browser integrations.
+
+Raw Keyboard retained ownership is allocator-backed as well. Each invocation
+owns an independent Page route ledger while the shared backend factory keeps
+the eight-operation execution budget already protected by the controlled
+runtime's queue. Locator Keyboard no longer reserves sixteen copies of its
+selector/text/cancellation envelope; the invocation retains the drag manager
+and any lazily selected Page controller directly. Touchscreen does not use that
+controlled dispatch path, so both its host retained-call gate and backend
+operation gate were removed together: the production host selects a new
+allocator-backed backend profile, and the existing finite profile remains an
+explicit constrained-embedder option. Regressions retain 129 Keyboard and
+Touchscreen owners without issuing native input or consuming synthetic
+connection-level leases. Keyboard composition passes 19/19; Touchscreen
+backend/composition pass 6/6 and 1/1; the complete Node host passes 1,558 / 27
+ignored plus all non-browser integrations; strict combined Clippy passes.
+
+The raw-input first-poll order shared by Mouse, Keyboard, Touchscreen, and
+Locator drag is an allocator-backed FIFO. It preserves submission order only
+until each operation performs its first poll; native replies and later
+continuations may still overlap under their own execution policies. Dropping a
+queued ticket removes its exact monotonic identity and wakes the next head when
+necessary. Terminal close takes the queue before waking callbacks, so shutdown
+does not allocate or invoke a waker under the order lock. A 129-ticket
+regression crosses the former 32-ticket rejection; all seven focused tests and
+the complete Node host pass.
+
+The optional `concurrent-close` leaf retains accepted requests in an allocator-
+backed FIFO before its finite native execution lane. Runtime disposal IDs and
+close-route scratch still grow to the latest subtree before topology/runtime
+mutation, so a valid allocator-backed graph is not rejected at the former
+256-object ceiling. At most eight requests simultaneously own the ready ring,
+native scheduler, close authority/Page confirmation, topology transition, and
+runtime disposal reservations. Later requests wait without reserving or
+writing native work; a cancelled waiter is discarded before promotion. Once a
+native command is written, the existing evidence-retirement and terminal-drain
+paths continue to own it exactly. Deferred runtime disposal follows the actual
+allocator-backed pending-call table rather than selecting a fixed sixteen-call
+scratch profile. Regressions cover 129 queued closes, pre-admission waiter
+cancellation, 129 pending runtime calls, and the existing 300-object close. The
+runtime suite passes 217/217 plus its doctest; the complete Node host passes
+1,560 / 27 ignored plus all non-browser integrations.
+
+Extra-header navigation referrer snapshots are allocator-backed and no longer
+reject the ninth simultaneous operation. Each retained value still has the
+existing 16 KiB field bound; a 129-value regression verifies that count and
+payload policy are independent.
+
+The Extra Headers installation is allocator-backed beyond navigation too.
+Production value/settings profiles declare no aggregate owner, Context, Page,
+or writer count. Route and fanout vectors, driver jobs, applied-session IDs,
+initialization failures and weak retirement watches reserve from observed live
+work and release with their exact owners. This removes the former 9-operation,
+16-Page, 80-route, 160-applied-session and 720-watch ceilings as well as the
+80-slot native semaphore and private 30-second enqueue timeout. The CDP write
+queue remains the natural asynchronous backpressure boundary. Per-header count
+and byte validation is unchanged and finite portable profiles remain available
+only by explicit embedder selection.
+
+Page Bindings now uses allocator-backed ownership throughout its production
+path. Registrations, pending calls, early calls, browser sessions, installed
+script identities, delivery records and per-call rejection continuations no
+longer carry the former 64/16/128/16 aggregate ceilings. The injected controller
+does not reject callback 65 and does not enforce local 256-byte identity,
+64-KiB argument/payload, depth-64, 4,096-node/entry or 64-KiB string limits.
+This matches pinned Playwright 1.58.0, whose `BindingsController` and server
+`PageBinding` use dynamic Maps without those count or field caps. Rust reserves
+fallibly before registry mutation and rolls back the exact call when delivery
+cannot be published. Python registration and dispatch task sets are dynamic as
+well: cancellation keeps the exact shielded registration through native
+commit/rollback, and Browser teardown cancels and joins remaining callback
+dispatchers. Regressions retain 129 Rust registrations/calls/sessions, a long
+binding name, a payload above 128 KiB, 129 Python registration transactions and
+130 Python dispatchers. JavaScript-safe sequence validation and empty native
+session rejection remain semantic integrity checks rather than resource caps.
+
+Node Context bindings select this same owner through the additive
+`context-bindings` profile. The addon adds no second queue, cursor, target
+registry, or browser-side controller: it forwards Context identity, name, and
+handle mode to Rust. JavaScript retains one callback reference per public
+registration, then resolves a published call against Page scope before Context
+scope; Rust conflict rules guarantee a name cannot ambiguously occupy both
+scopes for the same Page. Current/future Page and OOPIF installation and
+Context retirement consume the existing allocator-backed registration/session
+ownership.
 
 ## Current Chromium request-count policy (2026-11-14)
 
@@ -32,19 +303,12 @@ interim navigation `finished()` join still depends on explicit request-history
 and the existing 256-slot response-finished owner; it is not the planned
 independent bounded navigation owner.
 
-New Node Page/Frame and ElementHandle selector waits share one
-environment-owned, immediate-fail admission limit of 24 long waits, before
-acquiring an FFI Command ticket. The environment's Command capacity is 32;
-therefore these waits alone cannot consume the eight slots reserved for
-operations that may satisfy them. The permit spans the Rust future and JS
-settlement, then returns on success, error, or cancellation. Every Session
-and derived Locator from one environment uses the same limit; there is no
-per-Session multiplication or waiting queue. The selected full-Page release
-addon (SHA-256
-`905b9b7dd8bc171e0aab2d401899730da640854d7f10d22084d6ac6dc676c533`)
-loads; focused quota release tests pass 3/3 and strict selected full-profile
-Clippy passes.
-Browser-backed concurrency proof is still pending.
+Node Page/Frame and ElementHandle selector waits no longer have the former
+environment-owned, immediate-fail count of 24. Their language-boundary
+admission is allocator-backed; actual execution still enters the Rust command
+scheduler and its byte-accounted FFI lane, so removing the fabricated count
+does not remove execution backpressure. Browser-backed concurrency proof is
+still pending.
 
 The opt-in Node `element-handle-wait-for-selector` leaf reuses one already
 retained Handle, the existing command-lane FFI admission, selector recipe
@@ -89,16 +353,15 @@ original CDP object ID to its current parent Element and leaves the existing
 click admission/timeout/press limits unchanged. Both remain source-only until
 rebuilt native/browser gates run.
 
-Python ABI107 Context/Page binding registration admits at most 64
-Browser-shared in-flight language transactions before task/coroutine
-construction. Cancellation retains admission until native commit or rollback;
-callback dispatch has its own 64-slot bound, independent of Rust's 64
-pending-call cap. Those bounds do not guarantee settlement liveness: binding
-acknowledgement/result/error share the 32-command/64-MiB FFI budget and the
-eight-active native evaluation scheduler with ordinary work. Two release Rust
-regressions verify admission rejection at the existing count/byte limits;
-they are not progress proofs. A dedicated settlement composition is proposed
-but not implemented; no larger resource allowance is accepted here.
+Python ABI107's former 64-registration and 64-dispatch limits are retired.
+Browser-shared shielded registration tasks grow with actual live transactions;
+caller cancellation retains the exact task until native commit or rollback.
+Callback dispatchers likewise remain owned through result/error delivery or
+Browser teardown, including after native Page retirement, so the replacement
+Page's 130th callback is not rejected. Binding acknowledgement/result/error
+still use the selected FFI command and native evaluation paths; their execution
+scheduling and byte policies are separate leaves and are not reinterpreted as
+an aggregate binding-count limit.
 
 Python ABI 103 adds no feature, package, queue, task, timer, browser process or
 native registry. ElementHandle input composes the existing `element-handle-dom`
@@ -310,17 +573,38 @@ independently checked against that limit, request IDs are bounded to 256 bytes,
 and the PyO3 boundary charges the Rust output plus copied Python bytes. The leaf
 adds no Page table, cache, task, timer, browser process or event subscriber.
 
-Python ABI 76 `context-geolocation` retains at most 16 selected Context
-policies. The persistent default consumes one slot when present; attached
-external Contexts consume none. Each value is three finite `f64`s with
-longitude in `[-180, 180]`, latitude in `[-90, 90]` and nonnegative accuracy.
-Creation compensation and close release owned slots idempotently.
+The shared `context-geolocation` owner uses allocator-backed storage with no
+fabricated selected-Context count. Python and Node ordinary Context creation,
+Node runtime update/clear, and persistent defaults all reuse that owner.
+Each retained value is exactly three finite `f64`s with longitude in
+`[-180, 180]`, latitude in `[-90, 90]`, and nonnegative accuracy; the Node FFI
+input is therefore fixed-size rather than a byte-budgeted string. Failed
+allocation reports resource exhaustion. Creation compensation, runtime clear,
+and close release the exact owned entry idempotently; attached external
+Contexts do not inherit an override.
 
-The separately selectable geolocation-permission owner also retains at most
-16 selected Context identities, counting an enabled persistent default as one.
-It sends one constant-size browser command per grant and retains no origin,
-response body, Page, session or Python permission mirror. Both leaves reuse
-the existing topology initialization fence and native command admission.
+The separately selectable permission owner is allocator-backed too. It retains
+only selected Context identities plus deduplicated Playwright permission names
+grouped by normalized optional origin; there is no fabricated Context, grant,
+or permission-count cap. Node and Python FFI admission charge the observed
+permission-name and origin bytes. Each grant sends one browser-session command,
+and clear sends one reset command; neither path retains a response body, Page,
+session, or language-side permission mirror. Creation compensation and close
+release the exact Context entry. Both leaves reuse the existing topology
+initialization fence and native command admission.
+
+Node HTTP-credential profiles reuse the existing Rust authentication owner for
+ordinary and persistent Context creation plus runtime replacement/clear. Each
+N-API call charges the observed username, password and optional-origin UTF-8
+bytes before converting the typed value. Persistent launch carries that value
+in the same defaults transaction; JavaScript retains neither credentials nor
+authentication-attempt state. Runtime mutation is serialized with Page/OOPIF
+initialization, updates retained state before protocol refresh, and reuses the
+single composable Fetch owner for current Page/OOPIF and Service Worker
+sessions. The Rust owner validates each field against its explicit 65,536-byte
+value bound, redacts secrets from debug output, scopes optional origins
+exactly, and owns challenge attempt/release state. The generic Context-policy
+port is usable only when the exact `context-http-credentials` leaf is selected.
 
 Persistent launch arguments are transient provider input bounded to 256
 switches, 65,536 UTF-8 bytes per switch and 1,048,576 UTF-8 bytes in aggregate.
@@ -343,21 +627,17 @@ idempotently. The leaf adds a fixed 193-byte resource-profile allowance and no
 queue, task, timer, Page table, session registry, browser-process allowance,
 transport, recovery owner, Python mirror or additional Playwright Rust package closure.
 
-Python ABI 74 `context-timezone` retains at most 16 selected Context policies.
-The persistent default, when selected, consumes one slot and leaves at most 15
-later selected owned Contexts; attached external Contexts consume none. Each
-entry stores one portable Context identity and one nonempty, control-free
-timezone identifier bounded to 256 UTF-8 bytes. Total retained timezone input
-is therefore fixed by those two limits.
-
-Initialization sends one bounded
-`Emulation.setTimezoneOverride {"timezoneId": ...}` command per selected
-Page/OOPIF session and retains no response body. It reuses the existing
-topology initialization fence, native command admission and shutdown drainage.
-Creation compensation and close release the exact slot idempotently. The leaf
-adds a fixed 192-byte resource-profile allowance and no queue, task, timer,
-Page table, session registry, browser-process allowance, transport, recovery
-owner, Python mirror or additional Playwright Rust package closure.
+The compatibility `context-timezone` and `persistent-context-timezone` paths
+use allocator-backed ownership rather than the retired 16-Context registry and
+256-byte input cap. Node and Python FFI admission account for the observed
+UTF-8 length. Empty input is a no-op; nonempty input is retained exactly and
+sent as `Emulation.setTimezoneOverride {"timezoneId": ...}` for each selected
+Page/OOPIF session. Chromium is the validation authority for nonempty timezone
+identifiers. Initialization reuses the topology fence, native command
+admission and shutdown drainage; close and creation compensation release the
+owned entry idempotently. The leaf adds no response-body owner, queue, task,
+timer, Page table, browser-process allowance, transport, Python mirror or
+additional Playwright Rust package closure.
 
 Python ABI 73 `javascript-disabled` retains at most 16 selected Context
 policies. The persistent default, when disabled, consumes one slot and leaves
@@ -499,27 +779,28 @@ queue slot, retained session, registry entry, transport, timer owner, browser
 process or dependency. Public timeout latency can include acknowledgment of
 that one admitted command, but never another polling interval.
 
-Python ABI 66 `persistent-context-locale` adds no new allowance. Its optional
-default-Context locale consumes one entry and its actual UTF-8 bytes from ABI
-65's existing limits of 16 live locale policies and 256 bytes per policy.
-Consequently a selected persistent default locale leaves capacity for at most
-15 additional owned Context locales in the same host. The policy is admitted
-before browser publication and released with host shutdown. The leaf adds no
-Playwright Rust package, session table, Worker copy, queue, task, timer, transport or
-second browser process beyond `persistent-context`'s existing unique process
-lease. The shared user-agent override boundary is stateless: it borrows the
-already admitted device and locale policy owners during session initialization
-and adds no retained string copy, registry entry, lease or protocol queue.
+The current `persistent-context-locale` and `context-locale` compatibility
+paths share allocator-backed ownership. They retain the exact optional UTF-8
+string without the retired 16-entry or 256-byte limits; Node and Python FFI
+admission include the observed byte length. A nonempty persistent value is
+admitted before browser publication and released with host shutdown, while an
+empty value emits no Chromium locale or accept-language override. The leaves
+add no Worker copy, queue, task, timer, transport, or second browser process.
+The shared user-agent override boundary is stateless: it borrows the already
+owned device and locale policy during session initialization. Context removal
+and host shutdown release ordinary Context entries idempotently, and direct
+and nested Workers inherit the renderer locale.
 
-Python ABI 65 `context-locale` retains at most 16 locale entries, one per
-owned Context, with at most 256 UTF-8 bytes each. It reserves exactly one
-EventItem and the actual locale EventBytes per selected Context plus fixed
-preallocated 16-Context registry. Empty values, control characters, duplicate
-Context installation and capacity overflow fail explicitly. Context removal
-and host shutdown release every entry idempotently. The feature retains no
-session IDs and adds no Worker locale copy, command, task, queue, timer,
-browser process or transport; direct and nested Workers inherit the renderer
-locale.
+Persistent timezone shares the locale allocator-backed boundary and the same
+typed default-Context launch owner. Its observed UTF-8 bytes participate in FFI
+admission, an empty value selects no capability, and a nonempty value fails
+before process launch when its independent leaf is absent. Persistent offline
+emulation, CSP bypass, and JavaScript disablement add no string or collection
+allowance. Their no-op values do not select a capability; selected values fail
+before process launch when the corresponding leaf is absent. The combined
+profile composes timezone and those booleans with locale and HTTPS-error policy
+without a JavaScript post-creation mutation, extra queue, task, timer, or
+browser process.
 
 Python ABI 64 `worker-console-argument-handles` adds no new global Handle or
 call allowance. At most 16 argument descriptors are admitted per console event
@@ -619,9 +900,12 @@ storage-state and certificate paths. Certificate inputs share the Rust leaf's
 64-entry store and 16 MiB per-material caps; exact-origin lookup keeps decoding
 lazy and caches at most one TLS identity result per matched entry.
 `Playwright.stop()` disposes all remaining request
-contexts. The init-script leaf retains at most 128 sources of 64 KiB each,
-tagged with a typed Page or BrowserContext scope; Python retains no duplicate
-script registry. The sync facade retains one bounded loop thread with a 32-call
+contexts. The init-script leaf dynamically retains exact sources tagged with a
+typed Page or BrowserContext scope; it has neither the retired 128-source count
+nor a 64 KiB per-source cap, and Python retains no duplicate script registry.
+Its FFI allowance follows observed input bytes and its allocator-backed CDP
+large-command lane fragments outbound frames without imposing a total-message
+ceiling. The sync facade retains one bounded loop thread with a 32-call
 admission semaphore; the official-test adapter's thread-safe server waiter is
 test-only and owns no production resource.
 
@@ -796,38 +1080,28 @@ it adds no retained element, handle, queue, timer or state table. Preserving
 `FrameDetached` changes one enum value and error formatting only; the existing
 navigation result, FFI and diagnostic string bounds still apply.
 
-The default-off Node Page-binding conformance profile composes independently
-bounded leaves. `page-bindings` retains at most 64 registrations and 64 pending
-calls with 256-byte names and 64 KiB argument payloads. Its browser controller
-rejects the normal frame-local 65th call before allocating callback/publication
-state. Page-originated malformed or oversized bridge events are dropped
-nonterminally rather than killing the topology pump. Rust admission failures
-use up to 16 asynchronous CDP rejection tasks with an additional fixed
-65,536-byte backend-state allowance. They run after the event pump returns,
-so their CDP replies cannot deadlock that pump. If all 16 tasks are occupied,
-further native rejections are dropped; the corresponding page Promise may
-remain pending until Context close. This is an explicit boundary limitation,
-not proven unbounded compatibility. Backend failures still remain terminal.
-The native retained-call allowance now accounts for both the pending owner's
-name and the queued/foreign descriptor's name (two 256-byte allocations per
-call), correcting a 16 KiB undercount across 64 calls. A focused release
-regression verifies the exact declared allowance.
+The default-off Node Page-binding conformance profile now composes dynamic
+ownership rather than independently bounded count leaves. `page-bindings`
+retains registrations, pending calls, names, arguments and outbound descriptors
+for their exact lifetimes. Its browser controller does not reject callback 65,
+and every native admission failure gets its own asynchronous CDP rejection
+continuation after the event pump returns, so a saturated rejection pool cannot
+leave the corresponding page Promise pending. Backend failures remain terminal.
 
-Python independently caps callback dispatchers at 64 per Browser; Page churn
-cannot bypass this cap by retiring native pending entries first. Dispatchers
-retain their callback children until completion or observed cancellation,
-including the pre-acknowledgement window. Browser close waits at most five
-seconds for other dispatchers, does not cancel its own initiating callback,
-and retains admission for cancellation-resistant user code while recording
-an error. A separate Browser-shared 64-transaction registration bound includes
-running and queued Page/Context operations. Admission precedes coroutine/task
-construction; caller cancellation does not release a slot before the native
-transaction settles. Another Context cannot bypass the cap. Closing a second
-Browser from a callback does not retain that foreign dispatch task as its
-close marker. Deterministic saturation, failure/reuse and ownership regressions
-pass in the 22-case language binding suite. Partial-registration browser-side
-rollback and shared-command-lane settlement pressure remain explicit open
-limitations; these local bounds do not prove complete official compatibility.
+Python callback dispatchers and Browser-shared Page/Context registration
+transactions are dynamic too. Page churn cannot orphan their ownership by
+retiring native pending entries first. Dispatchers retain callback children
+through completion or observed cancellation, including the
+pre-acknowledgement window. Browser close waits at most five seconds for other
+dispatchers, does not cancel its own initiating callback, and records an error
+for cancellation-resistant user code. Caller cancellation keeps a shielded
+registration task until the native transaction settles; another Context cannot
+bypass or lose that ownership. Closing a second Browser from a callback does
+not retain that foreign dispatch task as its close marker. Dynamic-count,
+failure/reuse and ownership regressions pass in the language binding suite.
+Partial-registration browser-side rollback and shared-command-lane settlement
+pressure remain explicit open limitations; removing local count caps does not
+prove complete official compatibility.
 The shared settlement risk includes the 64 MiB FFI byte budget as well as
 32 Command slots: seven 8 MiB ordinary evaluation allowances plus one 32 KiB
 binding Watch leave less than a result/error allowance. Native acknowledgement
@@ -837,11 +1111,12 @@ has been added. A future control service must account for bounded foreign
 roots, preparation, worker storage and exact-world retirement, not retain 64
 unbudgeted result trees behind a single worker.
 
-`init-scripts` retains
-at most 128 Page- or BrowserContext-scoped sources of 64 KiB each in one
-preclaimed Rust scope; current target-session installation is rolled back on
-partial failure and future scoped sessions replay only the owning Page or
-Context sources. Receipt-free
+`init-scripts` retains allocator-backed Page- or BrowserContext-scoped sources
+with no local count or source-byte ceiling. Current target-session installation
+is rolled back on partial failure and future scoped sessions replay only the
+owning Page or Context sources. Its selected large-command transport preserves
+ordinary CDP limits while fragmenting the allocator-backed complete source.
+Receipt-free
 `waitForNavigation` reuses the existing four-registration-per-Page lifecycle
 table, eight concurrent frame-navigation operation slots and independently
 leased typed result storage. Its Page/Frame validation, lease admission and
@@ -982,15 +1257,15 @@ the exact ticket. [Canonical NODE-188 resource proof](knowledge/playwright-rust-
 
 NODE-187: Selected target prevalidation keeps the existing one-command/1 MiB
 FFI permit, 32 preparation slots and ten Node roots. The retargeted native object
-ID is held only by Rust. The pre-existing eight-call marker admission remains
+ID is held only by Rust. The marker admission remains
 nested in each validated owner until the original group settles; no release and
 re-adopt interval exists.
 
 Two new scopes are selected only by `retained-target-prevalidation`. Backend
-capacity is eight admissions, each with two RemoteHandle units and 19,546
-BackendStateBytes. Composition capacity is eight LiveObjects with 16 KiB owner
-storage each plus 512 bytes of fixed service state (131,584 bytes total), and a
-separate executor reserves eight cleanup continuations. The fixed service state
+and composition operation owners are allocator-backed; they no longer declare
+an aggregate admission count or synthetic RemoteHandle/LiveObject total.
+Each owner still has the checked 16 KiB storage envelope, and the separate
+cleanup executor is allocator-backed. The fixed service state
 adds one selected installation lease, making the idle retained-upload/marker/
 prevalidation test baseline exactly seven rather than the old marker baseline
 of six. These are Rust administrative bounds, not V8/DOM/browser RSS claims.
@@ -999,9 +1274,9 @@ of six. These are Rust administrative bounds, not V8/DOM/browser RSS claims.
 NODE-186: Selected successful marking now parks one concrete
 `RetainedMarkedFileInput` inside the existing typed FFI result. Its fixed
 completion layout remains compile-checked beneath the existing 1 MiB command
-admission; no second command, permit or runtime lane is added. The existing
-eight-call target-marker admission bounds simultaneously retained marked owners,
-while the persistent per-world marker cache remains independently admitted.
+admission; no second command, permit or runtime lane is added. Target-marker
+admission and the persistent per-world marker cache are allocator-backed; each
+retained marked owner still carries its exact cleanup authority.
 
 Only selected preparation roots grow from six to ten: four additional roots
 retain raw `filePayloads`, `localPaths`, `localDirectory` and `multiple` values.
@@ -1041,25 +1316,23 @@ cache and registration ledgers remain separately admitted. Same-permit live
 metrics and final zero-resource cleanup are recorded in the
 [canonical NODE-184 checkpoint](knowledge/playwright-rust-node-handles.md#node-184-same-admission-node-target-marking-handoff).
 
-NODE-183: The default-off host `retained-target-marking` cache admits 64
-current/creating worlds plus eight retiring predecessors, and independently
-limits lookup/call leases to eight. Cache bookkeeping declares 128 KiB fixed
-administration, 72 * 16 KiB world storage and 8 * 4 KiB waiter/lease storage:
-1,312 KiB in one scope with 81 lease slots. These are additional selected
-allowances, not a reuse of the existing Handle or upload budgets.
+NODE-183: The default-off host `retained-target-marking` cache is allocator-
+backed for current/creating worlds, retiring predecessors, and lookup/call
+waiters. Its production ledger declares only 128 KiB of fixed administration;
+dynamic entries, strings, flights, and detached close batches are ordinary
+allocator state rather than a fabricated maximum multiplied into the ledger.
 
-The installation independently selects 72 persistent marker owners and eight
-mark-call owners, their backend native/byte allowances, 16 KiB composition
-owner allowances, 72 untimed creation-driver reservations and 80 marker-cleanup
-reservations. It also adds 72 existing 8 KiB world-snapshot slots and their
-retirement-registry accounting. The persistent snapshot/receipt is independent
+The installation uses allocator-backed persistent marker owners, mark-call
+owners, native backend admissions, creation drivers, and cleanup continuations.
+Each composition owner retains its checked 16 KiB storage envelope. The
+persistent snapshot/receipt is independent
 of every per-call paired snapshot; its owner contains no source Handle or work
 token. Browser DOM graphs retained by the native Set and transport/runtime
 allocation are not bounded by these administrative figures.
 
-Stale-world pruning never frees a slot before terminal group ownership and
-snapshot release. Open replacement uses eight retiring slots; once sealed, all
-occupied slots may drain without new admission. Failed cleanup can return active
+Stale-world pruning never removes an entry before terminal group ownership and
+snapshot release. Replacements dynamically add retiring entries; once sealed,
+all occupied entries may drain without new admission. Failed cleanup can return active
 allowances but still poisons the cache; counters are not a fabricated native
 ACK. Bounded generation receipts prevent stale completion from clearing reused
 slots, and wakeups/drops run outside locks. No addon selection, Node root/budget
@@ -1500,7 +1773,7 @@ NODE-142: File-input content admits one LiveObject, planned ArtifactBytes and Ba
 NODE-141: File-input preflight computes exclusive 50 MiB transfer and per-file base64 sizes under explicit metadata/count bounds without allocation. These counters are not leases or whole-operation peak admission. Future selected owners must account for Buffer/file/encoding/transport overlap; ordinary limits are unchanged.
 [File-input policy, evidence and remaining work](knowledge/playwright-rust-file-input.md).
 
-NODE-140: The shared corpus records native lifecycle RequestCapacity during candidate newPage initialization. Current selection admits 256 request slots per Page, but the report does not identify the exhausted owner or prove missing reclamation. Do not increase capacity or drop events as a presumed fix. Production profiles and artifact hashes are unchanged.
+NODE-140: The historical shared corpus recorded native lifecycle RequestCapacity during candidate newPage initialization. The production selection is now allocator-backed, but that artifact still does not identify the exhausted owner or prove missing reclamation. Do not reinterpret the old failure as current proof or drop events as a presumed fix.
 [Expanded verification and retained failures](knowledge/testing-strategy.md#node-140-broadened-node-ffi-verification-remains-non-green).
 
 NODE-139: Page lifecycle and registry terminal owners add inline Notify bodies, automatically included by their existing size_of-based profile admission. The borrowed close future adds no transport, cursor, task, registry retention or navigation slot. Its inline waiter storage is caller-admitted within the existing bounded Frame navigation operation allowance; this is not complete allocator/RSS accounting.
@@ -1820,9 +2093,9 @@ native arenas and Context URL-value copies keep their own admissions. No Rust
 response pointer is handed to JS or made dependent on JS GC after delivery.
 [Owner/copy boundary](knowledge/playwright-rust-frame-navigation.md#node-076-public-node-frame-navigation).
 
-NODE-075 adds namespace 126/3 for 32 active-or-escaped typed navigation results
-at 384 KiB each, and 126/4 for their independently leased Arc counter. The
-explicit local count cannot borrow other features' spare plan capacity. JSON
+NODE-075 historically added namespace 126/3 for 32 active-or-escaped typed
+navigation results at 384 KiB each, and 126/4 for their independently leased Arc
+counter. Production result ownership is now allocator-backed. JSON
 projection admits before dispatch and bounds source/headers/strings; returned
 owners expose only borrowed outcomes and retain no native arena or host.
 The executor admission/TaskTracker/deadline covers projection. Native/foreign
@@ -1838,20 +2111,19 @@ background task is installed by the contract feature. FFI copies and mapping
 from the host's charged response arena remain separately unfinished admission.
 [Boundary](knowledge/playwright-rust-frame-navigation.md#node-074-opt-in-typed-navigation-12-contract).
 
-NODE-073 selects a 128-Frame/eight-snapshot retained route owner and eight
-48-KiB host executor allowances. A separately admitted Arc counter enforces
-eight operations before publication waiting: shared-plan spare capacity does
-not expand this local count. URL/referrer capacity is bounded before retention.
+NODE-073 historically selected a 128-Frame/eight-snapshot retained route owner
+and eight 48-KiB host executor allowances. Production route and operation
+ownership is now allocator-backed. URL/referrer capacity is bounded before retention.
 Pending native cancellation reclaims its call slot but keeps queued wire bytes
 charged until writer retirement; it does not stop browser loading.
 [Detailed ownership](knowledge/playwright-rust-frame-navigation.md#node-073-rust-host-dispatch-scheduling-and-cancellation).
 
-NODE-072 adds separately admitted fixed Page registration indexes and per-call
-Arc/Mutex/notification bodies. Ticket drop reclaims a slot on the next checkpoint;
+NODE-072 historically added separately admitted fixed Page registration indexes
+and per-call Arc/Mutex/notification bodies. Ticket drop reclaims an entry on the next checkpoint;
 moved results keep their core leases after all Page/driver owners drop. The
-host's separate `frame-navigation` feature declares 128 registration owners,
-allocating response storage only on registration. Readiness-only has no such
-budget. Caller executor/task storage, native requests and FFI copies are separate.
+production `frame-navigation` feature now grows registration owners and wait
+arenas through the allocator. Readiness-only allocates neither. Caller
+executor/task storage, native requests and FFI copies are separate.
 [Bounds and reclamation](knowledge/playwright-rust-frame-navigation.md#node-072-ordered-operation-registration-and-actual-rust-host-observation).
 
 NODE-071 admits one navigation invocation's fixed event/request slots, response
@@ -1861,8 +2133,8 @@ capacity failure seals instead of truncating or growing. Caller Arc/Mutex,
 envelopes, native pending calls and FFI copies remain separate admissions.
 [Contract](knowledge/playwright-rust-frame-navigation.md#node-071-bounded-navigation-matching-and-response-retention).
 
-NODE-070 admits a fixed lifecycle registry index and distinct per-slot Page
-owners. Active and escaped-retired capacities are separate; a retained handle
+NODE-070 historically introduced a fixed lifecycle registry index and distinct
+per-slot Page owners. Active and escaped-retired capacities were separate; a retained handle
 prevents slot reuse. Handles retain a shared terminal body whose lease also
 conservatively keeps the index allowance until final drop. The selected host
 separately admits its shared clock/readiness-sink allocation. These are declared
@@ -1870,6 +2142,9 @@ capacities, not measured process-RAM guarantees.
 Registry tests and the real-host gate verify retained leases remain after close
 while escaped handles live, then return to zero after final drop. Concurrent
 shutdown rejects queries even while a synchronous notice callback holds its lock.
+The current production profile supersedes the fixed registry with allocator-
+backed Page identity ownership while preserving the same sealing and escaped-
+handle lifetime contract.
 [Bounds, reclamation and exclusions](knowledge/playwright-rust-frame-navigation.md#node-070-bounded-multi-page-registry-and-opt-in-rust-host-selection).
 
 NODE-069 explicitly admits one Page lifecycle owner's body, Mutex and Arc
@@ -2027,13 +2302,14 @@ slots and 552 shared pending CDP commands. Write backpressure remains 32.
 The enlarged logical wire/provider allowances are not eager allocation or RSS
 claims. [Exact accounting and limits](knowledge/playwright-rust-chromium-drag.md#node-045-maximum-click-batches-and-matching-host-admission).
 
-Latest Keyboard host budgets: 16 retained invocations at scope 120/18, each
-with argument bytes plus 8192 call/native-binding bytes, alongside 4096 state
-bytes and separate route leases. Scope 120/19 admits eight executing operations.
-The original cancellation Arc retains every invocation lease. N-API separately
-admits conversion/settlement before copying. Public 24-case verification ends
-with zero host leases/operations/cleanup. Earlier pending budgets below refer
-to the preceding primitive/adapter checkpoints.
+Latest Keyboard host ownership keeps 4096 bytes of fixed installation state at
+scope 120/18. Retained invocations grow through the allocator and each owns an
+independent exact Page route ledger; the shared backend factory at scope 120/19
+still admits eight executing operations after the controlled runtime scheduler
+has queued excess calls. The original cancellation Arc retains every invocation
+and route through cleanup. N-API separately admits conversion/settlement before
+copying. The existing 128-byte key and 1 MiB text bounds remain a separate
+payload-compatibility audit, not a retained-call count.
 
 Raw Keyboard adds a caller-polled press helper over at most 16 borrowed token
 slices and the existing Page key/event state. No key-expression copy, delay task
@@ -2240,7 +2516,7 @@ leases. Zero is a valid limit and rejects the first reservation.
 | Incoming stream envelope | Tokio stream transport | outer declared length checked before allocation | `WireBytes` in connection scope | reject before body read; cancellation/parse failure releases through RAII | shared budget and production transport claim implemented |
 | Decoded incoming frame | stream codec/transport | payload, attachment-count, attachment, and aggregate limits | `WireBytes` in route-derived scope | reserve before copying; no truncation; final frame clone owns lease | shared budget implemented when injected |
 | Generic fragment assembly | transport utility | declared length checked before exact reserve | `WireBytes` in caller-selected scope | reserve full declaration before buffer allocation; reject declaration/overrun/incomplete stream; finished bytes retain lease | shared budget implemented when injected |
-| Raw Chromium CDP connection | CDP WebSocket connection | pending/write/event counts plus command/response/event/error/WebSocket byte limits; event capacity plus one incoming allocation-before-admission item; optional fixed subscriber-slot bookkeeping | `WireBytes` + `EventItem` + `EventBytes` + optional `BackendStateBytes` in connection-selected scope | synchronous command admission; bounded serialization; pending/queue clones share leases; legacy v1 uses Tokio broadcast; opt-in v2 fanout reclaims after every current cursor advances, drops events with no cursor, and reports bounded overwrite as lag | shared budget, legacy compatibility path, task-free reclaiming path, derived composition preflight, and production connector implemented |
+| Raw Chromium CDP connection | CDP WebSocket connection | pending/write/event policies plus command/response/event/error/WebSocket byte policies; finite event capacity includes one incoming allocation-before-admission item; optional fixed subscriber-slot bookkeeping | `WireBytes` + finite-profile `EventItem`/`EventBytes` + optional `BackendStateBytes` in connection-selected scope | synchronous command admission; bounded serialization; pending/queue clones share leases; the public-CDP compatibility profile maps allocator-backed event count/byte sentinels to zero finite accounting and grows fallibly; legacy v1 uses Tokio broadcast; opt-in v2 fanout reclaims after every current cursor advances, drops events with no cursor, and reports bounded overwrite as lag only for finite profiles | shared budget, allocator-backed public event payload/count, legacy compatibility path, task-free reclaiming path, derived composition preflight, and production connector implemented |
 | Native CDP liveness | one attached Chromium composition | one cancellation-token clone and one boxed caller-polled future; no task, queue, Browser owner, or replacement connection | fixed backend state only; the concrete connection retains its existing resource leases | reader/writer termination makes the signal sticky; liveness backend returns terminal failure; supervisor cleanup drops sibling backend turns and shuts down the remote transport; old native sessions are never rebound | implemented independently of topology-events; fresh remote-client snapshot/event-view bootstrap pending |
 | Reusable Chromium attach recipe | process/application configuration | immutable capability profile, `ResourceLimits`, and Browser root ID only; no retained ledger, connection, topology, ObjectId source, event receiver, runtime, or browser lease | none while stored; every `prepare` allocates a new connection-local `ProductionResourceLedger` | validate profile/limits/root namespace before I/O; preparation or attachment failure drops only fresh state; repeated calls never share ledgers or rebind Browser graphs | `ChromiumAttachFactory` and ledger-identity tests implemented; complete remote session unit pending |
 | Fresh Chromium remote connection unit | one accepted remote connection | exactly one fresh CDP attachment, production remote transport/supervisor, runtime graph, and optional topology-event driver; no hidden task/listener/executor | every component must prove the fresh connection ledger; transport requirements must exactly equal the handshake profile | reject missing handshake before CDP; reject builder error, foreign ledger, plan drift, duplicate topology driver, installer that returns without installing runtime, unnegotiated recipe capability, missing discovery/control component, or an unconsumed topology driver; topology updates fence through their final lifecycle `Create` even without portable event queues; failed staging drops the new unit rather than exposing a partial session | consuming runtime/handshake/application stages, mandatory liveness wrapping, exact shutdown, pre-provisioned navigation execution, client-observed automatic discovery, packaged Unix-listener admission, and complete current-capability assembly have dedicated-Chrome proof |
@@ -2880,20 +3156,26 @@ maximum active operation counts. An explicitly smaller fanout fails production
 validation before CDP I/O. Legacy delivery remains valid for preserved v1 and
 non-opt-in profiles.
 
-The raw CDP layer has independent hard limits for pending commands, write and
-event channel items, serialized command/response/event/error bytes, and the
-WebSocket frame/message ceiling. Pending admission is synchronous and
-clone-shared. Its RAII registration removes an unpolled or cancelled command;
+The raw CDP layer supports independent finite policies for pending commands,
+write/event channel items, serialized command/response/event/error bytes, and
+the WebSocket frame/message ceiling. The public-CDP compatibility profile uses
+an explicit allocator-backed sentinel for trusted-browser response, error,
+frame/event payload bytes and retained event count. Finite profiles keep exact
+event-item, event-byte, and lag policies.
+Pending admission is synchronous and clone-shared. Its RAII registration
+removes an unpolled or cancelled command;
 the shutdown failsafe drains the table even when the reader future is dropped.
 Serialization writes into a bounded buffer rather than allocating an
 arbitrarily large command and checking afterward.
 
-`CdpConnectionProductionProfile` accounts the reader's maximum raw-message and
+`CdpConnectionProductionProfile` accounts finite reader raw-message and
 parsed-JSON overlap as a fixed `WireBytes` lease. Every admitted command owns a
 full command/result peak shared by its pending entry and outgoing queue item;
 the lease therefore survives caller cancellation while the writer still owns
-the bytes. Each unique incoming event owns exact `EventItem` and `EventBytes`
-units. `CdpEvent` clones share its immutable payload and lease, eliminating
+the bytes. Each unique incoming event owns exact `EventItem` and, for finite
+profiles, exact `EventBytes` units. The allocator-backed event-byte sentinel
+contributes zero finite event-byte units. `CdpEvent` clones share its immutable
+payload and lease, eliminating
 subscriber-count deep copies. The profile reserves event capacity plus one
 maximum event because the incoming value is allocated before either delivery
 strategy performs bounded admission. Reclaiming mode additionally reserves one

@@ -187,7 +187,7 @@ test('selected profile returns a live remote Browser and disconnects once with i
 test('remote-side terminal state emits disconnected without an explicit close', async () => {
   // Arrange
   const { api, remote } = fixture();
-  const browser = await api.firefox.connect('http://example.test/prefix');
+  const browser = await api.chromium.connect('http://example.test/prefix');
   const disconnected = new Promise(resolve => browser.once('disconnected', resolve));
 
   // Act
@@ -238,7 +238,7 @@ test('remote terminal close emits Page then Context then Browser once', async ()
 test('explicit Browser.close emits terminal child closes before disconnected', async () => {
   // Arrange
   const { api, remote } = fixture();
-  const browser = await api.webkit.connect('ws://example.test/ws');
+  const browser = await api.chromium.connect('ws://example.test/ws');
   const context = await browser.newContext();
   const page = await context.newPage();
   const events = [];
@@ -258,7 +258,7 @@ test('explicit Browser.close emits terminal child closes before disconnected', a
 test('throwing Page close listener cannot suppress Context or Browser close', async () => {
   // Arrange
   const { api, remote } = fixture();
-  const browser = await api.firefox.connect('ws://example.test/ws');
+  const browser = await api.chromium.connect('ws://example.test/ws');
   const context = await browser.newContext();
   const page = await context.newPage();
   const original = new Error('page listener failed');
@@ -281,7 +281,7 @@ test('throwing Page close listener cannot suppress Context or Browser close', as
 test('remote Browser projects created Context and Page identities without fabrication', async () => {
   // Arrange
   const { api } = fixture();
-  const browser = await api.webkit.connect('ws://example.test/ws');
+  const browser = await api.chromium.connect('ws://example.test/ws');
 
   // Act
   assert.deepEqual(browser.contexts(), []);

@@ -1,4 +1,4 @@
-//! Bounded native-response projection and independently retained typed results.
+//! Native-response projection and independently retained typed results.
 use crate::HostError;
 use playwright_rust_backend_cdp_navigation::frame_lifecycle::navigation::{
     FrameNavigationWait, NavigationPoll, NavigationWaitError,
@@ -23,24 +23,10 @@ use std::{
     },
 };
 
-const RESULTS: usize = 32;
 const SOURCE_BYTES: usize = 64 * 1024;
 const HEADERS: usize = 256;
 const URL_BYTES: usize = 16 * 1024;
 const STATUS_BYTES: usize = 1024;
-// Includes parser scratch, escaped strings, final owned strings, both bounded
-// header arrays, error formatting, owner metadata and the copied native
-// document request identity. Native JSON has a separate arena lease. Allocator
-// bookkeeping and the caller's task stack are external.
-const RESULT_BYTES: u64 = 384 * 1024;
-// At most twice the bounded source for geometrically grown parser scratch,
-// once for escaped owned strings and once for final string copies, plus both
-// header arrays and a fixed allowance for structs/error metadata.
-const _: () = assert!(
-    RESULT_BYTES as usize
-        >= 4 * SOURCE_BYTES + 2 * HEADERS * std::mem::size_of::<Header>() + 4096 + 256
-);
-const RESULT_SCOPE: ResourceScope = ResourceScope::extension(126, 3);
 const SLOTS_SCOPE: ResourceScope = ResourceScope::extension(126, 4);
 
 pub struct FrameGotoOutput {
@@ -56,8 +42,8 @@ pub struct FrameGotoOutput {
     _permit: ResultPermit,
 }
 impl FrameGotoOutput {
-    /// Borrow the result while its independent allocation lease is retained.
-    /// A foreign copy must acquire its own budget before cloning these values.
+    /// Borrow the independently retained result. A foreign copy must perform
+    /// its own fallible allocation before cloning these values.
     pub fn outcome(&self) -> &Result<FrameGotoResult, OperationError<NavigationErrorDetails>> {
         &self.outcome
     }
@@ -134,7 +120,6 @@ pub(super) struct ResultSlots {
 }
 pub(super) struct ResultPermit {
     slots: Arc<ResultSlots>,
-    _lease: ResourceLease,
 }
 impl Drop for ResultPermit {
     fn drop(&mut self) {
@@ -149,14 +134,7 @@ fn slots_requirements() -> ResourceRequirements {
         .with_metadata(1, 1)
 }
 pub(super) fn requirements() -> ResourceRequirements {
-    ResourceRequirements::none()
-        .with_class(
-            ResourceClass::BackendStateBytes,
-            RESULT_BYTES * RESULTS as u64,
-            RESULT_BYTES * RESULTS as u64,
-        )
-        .with_metadata(1, RESULTS)
-        .combine_concurrent(slots_requirements())
+    slots_requirements()
 }
 impl ResultSlots {
     pub(super) fn new(resources: &ProductionResourceLedger) -> Result<Arc<Self>, HostError> {
@@ -175,32 +153,17 @@ impl ResultSlots {
             _lease: lease,
         }))
     }
-    pub(super) fn admit(
-        self: &Arc<Self>,
-        resources: &ProductionResourceLedger,
-    ) -> Result<ResultPermit, HostError> {
+    pub(super) fn admit(self: &Arc<Self>) -> Result<ResultPermit, HostError> {
         self.active
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| {
-                (n < RESULTS).then_some(n + 1)
-            })
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| n.checked_add(1))
             .map_err(|_| {
                 HostError::ResourceExhausted(
-                    "Frame navigation retained-result capacity exhausted".into(),
+                    "Frame navigation retained-result count overflow".into(),
                 )
             })?;
-        let reserved = resources.claim(requirements()).and_then(|ledger| {
-            Ok(ledger.reserve(RESULT_SCOPE, ResourceClass::BackendStateBytes, RESULT_BYTES)?)
-        });
-        match reserved {
-            Ok(lease) => Ok(ResultPermit {
-                slots: self.clone(),
-                _lease: lease,
-            }),
-            Err(error) => {
-                self.active.fetch_sub(1, Ordering::AcqRel);
-                Err(HostError::ResourceExhausted(error.to_string()))
-            }
-        }
+        Ok(ResultPermit {
+            slots: self.clone(),
+        })
     }
 }
 

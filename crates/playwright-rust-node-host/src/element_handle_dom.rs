@@ -1122,7 +1122,9 @@ mod tests {
         assert!(source.contains("./div[contains(@class, 'child')]"));
         assert!(source.contains("value.startsWith('/')"));
         assert!(source.contains("value = '.' + value"));
-        assert!(source.contains("node.nodeType === Node.ELEMENT_NODE"));
+        // The injected runtime pins numeric DOM node constants so a page that
+        // mutates the global `Node` binding cannot change selector behavior.
+        assert!(source.contains("node.nodeType === ELEMENT_NODE"));
         assert!(source.contains("return __pwMatches;"));
     }
 

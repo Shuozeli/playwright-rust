@@ -1,4 +1,4 @@
-<!-- agent-updated: 2026-11-14T05:28:56Z -->
+<!-- agent-updated: 2026-11-20T02:13:45Z -->
 
 ## NODE-366: post-commit client redirect keeps the original response
 
@@ -410,6 +410,9 @@ and broader Playwright API coverage are not proved by this selected lane.
 
 ## NODE-075 typed Rust host result ownership
 
+The fixed result-owner counts recorded in this historical checkpoint were
+later replaced by allocator-backed production ownership.
+
 The selected host now exposes `HostSession::frame_goto(page_id, frame_id,
 v1_2::GotoParams, timeout_ms) -> FrameGotoOutput`. It moves URL/referrer inputs
 into the existing native executor and maps all four selected wait policies in
@@ -650,6 +653,11 @@ Do not infer full Playwright compatibility from this Rust host test.
 
 ## NODE-072 ordered operation registration and actual Rust host observation
 
+The fixed registration counts recorded in this historical checkpoint were
+later superseded. Production now grows Page indexes, registration owners and
+wait arenas through the allocator; the finite constructors remain for explicit
+constrained embeddings.
+
 The lifecycle owner now has explicitly selected, fixed-capacity navigation
 registration slots. `NavigationRegistrationProfile` separately admits the
 operation core and its Arc/Mutex/notification owner before allocation.
@@ -697,9 +705,12 @@ Host selection is deliberately separate:
 - Default: no lifecycle registry or navigation registration selection.
 - `frame-lifecycle`: prior readiness-only selection, without registration slots
   or response-storage budgets.
-- `frame-navigation`: includes lifecycle plus four registration slots per Page.
-  The 32 active-or-escaped Page owners imply 128 budgeted registration owners.
-  Each operation permits 16 journal events, eight document-request chains,
+- `frame-navigation`: includes lifecycle plus an allocator-backed registration
+  index. Four entries are only an initial reservation, not a capacity. There is
+  no ordinary 128-owner ceiling or burst 21-permit ceiling.
+  At this historical checkpoint each operation permitted 16 journal events and
+  eight document-request chains. Production now treats those as initial
+  capacities and grows rows dynamically. It still validates
   256-byte IDs, 1024-byte error text and 64 KiB serialized response per chain.
   These are declared ceilings; response arenas allocate on registration, not
   eagerly for every possible operation. Escaped outcomes keep their charges
@@ -876,13 +887,21 @@ the callback lock. No new queue, cursor, task, timer or JavaScript callback is
 introduced by this registry.
 
 The Rust `playwright-rust-node-host/frame-lifecycle` feature is default-off. When selected,
-the existing host profile admits 16 active Pages and 32 total owners, each with
-64 Frames, 256 request slots and 256-byte native IDs. An admitted shared support
-allocation provides a monotonic clock and an explicitly readiness-only sink.
+the production host profile dynamically owns Page lifecycle owners, reduced and
+native Frame/request rows, and exact loader/request/session IDs. Native IDs retain
+their 256-byte per-ID validation, but no 16-Page, 32-owner, 64-Frame, or
+256-request aggregate count remains. An admitted shared support allocation
+provides a monotonic clock and an explicitly readiness-only sink.
 The existing driver owns the registry; the live session retains it for Rust
 `HostSession::frame_lifecycle(page)` access after the normal publication fence.
 The support sink intentionally retains no response/error envelope. Installing
 the operation-specific admitted response sink remains necessary for Frame.goto.
+Navigation registrations, their owner bodies and fixed wait arenas grow through
+the allocator. Four Page entries are only initial capacity, and neither the old
+ordinary 128-owner plan nor the burst 21-permit pool remains in production.
+The per-operation journal also grows dynamically. Sixteen navigation events and
+eight document-request chains are initial capacities only; exact owned
+loader/error/URL/response payloads retain their per-field validation.
 
 Verification in `.work/node070-host-lifecycle/`:
 

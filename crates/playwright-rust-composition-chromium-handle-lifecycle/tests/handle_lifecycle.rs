@@ -142,6 +142,42 @@ fn route_registry_installs_without_protocol_or_runtime_resources() {
 }
 
 #[test]
+fn allocator_backed_route_registry_retains_more_than_legacy_count() {
+    // Arrange
+    let profile =
+        ChromiumHandleRouteProfile::new_allocator_backed(ResourceScope::extension(97, 20), 64, 128);
+    let requirements = profile.requirements();
+    let resources = ProductionResourceLedger::new(exact_limits(requirements), requirements)
+        .expect("allocator-backed route resources should build");
+    let routes = ChromiumHandleRoutes::new_with_production_resources(profile, &resources)
+        .expect("allocator-backed route owner should install");
+
+    // Act
+    for id in 1..=129 {
+        routes
+            .reserve()
+            .expect("allocator-backed route should reserve")
+            .publish(
+                ObjectId::new(id),
+                ChromiumHandleRouteSpec::new(ObjectId::new(4), ObjectId::new(3), 0, 4, None),
+            )
+            .expect("allocator-backed route should publish");
+    }
+
+    // Assert
+    assert_eq!(routes.metrics().unwrap().current, 129);
+    assert_eq!(routes.profile().max_handles(), usize::MAX);
+    assert_eq!(
+        resources
+            .metrics()
+            .unwrap()
+            .class(ResourceClass::RemoteHandle)
+            .current,
+        0
+    );
+}
+
+#[test]
 fn committed_parent_retirement_releases_only_the_runtime_subtree_selection() {
     // Arrange
     let profile = ChromiumHandleRouteProfile::new(ResourceScope::extension(97, 3), 2, 64, 128);

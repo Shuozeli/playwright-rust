@@ -693,6 +693,100 @@ fn distinct_document_request_capacity_does_not_grow() {
 }
 
 #[test]
+fn allocator_backed_wait_grows_past_legacy_event_and_request_counts() {
+    // Arrange
+    let profile = FrameNavigationWaitProfile::new_allocator_backed(
+        ResourceScope::Connection,
+        1,
+        1,
+        32,
+        64,
+        128,
+    )
+    .unwrap()
+    .with_url_bytes(128)
+    .unwrap();
+    let resources =
+        ProductionResourceLedger::new(ResourceLimits::deny_all(0, 0), ResourceRequirements::none())
+            .unwrap();
+    let mut operation =
+        FrameNavigationWait::new(profile, &resources, FRAME, WaitUntil::Load, None).unwrap();
+    for index in 0..130_u64 {
+        let loader = format!("loader-{index}");
+        let url = format!("https://example.test/{index}");
+        start(&mut operation, index + 1, &loader, None);
+        commit_url(&mut operation, &loader, &url).unwrap();
+    }
+    let response = json!({"status": 200, "url": "https://example.test/129"});
+
+    // Act
+    let candidate = match operation.candidate(129).unwrap() {
+        Some(NavigationCandidate::Url(url)) => url.to_owned(),
+        other => panic!("unexpected candidate: {other:?}"),
+    };
+    operation.select_candidate(NOW, 129).unwrap();
+    operation
+        .observe(
+            NOW,
+            &NativeLifecycleNotice::Response {
+                frame: FRAME,
+                request: ObjectId::new(130),
+                response: &response,
+            },
+        )
+        .unwrap();
+    let outcome = operation.poll(NOW, snapshot(true)).unwrap();
+
+    // Assert
+    assert_eq!(candidate, "https://example.test/129");
+    let NavigationPoll::Complete {
+        response_json: Some(bytes),
+        ..
+    } = outcome
+    else {
+        panic!("allocator-backed navigation did not retain its response");
+    };
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(bytes).unwrap(),
+        response
+    );
+    assert_eq!(operation.response_request_id(), Some("loader-129"));
+    assert_eq!(resources.metrics().unwrap().active_leases, 0);
+}
+
+#[test]
+fn allocator_backed_wait_retains_exact_failure_text() {
+    // Arrange
+    let profile = FrameNavigationWaitProfile::new_allocator_backed(
+        ResourceScope::Connection,
+        1,
+        1,
+        32,
+        64,
+        128,
+    )
+    .unwrap();
+    let resources =
+        ProductionResourceLedger::new(ResourceLimits::deny_all(0, 0), ResourceRequirements::none())
+            .unwrap();
+    let mut operation =
+        FrameNavigationWait::new(profile, &resources, FRAME, WaitUntil::Load, None).unwrap();
+    start(&mut operation, 1, "document", None);
+    fail(&mut operation, 1, false).unwrap();
+
+    // Act
+    let failure = operation.receipt(NOW, Some("document"));
+
+    // Assert
+    assert_eq!(
+        failure,
+        Err(NavigationWaitError::Network { canceled: false })
+    );
+    assert_eq!(operation.failure_text(), Some("net::ERR_ABORTED"));
+    assert_eq!(resources.metrics().unwrap().active_leases, 0);
+}
+
+#[test]
 fn long_failure_text_is_never_silently_truncated() {
     // Arrange
     let (mut operation, _) = fixture(WaitUntil::Load);

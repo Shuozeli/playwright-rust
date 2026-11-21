@@ -7,7 +7,7 @@ function(token) {
   }
   if (!(table instanceof Map)) throw new Error('drag observer registry was replaced');
   // Explicit no-install result: cleanup must never delete another owner's token.
-  if (table.has(token) || table.size >= 32) return false;
+  if (table.has(token)) return false;
   let timer;
   let dragEvent = null;
   let settle;

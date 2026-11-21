@@ -68,6 +68,7 @@ enum OutboxMode {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct DisposalReservationProfile {
     objects: usize,
+    allocator_backed_objects: bool,
     require_runtime_limit_match: bool,
     pending: usize,
     scope: ResourceScope,
@@ -113,6 +114,50 @@ impl DisposalReservationProfile {
         Self::build(objects, pending, scope, OutboxMode::Absent, false)
     }
 
+    /// Select an in-process reservation for an allocator-backed runtime graph.
+    /// Pending close intents remain explicitly bounded, while the latest
+    /// object subtree is allocated at preparation instead of being rejected at
+    /// an artificial object count.
+    pub fn new_allocator_backed_in_process(
+        pending: NonZeroUsize,
+        scope: ResourceScope,
+    ) -> Result<Self, DisposalReservationError> {
+        if !matches!(scope, ResourceScope::Extension { .. }) {
+            return Err(DisposalReservationError::Invalid(
+                "an extension scope is required",
+            ));
+        }
+        let bytes = RESERVATION_BYTES;
+        let total =
+            bytes
+                .checked_mul(u64::try_from(pending.get()).map_err(|_| {
+                    DisposalReservationError::Invalid("reservation capacity overflow")
+                })?)
+                .and_then(|value| value.checked_add(POOL_BYTES))
+                .ok_or(DisposalReservationError::Invalid(
+                    "reservation capacity overflow",
+                ))?;
+        let leases = pending
+            .get()
+            .checked_add(1)
+            .ok_or(DisposalReservationError::Invalid(
+                "reservation capacity overflow",
+            ))?;
+        Ok(Self {
+            objects: usize::MAX,
+            allocator_backed_objects: true,
+            require_runtime_limit_match: false,
+            pending: pending.get(),
+            scope,
+            bytes,
+            requirements: ResourceRequirements::none()
+                .with_class(ResourceClass::BackendStateBytes, total, total)
+                .with_metadata(1, leases),
+            deferred_calls: None,
+            outbox: OutboxMode::Absent,
+        })
+    }
+
     fn build(
         objects: NonZeroUsize,
         pending: NonZeroUsize,
@@ -153,6 +198,7 @@ impl DisposalReservationProfile {
             .ok_or_else(overflow)?;
         Ok(Self {
             objects: objects.get(),
+            allocator_backed_objects: false,
             require_runtime_limit_match,
             pending: pending.get(),
             scope,
@@ -180,7 +226,12 @@ impl DisposalReservationProfile {
                 "deferred commit already selected",
             ));
         }
-        let extra = deferred::commit_storage_bytes(self.objects, pending_calls.get())?;
+        let object_envelope = if self.allocator_backed_objects {
+            0
+        } else {
+            self.objects
+        };
+        let extra = deferred::commit_storage_bytes(object_envelope, pending_calls.get())?;
         let overflow = || DisposalReservationError::Invalid("deferred commit capacity overflow");
         self.bytes = self.bytes.checked_add(extra).ok_or_else(overflow)?;
         let total = self
@@ -192,6 +243,21 @@ impl DisposalReservationProfile {
             .with_class(ResourceClass::BackendStateBytes, total, total)
             .with_metadata(1, self.pending + 1);
         self.deferred_calls = Some(pending_calls.get());
+        Ok(self)
+    }
+
+    /// Select deferred notification ownership for an allocator-backed pending
+    /// call table. Dynamic call/signal/waker collections retain their actual
+    /// allocations instead of declaring an arbitrary maximum call count.
+    pub fn with_allocator_backed_deferred_commit(
+        mut self,
+    ) -> Result<Self, DisposalReservationError> {
+        if self.deferred_calls.is_some() {
+            return Err(DisposalReservationError::Invalid(
+                "deferred commit already selected",
+            ));
+        }
+        self.deferred_calls = Some(usize::MAX);
         Ok(self)
     }
 
@@ -218,12 +284,11 @@ impl DisposalReservationProfile {
                     "runtime object limit differs from reservation profile",
                 ));
             }
-            if self
-                .deferred_calls
-                .is_some_and(|limit| limit != state.pending_calls.limit())
-            {
+            if self.deferred_calls.is_some_and(|required| {
+                required != usize::MAX && state.pending_calls.limit() < required
+            }) {
                 return Err(DisposalReservationError::Invalid(
-                    "runtime pending-call limit differs from deferred commit profile",
+                    "runtime pending-call limit is smaller than the deferred commit profile",
                 ));
             }
             match (self.outbox, state.control_messages.as_ref()) {
@@ -492,7 +557,9 @@ impl ReservedDisposalCapacity {
         }
         state.ensure_no_lifecycle_transaction()?;
         let disposal_order = state.objects.subtree_ids_child_first(object_id);
-        if disposal_order.len() > self.permit.0.profile.objects {
+        if !self.permit.0.profile.allocator_backed_objects
+            && disposal_order.len() > self.permit.0.profile.objects
+        {
             return Err(DisposalReservationError::Invalid(
                 "disposal subtree exceeds reserved capacity",
             ));

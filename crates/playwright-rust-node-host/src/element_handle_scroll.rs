@@ -190,15 +190,6 @@ impl HostSession {
                 .handles
                 .clone()
         };
-        // Four whole-action slots leave four of Handle's eight call slots
-        // available to their nested exact-handle stability evaluations.
-        let _action = handles
-            .element_action_slots
-            .clone()
-            .try_acquire_owned()
-            .map_err(|_| {
-                HostError::ResourceExhausted("ElementHandle scroll capacity exceeded".into())
-            })?;
         let timeout_ms = match timeout_ms.into() {
             Some(timeout_ms) => timeout_ms,
             #[cfg(feature = "timeout-settings")]

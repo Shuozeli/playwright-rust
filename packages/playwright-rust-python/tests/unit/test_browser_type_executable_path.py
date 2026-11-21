@@ -17,8 +17,6 @@ _MAC_ARM64_PATHS = {
         "chromium-1208/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/"
         "Google Chrome for Testing"
     ),
-    "firefox": Path("firefox-1509/firefox/Nightly.app/Contents/MacOS/firefox"),
-    "webkit": Path("webkit-2248/pw_run.sh"),
 }
 
 
@@ -26,7 +24,7 @@ _MAC_ARM64_PATHS = {
     sys.platform != "darwin" or platform.machine() != "arm64",
     reason="pinned Playwright v1.58.0 macOS arm64 executable paths",
 )
-@pytest.mark.parametrize("engine", ["chromium", "firefox", "webkit"])
+@pytest.mark.parametrize("engine", ["chromium"])
 def test_native_registry_reports_expected_uninstalled_path(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, engine: str
 ) -> None:
@@ -66,22 +64,21 @@ def test_zero_browser_path_is_explicitly_playwright_rust_package_local(
     sys.platform != "darwin" or platform.machine() != "arm64",
     reason="pinned Playwright v1.58.0 macOS arm64 executable paths",
 )
-@pytest.mark.parametrize("engine", ["chromium", "firefox", "webkit"])
 @pytest.mark.parametrize("api", ["async", "sync"])
 def test_zero_browser_path_public_api_stays_in_playwright_rust_package(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, engine: str, api: str
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, api: str
 ) -> None:
     # Arrange
     monkeypatch.setenv("PLAYWRIGHT_BROWSERS_PATH", "0")
     monkeypatch.setenv("INIT_CWD", str(tmp_path))
-    async_browser_type = AsyncBrowserType(cast(Any, object()), engine)
+    async_browser_type = AsyncBrowserType(cast(Any, object()))
     browser_type = (
         async_browser_type
         if api == "async"
         else SyncBrowserType(cast(Any, object()), async_browser_type)
     )
     package_root = Path(getfile(AsyncBrowserType)).resolve().parent
-    expected = package_root / ".local-browsers" / _MAC_ARM64_PATHS[engine]
+    expected = package_root / ".local-browsers" / _MAC_ARM64_PATHS["chromium"]
 
     # Act
     actual = browser_type.executable_path
@@ -95,36 +92,34 @@ def test_zero_browser_path_public_api_stays_in_playwright_rust_package(
     sys.platform != "darwin" or platform.machine() != "arm64",
     reason="pinned Playwright v1.58.0 macOS arm64 executable paths",
 )
-@pytest.mark.parametrize("engine", ["chromium", "firefox", "webkit"])
 def test_async_browser_type_uses_rust_registry(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, engine: str
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     # Arrange
     monkeypatch.setenv("PLAYWRIGHT_BROWSERS_PATH", str(tmp_path))
-    browser_type = AsyncBrowserType(cast(Any, object()), engine)
+    browser_type = AsyncBrowserType(cast(Any, object()))
 
     # Act
     actual = browser_type.executable_path
 
     # Assert
-    assert actual == str(tmp_path / _MAC_ARM64_PATHS[engine])
+    assert actual == str(tmp_path / _MAC_ARM64_PATHS["chromium"])
 
 
 @pytest.mark.skipif(
     sys.platform != "darwin" or platform.machine() != "arm64",
     reason="pinned Playwright v1.58.0 macOS arm64 executable paths",
 )
-@pytest.mark.parametrize("engine", ["chromium", "firefox", "webkit"])
 def test_sync_browser_type_uses_rust_registry(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, engine: str
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     # Arrange
     monkeypatch.setenv("PLAYWRIGHT_BROWSERS_PATH", str(tmp_path))
-    async_browser_type = AsyncBrowserType(cast(Any, object()), engine)
+    async_browser_type = AsyncBrowserType(cast(Any, object()))
     browser_type = SyncBrowserType(cast(Any, object()), async_browser_type)
 
     # Act
     actual = browser_type.executable_path
 
     # Assert
-    assert actual == str(tmp_path / _MAC_ARM64_PATHS[engine])
+    assert actual == str(tmp_path / _MAC_ARM64_PATHS["chromium"])

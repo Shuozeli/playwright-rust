@@ -12,7 +12,7 @@ fn resources() -> ProductionResourceLedger {
 }
 
 #[test]
-fn retained_slots_survive_installation_drop_and_release_on_last_owner() {
+fn retained_invocation_keeps_fixed_installation_state_until_last_owner_drops() {
     // Arrange
     let resources = resources();
     let installation = Installation::new(&resources, "macos").unwrap();
@@ -20,32 +20,30 @@ fn retained_slots_survive_installation_drop_and_release_on_last_owner() {
     // Act
     drop(installation);
     // Assert
-    assert_eq!(resources.metrics().unwrap().active_leases, 2);
+    assert_eq!(resources.metrics().unwrap().active_leases, 1);
     assert_eq!(
         resources
             .metrics()
             .unwrap()
             .class(ResourceClass::BackendStateBytes)
             .current,
-        STATE_BYTES + CALL_BYTES + 17
+        STATE_BYTES
     );
     drop(lease);
     assert_eq!(resources.metrics().unwrap().active_leases, 0);
 }
 
 #[test]
-fn retained_invocations_have_an_independent_count_limit() {
+fn allocator_backed_invocation_ownership_grows_past_legacy_count() {
     // Arrange
     let resources = resources();
     let installation = Installation::new(&resources, "linux").unwrap();
-    let leases: Vec<_> = (0..RETAINED)
-        .map(|_| installation.admit(0).unwrap())
-        .collect();
+    let leases: Vec<_> = (0..129).map(|_| installation.admit(0).unwrap()).collect();
     // Act
-    let error = installation.admit(0).err().unwrap();
+    let retained = installation.slots.count.load(Ordering::Acquire);
     // Assert
-    assert!(matches!(error, HostError::ResourceExhausted(_)));
-    assert_eq!(installation.slots.count.load(Ordering::Acquire), RETAINED);
+    assert_eq!(retained, 129);
+    assert_eq!(resources.metrics().unwrap().active_leases, 1);
     drop(leases);
     assert_eq!(installation.slots.count.load(Ordering::Acquire), 0);
     assert!(installation.admit(KEYBOARD_TEXT_MAX_BYTES).is_ok());
@@ -65,30 +63,6 @@ fn oversized_argument_rejects_without_admission() {
     assert!(matches!(error, HostError::ResourceExhausted(_)));
     assert_eq!(installation.slots.count.load(Ordering::Acquire), 0);
     assert_eq!(resources.metrics().unwrap().active_leases, 1);
-}
-
-#[test]
-fn ledger_rejection_rolls_back_the_reserved_slot() {
-    // Arrange
-    let resources = resources();
-    let installation = Installation::new(&resources, "macos").unwrap();
-    let required = requirements().unwrap();
-    let ledger = resources.claim(required).unwrap();
-    let bound = required.class(ResourceClass::BackendStateBytes);
-    let occupied = ledger
-        .reserve(
-            STATE_SCOPE,
-            ResourceClass::BackendStateBytes,
-            bound.per_scope - STATE_BYTES,
-        )
-        .unwrap();
-    // Act
-    let error = installation.admit(1).err().unwrap();
-    // Assert
-    assert!(matches!(error, HostError::ResourceExhausted(_)));
-    assert_eq!(installation.slots.count.load(Ordering::Acquire), 0);
-    drop(occupied);
-    assert!(installation.admit(1).is_ok());
 }
 
 #[test]

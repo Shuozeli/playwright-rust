@@ -116,10 +116,10 @@ impl DragCaptureFactory {
     ) -> Result<Self> {
         if !client
             .session_id()
-            .is_some_and(|id| (1..=128).contains(&id.len()))
+            .is_some_and(|id| store.accepts_session(id))
         {
             return Err(error(
-                "drag capture requires a fixed session of 1..=128 bytes",
+                "drag capture requires a fixed session accepted by the data profile",
             ));
         }
         let ledger = resources

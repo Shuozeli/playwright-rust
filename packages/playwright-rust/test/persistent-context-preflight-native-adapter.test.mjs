@@ -83,8 +83,8 @@ test('native argument decision receives boxed strings and inert non-string slots
   const { api, calls, nativeLoads } = fixture();
 
   // Act
-  const result = api.firefox.launchPersistentContext('unused-profile', {
-    channel: new String('moz-firefox'),
+  const result = api.chromium.launchPersistentContext('unused-profile', {
+    channel: new String('chrome'),
     args: [new String('https://example.invalid/'), 42],
   });
 
@@ -93,7 +93,7 @@ test('native argument decision receives boxed strings and inert non-string slots
     name: 'Error',
     message: 'browserType.launchPersistentContext: Arguments can not specify page to be opened',
   });
-  assert.deepEqual(calls, [['arguments', 'firefox', ['https://example.invalid/', null], 'moz-firefox']]);
+  assert.deepEqual(calls, [['arguments', 'chromium', ['https://example.invalid/', null], 'chrome']]);
   assert.equal(nativeLoads(), 1);
 });
 
@@ -102,7 +102,7 @@ test('ignored default arguments never load the pure native decision profile', as
   const { api, calls, nativeLoads } = fixture();
 
   // Act
-  const result = api.webkit.launchPersistentContext('unused-profile', {
+  const result = api.chromium.launchPersistentContext('unused-profile', {
     ignoreDefaultArgs: true,
     args: ['https://example.invalid/'],
   });

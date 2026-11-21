@@ -1,5 +1,5 @@
-//! Optional Page binding bridge. Chromium installation, call routing, bounded
-//! pending ownership and result delivery live in Rust; the language package
+//! Optional Page binding bridge. Chromium installation, call routing,
+//! allocator-backed pending ownership and result delivery live in Rust; the language package
 //! retains only the user callback and Playwright-shaped source wrappers.
 
 use std::error::Error;
@@ -7,7 +7,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use playwright_rust_backend_cdp_topology::CdpTopology;
-use playwright_rust_cdp::{CdpConnection, CdpEvent, generated::page};
+use playwright_rust_cdp::{
+    CdpConnection, CdpEvent, ServiceWorkerInitializationCommand, generated::page,
+};
 use playwright_rust_core::{
     ObjectId, ProductionResourceLedger, ResourceClass, ResourceLease, ResourceRequirements,
     ResourceScope,
@@ -21,7 +23,7 @@ use playwright_rust_plugin_chromium_session_initialization::{
 };
 use serde::Deserialize;
 use serde_json::Value;
-use tokio::sync::{Notify, Semaphore, mpsc};
+use tokio::sync::{Notify, mpsc};
 use tokio_util::sync::CancellationToken;
 
 use crate::{
@@ -31,17 +33,6 @@ use crate::{
 };
 
 const SCOPE: ResourceScope = ResourceScope::extension(137, 1);
-const MAX_BINDINGS: usize = 64;
-const MAX_PENDING_CALLS: usize = 64;
-const MAX_EARLY_CALLS: usize = 16;
-const MAX_REJECTION_TASKS: usize = 16;
-const MAX_REJECTION_TASK_BYTES: usize = 4096;
-const MAX_BINDING_SESSIONS: usize = 128;
-const MAX_BINDING_NAME_BYTES: usize = 256;
-const MAX_SESSION_ID_BYTES: usize = 256;
-const MAX_SCRIPT_IDENTIFIER_BYTES: usize = 256;
-const MAX_ARGUMENT_BYTES: usize = 64 * 1024;
-const MAX_BINDING_PAYLOAD_BYTES: usize = MAX_ARGUMENT_BYTES + MAX_BINDING_NAME_BYTES + 512;
 const BRIDGE_NAME: &str = "__playwright_rust_binding__";
 const BRIDGE_SCHEMA: &str = "playwright.rust.page-binding.v1";
 const CONTROLLER_NAME: &str = "__playwright_rust_binding_controller__";
@@ -91,32 +82,6 @@ const CONTROLLER_SOURCE: &str = r#"(() => {
   const WindowConstructor = typeof global.Window === 'function' ? global.Window : null;
   const DocumentConstructor = typeof global.Document === 'function' ? global.Document : null;
   const NodeConstructor = typeof global.Node === 'function' ? global.Node : null;
-  const limits = () => ({ nodes: 0, entries: 0, strings: 0 });
-  const utf8Length = value => {
-    let bytes = 0;
-    for (let index = 0; index < value.length; index++) {
-      const code = value.charCodeAt(index);
-      if (code < 0x80) bytes += 1;
-      else if (code < 0x800) bytes += 2;
-      else if (code >= 0xd800 && code <= 0xdbff && index + 1 < value.length &&
-               value.charCodeAt(index + 1) >= 0xdc00 && value.charCodeAt(index + 1) <= 0xdfff) {
-        bytes += 4;
-        index += 1;
-      } else bytes += 3;
-    }
-    return bytes;
-  };
-  const claimNode = (state, depth) => {
-    if (depth > 64) throw new ErrorConstructor('binding value depth limit exceeded');
-    if (++state.nodes > 4096) throw new ErrorConstructor('binding value node limit exceeded');
-  };
-  const claimEntry = state => {
-    if (++state.entries > 4096) throw new ErrorConstructor('binding value entry limit exceeded');
-  };
-  const claimString = (state, value) => {
-    state.strings += utf8Length(value);
-    if (state.strings > 65536) throw new ErrorConstructor('binding value string-byte limit exceeded');
-  };
   const isKind = (value, Constructor, tag) => {
     try {
       return value instanceof Constructor || objectToString(value) === tag;
@@ -130,8 +95,7 @@ const CONTROLLER_SOURCE: &str = r#"(() => {
     for (let index = 0; index < bytes.length; index++) binary += fromCharCode(bytes[index]);
     return encodeBase64(binary);
   };
-  const serialize = (value, visitor, depth) => {
-    claimNode(visitor.limits, depth);
+  const serialize = (value, visitor) => {
     if (typeof value === 'symbol' || typeof value === 'function' || value === undefined) return { v: 'undefined' };
     if (value === null) return { v: 'null' };
     if (numberIsNaN(value)) return { v: 'NaN' };
@@ -139,10 +103,7 @@ const CONTROLLER_SOURCE: &str = r#"(() => {
     if (value === -Infinity) return { v: '-Infinity' };
     if (objectIs(value, -0)) return { v: '-0' };
     if (typeof value === 'boolean' || typeof value === 'number') return value;
-    if (typeof value === 'string') {
-      claimString(visitor.limits, value);
-      return value;
-    }
+    if (typeof value === 'string') return value;
     if (typeof value === 'bigint') return { bi: value.toString() };
     if (value && typeof value === 'object') {
       if (WindowConstructor && value instanceof WindowConstructor) return 'ref: <Window>';
@@ -153,9 +114,6 @@ const CONTROLLER_SOURCE: &str = r#"(() => {
       const name = String(value.name);
       const message = String(value.message);
       const stack = typeof value.stack === 'string' ? value.stack : `${name}: ${message}`;
-      claimString(visitor.limits, name);
-      claimString(visitor.limits, message);
-      claimString(visitor.limits, stack);
       return { e: { n: name, m: message, s: stack } };
     }
     if (isKind(value, DateConstructor, '[object Date]')) return { d: value.toJSON() };
@@ -173,8 +131,7 @@ const CONTROLLER_SOURCE: &str = r#"(() => {
     if (arrayIsArray(value)) {
       const array = [];
       for (let index = 0; index < value.length; index++) {
-        claimEntry(visitor.limits);
-        array[index] = serialize(value[index], visitor, depth + 1);
+        array[index] = serialize(value[index], visitor);
       }
       return { a: array, id };
     }
@@ -188,18 +145,16 @@ const CONTROLLER_SOURCE: &str = r#"(() => {
       } catch (_) {
         continue;
       }
-      claimEntry(visitor.limits);
-      claimString(visitor.limits, key);
       object[object.length] = {
         k: key,
         v: key === 'toJSON' && typeof item === 'function'
           ? { o: [], id: 0 }
-          : serialize(item, visitor, depth + 1),
+          : serialize(item, visitor),
       };
     }
     if (!object.length) {
       try {
-        if (typeof value.toJSON === 'function') return serialize(value.toJSON(), visitor, depth + 1);
+        if (typeof value.toJSON === 'function') return serialize(value.toJSON(), visitor);
       } catch (_) {}
     }
     return { o: object, id };
@@ -209,8 +164,6 @@ const CONTROLLER_SOURCE: &str = r#"(() => {
       if (bindings.has(name)) return;
       let sequence = 0;
       const binding = (...args) => {
-        if (callbacks.size >= 64)
-          return new PromiseConstructor((_, reject) => reject(new ErrorConstructor('pending Page binding capacity exceeded (64)')));
         const seq = ++sequence;
         const key = `${name}:${seq}`;
         const promise = new PromiseConstructor((resolve, reject) => callbacks.set(key, { resolve, reject }));
@@ -228,15 +181,11 @@ const CONTROLLER_SOURCE: &str = r#"(() => {
           } else {
             serializedArgs = [];
             for (let index = 0; index < args.length; index++)
-              serializedArgs[index] = serialize(args[index], { seen: new MapConstructor(), nextId: 0, limits: limits() }, 0);
-            if (utf8Length(stringify(serializedArgs)) > 65536)
-              throw new ErrorConstructor('binding call arguments exceed byte limit');
+              serializedArgs[index] = serialize(args[index], { seen: new MapConstructor(), nextId: 0 });
           }
           const payload = { schema: 'playwright.rust.page-binding.v1', name, seq };
           if (!needsHandle) payload.serializedArgs = serializedArgs;
           const encoded = stringify(payload);
-          if (utf8Length(encoded) > 65536 + 256 + 512)
-            throw new ErrorConstructor('binding payload exceeds byte limit');
           global.__playwright_rust_binding__(encoded);
         } catch (error) {
           callbacks.delete(key);
@@ -428,11 +377,6 @@ fn add_registration_to_state(
     name: &str,
     needs_handle: bool,
 ) -> Result<u64, HostError> {
-    if name.is_empty() || name.len() > MAX_BINDING_NAME_BYTES {
-        return Err(HostError::InvalidArgument(format!(
-            "binding name must contain 1..={MAX_BINDING_NAME_BYTES} UTF-8 bytes"
-        )));
-    }
     for binding in &state.registrations {
         if binding.name.as_ref() != name || binding.scope.context() != scope.context() {
             continue;
@@ -466,15 +410,15 @@ fn add_registration_to_state(
             return Err(HostError::InvalidArgument(message));
         }
     }
-    if state.registrations.len() == MAX_BINDINGS {
-        return Err(HostError::ResourceExhausted(format!(
-            "Page binding capacity exceeded ({MAX_BINDINGS})"
-        )));
-    }
     let id = state.next_registration;
-    state.next_registration = id.checked_add(1).ok_or_else(|| {
+    let next = id.checked_add(1).ok_or_else(|| {
         HostError::ResourceExhausted("binding registration ID space exhausted".into())
     })?;
+    state
+        .registrations
+        .try_reserve(1)
+        .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
+    state.next_registration = next;
     state.registrations.push(Registration {
         id,
         scope,
@@ -531,13 +475,17 @@ fn registrations_for_target(
 fn session_records_for_scope(
     state: &State,
     scope: RegistrationScope,
-) -> Vec<Arc<SessionInstallation>> {
-    state
-        .sessions
-        .iter()
-        .filter(|session| scope.applies_to(session.page, session.context))
-        .cloned()
-        .collect()
+) -> Result<Vec<Arc<SessionInstallation>>, HostError> {
+    let mut records = Vec::new();
+    for session in &state.sessions {
+        if scope.applies_to(session.page, session.context) {
+            records
+                .try_reserve(1)
+                .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
+            records.push(session.clone());
+        }
+    }
+    Ok(records)
 }
 
 fn has_registration_for_page(state: &State, page: ObjectId, context: ObjectId) -> bool {
@@ -615,6 +563,57 @@ fn call_is_pending(state: &State, id: u64) -> bool {
     state.pending.iter().any(|call| call.id == id)
 }
 
+#[allow(clippy::too_many_arguments)]
+fn enqueue_call(
+    state: &mut State,
+    sender: &mpsc::UnboundedSender<BindingCall>,
+    context: ObjectId,
+    page: ObjectId,
+    frame: ObjectId,
+    name: &str,
+    sequence: u64,
+    needs_handle: bool,
+    arguments_json: String,
+) -> Result<(), HostError> {
+    let id = state.next_call;
+    let next = id
+        .checked_add(1)
+        .ok_or_else(|| HostError::ResourceExhausted("binding call ID space exhausted".into()))?;
+    state
+        .pending
+        .try_reserve(1)
+        .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
+    state.next_call = next;
+    state.pending.push(PendingCall {
+        id,
+        context,
+        page,
+        frame,
+        name: name.to_owned().into_boxed_str(),
+        sequence,
+        needs_handle,
+        handle_taken: false,
+        published: false,
+        delivering: false,
+    });
+    let descriptor = BindingCall {
+        id,
+        context,
+        page,
+        frame,
+        name: name.to_owned(),
+        arguments_json,
+        needs_handle,
+    };
+    if let Err(error) = sender.send(descriptor) {
+        state.pending.retain(|pending| pending.id != id);
+        return Err(HostError::ResourceExhausted(format!(
+            "Page binding delivery queue is unavailable: {error}"
+        )));
+    }
+    Ok(())
+}
+
 fn retain_materialized_registrations(
     state: &mut State,
     pages: &[(ObjectId, ObjectId)],
@@ -633,9 +632,8 @@ pub(crate) struct Installation {
     connection: Arc<CdpConnection>,
     state: Mutex<State>,
     publication_changed: Notify,
-    rejection_permits: Arc<Semaphore>,
-    sender: mpsc::Sender<BindingCall>,
-    receiver: tokio::sync::Mutex<mpsc::Receiver<BindingCall>>,
+    sender: mpsc::UnboundedSender<BindingCall>,
+    receiver: tokio::sync::Mutex<mpsc::UnboundedReceiver<BindingCall>>,
     _storage: ResourceLease,
 }
 
@@ -683,11 +681,6 @@ fn observe_browser_call(
         .get("payload")
         .and_then(Value::as_str)
         .ok_or_else(|| invalid("payload"))?;
-    if payload.len() > MAX_BINDING_PAYLOAD_BYTES {
-        return Err(Box::new(HostError::ResourceExhausted(
-            "binding payload exceeds byte limit".into(),
-        )));
-    }
     let call: BrowserCall = serde_json::from_str(payload)
         .map_err(|error| Box::new(error) as Box<dyn Error + Send + Sync>)?;
     if call.schema != BRIDGE_SCHEMA {
@@ -735,11 +728,10 @@ fn stage_early_call(
     }) else {
         return Ok(false);
     };
-    if state.early.len() == MAX_EARLY_CALLS {
-        return Err(HostError::ResourceExhausted(format!(
-            "early Page binding capacity exceeded ({MAX_EARLY_CALLS})"
-        )));
-    }
+    state
+        .early
+        .try_reserve(1)
+        .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
     state.early.push(EarlyCall {
         session: session.clone(),
         session_id: observed.session_id.to_owned().into_boxed_str(),
@@ -824,27 +816,11 @@ fn rejection_source(name: &str, seq: u64, error: &str) -> Result<String, HostErr
 }
 
 pub(crate) const fn requirements() -> ResourceRequirements {
-    // Includes fixed queue cells and the maximum retained payload bodies. The
-    // mpsc allocation is bounded by the same item count and never grows. Each
-    // pending call owns a name separately from its queued/foreign descriptor.
-    let bytes = (std::mem::size_of::<Installation>()
-        + std::mem::size_of::<State>()
-        + MAX_BINDINGS * (std::mem::size_of::<Registration>() + MAX_BINDING_NAME_BYTES)
-        + MAX_PENDING_CALLS
-            * (std::mem::size_of::<PendingCall>()
-                + std::mem::size_of::<BindingCall>()
-                + 2 * MAX_BINDING_NAME_BYTES
-                + MAX_ARGUMENT_BYTES)
-        + MAX_EARLY_CALLS
-            * (std::mem::size_of::<EarlyCall>() + MAX_SESSION_ID_BYTES + MAX_BINDING_PAYLOAD_BYTES)
-        + MAX_REJECTION_TASKS * MAX_REJECTION_TASK_BYTES
-        + MAX_BINDING_SESSIONS
-            * (std::mem::size_of::<Arc<SessionInstallation>>()
-                + std::mem::size_of::<SessionInstallation>()
-                + MAX_SESSION_ID_BYTES
-                + MAX_BINDINGS
-                    * (std::mem::size_of::<InstalledScript>() + MAX_SCRIPT_IDENTIFIER_BYTES)))
-        as u64;
+    // Compatibility ownership is allocator-backed: registrations, pending and
+    // early calls, channel nodes, native sessions/scripts and per-call rejection
+    // tasks are retained by their exact live owners. This fixed claim covers
+    // only the installation and registry headers.
+    let bytes = (std::mem::size_of::<Installation>() + std::mem::size_of::<State>() + 1024) as u64;
     ResourceRequirements::none()
         .with_class(ResourceClass::BackendStateBytes, bytes, bytes)
         .with_metadata(1, 1)
@@ -869,35 +845,18 @@ impl Installation {
                 plan.class(ResourceClass::BackendStateBytes).global,
             )
             .map_err(HostError::backend)?;
-        let mut registrations = Vec::new();
-        registrations
-            .try_reserve_exact(MAX_BINDINGS)
-            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
-        let mut pending = Vec::new();
-        pending
-            .try_reserve_exact(MAX_PENDING_CALLS)
-            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
-        let mut early = Vec::new();
-        early
-            .try_reserve_exact(MAX_EARLY_CALLS)
-            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
-        let mut sessions = Vec::new();
-        sessions
-            .try_reserve_exact(MAX_BINDING_SESSIONS)
-            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
-        let (sender, receiver) = mpsc::channel(MAX_PENDING_CALLS);
+        let (sender, receiver) = mpsc::unbounded_channel();
         Ok(Arc::new(Self {
             connection,
             state: Mutex::new(State {
                 next_call: 1,
                 next_registration: 1,
-                registrations,
-                pending,
-                early,
-                sessions,
+                registrations: Vec::new(),
+                pending: Vec::new(),
+                early: Vec::new(),
+                sessions: Vec::new(),
             }),
             publication_changed: Notify::new(),
-            rejection_permits: Arc::new(Semaphore::new(MAX_REJECTION_TASKS)),
             sender,
             receiver: tokio::sync::Mutex::new(receiver),
             _storage: storage,
@@ -964,6 +923,7 @@ impl Installation {
         needs_handle: bool,
     ) -> Result<(Registration, Vec<Arc<SessionInstallation>>), HostError> {
         let mut state = self.state.lock().map_err(HostError::backend)?;
+        let sessions = session_records_for_scope(&state, scope)?;
         let id = add_registration_to_state(&mut state, scope, name, needs_handle)?;
         let registration = state
             .registrations
@@ -971,7 +931,6 @@ impl Installation {
             .find(|registration| registration.id == id)
             .expect("just inserted registration")
             .clone();
-        let sessions = session_records_for_scope(&state, scope);
         Ok((registration, sessions))
     }
 
@@ -987,33 +946,24 @@ impl Installation {
         ),
         HostError,
     > {
-        if session_id.is_empty() || session_id.len() > MAX_SESSION_ID_BYTES {
+        if session_id.is_empty() {
             return Err(HostError::ResourceExhausted(
-                "binding session ID exceeds byte limit".into(),
+                "binding session ID is empty".into(),
             ));
         }
-        let mut scripts = Vec::new();
-        scripts
-            .try_reserve_exact(MAX_BINDINGS)
-            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
         let session = Arc::new(SessionInstallation {
             session_id: session_id.to_owned().into_boxed_str(),
             page,
             context,
             initializing: AtomicBool::new(true),
             retired: AtomicBool::new(false),
-            scripts: Arc::new(tokio::sync::Mutex::new(scripts)),
+            scripts: Arc::new(tokio::sync::Mutex::new(Vec::new())),
         });
         // Publish only after the installer owns this session gate. A concurrent
         // registration that sees the pre-publication record then waits for the
         // controller and its initial scripts, never installing ahead of them.
         let scripts = session.scripts.clone().lock_owned().await;
         let mut state = self.state.lock().map_err(HostError::backend)?;
-        if state.sessions.len() == MAX_BINDING_SESSIONS {
-            return Err(HostError::ResourceExhausted(format!(
-                "Page binding session capacity exceeded ({MAX_BINDING_SESSIONS})"
-            )));
-        }
         if state
             .sessions
             .iter()
@@ -1023,6 +973,10 @@ impl Installation {
                 "Page binding session initialized twice".into(),
             ));
         }
+        state
+            .sessions
+            .try_reserve(1)
+            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
         state.sessions.push(session.clone());
         Ok((session, scripts))
     }
@@ -1039,12 +993,16 @@ impl Installation {
         session: &SessionInstallation,
     ) -> Result<Vec<Registration>, HostError> {
         let state = self.state.lock().map_err(HostError::backend)?;
-        Ok(state
-            .registrations
-            .iter()
-            .filter(|binding| binding.scope.applies_to(session.page, session.context))
-            .cloned()
-            .collect())
+        let mut registrations = Vec::new();
+        for binding in &state.registrations {
+            if binding.scope.applies_to(session.page, session.context) {
+                registrations
+                    .try_reserve(1)
+                    .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
+                registrations.push(binding.clone());
+            }
+        }
+        Ok(registrations)
     }
 
     fn registration_is_live(&self, id: u64) -> Result<bool, HostError> {
@@ -1071,6 +1029,9 @@ impl Installation {
         {
             return Ok(());
         }
+        scripts
+            .try_reserve(1)
+            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
         let identifier = self
             .install_name(
                 &session.session_id,
@@ -1079,19 +1040,6 @@ impl Installation {
             )
             .await
             .map_err(HostError::backend)?;
-        if identifier.len() > MAX_SCRIPT_IDENTIFIER_BYTES {
-            let _ = self
-                .connection
-                .send_command_with_session(
-                    "Page.removeScriptToEvaluateOnNewDocument",
-                    serde_json::json!({ "identifier": identifier }),
-                    Some(&session.session_id),
-                )
-                .await;
-            return Err(HostError::ResourceExhausted(
-                "binding script identifier exceeds byte limit".into(),
-            ));
-        }
         scripts.push(InstalledScript {
             registration_id: registration.id,
             identifier: identifier.into_boxed_str(),
@@ -1221,11 +1169,6 @@ impl Installation {
         else {
             return Ok(());
         };
-        if call.name.len() > MAX_BINDING_NAME_BYTES {
-            return Err(HostError::ResourceExhausted(
-                "binding call name exceeds byte limit".into(),
-            ));
-        }
         if call.seq > 9_007_199_254_740_991 {
             return Err(HostError::ResourceExhausted(
                 "binding call sequence exceeds JavaScript safe integer range".into(),
@@ -1239,11 +1182,6 @@ impl Installation {
             })?)
             .map_err(HostError::backend)?
         };
-        if arguments_json.len() > MAX_ARGUMENT_BYTES {
-            return Err(HostError::ResourceExhausted(
-                "binding call arguments exceed byte limit".into(),
-            ));
-        }
         let mut state = self.state.lock().map_err(HostError::backend)?;
         if !state.registrations.iter().any(|registration| {
             registration.id == registration_id && registration.scope.applies_to(page, context)
@@ -1257,43 +1195,17 @@ impl Installation {
         {
             return Ok(());
         }
-        if state.pending.len() == MAX_PENDING_CALLS {
-            return Err(HostError::ResourceExhausted(format!(
-                "pending Page binding capacity exceeded ({MAX_PENDING_CALLS})"
-            )));
-        }
-        let id = state.next_call;
-        state.next_call = id.checked_add(1).ok_or_else(|| {
-            HostError::ResourceExhausted("binding call ID space exhausted".into())
-        })?;
-        state.pending.push(PendingCall {
-            id,
+        enqueue_call(
+            &mut state,
+            &self.sender,
             context,
             page,
             frame,
-            name: call.name.clone().into_boxed_str(),
-            sequence: call.seq,
+            &call.name,
+            call.seq,
             needs_handle,
-            handle_taken: false,
-            published: false,
-            delivering: false,
-        });
-        let descriptor = BindingCall {
-            id,
-            context,
-            page,
-            frame,
-            name: call.name.clone(),
             arguments_json,
-            needs_handle,
-        };
-        if let Err(error) = self.sender.try_send(descriptor) {
-            state.pending.retain(|pending| pending.id != id);
-            return Err(HostError::ResourceExhausted(format!(
-                "Page binding delivery queue is unavailable: {error}"
-            )));
-        }
-        Ok(())
+        )
     }
 
     fn stage_call(&self, observed: &ObservedBrowserCall<'_>) -> Result<(), HostError> {
@@ -1357,15 +1269,9 @@ impl Installation {
         call: &BrowserCall,
         error: &HostError,
     ) {
-        if session_id.len() > MAX_SESSION_ID_BYTES
-            || call.name.len() > MAX_BINDING_NAME_BYTES
-            || call.seq > 9_007_199_254_740_991
-        {
+        if call.seq > 9_007_199_254_740_991 {
             return;
         }
-        let Ok(permit) = self.rejection_permits.clone().try_acquire_owned() else {
-            return;
-        };
         let Ok(runtime) = tokio::runtime::Handle::try_current() else {
             return;
         };
@@ -1375,7 +1281,6 @@ impl Installation {
         let connection = self.connection.clone();
         let session_id = session_id.to_owned();
         runtime.spawn(async move {
-            let _permit = permit;
             let _ = connection
                 .send_command_with_session(
                     "Runtime.evaluate",
@@ -1632,6 +1537,44 @@ impl Observer {
 impl ChromiumFrameEventObserver for Observer {
     fn observes_page(&self, page: ObjectId) -> bool {
         self.downstream.observes_page(page)
+    }
+
+    fn retains_worker_targets(&self) -> bool {
+        self.downstream.retains_worker_targets()
+    }
+
+    fn retains_service_worker_targets(&self) -> bool {
+        self.downstream.retains_service_worker_targets()
+    }
+
+    fn retains_worker_session(&self, session: &str) -> bool {
+        self.downstream.retains_worker_session(session)
+    }
+
+    fn enables_worker_network(&self) -> bool {
+        self.downstream.enables_worker_network()
+    }
+
+    fn enables_service_worker_network(&self) -> bool {
+        self.downstream.enables_service_worker_network()
+    }
+
+    fn prepare_service_worker(
+        &self,
+        topology: &CdpTopology,
+        event: &CdpEvent,
+    ) -> FrameObservationResult {
+        self.downstream.prepare_service_worker(topology, event)
+    }
+
+    fn service_worker_initialization_commands(
+        &self,
+        topology: &CdpTopology,
+        event: &CdpEvent,
+        commands: &mut Vec<ServiceWorkerInitializationCommand>,
+    ) -> FrameObservationResult {
+        self.downstream
+            .service_worker_initialization_commands(topology, event, commands)
     }
 
     fn prepare_page(&self, topology: &CdpTopology, page: ObjectId) -> FrameObservationResult {
@@ -2130,41 +2073,80 @@ mod tests {
     }
 
     #[test]
-    fn pending_call_budget_covers_owner_and_descriptor_name_copies() {
+    fn production_requirements_cover_only_allocator_backed_registry_headers() {
         // Arrange
-        let other_storage = std::mem::size_of::<Installation>()
-            + std::mem::size_of::<State>()
-            + MAX_BINDINGS * (std::mem::size_of::<Registration>() + MAX_BINDING_NAME_BYTES)
-            + MAX_EARLY_CALLS
-                * (std::mem::size_of::<EarlyCall>()
-                    + MAX_SESSION_ID_BYTES
-                    + MAX_BINDING_PAYLOAD_BYTES)
-            + MAX_REJECTION_TASKS * MAX_REJECTION_TASK_BYTES
-            + MAX_BINDING_SESSIONS
-                * (std::mem::size_of::<Arc<SessionInstallation>>()
-                    + std::mem::size_of::<SessionInstallation>()
-                    + MAX_SESSION_ID_BYTES
-                    + MAX_BINDINGS
-                        * (std::mem::size_of::<InstalledScript>() + MAX_SCRIPT_IDENTIFIER_BYTES));
-        let pending_storage = MAX_PENDING_CALLS
-            * (std::mem::size_of::<PendingCall>()
-                + std::mem::size_of::<BindingCall>()
-                + 2 * MAX_BINDING_NAME_BYTES
-                + MAX_ARGUMENT_BYTES);
+        let expected =
+            (std::mem::size_of::<Installation>() + std::mem::size_of::<State>() + 1024) as u64;
 
         // Act
         let declared = requirements().class(ResourceClass::BackendStateBytes);
 
         // Assert
-        assert_eq!(
-            declared.global - other_storage as u64,
-            pending_storage as u64
-        );
+        assert_eq!(declared.global, expected);
         assert_eq!(declared.per_scope, declared.global);
+        assert_eq!(requirements().class(ResourceClass::LiveObject).global, 0);
+    }
+
+    #[tokio::test]
+    async fn pending_registry_and_delivery_queue_grow_past_legacy_count() {
+        // Arrange
+        let mut state = State::empty();
+        let (sender, mut receiver) = mpsc::unbounded_channel();
+
+        // Act
+        for sequence in 1..=129 {
+            enqueue_call(
+                &mut state,
+                &sender,
+                ObjectId::new(1),
+                ObjectId::new(2),
+                ObjectId::new(3),
+                "binding",
+                sequence,
+                false,
+                format!("[{sequence}]"),
+            )
+            .unwrap();
+        }
+
+        // Assert
+        assert_eq!(state.pending.len(), 129);
+        for expected in 1..=129 {
+            let descriptor = receiver.recv().await.unwrap();
+            assert_eq!(descriptor.id, expected);
+            assert_eq!(descriptor.arguments_json, format!("[{expected}]"));
+        }
     }
 
     #[test]
-    fn duplicate_page_binding_registration_is_rejected_without_consuming_capacity() {
+    fn closed_delivery_queue_rolls_back_the_exact_pending_call() {
+        // Arrange
+        let mut state = State::empty();
+        let (sender, receiver) = mpsc::unbounded_channel();
+        drop(receiver);
+
+        // Act
+        let error = enqueue_call(
+            &mut state,
+            &sender,
+            ObjectId::new(1),
+            ObjectId::new(2),
+            ObjectId::new(3),
+            "binding",
+            1,
+            false,
+            "[]".into(),
+        )
+        .unwrap_err();
+
+        // Assert
+        assert!(error.to_string().contains("delivery queue is unavailable"));
+        assert!(state.pending.is_empty());
+        assert_eq!(state.next_call, 2);
+    }
+
+    #[test]
+    fn duplicate_page_binding_registration_is_rejected_without_adding_an_owner() {
         // Arrange
         let mut state = State::empty();
         let page = ObjectId::new(7);
@@ -2181,6 +2163,28 @@ mod tests {
         assert!(error.to_string().contains("already registered"));
         assert_eq!(state.registrations.len(), 1);
         assert_eq!(state.registrations[0].name.as_ref(), "add");
+    }
+
+    #[test]
+    fn binding_name_storage_has_no_non_playwright_length_cap() {
+        // Arrange
+        let mut state = State::empty();
+        let name = "binding".repeat(1_024);
+
+        // Act
+        add_registration_to_state(
+            &mut state,
+            RegistrationScope::Page {
+                page: ObjectId::new(7),
+                context: ObjectId::new(2),
+            },
+            &name,
+            false,
+        )
+        .unwrap();
+
+        // Assert
+        assert_eq!(state.registrations[0].name.as_ref(), name);
     }
 
     #[test]
@@ -2470,11 +2474,11 @@ mod tests {
     }
 
     #[test]
-    fn page_retirement_releases_bounded_binding_capacity() {
+    fn registration_registry_grows_past_legacy_count_and_reclaims_retired_page() {
         // Arrange
         let context = ObjectId::new(2);
         let mut state = State::empty();
-        for index in 0..MAX_BINDINGS {
+        for index in 0..129 {
             add_registration_to_state(
                 &mut state,
                 RegistrationScope::Page {
@@ -2486,15 +2490,6 @@ mod tests {
             )
             .unwrap();
         }
-        assert!(matches!(
-            add_registration_to_state(
-                &mut state,
-                RegistrationScope::Context(ObjectId::new(3)),
-                "another",
-                false,
-            ),
-            Err(HostError::ResourceExhausted(_))
-        ));
 
         // Act
         remove_page_from_state(&mut state, ObjectId::new(1));
@@ -2507,7 +2502,7 @@ mod tests {
 
         // Assert
         assert!(result.is_ok());
-        assert_eq!(state.registrations.len(), MAX_BINDINGS);
+        assert_eq!(state.registrations.len(), 129);
     }
 
     #[test]
@@ -2608,7 +2603,8 @@ mod tests {
             false,
         )
         .unwrap();
-        let records = session_records_for_scope(&state, RegistrationScope::Context(context));
+        let records =
+            session_records_for_scope(&state, RegistrationScope::Context(context)).unwrap();
         assert_eq!(records.len(), 1);
         let lock = records[0].scripts.lock();
         tokio::pin!(lock);
@@ -2712,19 +2708,19 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn cancelled_initializer_releases_its_session_and_early_call_capacity() {
+    async fn cancelled_initializer_reclaims_one_of_many_dynamic_sessions_and_early_calls() {
         // Arrange
         let context = ObjectId::new(2);
         let page = ObjectId::new(3);
         let abandoned = test_session("abandoned", page, context);
         let mut state = State::empty();
         state.sessions.push(abandoned.clone());
-        for index in 1..MAX_BINDING_SESSIONS {
+        for index in 1..129 {
             state
                 .sessions
                 .push(test_session(&format!("other-{index}"), page, context));
         }
-        for index in 0..MAX_EARLY_CALLS {
+        for index in 0..129 {
             state
                 .early
                 .push(early_call_for_session(&abandoned, index as i64));
@@ -2742,12 +2738,12 @@ mod tests {
         // Assert
         let mut state = state.lock().unwrap();
         assert!(abandoned.retired.load(Ordering::Acquire));
-        assert_eq!(state.sessions.len(), MAX_BINDING_SESSIONS - 1);
+        assert_eq!(state.sessions.len(), 128);
         assert!(state.early.is_empty());
         state
             .sessions
             .push(test_session("replacement", page, context));
-        assert_eq!(state.sessions.len(), MAX_BINDING_SESSIONS);
+        assert_eq!(state.sessions.len(), 129);
         let retained = state.sessions[0].clone();
         state.early.push(early_call_for_session(&retained, 17));
         assert_eq!(state.early.len(), 1);
@@ -2822,21 +2818,22 @@ mod tests {
     }
 
     #[test]
-    fn controller_rejects_local_overload_before_allocating_a_callback_or_publication() {
+    fn controller_has_no_local_count_or_payload_rejection() {
         // Arrange
         let source = CONTROLLER_SOURCE;
 
         // Act
-        let guard = source.find("if (callbacks.size >= 64)").unwrap();
         let callback = source.find("callbacks.set(key").unwrap();
         let publication = source.find("publications.set(key").unwrap();
 
         // Assert
-        assert_eq!(MAX_PENDING_CALLS, 64);
-        assert!(guard < callback && guard < publication);
-        assert!(source.contains("return new PromiseConstructor((_, reject) => reject(new ErrorConstructor('pending Page binding capacity exceeded (64)')))") );
-        assert!(source.contains("if (utf8Length(stringify(serializedArgs)) > 65536)"));
-        assert!(source.contains("if (utf8Length(encoded) > 65536 + 256 + 512)"));
+        assert!(!source.contains("callbacks.size"));
+        assert!(callback < publication);
+        assert!(!source.contains("pending Page binding capacity exceeded"));
+        assert!(!source.contains("utf8Length"));
+        assert!(!source.contains("claimNode"));
+        assert!(!source.contains("claimEntry"));
+        assert!(!source.contains("claimString"));
     }
 
     #[test]
@@ -2929,18 +2926,27 @@ mod tests {
     }
 
     #[test]
-    fn oversized_own_binding_call_is_dropped_at_event_boundary() {
+    fn large_own_binding_call_is_parsed_without_a_host_payload_cap() {
         // Arrange
         let event = binding_event(
             BRIDGE_NAME,
-            Value::String("x".repeat(MAX_ARGUMENT_BYTES + MAX_BINDING_NAME_BYTES + 513)),
+            Value::String(
+                serde_json::json!({
+                    "schema": BRIDGE_SCHEMA,
+                    "name": "large",
+                    "seq": 1,
+                    "serializedArgs": ["x".repeat(128 * 1024)],
+                })
+                .to_string(),
+            ),
         );
 
         // Act
-        let observed = observe_browser_call_nonfatal(&event).unwrap();
+        let observed = observe_browser_call_nonfatal(&event).unwrap().unwrap();
 
         // Assert
-        assert!(observed.is_none());
+        assert_eq!(observed.call.name, "large");
+        assert!(observed.payload.len() > 128 * 1024);
     }
 
     #[test]
@@ -3130,7 +3136,7 @@ mod tests {
     }
 
     #[test]
-    fn early_binding_queue_has_a_finite_global_capacity() {
+    fn early_binding_queue_grows_past_legacy_global_count() {
         // Arrange
         let context = ObjectId::new(2);
         let page = ObjectId::new(3);
@@ -3158,16 +3164,16 @@ mod tests {
             ),
         );
         let observed = observe_browser_call(&event).unwrap().unwrap();
-        for _ in 0..MAX_EARLY_CALLS {
+        for _ in 0..129 {
             assert!(stage_early_call(&mut state, &observed).unwrap());
         }
 
         // Act
-        let excess = stage_early_call(&mut state, &observed);
+        let additional = stage_early_call(&mut state, &observed);
 
         // Assert
-        assert!(matches!(excess, Err(HostError::ResourceExhausted(_))));
-        assert_eq!(state.early.len(), MAX_EARLY_CALLS);
+        assert!(matches!(additional, Ok(true)));
+        assert_eq!(state.early.len(), 130);
     }
 
     #[test]

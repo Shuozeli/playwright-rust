@@ -7,7 +7,7 @@ pub mod events;
 pub mod generated;
 pub mod session;
 
-pub use client_trait::{CdpClient, SessionFactory};
+pub use client_trait::{CdpClient, ServiceWorkerInitializationCommand, SessionFactory};
 #[cfg(feature = "cdp-handshake-headers")]
 pub use connection::{
     CDP_HANDSHAKE_HEADER_MAX_BATCH_BYTES, CDP_HANDSHAKE_HEADER_MAX_COUNT,

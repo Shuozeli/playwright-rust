@@ -1,25 +1,13 @@
 //! Borrowed Page-only policy, followed by a bounded copy for native navigation.
-use super::{Installation, admit};
 use crate::{HostError, HostSession};
 use playwright_rust_core::ObjectId;
 use playwright_rust_network_model::extra_headers::PageHeaders;
-use std::sync::{Arc, atomic::Ordering};
 
-pub(super) const MAX_OPERATIONS: usize = 8;
-pub(super) const OPERATION_BYTES: usize = 32 * 1024;
 const MAX_REFERRER_BYTES: usize = 16 * 1024;
 
-struct Permit(Arc<Installation>);
-impl Drop for Permit {
-    fn drop(&mut self) {
-        self.0.navigations.fetch_sub(1, Ordering::AcqRel);
-    }
-}
-
-/// The permit stays alive after `value` moves into the command, through await.
+/// One allocator-backed snapshot whose field size remains protocol-bounded.
 pub(crate) struct NavigationReferrer {
     pub(crate) value: Option<String>,
-    _permit: Permit,
 }
 
 fn resolve(
@@ -78,8 +66,6 @@ impl HostSession {
             .map(|page| page.browser_context_object_id())
             .ok_or(HostError::TargetClosed)?;
         let installation = &live.extra_headers;
-        admit(&installation.navigations, MAX_OPERATIONS)?;
-        let permit = Permit(installation.clone());
         let headers = installation
             .settings
             .lock()
@@ -87,10 +73,7 @@ impl HostSession {
             .page_headers(context, id)
             .map_err(HostError::backend)?;
         let value = resolve(headers.as_ref(), option)?;
-        Ok(NavigationReferrer {
-            value,
-            _permit: permit,
-        })
+        Ok(NavigationReferrer { value })
     }
 }
 
@@ -157,9 +140,24 @@ mod tests {
         let result = resolve(Some(&headers), None);
         // Assert
         assert!(matches!(result, Err(HostError::ResourceExhausted(_))));
-        assert!(
-            MAX_REFERRER_BYTES + std::mem::size_of::<NavigationReferrer>() + 4096
-                <= OPERATION_BYTES
-        );
+        assert!(MAX_REFERRER_BYTES + std::mem::size_of::<NavigationReferrer>() < 32 * 1024);
+    }
+
+    #[test]
+    fn allocator_backed_referrer_snapshots_have_no_operation_count_limit() {
+        // Arrange
+        let options = (0..129)
+            .map(|index| format!("https://example.test/{index}"))
+            .collect::<Vec<_>>();
+
+        // Act
+        let retained = options
+            .into_iter()
+            .map(|option| resolve(None, Some(option)).unwrap().unwrap())
+            .collect::<Vec<_>>();
+
+        // Assert
+        assert_eq!(retained.len(), 129);
+        assert_eq!(retained[128], "https://example.test/128");
     }
 }

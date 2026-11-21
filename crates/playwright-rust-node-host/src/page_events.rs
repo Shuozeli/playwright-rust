@@ -21,7 +21,6 @@ pub(crate) struct Observer {
     documents: Mutex<DocumentEvents>,
 }
 
-const PAGE_CAPACITY: usize = 16;
 const NATIVE_ID_BYTES: usize = 128;
 
 struct DocumentEvent {
@@ -55,35 +54,28 @@ impl NativeId {
 }
 
 struct DocumentEvents {
-    entries: [Option<DocumentEvent>; PAGE_CAPACITY],
+    entries: Vec<DocumentEvent>,
 }
 
 impl DocumentEvents {
     fn new() -> Self {
         Self {
-            entries: std::array::from_fn(|_| None),
+            entries: Vec::new(),
         }
     }
 
     fn seed(&mut self, page: ObjectId, loader: &str) -> FrameObservationResult {
         let loader = NativeId::new(loader)?;
-        if let Some(entry) = self
-            .entries
-            .iter_mut()
-            .flatten()
-            .find(|entry| entry.page == page)
-        {
+        if let Some(entry) = self.entries.iter_mut().find(|entry| entry.page == page) {
             entry.loader = loader;
             entry.dom_content_loaded = true;
             entry.load = true;
             return Ok(());
         }
-        let slot = self
-            .entries
-            .iter_mut()
-            .find(|entry| entry.is_none())
-            .ok_or_else(|| invalid("Page lifecycle document capacity"))?;
-        *slot = Some(DocumentEvent {
+        self.entries
+            .try_reserve(1)
+            .map_err(|_| invalid("Page lifecycle document allocation"))?;
+        self.entries.push(DocumentEvent {
             page,
             loader,
             // The initial document is ready before its public Page wrapper is
@@ -101,32 +93,30 @@ impl DocumentEvents {
         loader: &str,
         dom_content_loaded: bool,
     ) -> Result<bool, Box<dyn Error + Send + Sync>> {
-        let index = self
-            .entries
-            .iter()
-            .position(|entry| entry.as_ref().is_some_and(|entry| entry.page == page));
-        let index = if let Some(index) = index {
+        let index = if let Some(index) = self.entries.iter().position(|entry| entry.page == page) {
             index
         } else {
             self.entries
-                .iter()
-                .position(Option::is_none)
-                .ok_or_else(|| invalid("Page lifecycle document capacity"))?
-        };
-        let replace = self.entries[index]
-            .as_ref()
-            .is_none_or(|entry| !entry.loader.equals(loader));
-        if replace {
-            self.entries[index] = Some(DocumentEvent {
+                .try_reserve(1)
+                .map_err(|_| invalid("Page lifecycle document allocation"))?;
+            self.entries.push(DocumentEvent {
                 page,
                 loader: NativeId::new(loader)?,
                 dom_content_loaded: false,
                 load: false,
             });
+            self.entries.len() - 1
+        };
+        let replace = !self.entries[index].loader.equals(loader);
+        if replace {
+            self.entries[index] = DocumentEvent {
+                page,
+                loader: NativeId::new(loader)?,
+                dom_content_loaded: false,
+                load: false,
+            };
         }
-        let entry = self.entries[index]
-            .as_mut()
-            .expect("selected Page document slot");
+        let entry = &mut self.entries[index];
         let selected = if dom_content_loaded {
             !std::mem::replace(&mut entry.dom_content_loaded, true)
         } else {
@@ -136,18 +126,12 @@ impl DocumentEvents {
     }
 
     fn retain(&mut self, topology: &CdpTopology) {
-        for entry in &mut self.entries {
-            if entry
-                .as_ref()
-                .is_some_and(|entry| topology.main_frame_native_id(entry.page).is_none())
-            {
-                *entry = None;
-            }
-        }
+        self.entries
+            .retain(|entry| topology.main_frame_native_id(entry.page).is_some());
     }
 
     fn clear(&mut self) {
-        self.entries.fill_with(|| None);
+        self.entries.clear();
     }
 }
 

@@ -45,13 +45,13 @@ test('real Rust decision accepts boxed strings and ignores non-string argument s
   const binary = require(nativeArtifact.path);
 
   // Act
-  const result = api.firefox.launchPersistentContext('unused-profile', {
-    channel: new String('moz-firefox'),
+  const result = api.chromium.launchPersistentContext('unused-profile', {
+    channel: new String('chrome'),
     args: [42, new String('https://example.invalid/')],
   });
 
   // Assert
-  assert.equal(binary.persistentContextArgumentError('firefox', [null, 'https://example.invalid/'], 'moz-firefox'),
+  assert.equal(binary.persistentContextArgumentError('chromium', [null, 'https://example.invalid/'], 'chrome'),
     'Arguments can not specify page to be opened');
   await assert.rejects(result, {
     name: 'Error',
@@ -64,7 +64,7 @@ test('valid pure preflight never claims persistent browser support', { skip: !se
   const api = require('../src/index.cjs');
 
   // Act
-  const result = api.webkit.launchPersistentContext('unused-profile', { args: ['--safe-argument'] });
+  const result = api.chromium.launchPersistentContext('unused-profile', { args: ['--safe-argument'] });
 
   // Assert
   await assert.rejects(result, { code: 'PLAYWRIGHT_RUST_UNSUPPORTED' });

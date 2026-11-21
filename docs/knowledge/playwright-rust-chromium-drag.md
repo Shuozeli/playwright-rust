@@ -1,6 +1,49 @@
-<!-- agent-updated: 2026-11-14T05:28:56Z -->
+<!-- agent-updated: 2026-11-20T02:50:56Z -->
 
 # Chromium drag: listener ownership and remaining integration
+
+## Allocator-backed outer controller ownership (2026-11-19)
+
+The opt-in drag host no longer reserves one connection-wide table for 32
+Page/session controllers. Its inventory grows fallibly with discovered
+controllers, stale entries retain the existing exact dispatcher/native-drag
+retirement checks, and shutdown walks the observed inventory instead of a
+fixed range. Each controller receives an independent local finite resource
+ledger, so the change removes a fabricated aggregate identity count without
+silently removing the inner scheduling and payload constraints.
+
+The Chromium composition also selects allocator-backed reclaiming-event
+subscriber bookkeeping for drag. Dynamic selection survives later fixed
+extension additions and derives a dynamic fanout; unread event item/byte
+backpressure is unchanged. Unit regressions retain 129 independent controller
+budgets and compose a later fixed subscriber after dynamic selection. The CDP
+fanout already proves 129 simultaneous subscriber cursors.
+
+The production world path is dynamic too. Pinned Playwright 1.58.0 calls
+`safeNonStallingEvaluateInAllFrames` for listener setup and enumerates the
+Page's complete Frame list for cleanup; it has no 32-Frame rejection. The Rust
+utility-world snapshot, listener factory, `DragMove` owner vector, and injected
+world-local registry now grow through the allocator. Explicit finite
+constructors remain selectable for constrained embedders. Backend drag passes
+77/77 with 130-listener and 130-world regressions, and the complete Node host
+passes 1,557 / 27 ignored plus all non-browser integration results.
+
+The single retained source move/capture/data record now schedules correctly.
+Pinned upstream has one Page `_dragState`, and CDP interception is one native
+interval, so parallel allocator-backed captures would be incorrect. The Rust
+dispatcher now waits on a fair Page-local gate before allocating snapshots,
+listeners or capture ownership. Cancellation removes an unstarted waiter; dirty
+native work retains the gate through retirement. After waking, a move rechecks
+`_dragState` and becomes `dragOver` if the earlier move established a drag. The
+Page command-owner and dispatcher-operation counts are separately allocator-
+backed in the production host. Dynamic dispatcher growth covers active slots,
+quarantine bookkeeping, and cleanup-round bookkeeping; allocation failure is
+explicit, but the former 1,024-owner ceiling is not Playwright behavior. The
+finite 1..=1024 constructors remain for explicitly constrained embedders.
+Regressions retain 1,025 Page operations and drive 1,025 pending dispatcher
+operations into quarantine and clean retirement. The all-feature backend passes
+106/106, the complete Node host passes 1,557 / 27 ignored plus all non-browser
+integration tests, and strict combined all-target Clippy passes.
 
 NODE-076 adds the separate `drag-frame-navigation` native artifact, combining
 independent drag-runtime and frame-navigation Cargo features. It preserves the
@@ -623,7 +666,8 @@ inside actual HostSession Mouse calls. It is deliberately separate from
 `drag-source`: default hosts and the Node addon do not select it yet. All
 dispatch, captured data, Page state and retirement remain Rust-owned.
 
-The host inventory admits at most 32 Page/native-client controllers. Reuse
+At the historical NODE-044 checkpoint, the host inventory admitted at most 32
+Page/native-client controllers. Reuse
 requires both the Page object ID and the exact native client Arc. Each controller
 owns its `DragPage`, dispatcher, source and unique retirement driver. The listener
 namespace includes the native session ID to separate independent sessions sharing
@@ -639,7 +683,7 @@ drag before inspector-session and transport teardown. The existing topology
 driver continues polling during Mouse shutdown so exact world destruction
 receipts can advance. No new background task is introduced in a reusable leaf.
 
-### Selected resource profile
+### Historical selected resource profile
 
 - The existing Locator world-access installation is shared, not duplicated.
   The selected snapshot allowance is `32 * 32 + 8 = 1032`; default/source-only

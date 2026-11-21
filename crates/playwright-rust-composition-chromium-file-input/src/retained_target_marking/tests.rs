@@ -22,6 +22,24 @@ fn production(requirements: ResourceRequirements) -> ProductionResourceLedger {
     ProductionResourceLedger::new(limits, requirements).unwrap()
 }
 
+#[test]
+fn allocator_backed_marker_owner_pool_grows_past_legacy_counts() {
+    // Arrange
+    let profile =
+        UploadProfile::new_allocator_backed(ResourceScope::extension(182, 90), 16 * 1024).unwrap();
+    let resources = production(profile.requirements());
+    let pool = Pool::new(profile, &resources).unwrap();
+
+    // Act
+    let owners: Vec<_> = (0..129).map(|_| pool.admit().unwrap()).collect();
+
+    // Assert
+    assert_eq!(pool.state.active.load(Ordering::Acquire), 129);
+    assert_eq!(resources.metrics().unwrap().active_leases, 1);
+    drop(owners);
+    assert_eq!(pool.state.active.load(Ordering::Acquire), 0);
+}
+
 struct Fixture {
     service: TargetMarkingOperationService<CleanupQueue>,
     resolver: ContinuableResolutionService<CdpLocatorResolutionService, CleanupQueue>,

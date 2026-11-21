@@ -3,10 +3,11 @@
 #[cfg(feature = "frame-detach-events")]
 use crate::frame_metadata::TreeDetachReservation;
 use crate::frame_metadata::{FrameClosePermit, FrameMetadata};
+#[cfg(test)]
+use crate::frame_tree::FrameTreeLimits;
 use crate::frame_tree::{
     FrameBinding, FrameConversion, FrameNode, FrameTree, FrameTreeBinding, FrameTreeFactory,
-    FrameTreeLimits, FrameTreeMetrics, ReservedFrameBinding, ReservedPageTree, ReservedTreeBinding,
-    Storage,
+    FrameTreeMetrics, ReservedFrameBinding, ReservedPageTree, ReservedTreeBinding, Storage,
 };
 use crate::{FrameUrlSnapshot, HostError};
 use playwright_rust_backend_cdp_topology::CdpTopologyEffect;
@@ -19,24 +20,28 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-const PAGES: usize = 16;
 const FRAMES: usize = 128;
+#[cfg(test)]
 const BASE_REVISIONS: usize = if cfg!(any(feature = "console-events", feature = "page-errors")) {
     512
 } else {
     256
 };
+#[cfg(any(test, feature = "frame-detach-events"))]
 const DETACH_RESERVATIONS: usize = if cfg!(feature = "frame-detach-events") {
     FRAMES - 1
 } else {
     0
 };
-pub(crate) const FRAME_EVENT_RESERVATIONS: usize = if cfg!(feature = "frame-events") {
+#[cfg(test)]
+const FRAME_EVENT_RESERVATIONS: usize = if cfg!(feature = "frame-events") {
     2 * (FRAMES - 1)
 } else {
     0
 };
+#[cfg(test)]
 const REVISIONS: usize = BASE_REVISIONS + 2 * DETACH_RESERVATIONS + FRAME_EVENT_RESERVATIONS;
+#[cfg(test)]
 const STATES: usize = 256 + DETACH_RESERVATIONS;
 mod close_events;
 mod collections;
@@ -91,6 +96,7 @@ pub(crate) struct ReservedPage {
 }
 
 impl FrameTrees {
+    #[cfg(test)]
     pub fn new(urls: Arc<FrameMetadata>) -> Result<Self, HostError> {
         let factory = FrameTreeFactory::new(FrameTreeLimits {
             states: STATES,
@@ -98,30 +104,51 @@ impl FrameTrees {
             revisions: REVISIONS,
             bytes: 8 * 1024 * 1024,
         })?;
-        // Fixed active vectors plus one mutex-serialized reconciliation's
-        // borrowed-ID and desired-node vectors, reserved before allocation.
+        Self::with_factory(urls, factory, FRAMES)
+    }
+
+    pub fn new_allocator_backed(urls: Arc<FrameMetadata>) -> Result<Self, HostError> {
+        Self::with_factory(urls, FrameTreeFactory::new_allocator_backed()?, 0)
+    }
+
+    fn with_factory(
+        urls: Arc<FrameMetadata>,
+        factory: FrameTreeFactory,
+        initial_capacity: usize,
+    ) -> Result<Self, HostError> {
+        // Finite test profiles account their fixed vectors here. The
+        // Playwright-compatible profile keeps only fixed owner storage in the
+        // ledger and grows all projection vectors through fallible allocation.
         let index_bytes = std::mem::size_of::<Self>()
             + 2 * std::mem::size_of::<usize>()
-            + PAGES * std::mem::size_of::<PageEntry>()
-            + FRAMES
+            + initial_capacity
                 * (std::mem::size_of::<NodeEntry>()
                     + std::mem::size_of::<ChromiumFrameOwnership>()
                     + std::mem::size_of::<FrameNode>())
-            + DETACH_SCRATCH_BYTES;
+            + if factory.allocator_backed() {
+                0
+            } else {
+                DETACH_SCRATCH_BYTES
+            };
         #[cfg(feature = "frame-events")]
-        let index_bytes = index_bytes + FRAMES * std::mem::size_of::<(ObjectId, FrameNode)>();
+        let index_bytes =
+            index_bytes + initial_capacity * std::mem::size_of::<(ObjectId, FrameNode)>();
         let bytes = urls
             .publication_storage_bytes()?
             .checked_add(index_bytes)
             .ok_or_else(|| HostError::ResourceExhausted("Frame index storage overflow".into()))?;
         let storage = Arc::new(factory.reserve_index(bytes)?);
         urls.admit_page_closure(storage.clone())?;
+        let mut nodes = Vec::new();
+        nodes
+            .try_reserve_exact(initial_capacity)
+            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
         Ok(Self {
             urls,
             factory,
             state: Mutex::new(State {
-                pages: Vec::with_capacity(PAGES),
-                nodes: Vec::with_capacity(FRAMES),
+                pages: Vec::new(),
+                nodes,
                 closed: false,
                 collections: None,
             }),
@@ -384,7 +411,7 @@ impl FrameTrees {
         if state.closed {
             return Err(HostError::TargetClosed);
         }
-        if state.pages.len() == PAGES || state.nodes.len() == FRAMES {
+        if !self.factory.allocator_backed() && state.nodes.len() == FRAMES {
             return Err(HostError::ResourceExhausted(
                 "Frame index capacity exhausted".into(),
             ));
@@ -411,7 +438,7 @@ impl FrameTrees {
         if state.closed {
             return Err(HostError::TargetClosed);
         }
-        if state.pages.len() == PAGES || state.nodes.len() == FRAMES {
+        if !self.factory.allocator_backed() && state.nodes.len() == FRAMES {
             return Err(HostError::ResourceExhausted(
                 "Frame index capacity exhausted".into(),
             ));
@@ -426,6 +453,14 @@ impl FrameTrees {
         let (node, tree) = reservation.tree.activate(main);
         let binding = reservation.binding.activate(node.clone());
         let tree_binding = reservation.tree_binding.activate(tree.clone());
+        state
+            .nodes
+            .try_reserve(1)
+            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
+        state
+            .pages
+            .try_reserve(1)
+            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
         state.nodes.push(NodeEntry {
             page,
             node,
@@ -519,23 +554,51 @@ impl FrameTrees {
         if state.closed {
             return Err(HostError::TargetClosed);
         }
-        let mut snapshot = Vec::with_capacity(FRAMES);
+        let initial_capacity = if self.factory.allocator_backed() {
+            0
+        } else {
+            FRAMES
+        };
+        let mut snapshot = Vec::new();
+        snapshot
+            .try_reserve_exact(initial_capacity)
+            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
         for row in rows {
-            if snapshot.len() == FRAMES {
+            if !self.factory.allocator_backed() && snapshot.len() == FRAMES {
                 return Err(HostError::ResourceExhausted(
                     "Frame projection exceeds index capacity".into(),
                 ));
             }
+            snapshot
+                .try_reserve(1)
+                .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
             snapshot.push(row);
         }
         snapshot.sort_unstable_by_key(|row| (row.page, row.parent.is_some(), row.frame));
-        #[cfg(feature = "frame-events")]
-        let mut newly_attached = Vec::with_capacity(FRAMES);
-        if snapshot.iter().filter(|row| row.parent.is_none()).count() > PAGES {
-            return Err(HostError::ResourceExhausted(
-                "Page projection exceeds index capacity".into(),
-            ));
+        if self.factory.allocator_backed() {
+            state
+                .nodes
+                .try_reserve(snapshot.len())
+                .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
+            state
+                .pages
+                .try_reserve(snapshot.len())
+                .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
         }
+        let mut desired = Vec::new();
+        desired
+            .try_reserve(snapshot.len())
+            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
+        #[cfg(feature = "frame-events")]
+        let mut newly_attached = Vec::new();
+        #[cfg(feature = "frame-events")]
+        newly_attached
+            .try_reserve_exact(if self.factory.allocator_backed() {
+                snapshot.len()
+            } else {
+                initial_capacity
+            })
+            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
         for page in &mut state.pages {
             if !contains_page(page.id) && page.close.is_some() {
                 self.urls
@@ -546,7 +609,15 @@ impl FrameTrees {
         state.pages.retain(|entry| contains_page(entry.id));
         // Retired FrameNodes remain in staged tree revisions until publication.
         #[cfg(feature = "frame-detach-events")]
-        let mut removed = Vec::with_capacity(DETACH_RESERVATIONS);
+        let mut removed = Vec::new();
+        #[cfg(feature = "frame-detach-events")]
+        removed
+            .try_reserve_exact(if self.factory.allocator_backed() {
+                state.nodes.len()
+            } else {
+                DETACH_RESERVATIONS
+            })
+            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
         #[cfg(feature = "frame-detach-events")]
         let mut missing_reservation = false;
         state.nodes.retain_mut(|entry| {
@@ -633,9 +704,6 @@ impl FrameTrees {
         }
         for row in snapshot.iter().filter(|row| row.parent.is_none()) {
             if !state.pages.iter().any(|entry| entry.id == row.page) {
-                if state.pages.len() == PAGES {
-                    return Err(HostError::ResourceExhausted("Page index is full".into()));
-                }
                 let root = state
                     .nodes
                     .iter()
@@ -648,6 +716,10 @@ impl FrameTrees {
                 let close = self.urls.publications().reserve_close()?;
                 let tree = self.factory.page(root)?;
                 let ready = self.reserve_ready_delivery(&state)?;
+                state
+                    .pages
+                    .try_reserve(1)
+                    .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
                 state.pages.push(PageEntry {
                     id: row.page,
                     internal: false,
@@ -657,7 +729,6 @@ impl FrameTrees {
                 });
             }
         }
-        let mut desired = Vec::with_capacity(FRAMES);
         for page in &state.pages {
             desired.clear();
             for row in snapshot.iter().filter(|row| row.page == page.id) {

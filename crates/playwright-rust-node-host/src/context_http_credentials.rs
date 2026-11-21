@@ -1,6 +1,6 @@
 //! Optional Context-scoped HTTP authentication challenge handling.
 //!
-//! Credentials stay in bounded Rust storage. Chromium request interception is
+//! Credentials stay in Rust-owned storage with bounded fields. Chromium request interception is
 //! enabled only for selected Contexts and every authentication challenge is
 //! answered on the exact CDP session that emitted it. Page routing can share
 //! the same `Fetch` installation without either capability overwriting the
@@ -11,7 +11,11 @@ use std::error::Error;
 use std::sync::{Arc, Mutex};
 
 use playwright_rust_backend_cdp_topology::{CdpContextOwnership, CdpTopology};
-use playwright_rust_cdp::{CdpConnection, CdpEvent, connection::CdpError, generated::page};
+use playwright_rust_cdp::{
+    CdpConnection, CdpEvent, ServiceWorkerInitializationCommand,
+    connection::CdpError,
+    generated::{page, target},
+};
 #[cfg(not(feature = "page-routes"))]
 use playwright_rust_cdp::{CdpEventReceiver, CdpEventRecvError};
 #[cfg(not(feature = "page-routes"))]
@@ -30,13 +34,8 @@ use playwright_rust_plugin_chromium_session_initialization::{
 };
 use serde_json::{Value, json};
 
-use crate::HostError;
+use crate::{HostError, HostSession};
 
-pub(crate) const MAX_CONTEXTS: usize = 16;
-const MAX_PENDING_ACTIONS: usize = 64;
-const MAX_ATTEMPTED_AUTHENTICATIONS: usize = 64;
-const MAX_REQUEST_MAPPINGS: usize = 64;
-const MAX_INITIALIZING_SESSIONS: usize = 64;
 const MAX_NATIVE_ID_BYTES: usize = 4 * 1024;
 pub const MAX_HTTP_CREDENTIAL_FIELD_BYTES: usize = 64 * 1024;
 const SCOPE: ResourceScope = ResourceScope::extension(196, 0);
@@ -175,12 +174,17 @@ struct RequestMapping {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct SessionScope {
-    pub(crate) page: ObjectId,
+    pub(crate) page: Option<ObjectId>,
     pub(crate) context: ObjectId,
     pub(crate) ownership: CdpContextOwnership,
 }
 
 struct InitializingSession {
+    session_id: Box<str>,
+    scope: SessionScope,
+}
+
+struct ServiceWorkerSession {
     session_id: Box<str>,
     scope: SessionScope,
 }
@@ -192,26 +196,12 @@ struct State {
     attempted: Vec<AttemptedAuthentication>,
     requests: Vec<RequestMapping>,
     initializing_sessions: Vec<InitializingSession>,
+    service_worker_sessions: Vec<ServiceWorkerSession>,
     closed: bool,
 }
 
 pub(crate) const fn requirements() -> ResourceRequirements {
-    let credential_bytes = 3 * MAX_HTTP_CREDENTIAL_FIELD_BYTES;
-    let pending_bytes =
-        MAX_PENDING_ACTIONS * (std::mem::size_of::<PendingAction>() + 2 * MAX_NATIVE_ID_BYTES);
-    let attempted_bytes = MAX_ATTEMPTED_AUTHENTICATIONS
-        * (std::mem::size_of::<AttemptedAuthentication>() + 3 * MAX_NATIVE_ID_BYTES);
-    let request_mapping_bytes =
-        MAX_REQUEST_MAPPINGS * (std::mem::size_of::<RequestMapping>() + 3 * MAX_NATIVE_ID_BYTES);
-    let initializing_session_bytes = MAX_INITIALIZING_SESSIONS
-        * (std::mem::size_of::<InitializingSession>() + MAX_NATIVE_ID_BYTES);
-    let storage_bytes = (std::mem::size_of::<Installation>()
-        + std::mem::size_of::<State>()
-        + MAX_CONTEXTS * (std::mem::size_of::<ContextEntry>() + credential_bytes)
-        + pending_bytes
-        + attempted_bytes
-        + request_mapping_bytes
-        + initializing_session_bytes) as u64;
+    let storage_bytes = (std::mem::size_of::<Installation>() + std::mem::size_of::<State>()) as u64;
     ResourceRequirements::none()
         .with_class(
             ResourceClass::BackendStateBytes,
@@ -224,6 +214,7 @@ pub(crate) const fn requirements() -> ResourceRequirements {
 pub(crate) struct Installation {
     connection: Arc<CdpConnection>,
     state: Mutex<State>,
+    pub(crate) update_gate: tokio::sync::Mutex<()>,
     _storage: ResourceLease,
 }
 
@@ -243,37 +234,19 @@ impl Installation {
                 plan.class(ResourceClass::BackendStateBytes).global,
             )
             .map_err(HostError::backend)?;
-        let mut entries = Vec::new();
-        entries
-            .try_reserve_exact(MAX_CONTEXTS)
-            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
-        let mut pending = VecDeque::new();
-        pending
-            .try_reserve_exact(MAX_PENDING_ACTIONS)
-            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
-        let mut attempted = Vec::new();
-        attempted
-            .try_reserve_exact(MAX_ATTEMPTED_AUTHENTICATIONS)
-            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
-        let mut requests = Vec::new();
-        requests
-            .try_reserve_exact(MAX_REQUEST_MAPPINGS)
-            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
-        let mut initializing_sessions = Vec::new();
-        initializing_sessions
-            .try_reserve_exact(MAX_INITIALIZING_SESSIONS)
-            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
         Ok(Arc::new(Self {
             connection,
             state: Mutex::new(State {
                 default_credentials,
-                entries,
-                pending,
-                attempted,
-                requests,
-                initializing_sessions,
+                entries: Vec::new(),
+                pending: VecDeque::new(),
+                attempted: Vec::new(),
+                requests: Vec::new(),
+                initializing_sessions: Vec::new(),
+                service_worker_sessions: Vec::new(),
                 closed: false,
             }),
+            update_gate: tokio::sync::Mutex::new(()),
             _storage: storage,
         }))
     }
@@ -292,15 +265,10 @@ impl Installation {
                 "HTTP credentials are already installed for this Context".into(),
             ));
         }
-        let retained = state
+        state
             .entries
-            .len()
-            .saturating_add(usize::from(state.default_credentials.is_some()));
-        if retained >= MAX_CONTEXTS {
-            return Err(HostError::ResourceExhausted(format!(
-                "HTTP credentials exceed {MAX_CONTEXTS} live Contexts"
-            )));
-        }
+            .try_reserve(1)
+            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
         state.entries.push(ContextEntry {
             context,
             credentials,
@@ -312,6 +280,19 @@ impl Installation {
         let mut state = self.state.lock().map_err(HostError::backend)?;
         state.entries.retain(|entry| entry.context != context);
         Ok(())
+    }
+
+    fn set(
+        &self,
+        context: ObjectId,
+        ownership: CdpContextOwnership,
+        credentials: Option<ContextHttpCredentials>,
+    ) -> Result<(), HostError> {
+        let mut state = self.state.lock().map_err(HostError::backend)?;
+        if state.closed {
+            return Err(HostError::TargetClosed);
+        }
+        set_credentials(&mut state, context, ownership, credentials)
     }
 
     pub(crate) fn enabled(
@@ -333,12 +314,11 @@ impl Installation {
         }
         Ok(match ownership {
             CdpContextOwnership::Default => state.default_credentials.clone(),
-            CdpContextOwnership::Owned => state
+            CdpContextOwnership::Owned | CdpContextOwnership::External => state
                 .entries
                 .iter()
                 .find(|entry| entry.context == context)
                 .map(|entry| entry.credentials.clone()),
-            CdpContextOwnership::External => None,
         })
     }
 
@@ -347,13 +327,7 @@ impl Installation {
         if state.closed {
             return Err(HostError::TargetClosed);
         }
-        if state.pending.len() == MAX_PENDING_ACTIONS {
-            return Err(HostError::ResourceExhausted(format!(
-                "HTTP authentication action capacity exceeded ({MAX_PENDING_ACTIONS})"
-            )));
-        }
-        state.pending.push_back(action);
-        Ok(())
+        enqueue_action_state(&mut state, action)
     }
 
     pub(crate) fn continue_request(
@@ -383,23 +357,7 @@ impl Installation {
         };
         validate_native_id("networkId", network_id)?;
         let mut state = self.state.lock().map_err(HostError::backend)?;
-        if let Some(mapping) = state.requests.iter_mut().find(|mapping| {
-            mapping.session_id.as_ref() == session_id && mapping.request_id.as_ref() == request_id
-        }) {
-            mapping.network_id = network_id.to_owned().into_boxed_str();
-            return Ok(());
-        }
-        if state.requests.len() == MAX_REQUEST_MAPPINGS {
-            return Err(HostError::ResourceExhausted(format!(
-                "HTTP authentication request mapping capacity exceeded ({MAX_REQUEST_MAPPINGS})"
-            )));
-        }
-        state.requests.push(RequestMapping {
-            session_id: session_id.to_owned().into_boxed_str(),
-            request_id: request_id.to_owned().into_boxed_str(),
-            network_id: network_id.to_owned().into_boxed_str(),
-        });
-        Ok(())
+        observe_request_state(&mut state, session_id, request_id, network_id)
     }
 
     fn retire_request(&self, session_id: &str, network_id: &str) -> Result<(), HostError> {
@@ -418,24 +376,7 @@ impl Installation {
         if state.closed {
             return Err(HostError::TargetClosed);
         }
-        if let Some(entry) = state
-            .initializing_sessions
-            .iter_mut()
-            .find(|entry| entry.session_id.as_ref() == session_id)
-        {
-            entry.scope = scope;
-            return Ok(());
-        }
-        if state.initializing_sessions.len() == MAX_INITIALIZING_SESSIONS {
-            return Err(HostError::ResourceExhausted(format!(
-                "HTTP authentication initializing session capacity exceeded ({MAX_INITIALIZING_SESSIONS})"
-            )));
-        }
-        state.initializing_sessions.push(InitializingSession {
-            session_id: session_id.to_owned().into_boxed_str(),
-            scope,
-        });
-        Ok(())
+        remember_initializing_session_in_state(&mut state, session_id, scope)
     }
 
     pub(crate) fn initializing_session(
@@ -458,6 +399,83 @@ impl Installation {
         state
             .initializing_sessions
             .retain(|entry| entry.session_id.as_ref() != session_id);
+        Ok(())
+    }
+
+    pub(crate) fn remember_service_worker_session(
+        &self,
+        session_id: &str,
+        context: ObjectId,
+        ownership: CdpContextOwnership,
+    ) -> Result<(), HostError> {
+        let mut state = self.state.lock().map_err(HostError::backend)?;
+        if state.closed {
+            return Err(HostError::TargetClosed);
+        }
+        remember_service_worker_session_in_state(&mut state, session_id, context, ownership)
+    }
+
+    fn retire_service_worker_session(&self, session_id: &str) -> Result<(), HostError> {
+        let mut state = self.state.lock().map_err(HostError::backend)?;
+        state
+            .service_worker_sessions
+            .retain(|entry| entry.session_id.as_ref() != session_id);
+        Ok(())
+    }
+
+    fn service_worker_session(&self, session_id: &str) -> Result<Option<SessionScope>, HostError> {
+        let state = self.state.lock().map_err(HostError::backend)?;
+        if state.closed {
+            return Err(HostError::TargetClosed);
+        }
+        Ok(state
+            .service_worker_sessions
+            .iter()
+            .find(|entry| entry.session_id.as_ref() == session_id)
+            .map(|entry| entry.scope))
+    }
+
+    #[cfg(not(feature = "page-routes"))]
+    fn service_worker_sessions(&self, context: ObjectId) -> Result<Vec<String>, HostError> {
+        let state = self.state.lock().map_err(HostError::backend)?;
+        if state.closed {
+            return Err(HostError::TargetClosed);
+        }
+        let matching = state
+            .service_worker_sessions
+            .iter()
+            .filter(|entry| entry.scope.context == context);
+        let mut sessions = Vec::new();
+        sessions
+            .try_reserve_exact(matching.clone().count())
+            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
+        sessions.extend(matching.map(|entry| entry.session_id.to_string()));
+        Ok(sessions)
+    }
+
+    #[cfg(not(feature = "page-routes"))]
+    async fn update_session(&self, session_id: &str, enabled: bool) -> Result<(), HostError> {
+        if !enabled {
+            self.connection
+                .send_command_with_session("Fetch.disable", json!({}), Some(session_id))
+                .await
+                .map_err(HostError::backend)?;
+            return Ok(());
+        }
+        let disable_cache = self.connection.send_command_with_session(
+            "Network.setCacheDisabled",
+            json!({ "cacheDisabled": true }),
+            Some(session_id),
+        );
+        let enable_fetch = self.connection.send_command_with_session(
+            "Fetch.enable",
+            json!({
+                "handleAuthRequests": true,
+                "patterns": [{ "urlPattern": "*", "requestStage": "Request" }]
+            }),
+            Some(session_id),
+        );
+        tokio::try_join!(disable_cache, enable_fetch).map_err(HostError::backend)?;
         Ok(())
     }
 
@@ -487,18 +505,15 @@ impl Installation {
         if state.closed {
             return Err(HostError::TargetClosed);
         }
-        if state.pending.len() == MAX_PENDING_ACTIONS {
-            return Err(HostError::ResourceExhausted(format!(
-                "HTTP authentication action capacity exceeded ({MAX_PENDING_ACTIONS})"
-            )));
-        }
         let kind = authentication_kind(&mut state, matching, session_id, request_id)?;
-        state.pending.push_back(PendingAction {
-            session_id: session_id.to_owned().into_boxed_str(),
-            request_id: request_id.to_owned().into_boxed_str(),
-            kind,
-        });
-        Ok(())
+        enqueue_action_state(
+            &mut state,
+            PendingAction {
+                session_id: session_id.to_owned().into_boxed_str(),
+                request_id: request_id.to_owned().into_boxed_str(),
+                kind,
+            },
+        )
     }
 
     pub(crate) async fn finish_next(&self) -> Result<(), HostError> {
@@ -558,6 +573,7 @@ impl Installation {
         state.attempted.clear();
         state.requests.clear();
         state.initializing_sessions.clear();
+        state.service_worker_sessions.clear();
     }
 
     pub(crate) fn observe_event(
@@ -573,6 +589,7 @@ impl Installation {
                 .and_then(Value::as_str)
             {
                 self.retire_initializing_session(session_id)?;
+                self.retire_service_worker_session(session_id)?;
             }
             return Ok(());
         }
@@ -623,12 +640,13 @@ impl Installation {
                 .map(|route| route.ownership())
                 .ok_or_else(|| invalid("BrowserContext ownership"))?;
             SessionScope {
-                page,
+                page: Some(page),
                 context,
                 ownership,
             }
         } else {
             self.initializing_session(session_id)?
+                .or(self.service_worker_session(session_id)?)
                 .ok_or_else(|| invalid("target route"))?
         };
         let url = params
@@ -640,6 +658,97 @@ impl Installation {
         self.authenticate(scope.context, scope.ownership, session_id, request_id, url)
             .map_err(|error| Box::new(error) as Box<dyn Error + Send + Sync>)
     }
+}
+
+fn set_credentials(
+    state: &mut State,
+    context: ObjectId,
+    ownership: CdpContextOwnership,
+    credentials: Option<ContextHttpCredentials>,
+) -> Result<(), HostError> {
+    if ownership == CdpContextOwnership::Default {
+        state.default_credentials = credentials;
+        return Ok(());
+    }
+    let existing = state
+        .entries
+        .iter()
+        .position(|entry| entry.context == context);
+    match (existing, credentials) {
+        (Some(index), Some(credentials)) => state.entries[index].credentials = credentials,
+        (Some(index), None) => {
+            state.entries.swap_remove(index);
+        }
+        (None, Some(credentials)) => {
+            state
+                .entries
+                .try_reserve(1)
+                .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
+            state.entries.push(ContextEntry {
+                context,
+                credentials,
+            });
+        }
+        (None, None) => {}
+    }
+    Ok(())
+}
+
+fn enqueue_action_state(state: &mut State, action: PendingAction) -> Result<(), HostError> {
+    state
+        .pending
+        .try_reserve(1)
+        .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
+    state.pending.push_back(action);
+    Ok(())
+}
+
+fn observe_request_state(
+    state: &mut State,
+    session_id: &str,
+    request_id: &str,
+    network_id: &str,
+) -> Result<(), HostError> {
+    if let Some(mapping) = state.requests.iter_mut().find(|mapping| {
+        mapping.session_id.as_ref() == session_id && mapping.request_id.as_ref() == request_id
+    }) {
+        mapping.network_id = network_id.to_owned().into_boxed_str();
+        return Ok(());
+    }
+    state
+        .requests
+        .try_reserve(1)
+        .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
+    state.requests.push(RequestMapping {
+        session_id: session_id.to_owned().into_boxed_str(),
+        request_id: request_id.to_owned().into_boxed_str(),
+        network_id: network_id.to_owned().into_boxed_str(),
+    });
+    Ok(())
+}
+
+fn remember_initializing_session_in_state(
+    state: &mut State,
+    session_id: &str,
+    scope: SessionScope,
+) -> Result<(), HostError> {
+    if let Some(entry) = state
+        .initializing_sessions
+        .iter_mut()
+        .find(|entry| entry.session_id.as_ref() == session_id)
+    {
+        entry.scope = scope;
+        return Ok(());
+    }
+    state
+        .initializing_sessions
+        .try_reserve(1)
+        .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
+    state.initializing_sessions.push(InitializingSession {
+        session_id: session_id.to_owned().into_boxed_str(),
+        scope,
+    });
+    Ok(())
 }
 
 #[cfg(not(feature = "page-routes"))]
@@ -737,11 +846,10 @@ fn authentication_kind(
             password: None,
         });
     };
-    if state.attempted.len() == MAX_ATTEMPTED_AUTHENTICATIONS {
-        return Err(HostError::ResourceExhausted(format!(
-            "HTTP authentication attempt capacity exceeded ({MAX_ATTEMPTED_AUTHENTICATIONS})"
-        )));
-    }
+    state
+        .attempted
+        .try_reserve(1)
+        .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
     state.attempted.push(AttemptedAuthentication {
         session_id: session_id.to_owned().into_boxed_str(),
         request_id: request_id.to_owned().into_boxed_str(),
@@ -830,6 +938,7 @@ where
         target: ChromiumSessionInitializationTarget<'a>,
     ) -> ChromiumSessionInitializationFuture<'a> {
         Box::pin(async move {
+            let _gate = self.installation.update_gate.lock().await;
             if !self
                 .installation
                 .enabled(target.context, target.ownership)?
@@ -839,7 +948,7 @@ where
             self.installation.remember_initializing_session(
                 target.session_id,
                 SessionScope {
-                    page: target.page,
+                    page: Some(target.page),
                     context: target.context,
                     ownership: target.ownership,
                 },
@@ -868,6 +977,75 @@ where
     }
 }
 
+impl HostSession {
+    /// Replace or clear a Context's HTTP credentials, then reconfigure every
+    /// current Page/OOPIF and Service Worker interception session. The retained
+    /// value is updated first, matching Playwright's target-initialization order.
+    pub async fn set_context_http_credentials(
+        &self,
+        context_id: &str,
+        credentials: Option<ContextHttpCredentials>,
+    ) -> Result<(), HostError> {
+        let (context, _call, _operation) = self.admit_operation(context_id)?;
+        let installation = {
+            let state = self.state.lock().map_err(HostError::backend)?;
+            state
+                .as_ref()
+                .ok_or(HostError::TargetClosed)?
+                .context_http_credentials
+                .clone()
+        };
+        let _gate = tokio::select! {
+            biased;
+            () = self.stop.cancelled() => return Err(HostError::TargetClosed),
+            gate = installation.update_gate.lock() => gate,
+        };
+        let ownership = {
+            let state = self.state.lock().map_err(HostError::backend)?;
+            let live = state.as_ref().ok_or(HostError::TargetClosed)?;
+            live.composition
+                .topology()
+                .map_err(HostError::backend)?
+                .topology()
+                .browser_context_route(context)
+                .map(|route| route.ownership())
+                .ok_or(HostError::TargetClosed)?
+        };
+
+        installation.set(context, ownership, credentials)?;
+
+        #[cfg(feature = "page-routes")]
+        self.refresh_context_fetch_interception(context).await?;
+
+        #[cfg(not(feature = "page-routes"))]
+        {
+            let sessions = {
+                let state = self.state.lock().map_err(HostError::backend)?;
+                let live = state.as_ref().ok_or(HostError::TargetClosed)?;
+                let topology = live.composition.topology().map_err(HostError::backend)?;
+                let topology = topology.topology();
+                let page_targets = topology
+                    .page_session_routes()
+                    .filter(|route| route.browser_context_object_id() == context)
+                    .map(|route| route.target_id())
+                    .collect::<Vec<_>>();
+                let mut sessions = topology
+                    .target_session_routes()
+                    .filter(|route| page_targets.contains(&route.page_target_id()))
+                    .map(|route| route.session_id().to_owned())
+                    .collect::<Vec<_>>();
+                sessions.extend(installation.service_worker_sessions(context)?);
+                sessions
+            };
+            let enabled = installation.enabled(context, ownership)?;
+            for session in sessions {
+                installation.update_session(&session, enabled).await?;
+            }
+        }
+        Ok(())
+    }
+}
+
 pub(crate) struct Observer {
     installation: Arc<Installation>,
     downstream: Arc<dyn ChromiumFrameEventObserver>,
@@ -888,6 +1066,66 @@ impl Observer {
 impl ChromiumFrameEventObserver for Observer {
     fn observes_page(&self, page: ObjectId) -> bool {
         self.downstream.observes_page(page)
+    }
+
+    fn retains_service_worker_targets(&self) -> bool {
+        true
+    }
+
+    fn enables_service_worker_network(&self) -> bool {
+        true
+    }
+
+    fn prepare_service_worker(
+        &self,
+        topology: &CdpTopology,
+        event: &CdpEvent,
+    ) -> FrameObservationResult {
+        self.downstream.prepare_service_worker(topology, event)?;
+        if let Some((session, context, ownership)) = service_worker_scope(topology, event)? {
+            self.installation
+                .remember_service_worker_session(&session, context, ownership)?;
+        }
+        Ok(())
+    }
+
+    fn service_worker_initialization_commands(
+        &self,
+        topology: &CdpTopology,
+        event: &CdpEvent,
+        commands: &mut Vec<ServiceWorkerInitializationCommand>,
+    ) -> FrameObservationResult {
+        self.downstream
+            .service_worker_initialization_commands(topology, event, commands)?;
+        #[cfg(feature = "page-routes")]
+        {
+            let _ = (topology, event);
+            Ok(())
+        }
+        #[cfg(not(feature = "page-routes"))]
+        {
+            let Some((_, context, ownership)) = service_worker_scope(topology, event)? else {
+                return Ok(());
+            };
+            if !self.installation.enabled(context, ownership)? {
+                return Ok(());
+            }
+            commands
+                .try_reserve(2)
+                .map_err(|error| Box::new(error) as Box<dyn Error + Send + Sync>)?;
+            commands.push(ServiceWorkerInitializationCommand::new(
+                "Network.setCacheDisabled",
+                json!({ "cacheDisabled": true }),
+            ));
+            commands.push(ServiceWorkerInitializationCommand::new(
+                "Fetch.enable",
+                json!({
+                    "handleAuthRequests": true,
+                    "patterns": [{ "urlPattern": "*", "requestStage": "Request" }]
+                }),
+            ));
+            Ok(())
+        }
     }
 
     fn prepare_page(&self, topology: &CdpTopology, page: ObjectId) -> FrameObservationResult {
@@ -928,6 +1166,72 @@ impl ChromiumFrameEventObserver for Observer {
     }
 }
 
+fn remember_service_worker_session_in_state(
+    state: &mut State,
+    session_id: &str,
+    context: ObjectId,
+    ownership: CdpContextOwnership,
+) -> Result<(), HostError> {
+    validate_native_id("sessionId", session_id)?;
+    let scope = SessionScope {
+        page: None,
+        context,
+        ownership,
+    };
+    if let Some(entry) = state
+        .service_worker_sessions
+        .iter_mut()
+        .find(|entry| entry.session_id.as_ref() == session_id)
+    {
+        entry.scope = scope;
+        return Ok(());
+    }
+    state
+        .service_worker_sessions
+        .try_reserve(1)
+        .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
+    state.service_worker_sessions.push(ServiceWorkerSession {
+        session_id: session_id.to_owned().into_boxed_str(),
+        scope,
+    });
+    Ok(())
+}
+
+fn service_worker_scope(
+    topology: &CdpTopology,
+    event: &CdpEvent,
+) -> Result<Option<(String, ObjectId, CdpContextOwnership)>, HostError> {
+    let params: target::AttachedToTargetEvent =
+        serde_json::from_value(event.params.clone()).map_err(HostError::backend)?;
+    if params.target_info.r#type != "service_worker" {
+        return Ok(None);
+    }
+    validate_native_id("service worker sessionId", &params.session_id)?;
+    let native_context = params
+        .target_info
+        .browser_context_id
+        .as_deref()
+        .unwrap_or("");
+    let context = if native_context.is_empty() {
+        topology
+            .default_context_route()
+            .map(|route| route.object_id())
+    } else {
+        topology.context_object_id(native_context).or_else(|| {
+            topology
+                .default_context_route()
+                .map(|route| route.object_id())
+        })
+    };
+    let Some(context) = context else {
+        return Ok(None);
+    };
+    let Some(route) = topology.browser_context_route(context) else {
+        return Ok(None);
+    };
+    Ok(Some((params.session_id, context, route.ownership())))
+}
+
 fn invalid(field: &str) -> Box<dyn Error + Send + Sync> {
     Box::new(HostError::Backend(format!(
         "HTTP authentication event is missing {field}"
@@ -955,6 +1259,7 @@ mod tests {
             attempted: Vec::new(),
             requests: Vec::new(),
             initializing_sessions: Vec::new(),
+            service_worker_sessions: Vec::new(),
             closed: false,
         }
     }
@@ -997,6 +1302,100 @@ mod tests {
             observed,
             ("user", "pass", Some("https://example.test"), true,)
         );
+    }
+
+    #[test]
+    fn runtime_credentials_replace_owned_context_value() {
+        // Arrange
+        let context = ObjectId::new(7);
+        let mut state = state();
+        state.entries.push(ContextEntry {
+            context,
+            credentials: ContextHttpCredentials::new(
+                "old-user".to_owned(),
+                "old-pass".to_owned(),
+                None,
+            )
+            .expect("valid old credentials"),
+        });
+        let replacement =
+            ContextHttpCredentials::new("new-user".to_owned(), "new-pass".to_owned(), None)
+                .expect("valid replacement credentials");
+
+        // Act
+        set_credentials(
+            &mut state,
+            context,
+            CdpContextOwnership::Owned,
+            Some(replacement.clone()),
+        )
+        .expect("replace credentials");
+
+        // Assert
+        assert_eq!(state.entries.len(), 1);
+        assert_eq!(state.entries[0].credentials, replacement);
+    }
+
+    #[test]
+    fn runtime_credentials_support_external_contexts() {
+        // Arrange
+        let context = ObjectId::new(11);
+        let mut state = state();
+        let credentials = credentials(None);
+
+        // Act
+        set_credentials(
+            &mut state,
+            context,
+            CdpContextOwnership::External,
+            Some(credentials.clone()),
+        )
+        .expect("install external credentials");
+
+        // Assert
+        assert_eq!(state.entries.len(), 1);
+        assert_eq!(state.entries[0].context, context);
+        assert_eq!(state.entries[0].credentials, credentials);
+    }
+
+    #[test]
+    fn runtime_credentials_clear_context_value() {
+        // Arrange
+        let context = ObjectId::new(13);
+        let mut state = state();
+        state.entries.push(ContextEntry {
+            context,
+            credentials: credentials(None),
+        });
+
+        // Act
+        set_credentials(&mut state, context, CdpContextOwnership::Owned, None)
+            .expect("clear credentials");
+
+        // Assert
+        assert!(state.entries.is_empty());
+    }
+
+    #[test]
+    fn runtime_credentials_replace_default_context_value() {
+        // Arrange
+        let mut state = state();
+        state.default_credentials = Some(credentials(None));
+        let replacement =
+            ContextHttpCredentials::new("new-user".to_owned(), "new-pass".to_owned(), None)
+                .expect("valid replacement credentials");
+
+        // Act
+        set_credentials(
+            &mut state,
+            ObjectId::new(17),
+            CdpContextOwnership::Default,
+            Some(replacement.clone()),
+        )
+        .expect("replace default credentials");
+
+        // Assert
+        assert_eq!(state.default_credentials, Some(replacement));
     }
 
     #[test]
@@ -1119,5 +1518,89 @@ mod tests {
         // Assert
         assert!(state.attempted.is_empty());
         assert!(state.requests.is_empty());
+    }
+
+    #[test]
+    fn authentication_state_grows_past_the_retired_fixed_capacity() {
+        // Arrange
+        const RETIRED_FIXED_CAPACITY: usize = 64;
+        let mut state = state();
+        let scope = SessionScope {
+            page: Some(ObjectId::new(8)),
+            context: ObjectId::new(7),
+            ownership: CdpContextOwnership::Owned,
+        };
+
+        // Act
+        for index in 0..=RETIRED_FIXED_CAPACITY {
+            let session_id = format!("session-{index}");
+            let request_id = format!("request-{index}");
+            let network_id = format!("network-{index}");
+            observe_request_state(&mut state, &session_id, &request_id, &network_id)
+                .expect("remember request mapping");
+            let kind = authentication_kind(
+                &mut state,
+                Some(credentials(None)),
+                &session_id,
+                &request_id,
+            )
+            .expect("remember authentication attempt");
+            enqueue_action_state(
+                &mut state,
+                PendingAction {
+                    session_id: session_id.clone().into_boxed_str(),
+                    request_id: request_id.into_boxed_str(),
+                    kind,
+                },
+            )
+            .expect("enqueue authentication action");
+            remember_initializing_session_in_state(&mut state, &session_id, scope)
+                .expect("remember initializing session");
+        }
+
+        // Assert
+        assert_eq!(state.requests.len(), RETIRED_FIXED_CAPACITY + 1);
+        assert_eq!(state.attempted.len(), RETIRED_FIXED_CAPACITY + 1);
+        assert_eq!(state.pending.len(), RETIRED_FIXED_CAPACITY + 1);
+        assert_eq!(
+            state.initializing_sessions.len(),
+            RETIRED_FIXED_CAPACITY + 1
+        );
+    }
+
+    #[test]
+    fn service_worker_registry_is_allocator_backed_past_initialization_capacity() {
+        // Arrange
+        const RETIRED_FIXED_CAPACITY: usize = 64;
+        let mut state = state();
+        let context = ObjectId::new(7);
+
+        // Act
+        for index in 0..=RETIRED_FIXED_CAPACITY {
+            remember_service_worker_session_in_state(
+                &mut state,
+                &format!("worker-{index}"),
+                context,
+                CdpContextOwnership::Owned,
+            )
+            .expect("remember live Service Worker");
+        }
+
+        // Assert
+        assert_eq!(
+            state.service_worker_sessions.len(),
+            RETIRED_FIXED_CAPACITY + 1
+        );
+        assert_eq!(
+            state
+                .service_worker_sessions
+                .last()
+                .map(|entry| entry.scope),
+            Some(SessionScope {
+                page: None,
+                context,
+                ownership: CdpContextOwnership::Owned,
+            })
+        );
     }
 }

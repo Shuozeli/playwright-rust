@@ -12,9 +12,7 @@ use playwright_rust_backend_cdp_file_input::PayloadTarget;
 #[cfg(feature = "file-chooser-events")]
 use playwright_rust_cdp::CdpClient;
 use playwright_rust_composition_chromium_file_input::FilePayloadOperationService;
-use playwright_rust_core::{
-    ProductionResourceLedger, ResourceClass, ResourceLease, ResourceLedger, ResourceRequest,
-};
+use playwright_rust_core::{ProductionResourceLedger, ResourceClass, ResourceLease};
 #[cfg(any(feature = "file-chooser-events", feature = "retained-file-input"))]
 use playwright_rust_file_input_fs::PreparedInput;
 use playwright_rust_file_input_fs::SystemFileSystem;
@@ -72,6 +70,27 @@ struct Slots {
     sources: AtomicUsize,
     _state: ResourceLease,
 }
+impl Slots {
+    fn source(self: &Arc<Self>) -> Result<SourceSlot, HostError> {
+        self.sources
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |count| {
+                count.checked_add(1)
+            })
+            .map_err(|_| {
+                HostError::ResourceExhausted("file-input source counter overflow".into())
+            })?;
+        Ok(SourceSlot(self.clone()))
+    }
+
+    fn call(self: &Arc<Self>) -> Result<CallLease, HostError> {
+        self.calls
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |count| {
+                count.checked_add(1)
+            })
+            .map_err(|_| HostError::ResourceExhausted("file-input call counter overflow".into()))?;
+        Ok(CallLease { slot: self.clone() })
+    }
+}
 pub(crate) struct SourceSlot(Arc<Slots>);
 impl Drop for SourceSlot {
     fn drop(&mut self) {
@@ -80,11 +99,9 @@ impl Drop for SourceSlot {
 }
 pub(crate) struct CallLease {
     slot: Arc<Slots>,
-    lease: Option<ResourceLease>,
 }
 impl Drop for CallLease {
     fn drop(&mut self) {
-        self.lease = None;
         self.slot.calls.fetch_sub(1, Ordering::AcqRel);
     }
 }
@@ -101,8 +118,6 @@ pub(crate) struct Installation {
     cleanup: TokioCleanupExecutor,
     #[cfg(feature = "file-input-native-paths")]
     pub(crate) native_paths: native_paths::Service,
-    source: ResourceLedger,
-    state: ResourceLedger,
     origin: Arc<()>,
     slots: Arc<Slots>,
     #[cfg(feature = "file-chooser-events")]
@@ -167,9 +182,6 @@ impl Installation {
                 "file-input installation exceeds state budget".into(),
             ));
         }
-        let source = resources
-            .claim(profile::source_requirements())
-            .map_err(HostError::backend)?;
         let state = resources
             .claim(profile::state_requirements())
             .map_err(HostError::backend)?;
@@ -180,9 +192,10 @@ impl Installation {
                 profile::STATE_BYTES,
             )
             .map_err(HostError::backend)?;
-        // One started upload; no private runtime or arbitrary cleanup deadline.
+        // Started uploads retain their own futures; no private runtime or
+        // arbitrary count/deadline is imposed by the cleanup executor.
         // Native session retirement/transport shutdown precedes this drain.
-        let cleanup = TokioCleanupExecutor::new(1);
+        let cleanup = TokioCleanupExecutor::new_allocator_backed();
         let backend = Arc::new(
             CdpFilePayloadService::new(profile::payload()?, resources)
                 .map_err(HostError::backend)?,
@@ -202,10 +215,9 @@ impl Installation {
             .map_err(HostError::backend)?,
             #[cfg(feature = "file-chooser-events")]
             backend,
-            worker: FileInputExecutor::new(
+            worker: FileInputExecutor::new_allocator_backed(
                 profile::worker()?,
                 resources,
-                source.clone(),
                 runtime,
                 Arc::new(SystemFileSystem),
                 Arc::new(PinnedMime),
@@ -214,8 +226,6 @@ impl Installation {
             cleanup,
             #[cfg(feature = "file-input-native-paths")]
             native_paths: native_paths::Service::new(resources)?,
-            source,
-            state,
             origin: Arc::new(()),
             slots: Arc::new(Slots {
                 calls: AtomicUsize::new(0),
@@ -227,41 +237,10 @@ impl Installation {
         })
     }
     fn source_slot(&self) -> Result<SourceSlot, HostError> {
-        self.slots
-            .sources
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |count| {
-                (count < 2).then(|| count + 1)
-            })
-            .map_err(|_| {
-                HostError::ResourceExhausted("file-input source capacity exhausted".into())
-            })?;
-        Ok(SourceSlot(self.slots.clone()))
+        self.slots.source()
     }
     pub(crate) fn admit(&self) -> Result<CallLease, HostError> {
-        self.slots
-            .calls
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |count| {
-                (count < profile::CALLS as usize).then(|| count + 1)
-            })
-            .map_err(|_| {
-                HostError::ResourceExhausted("file-input call capacity exhausted".into())
-            })?;
-        let mut owner = CallLease {
-            slot: self.slots.clone(),
-            lease: None,
-        };
-        owner.lease = Some(
-            self.state
-                .reserve_many(
-                    profile::STATE_SCOPE,
-                    &[
-                        ResourceRequest::new(ResourceClass::ActiveCommand, 1),
-                        ResourceRequest::new(ResourceClass::BackendStateBytes, profile::CALL_BYTES),
-                    ],
-                )
-                .map_err(HostError::backend)?,
-        );
-        Ok(owner)
+        self.slots.call()
     }
     pub(crate) fn prepare(&self, files: &[MemoryFile<'_>]) -> Result<PreparedFileInput, HostError> {
         if files.len() > profile::ITEMS {
@@ -299,27 +278,25 @@ impl Installation {
                 content: Content::Bytes(file.buffer),
             })
             .collect();
-        let payloads = PreparedPayloads::materialize(
-            &self.source,
-            profile::SOURCE_SCOPE,
-            profile::limits(),
-            &mut sources,
-        )
-        .map_err(|error| match error {
-            playwright_rust_file_input_source::SourceError::Budget(error) => {
-                HostError::ResourceExhausted(error.to_string())
-            }
-            playwright_rust_file_input_source::SourceError::Policy(error) => {
-                if error == playwright_rust_file_input_model::FileInputError::PayloadSizeLimit {
-                    // Upstream's semantic 50 MiB rejection is Error, not the
-                    // TypeError used for malformed boundary arguments.
-                    HostError::backend(error)
-                } else {
-                    HostError::InvalidArgument(error.to_string())
-                }
-            }
-            other => HostError::backend(other),
-        })?;
+        let payloads =
+            PreparedPayloads::materialize_allocator_backed(profile::limits(), &mut sources)
+                .map_err(|error| match error {
+                    playwright_rust_file_input_source::SourceError::Budget(error) => {
+                        HostError::ResourceExhausted(error.to_string())
+                    }
+                    playwright_rust_file_input_source::SourceError::Policy(error) => {
+                        if error
+                            == playwright_rust_file_input_model::FileInputError::PayloadSizeLimit
+                        {
+                            // Upstream's semantic 50 MiB rejection is Error, not the
+                            // TypeError used for malformed boundary arguments.
+                            HostError::backend(error)
+                        } else {
+                            HostError::InvalidArgument(error.to_string())
+                        }
+                    }
+                    other => HostError::backend(other),
+                })?;
         Ok(PreparedFileInput {
             input: PreparedFileInputKind::Payloads(payloads),
             origin: self.origin.clone(),

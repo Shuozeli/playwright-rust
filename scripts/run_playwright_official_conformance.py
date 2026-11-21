@@ -115,6 +115,51 @@ _HISTORY_PUBLIC_CROSS_ORIGIN_SUITE: Suite = {
         "632d3bb4dd07f8e8b002cbe9a0ea0a7ac01886164e84e3c10fa7aecd10dbf7e6"
     ),
 }
+_VIDEO_CROSS_ORIGIN_SUITE: Suite = {
+    "id": "library-video-chromium-v1",
+    "role": "browser-backed-official-file",
+    "runner": "packages/playwright/cli.js",
+    "config": "tests/library/playwright.config.ts",
+    "args": ["tests/library/video.spec.ts"],
+    "candidateAdapter": "test-mode-playwright-core",
+    "oracleAdapter": "test-mode-playwright-core-cdp",
+    "project": "chromium-library",
+    "channel": "chromium",
+    "requiresBrowser": True,
+    "crossOriginForward": True,
+    "expectedTestsPerProject": 29,
+    "expectedFiles": 1,
+    "upstreamTestSourceSha256": (
+        "49b54ed870daa4066972cbec9c61b0a715692f593fe43f0df7d620999506867c"
+    ),
+    "expectedSpecIdsSha256": (
+        "da6b947bae93ed72aeff68f94e7599dde5e11a587940034472ecfc6ba21ec6d7"
+    ),
+}
+_TRACING_CROSS_ORIGIN_SUITE: Suite = {
+    "id": "library-tracing-chromium-v1",
+    "role": "browser-backed-official-file",
+    "runner": "packages/playwright/cli.js",
+    "config": "tests/library/playwright.config.ts",
+    "args": ["tests/library/tracing.spec.ts"],
+    "candidateAdapter": "test-mode-playwright-core",
+    "oracleAdapter": "test-mode-playwright-core-cdp",
+    "project": "chromium-library",
+    "channel": "chromium",
+    "requiresBrowser": True,
+    "crossOriginForward": True,
+    "expectedTestsPerProject": 35,
+    "expectedFiles": 1,
+    "upstreamTestSourceSha256": (
+        "7757232728c1b62b43f4c5aed96a2d5ccb94adcc38b1692dc3f93e88a81ab7ba"
+    ),
+    "expectedSpecIdsSha256": (
+        "ae6a094d9aaa58c7383b4a646586ba0d6143eec378776a1cdf0dba3e71057110"
+    ),
+}
+_CANDIDATE_OWNED_LAUNCH_SUITES = frozenset(
+    {_VIDEO_CROSS_ORIGIN_SUITE["id"], _TRACING_CROSS_ORIGIN_SUITE["id"]}
+)
 _SET_CONTENT_PUBLIC_SUITE = "library-page-set-content-public-chromium"
 _SET_CONTENT_PUBLIC_GREP_INVERT = "should handle timeout properly(?: 2)?$"
 _SET_CONTENT_SOURCE_SHA256 = (
@@ -759,6 +804,18 @@ def _cross_origin_forward_enabled(suite: Suite) -> bool:
                 "cross-origin forward requires the exact pinned page-history suite"
             )
         return True
+    if suite.get("id") == _VIDEO_CROSS_ORIGIN_SUITE["id"]:
+        if suite != _VIDEO_CROSS_ORIGIN_SUITE:
+            raise ValueError(
+                "cross-origin forward requires the exact pinned video suite"
+            )
+        return True
+    if suite.get("id") == _TRACING_CROSS_ORIGIN_SUITE["id"]:
+        if suite != _TRACING_CROSS_ORIGIN_SUITE:
+            raise ValueError(
+                "cross-origin forward requires the exact pinned tracing suite"
+            )
+        return True
     if value is None:
         return False
     if suite.get("id") == _ROUTE_PUBLIC_CROSS_ORIGIN_SUITE["id"]:
@@ -1039,6 +1096,7 @@ def _result_provenance(
     grep_invert: str | None = None,
     workers: int,
     headed: bool,
+    channel: str | None,
     endpoint: str,
     fixture_bind: str,
     fixture_host: str,
@@ -1077,6 +1135,7 @@ def _result_provenance(
         "grep": grep,
         "workers": workers,
         "headed": headed,
+        "channel": channel,
         "endpoint": endpoint,
         "fixtureBind": fixture_bind,
         "fixtureHost": fixture_host,
@@ -1267,6 +1326,9 @@ def main() -> None:
             f"cannot override it with {args.project!r}"
         )
     project = fixed_project or args.project
+    channel = suite.get("channel")
+    if channel is not None and (not isinstance(channel, str) or not channel):
+        parser.error("suite channel must be a nonempty string")
     requires_browser = suite.get("requiresBrowser", True)
     if not requires_browser and args.test:
         parser.error(
@@ -1335,6 +1397,9 @@ def main() -> None:
     command.extend(args.test or suite.get("args", []))
 
     env = os.environ.copy()
+    env.pop("PWTEST_CHANNEL", None)
+    if channel is not None:
+        env["PWTEST_CHANNEL"] = channel
     env.pop("PLAYWRIGHT_RUST_OFFICIAL_CROSS_ORIGIN_FORWARD", None)
     if cross_origin_forward and not args.collect_only:
         env["PLAYWRIGHT_RUST_OFFICIAL_CROSS_ORIGIN_FORWARD"] = "1"
@@ -1419,7 +1484,10 @@ def main() -> None:
         env["PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM"] = str(upstream)
         if candidate_profile is not None:
             env["PLAYWRIGHT_RUST_NATIVE_PROFILE"] = candidate_profile
-        if requires_browser:
+        if requires_browser and suite["id"] in _CANDIDATE_OWNED_LAUNCH_SUITES:
+            env.pop("PLAYWRIGHT_RUST_CANDIDATE_CDP_ENDPOINT", None)
+            env["PLAYWRIGHT_RUST_CANDIDATE_OWNED_LAUNCH"] = "1"
+        elif requires_browser:
             env["PLAYWRIGHT_RUST_CANDIDATE_CDP_ENDPOINT"] = args.endpoint
     elif not args.collect_only and requires_browser:
         preload = (root / "tests/official/playwright-core-oracle-preload.cjs").resolve()
@@ -1505,6 +1573,7 @@ def main() -> None:
             grep_invert=pinned_grep_invert,
             workers=args.workers,
             headed=args.headed,
+            channel=channel,
             endpoint=args.endpoint,
             fixture_bind=fixture_bind,
             fixture_host=fixture_host,

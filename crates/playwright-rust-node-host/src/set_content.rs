@@ -15,22 +15,17 @@ use playwright_rust_plugin_chromium_frame_lifecycle::PageLifecycleHandle;
 use crate::evaluation::{EvaluateParams, EvaluationValue};
 use crate::{HostError, HostSession};
 
-const MAX_OPERATIONS: u64 = 8;
-const OPERATION_BYTES: u64 = 64 * 1024;
-const OPERATION_SCOPE: ResourceScope = ResourceScope::extension(130, 1);
 const SLOT_SCOPE: ResourceScope = ResourceScope::extension(130, 2);
 const SET_CONTENT_SOURCE: &str =
     "html => { document.open(); document.write(html); document.close(); }";
 
 struct Slots {
     active: AtomicU64,
-    resources: ProductionResourceLedger,
     _lease: ResourceLease,
 }
 
 struct OperationPermit {
     owner: Arc<Slots>,
-    _storage: ResourceLease,
 }
 
 impl Drop for OperationPermit {
@@ -53,7 +48,6 @@ impl Slots {
             .map_err(HostError::backend)?;
         Ok(Arc::new(Self {
             active: AtomicU64::new(0),
-            resources: resources.clone(),
             _lease: lease,
         }))
     }
@@ -61,36 +55,12 @@ impl Slots {
     fn admit(self: &Arc<Self>) -> Result<OperationPermit, HostError> {
         self.active
             .fetch_update(Ordering::AcqRel, Ordering::Acquire, |active| {
-                (active < MAX_OPERATIONS).then_some(active + 1)
+                active.checked_add(1)
             })
-            .map_err(|_| {
-                HostError::ResourceExhausted(format!(
-                    "Page set_content capacity exceeded ({MAX_OPERATIONS})"
-                ))
-            })?;
-        let storage = self
-            .resources
-            .claim(operation_requirements())
-            .map_err(HostError::backend)
-            .and_then(|ledger| {
-                ledger
-                    .reserve(
-                        OPERATION_SCOPE,
-                        ResourceClass::BackendStateBytes,
-                        OPERATION_BYTES,
-                    )
-                    .map_err(HostError::backend)
-            });
-        match storage {
-            Ok(storage) => Ok(OperationPermit {
-                owner: self.clone(),
-                _storage: storage,
-            }),
-            Err(error) => {
-                self.active.fetch_sub(1, Ordering::AcqRel);
-                Err(error)
-            }
-        }
+            .map_err(|_| HostError::ResourceExhausted("Page set_content count overflow".into()))?;
+        Ok(OperationPermit {
+            owner: self.clone(),
+        })
     }
 }
 
@@ -105,18 +75,8 @@ const fn slot_requirements() -> ResourceRequirements {
         .with_metadata(1, 1)
 }
 
-const fn operation_requirements() -> ResourceRequirements {
-    ResourceRequirements::none()
-        .with_class(
-            ResourceClass::BackendStateBytes,
-            OPERATION_BYTES * MAX_OPERATIONS,
-            OPERATION_BYTES * MAX_OPERATIONS,
-        )
-        .with_metadata(1, MAX_OPERATIONS as usize)
-}
-
 pub(crate) fn requirements() -> ResourceRequirements {
-    operation_requirements().combine_concurrent(slot_requirements())
+    slot_requirements()
 }
 
 pub(crate) fn install(resources: &ProductionResourceLedger) -> Result<Installation, HostError> {
@@ -266,21 +226,20 @@ mod tests {
     }
 
     #[test]
-    fn operation_capacity_is_fixed_and_reclaimed_on_drop() {
+    fn operation_admission_is_allocator_backed_and_reclaimed_on_drop() {
         // Arrange
         let resources = resources();
         let slots = Slots::new(&resources).unwrap();
-        let mut permits: Vec<_> = (0..MAX_OPERATIONS)
-            .map(|_| slots.admit().unwrap())
-            .collect();
+        let permits: Vec<_> = (0..129).map(|_| slots.admit().unwrap()).collect();
 
         // Act
-        let excess = slots.admit();
-        drop(permits.pop());
-        let reclaimed = slots.admit();
+        let additional = slots.admit();
 
         // Assert
-        assert!(matches!(excess, Err(HostError::ResourceExhausted(_))));
-        assert!(reclaimed.is_ok());
+        assert!(additional.is_ok());
+        assert_eq!(slots.active.load(Ordering::Acquire), 130);
+        drop(additional);
+        drop(permits);
+        assert_eq!(slots.active.load(Ordering::Acquire), 0);
     }
 }

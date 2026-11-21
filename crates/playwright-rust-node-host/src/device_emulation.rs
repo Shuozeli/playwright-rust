@@ -1,7 +1,7 @@
 //! Optional, Context-scoped Playwright device emulation.
 //!
 //! The embedded catalog is immutable package data. Runtime settings are
-//! retained in a fixed Context registry and applied by the existing Chromium
+//! retained in an allocator-backed Context registry and applied by the existing Chromium
 //! session-initialization fence before a Page is resumed or published.
 
 use std::error::Error;
@@ -10,8 +10,8 @@ use std::sync::{Arc, Mutex};
 use playwright_rust_backend_cdp_topology::CdpContextOwnership;
 use playwright_rust_cdp::{CdpConnection, CdpSession, generated::browser};
 use playwright_rust_core::{
-    ObjectId, ProductionResourceLedger, ResourceClass, ResourceLease, ResourceRequest,
-    ResourceRequirements, ResourceScope,
+    ObjectId, ProductionResourceLedger, ResourceClass, ResourceLease, ResourceRequirements,
+    ResourceScope,
 };
 use playwright_rust_plugin_chromium_session_initialization::{
     ChromiumSessionInitializationFuture, ChromiumSessionInitializationTarget,
@@ -21,9 +21,7 @@ use serde::Serialize;
 
 use crate::HostError;
 
-const MAX_CONTEXTS: usize = 16;
 const MAX_USER_AGENT_BYTES: usize = 4096;
-const MAX_RETAINED_BYTES: u64 = 64 * 1024;
 const MAX_VIEWPORT_DIMENSION: u32 = 10_000_000;
 const DEVICE_SCOPE: ResourceScope = ResourceScope::extension(177, 1);
 
@@ -111,19 +109,10 @@ impl DeviceContextOptions {
             has_touch,
         })
     }
-
-    fn retained_bytes(&self) -> Result<u64, HostError> {
-        let bytes = std::mem::size_of::<Self>()
-            .checked_add(self.user_agent.as_ref().map_or(0, |value| value.len()))
-            .ok_or_else(|| HostError::ResourceExhausted("device settings size overflow".into()))?;
-        u64::try_from(bytes)
-            .map_err(|_| HostError::ResourceExhausted("device settings size overflow".into()))
-    }
 }
 
 pub(crate) struct StoredSettings {
     options: DeviceContextOptions,
-    _lease: ResourceLease,
 }
 
 impl StoredSettings {
@@ -149,26 +138,17 @@ struct State {
 }
 
 pub const fn requirements() -> ResourceRequirements {
-    let storage_bytes = (std::mem::size_of::<Installation>()
-        + std::mem::size_of::<State>()
-        + MAX_CONTEXTS * std::mem::size_of::<ContextEntry>()) as u64;
+    let storage_bytes = (std::mem::size_of::<Installation>() + std::mem::size_of::<State>()) as u64;
     ResourceRequirements::none()
-        .with_class(ResourceClass::EventItem, MAX_CONTEXTS as u64, 1)
-        .with_class(
-            ResourceClass::EventBytes,
-            MAX_RETAINED_BYTES,
-            MAX_RETAINED_BYTES,
-        )
         .with_class(
             ResourceClass::BackendStateBytes,
             storage_bytes,
             storage_bytes,
         )
-        .with_metadata(MAX_CONTEXTS + 1, MAX_CONTEXTS * 3 + 1)
+        .with_metadata(1, 1)
 }
 
 pub(crate) struct Installation {
-    resources: playwright_rust_core::ResourceLedger,
     state: Mutex<State>,
     _storage: ResourceLease,
 }
@@ -187,33 +167,11 @@ impl Installation {
                 plan.class(ResourceClass::BackendStateBytes).global,
             )
             .map_err(HostError::backend)?;
-        let mut entries = Vec::new();
-        entries
-            .try_reserve_exact(MAX_CONTEXTS)
-            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
-        let default_settings = default_options
-            .map(|options| {
-                let bytes = options.retained_bytes()?;
-                let lease = ledger
-                    .reserve_many(
-                        DEVICE_SCOPE,
-                        &[
-                            ResourceRequest::new(ResourceClass::EventItem, 1),
-                            ResourceRequest::new(ResourceClass::EventBytes, bytes),
-                        ],
-                    )
-                    .map_err(HostError::backend)?;
-                Ok::<_, HostError>(Arc::new(StoredSettings {
-                    options,
-                    _lease: lease,
-                }))
-            })
-            .transpose()?;
+        let default_settings = default_options.map(|options| Arc::new(StoredSettings { options }));
         Ok(Arc::new(Self {
-            resources: ledger,
             state: Mutex::new(State {
                 default_settings,
-                entries,
+                entries: Vec::new(),
                 closed: false,
             }),
             _storage: storage,
@@ -225,7 +183,6 @@ impl Installation {
         context: ObjectId,
         options: DeviceContextOptions,
     ) -> Result<(), HostError> {
-        let bytes = options.retained_bytes()?;
         let mut state = self.state.lock().map_err(HostError::backend)?;
         if state.closed {
             return Err(HostError::TargetClosed);
@@ -235,31 +192,12 @@ impl Installation {
                 "device settings are already installed for this Context".into(),
             ));
         }
-        let retained = state
-            .entries
-            .len()
-            .saturating_add(usize::from(state.default_settings.is_some()));
-        if retained >= MAX_CONTEXTS {
-            return Err(HostError::ResourceExhausted(format!(
-                "device settings exceed {MAX_CONTEXTS} live Contexts"
-            )));
-        }
-        let lease = self
-            .resources
-            .reserve_many(
-                ResourceScope::Object(context),
-                &[
-                    ResourceRequest::new(ResourceClass::EventItem, 1),
-                    ResourceRequest::new(ResourceClass::EventBytes, bytes),
-                ],
-            )
-            .map_err(HostError::backend)?;
+        state.entries.try_reserve(1).map_err(|error| {
+            HostError::ResourceExhausted(format!("device settings allocation failed: {error}"))
+        })?;
         state.entries.push(ContextEntry {
             context,
-            settings: Arc::new(StoredSettings {
-                options,
-                _lease: lease,
-            }),
+            settings: Arc::new(StoredSettings { options }),
         });
         Ok(())
     }
@@ -385,6 +323,10 @@ fn metrics(options: &DeviceContextOptions) -> MetricsOverride {
     }
 }
 
+fn touch_emulation_params(has_touch: bool) -> Option<serde_json::Value> {
+    has_touch.then(|| serde_json::json!({ "enabled": true }))
+}
+
 pub(crate) fn window_insets(headful: bool, host_platform: &str) -> (u32, u32) {
     if !headful {
         return (0, 0);
@@ -485,15 +427,9 @@ where
                     )
                     .await?;
             }
-            if let Some(has_touch) = settings.options.has_touch {
+            if let Some(params) = settings.options.has_touch.and_then(touch_emulation_params) {
                 session
-                    .send(
-                        "Emulation.setTouchEmulationEnabled",
-                        serde_json::json!({
-                            "enabled": has_touch,
-                            "maxTouchPoints": if has_touch { 1 } else { 0 },
-                        }),
-                    )
+                    .send("Emulation.setTouchEmulationEnabled", params)
                     .await?;
             }
             Ok::<(), Box<dyn Error + Send + Sync>>(())
@@ -578,6 +514,30 @@ mod tests {
                 "screenOrientation": { "type": "portraitPrimary", "angle": 0 },
             })
         );
+    }
+
+    #[test]
+    fn enabled_touch_emulation_matches_playwright_chromium_payload() {
+        // Arrange
+        let has_touch = true;
+
+        // Act
+        let params = touch_emulation_params(has_touch);
+
+        // Assert
+        assert_eq!(params, Some(serde_json::json!({ "enabled": true })));
+    }
+
+    #[test]
+    fn disabled_touch_emulation_sends_no_chromium_command() {
+        // Arrange
+        let has_touch = false;
+
+        // Act
+        let params = touch_emulation_params(has_touch);
+
+        // Assert
+        assert_eq!(params, None);
     }
 
     #[cfg(feature = "page-viewport")]
@@ -693,13 +653,13 @@ mod tests {
     }
 
     #[test]
-    fn default_settings_consume_one_fixed_context_slot() {
+    fn default_settings_do_not_reduce_dynamic_context_capacity() {
         // Arrange
         let default_options =
             DeviceContextOptions::new(None, Some((456, 789)), None, None, None, None).unwrap();
         let installation =
             Installation::new_with_default(&resources(), Some(default_options)).unwrap();
-        for value in 1..MAX_CONTEXTS {
+        for value in 1..=129 {
             let options =
                 DeviceContextOptions::new(None, None, None, None, None, Some(true)).unwrap();
             installation
@@ -708,14 +668,11 @@ mod tests {
         }
 
         // Act
-        let error = installation
-            .install(
-                ObjectId::new(MAX_CONTEXTS as u64),
-                DeviceContextOptions::new(None, None, None, None, None, Some(true)).unwrap(),
-            )
-            .unwrap_err();
+        let retained = installation
+            .settings(ObjectId::new(129), CdpContextOwnership::Owned)
+            .unwrap();
 
         // Assert
-        assert!(matches!(error, HostError::ResourceExhausted(_)));
+        assert!(retained.is_some());
     }
 }

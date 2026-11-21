@@ -1,4 +1,4 @@
-//! Explicitly selected, bounded public Chromium CDP sessions.
+//! Explicitly selected public Chromium CDP sessions with allocator-backed unread-event queues.
 //!
 //! A browser-root auxiliary attachment keeps these sessions separate from
 //! Playwright Rust's Page-discovery attachment. The topology driver recognizes only
@@ -10,13 +10,15 @@ use std::sync::{Arc, Mutex};
 #[cfg(feature = "browser-cdp-session")]
 use std::time::Duration;
 
+#[cfg(all(not(feature = "file-input"), not(feature = "init-scripts")))]
+use playwright_rust_cdp::connection::large_commands::LargeCommandProfile;
 use playwright_rust_cdp::{
     CdpConnection, CdpEvent, CdpEventReceiver, CdpEventRecvError, CdpEventTryRecvError, CdpSession,
 };
 use playwright_rust_composition_chromium::ChromiumAuxiliarySessionParent;
 use playwright_rust_core::{
-    ObjectId, ProductionResourceLedger, ResourceClass, ResourceLease, ResourceRequest,
-    ResourceRequirements, ResourceScope,
+    ObjectId, ProductionResourceLedger, ResourceClass, ResourceLease, ResourceRequirements,
+    ResourceScope,
 };
 use serde_json::{Value, json};
 use tokio::sync::{mpsc, oneshot, watch};
@@ -25,14 +27,16 @@ use tokio_util::sync::CancellationToken;
 
 use crate::{HostError, HostSession, LiveSession, context_metadata::ContextMetadata};
 
-pub const MAX_CDP_SESSIONS: usize = 8;
-pub const MAX_CDP_SESSION_EVENTS: usize = 64;
-pub const MAX_CDP_SESSION_EVENT_BYTES: usize = 1024 * 1024;
+/// Maximum events transferred by one FFI claim. This is a fairness quantum,
+/// not a limit on the allocator-backed unread-event queue.
+pub const CDP_SESSION_EVENT_BATCH_LIMIT: usize = 64;
 const MAX_NATIVE_ID_BYTES: usize = 256;
-const MAX_METHOD_BYTES: usize = 256;
-const MAX_COMMAND_PARAMS_BYTES: usize = 1024 * 1024;
 const BARRIER_CAPACITY: usize = 8;
 const INSTALLATION_SCOPE: ResourceScope = ResourceScope::extension(199, 1);
+#[cfg(all(not(feature = "file-input"), not(feature = "init-scripts")))]
+const LARGE_COMMAND_SCOPE: ResourceScope = ResourceScope::extension(199, 2);
+#[cfg(all(not(feature = "file-input"), not(feature = "init-scripts")))]
+const LARGE_COMMAND_FRAGMENT_BYTES: usize = 64 * 1024;
 #[cfg(not(feature = "browser-cdp-session"))]
 const BACKEND_STATE_BYTES: u64 = 16 * 1024;
 #[cfg(feature = "browser-cdp-session")]
@@ -47,21 +51,21 @@ const TARGET_EVENT_FENCE_TIMEOUT_MS: u32 = 30_000;
 pub(crate) const fn requirements() -> ResourceRequirements {
     ResourceRequirements::none()
         .with_class(
-            ResourceClass::EventItem,
-            (MAX_CDP_SESSIONS * MAX_CDP_SESSION_EVENTS) as u64,
-            (MAX_CDP_SESSIONS * MAX_CDP_SESSION_EVENTS) as u64,
-        )
-        .with_class(
-            ResourceClass::EventBytes,
-            (MAX_CDP_SESSIONS * MAX_CDP_SESSION_EVENT_BYTES) as u64,
-            (MAX_CDP_SESSIONS * MAX_CDP_SESSION_EVENT_BYTES) as u64,
-        )
-        .with_class(
             ResourceClass::BackendStateBytes,
             BACKEND_STATE_BYTES,
             BACKEND_STATE_BYTES,
         )
         .with_metadata(1, 1)
+}
+
+#[cfg(all(not(feature = "file-input"), not(feature = "init-scripts")))]
+pub(crate) fn large_commands() -> Result<LargeCommandProfile, HostError> {
+    LargeCommandProfile::new_allocator_backed(
+        LARGE_COMMAND_SCOPE,
+        usize::MAX,
+        LARGE_COMMAND_FRAGMENT_BYTES,
+    )
+    .map_err(HostError::backend)
 }
 
 /// One event delivered by a public CDP session, without the transport envelope.
@@ -71,14 +75,9 @@ pub struct CdpSessionEvent {
     pub params: Value,
 }
 
-struct BufferedEvent {
-    event: CdpSessionEvent,
-    bytes: usize,
-}
-
 struct EventClaim {
     generation: u64,
-    events: VecDeque<BufferedEvent>,
+    events: VecDeque<CdpSessionEvent>,
     peeked: bool,
 }
 
@@ -142,9 +141,8 @@ struct Entry {
     session_id: Option<String>,
     detaching: bool,
     abandoned: bool,
-    events: VecDeque<BufferedEvent>,
+    events: VecDeque<CdpSessionEvent>,
     claim: Option<EventClaim>,
-    event_bytes: usize,
     overflowed: bool,
     #[cfg(feature = "browser-cdp-session")]
     discover_targets: bool,
@@ -157,6 +155,7 @@ struct Entry {
 }
 
 impl Entry {
+    #[cfg(test)]
     fn event_count(&self) -> usize {
         self.events.len() + self.claim.as_ref().map_or(0, |claim| claim.events.len())
     }
@@ -172,7 +171,6 @@ impl Entry {
     fn clear_event_payloads(&mut self) {
         self.events.clear();
         self.claim = None;
-        self.event_bytes = 0;
         self.overflowed = false;
         #[cfg(feature = "browser-cdp-session")]
         self.recent_targets.clear();
@@ -232,11 +230,6 @@ impl Registry {
     }
 
     fn reserve_owner(&mut self, owner: SessionOwner) -> Result<u64, HostError> {
-        if self.entries.len() >= MAX_CDP_SESSIONS {
-            return Err(HostError::ResourceExhausted(format!(
-                "CDP session capacity exceeded ({MAX_CDP_SESSIONS})"
-            )));
-        }
         let token = self.next_token;
         self.next_token = token.checked_add(1).ok_or_else(|| {
             HostError::ResourceExhausted("CDP session token space exhausted".into())
@@ -250,7 +243,6 @@ impl Registry {
                 abandoned: false,
                 events: VecDeque::new(),
                 claim: None,
-                event_bytes: 0,
                 overflowed: false,
                 #[cfg(feature = "browser-cdp-session")]
                 discover_targets: false,
@@ -442,31 +434,9 @@ impl Registry {
         if entry.overflowed {
             return;
         }
-        let Some(bytes) = serde_json::to_vec(&event.params)
-            .ok()
-            .and_then(|encoded| encoded.len().checked_add(event.method.len()))
-        else {
-            entry.overflowed = true;
-            self.signal_event_change();
-            return;
-        };
-        if entry.event_count() >= MAX_CDP_SESSION_EVENTS
-            || entry
-                .event_bytes
-                .checked_add(bytes)
-                .is_none_or(|total| total > MAX_CDP_SESSION_EVENT_BYTES)
-        {
-            entry.overflowed = true;
-            self.signal_event_change();
-            return;
-        }
-        entry.event_bytes += bytes;
-        entry.events.push_back(BufferedEvent {
-            event: CdpSessionEvent {
-                method: event.method.clone(),
-                params: event.params.clone(),
-            },
-            bytes,
+        entry.events.push_back(CdpSessionEvent {
+            method: event.method.clone(),
+            params: event.params.clone(),
         });
         #[cfg(feature = "browser-cdp-session")]
         if matches!(entry.owner, SessionOwner::Browser)
@@ -522,9 +492,9 @@ impl Registry {
     }
 
     fn drain(&mut self, token: u64, max_events: usize) -> Result<Vec<CdpSessionEvent>, HostError> {
-        if max_events == 0 || max_events > MAX_CDP_SESSION_EVENTS {
+        if max_events == 0 || max_events > CDP_SESSION_EVENT_BATCH_LIMIT {
             return Err(HostError::InvalidArgument(format!(
-                "CDP event drain count must be between 1 and {MAX_CDP_SESSION_EVENTS}"
+                "CDP event drain count must be between 1 and {CDP_SESSION_EVENT_BATCH_LIMIT}"
             )));
         }
         let entry = self
@@ -541,7 +511,7 @@ impl Registry {
         }
         if entry.overflowed {
             return Err(HostError::ResourceExhausted(
-                "CDP session event queue overflowed".into(),
+                "CDP session event delivery lost native events".into(),
             ));
         }
         let mut drained = Vec::with_capacity(max_events.min(entry.events.len()));
@@ -549,16 +519,15 @@ impl Registry {
             let Some(event) = entry.events.pop_front() else {
                 break;
             };
-            entry.event_bytes -= event.bytes;
-            drained.push(event.event);
+            drained.push(event);
         }
         Ok(drained)
     }
 
     fn claim(&mut self, token: u64, max_events: usize) -> Result<u64, HostError> {
-        if max_events == 0 || max_events > MAX_CDP_SESSION_EVENTS {
+        if max_events == 0 || max_events > CDP_SESSION_EVENT_BATCH_LIMIT {
             return Err(HostError::InvalidArgument(format!(
-                "CDP event claim count must be between 1 and {MAX_CDP_SESSION_EVENTS}"
+                "CDP event claim count must be between 1 and {CDP_SESSION_EVENT_BATCH_LIMIT}"
             )));
         }
         let entry = self
@@ -575,7 +544,7 @@ impl Registry {
         }
         if entry.overflowed {
             return Err(HostError::ResourceExhausted(
-                "CDP session event queue overflowed".into(),
+                "CDP session event delivery lost native events".into(),
             ));
         }
         let generation = self.next_claim_generation;
@@ -620,11 +589,11 @@ impl Registry {
             .ok_or(HostError::TargetClosed)?;
         if entry.overflowed {
             return Err(HostError::ResourceExhausted(
-                "CDP session event queue overflowed".into(),
+                "CDP session event delivery lost native events".into(),
             ));
         }
         let claim = entry.claim.as_mut().ok_or(HostError::TargetClosed)?;
-        let next = claim.events.front().map(|event| event.event.clone());
+        let next = claim.events.front().cloned();
         claim.peeked = next.is_some();
         Ok(next)
     }
@@ -641,15 +610,9 @@ impl Registry {
                 "CDP event must be peeked before acknowledgement".into(),
             ));
         }
-        let event = claim.events.front().ok_or_else(|| {
+        claim.events.front().ok_or_else(|| {
             HostError::InvalidArgument("CDP event claim has no next event to acknowledge".into())
         })?;
-        if entry.event_bytes < event.bytes {
-            return Err(HostError::Backend(
-                "CDP event claim byte accounting underflow".into(),
-            ));
-        }
-        entry.event_bytes -= event.bytes;
         claim.events.pop_front();
         claim.peeked = false;
         Ok(())
@@ -672,7 +635,7 @@ impl Registry {
 
     fn retain_pages(&mut self, pages: &[ObjectId]) {
         // The portable Page is gone, but native detach is not yet proved.
-        // Keep the child or in-flight attach in the capacity budget until a
+        // Keep the child or in-flight attach in the ownership registry until a
         // native detach event, explicit compensation, or host shutdown.
         let mut changed = false;
         for entry in self.entries.values_mut() {
@@ -706,7 +669,7 @@ impl Registry {
             .ok_or(HostError::TargetClosed)?
             .to_owned();
         // Delivery-lease cleanup is independent of the portable Page's
-        // lifetime. Preserve the exact native ID in the bounded registry
+        // lifetime. Preserve the exact native ID in the ownership registry
         // while making the token unusable to ordinary public operations.
         self.abandon(token);
         Ok(child_id)
@@ -755,19 +718,10 @@ impl Installation {
         let budget = resources
             .claim(requirements())
             .map_err(HostError::backend)?
-            .reserve_many(
+            .reserve(
                 INSTALLATION_SCOPE,
-                &[
-                    ResourceRequest::new(
-                        ResourceClass::EventItem,
-                        (MAX_CDP_SESSIONS * MAX_CDP_SESSION_EVENTS) as u64,
-                    ),
-                    ResourceRequest::new(
-                        ResourceClass::EventBytes,
-                        (MAX_CDP_SESSIONS * MAX_CDP_SESSION_EVENT_BYTES) as u64,
-                    ),
-                    ResourceRequest::new(ResourceClass::BackendStateBytes, BACKEND_STATE_BYTES),
-                ],
+                ResourceClass::BackendStateBytes,
+                BACKEND_STATE_BYTES,
             )
             .map_err(HostError::backend)?;
         let receiver = connection
@@ -1634,8 +1588,9 @@ impl HostSession {
         .await
     }
 
-    /// Send a bounded command on the exact auxiliary session, then publish
-    /// earlier CDP events into that session's bounded drain queue.
+    /// Send a command on the exact auxiliary session through the selected
+    /// fragmented large-command path, then publish earlier CDP events into
+    /// that session's independently bounded drain queue.
     pub async fn cdp_session_send(
         &self,
         token: u64,
@@ -1643,27 +1598,6 @@ impl HostSession {
         params: Value,
     ) -> Result<Value, HostError> {
         let _operation = self.operations.token();
-        let valid_method = method.split_once('.').is_some_and(|(domain, command)| {
-            !domain.is_empty()
-                && !command.is_empty()
-                && domain.bytes().all(|byte| byte.is_ascii_alphanumeric())
-                && command
-                    .bytes()
-                    .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
-        });
-        if method.len() > MAX_METHOD_BYTES || !valid_method {
-            return Err(HostError::InvalidArgument("invalid CDP method name".into()));
-        }
-        if !params.is_object()
-            || serde_json::to_vec(&params)
-                .map_err(HostError::backend)?
-                .len()
-                > MAX_COMMAND_PARAMS_BYTES
-        {
-            return Err(HostError::InvalidArgument(
-                "CDP command parameters must be a bounded object".into(),
-            ));
-        }
         let installation = self.cdp_installation()?;
         let (owner, session_id) = installation.registry()?.active(token)?;
         self.cdp_live_owner(&owner)?;
@@ -1677,7 +1611,7 @@ impl HostSession {
             SessionOwner::Browser => String::new(),
         };
         let result = CdpSession::new(Arc::clone(&installation.connection), session_id, target_id)
-            .send(method, params)
+            .send_large_to_settlement(method, params)
             .await
             .map_err(HostError::backend)?;
         installation.synchronize().await?;
@@ -1727,8 +1661,8 @@ impl HostSession {
         })
     }
 
-    /// Park until a CDP session event, overflow, or native retirement changes
-    /// the bounded registry. The caller drains with `cdp_session_claim` and
+    /// Park until a CDP session event, delivery loss, or native retirement
+    /// changes the registry. The caller drains with `cdp_session_claim` and
     /// acknowledges events independently; this watch never consumes payloads.
     pub async fn next_cdp_session_event_generation(&self, after: u64) -> Result<u64, HostError> {
         let _operation = self.operations.token();
@@ -1890,6 +1824,23 @@ mod tests {
     use super::*;
     use std::sync::atomic::{AtomicBool, Ordering};
 
+    #[cfg(all(not(feature = "file-input"), not(feature = "init-scripts")))]
+    #[test]
+    fn production_cdp_session_large_commands_have_no_total_byte_ceiling() {
+        // Arrange
+        let profile = large_commands().unwrap();
+
+        // Act
+        let requirements = profile.requirements();
+
+        // Assert
+        assert!(profile.allocator_backed());
+        assert_eq!(profile.capacity(), usize::MAX);
+        assert_eq!(profile.max_bytes(), usize::MAX);
+        assert_eq!(profile.fragment_bytes(), LARGE_COMMAND_FRAGMENT_BYTES);
+        assert_eq!(requirements.class(ResourceClass::WireBytes).global, 0);
+    }
+
     #[tokio::test]
     async fn event_watch_wakes_for_exact_child_without_consuming_payload() {
         // Arrange
@@ -2033,7 +1984,7 @@ mod tests {
             .map(|event| event.params["value"].as_u64().unwrap())
             .collect();
         assert_eq!(values, vec![2, 3, 4]);
-        assert_eq!(owner.lock().unwrap().entries[&token].event_bytes, 0);
+        assert_eq!(owner.lock().unwrap().entries[&token].event_count(), 0);
     }
 
     #[test]
@@ -2055,33 +2006,28 @@ mod tests {
         assert_eq!(first.unwrap().params["value"], 1);
         assert!(exhausted.is_none());
         assert!(matches!(repeated, Err(HostError::InvalidArgument(_))));
-        assert_eq!(owner.lock().unwrap().entries[&token].event_bytes, 0);
+        assert_eq!(owner.lock().unwrap().entries[&token].event_count(), 0);
     }
 
     #[test]
-    fn queued_and_claimed_events_share_the_item_cap_and_block_legacy_drain() {
+    fn queued_and_claimed_events_grow_past_the_batch_quantum() {
         // Arrange
         let (owner, token) = claimed_registry();
         {
             let mut registry = owner.lock().unwrap();
-            for value in 0..MAX_CDP_SESSION_EVENTS {
+            for value in 0..129 {
                 registry.record(&event(value as u64));
             }
         }
         let batch = claim(&owner, token, 32);
 
         // Act
-        let legacy = owner.lock().unwrap().drain(token, 1);
-        owner.lock().unwrap().record(&event(65));
+        owner.lock().unwrap().record(&event(129));
 
         // Assert
         let registry = owner.lock().unwrap();
-        assert!(matches!(legacy, Err(HostError::InvalidArgument(_))));
-        assert_eq!(
-            registry.entries[&token].event_count(),
-            MAX_CDP_SESSION_EVENTS
-        );
-        assert_eq!(registry.entries[&token].events.len(), 32);
+        assert_eq!(registry.entries[&token].event_count(), 130);
+        assert_eq!(registry.entries[&token].events.len(), 98);
         assert_eq!(
             registry.entries[&token]
                 .claim
@@ -2091,19 +2037,17 @@ mod tests {
                 .len(),
             32
         );
-        assert!(registry.entries[&token].overflowed);
+        assert!(!registry.entries[&token].overflowed);
         drop(registry);
-        assert!(matches!(batch.peek(), Err(HostError::ResourceExhausted(_))));
+        assert_eq!(batch.peek().unwrap().unwrap().params["value"], 0);
     }
 
     #[test]
-    fn claimed_bytes_remain_counted_against_the_one_megabyte_cap() {
+    fn claimed_large_event_does_not_limit_new_queue_entries() {
         // Arrange
         let (owner, token) = claimed_registry();
         let method = "Runtime.large";
-        let empty = json!({"payload": ""});
-        let overhead = serde_json::to_vec(&empty).unwrap().len() + method.len();
-        let payload = "x".repeat(MAX_CDP_SESSION_EVENT_BYTES - overhead);
+        let payload = "x".repeat(2 * 1024 * 1024);
         owner.lock().unwrap().record(&CdpEvent::new(
             method.into(),
             json!({"payload": payload}),
@@ -2116,14 +2060,16 @@ mod tests {
 
         // Assert
         let registry = owner.lock().unwrap();
-        assert_eq!(
-            registry.entries[&token].event_bytes,
-            MAX_CDP_SESSION_EVENT_BYTES
-        );
-        assert_eq!(registry.entries[&token].event_count(), 1);
-        assert!(registry.entries[&token].overflowed);
+        assert_eq!(registry.entries[&token].event_count(), 2);
+        assert!(!registry.entries[&token].overflowed);
         drop(registry);
-        assert!(matches!(batch.peek(), Err(HostError::ResourceExhausted(_))));
+        assert_eq!(
+            batch.peek().unwrap().unwrap().params["payload"]
+                .as_str()
+                .unwrap()
+                .len(),
+            2 * 1024 * 1024
+        );
     }
 
     #[test]
@@ -2167,7 +2113,6 @@ mod tests {
         let registry = owner.lock().unwrap();
         assert_eq!(registry.native_child(token), Some("child"));
         assert_eq!(registry.entries[&token].event_count(), 0);
-        assert_eq!(registry.entries[&token].event_bytes, 0);
     }
 
     #[test]
@@ -2350,7 +2295,7 @@ mod tests {
     }
 
     #[test]
-    fn selected_profile_accounts_for_every_session_queue_and_parent() {
+    fn selected_profile_accounts_for_parent_with_allocator_backed_event_queues() {
         // Arrange
         let declared = requirements();
 
@@ -2360,24 +2305,18 @@ mod tests {
         let owner_bytes = declared.class(ResourceClass::BackendStateBytes);
 
         // Assert
-        assert_eq!(
-            items.global,
-            (MAX_CDP_SESSIONS * MAX_CDP_SESSION_EVENTS) as u64
-        );
-        assert_eq!(
-            event_bytes.global,
-            (MAX_CDP_SESSIONS * MAX_CDP_SESSION_EVENT_BYTES) as u64
-        );
+        assert_eq!(items.global, 0);
+        assert_eq!(event_bytes.global, 0);
         assert_eq!(owner_bytes.global, BACKEND_STATE_BYTES);
         assert_eq!(declared.scopes, 1);
         assert_eq!(declared.leases, 1);
     }
 
     #[test]
-    fn registry_rejects_ninth_session_without_reusing_tokens() {
+    fn registry_grows_past_the_legacy_session_count_without_reusing_tokens() {
         // Arrange
         let mut registry = Registry::new();
-        for index in 0..MAX_CDP_SESSIONS {
+        for index in 0..129 {
             registry
                 .reserve(ObjectId::new(1), ObjectId::new(2), format!("page-{index}"))
                 .unwrap();
@@ -2387,19 +2326,19 @@ mod tests {
         let result = registry.reserve(ObjectId::new(1), ObjectId::new(2), "extra".into());
 
         // Assert
-        assert!(matches!(result, Err(HostError::ResourceExhausted(_))));
+        assert_eq!(result.unwrap(), 130);
         registry.entries.remove(&1);
         assert_eq!(
             registry
                 .reserve(ObjectId::new(1), ObjectId::new(2), "new".into())
                 .unwrap(),
-            9
+            131
         );
     }
 
     #[cfg(feature = "browser-cdp-session")]
     #[test]
-    fn browser_and_page_sessions_share_capacity_but_page_retirement_keeps_browser_live() {
+    fn page_retirement_keeps_browser_session_live_and_allows_more_sessions() {
         // Arrange
         let mut registry = Registry::new();
         let page = registry
@@ -2408,7 +2347,7 @@ mod tests {
         registry.commit(page, "page-session".into()).unwrap();
         let browser = registry.reserve_browser().unwrap();
         registry.commit(browser, "browser-session".into()).unwrap();
-        for index in 0..(MAX_CDP_SESSIONS - 2) {
+        for index in 0..127 {
             registry
                 .reserve(ObjectId::new(1), ObjectId::new(3), format!("page-{index}"))
                 .unwrap();
@@ -2427,7 +2366,7 @@ mod tests {
             registry.active(browser),
             Ok((SessionOwner::Browser, _))
         ));
-        assert!(matches!(additional, Err(HostError::ResourceExhausted(_))));
+        assert!(additional.is_ok());
     }
 
     #[cfg(feature = "browser-cdp-session")]
@@ -2584,14 +2523,14 @@ mod tests {
 
     #[cfg(feature = "browser-cdp-session")]
     #[test]
-    fn target_fence_fails_closed_if_event_queue_overflows() {
+    fn target_fence_tracks_target_after_more_than_one_event_batch() {
         // Arrange
         let mut registry = Registry::new();
         let browser = registry.reserve_browser().unwrap();
         registry.commit(browser, "browser-session".into()).unwrap();
         registry.set_discover_targets(browser, true).unwrap();
         let fence = registry.target_fence();
-        for index in 0..MAX_CDP_SESSION_EVENTS {
+        for index in 0..129 {
             registry.record(&CdpEvent::new(
                 "Runtime.event".into(),
                 json!({"value": index}),
@@ -2608,7 +2547,9 @@ mod tests {
         let result = registry.target_fence_satisfied(&fence, "new-page");
 
         // Assert
-        assert!(matches!(result, Err(HostError::ResourceExhausted(_))));
+        assert!(result.unwrap());
+        assert_eq!(registry.entries[&browser].event_count(), 130);
+        assert!(!registry.entries[&browser].overflowed);
     }
 
     #[test]
@@ -2721,7 +2662,7 @@ mod tests {
     }
 
     #[test]
-    fn late_child_on_closed_page_keeps_identity_and_capacity_until_native_detach() {
+    fn late_child_on_closed_page_keeps_identity_until_native_detach() {
         // Arrange
         let mut registry = Registry::new();
         let first = registry
@@ -2735,15 +2676,16 @@ mod tests {
         // Assert
         assert!(matches!(result, Err(HostError::TargetClosed)));
         assert_eq!(registry.native_child(first), Some("late-child"));
-        for index in 1..MAX_CDP_SESSIONS {
+        for index in 1..=129 {
             registry
                 .reserve(ObjectId::new(1), ObjectId::new(3), format!("other-{index}"))
                 .unwrap();
         }
-        assert!(matches!(
-            registry.reserve(ObjectId::new(1), ObjectId::new(3), "ninth".into()),
-            Err(HostError::ResourceExhausted(_))
-        ));
+        assert!(
+            registry
+                .reserve(ObjectId::new(1), ObjectId::new(3), "additional".into())
+                .is_ok()
+        );
         registry.record(&CdpEvent::new(
             "Target.detachedFromTarget".into(),
             json!({"sessionId": "late-child"}),
@@ -2758,7 +2700,7 @@ mod tests {
     }
 
     #[test]
-    fn event_capacity_fails_closed_without_growing_queue() {
+    fn event_queue_grows_past_the_retired_capacity_and_drains_one_batch() {
         // Arrange
         let mut registry = Registry::new();
         let token = registry
@@ -2766,20 +2708,18 @@ mod tests {
             .unwrap();
         registry.commit(token, "child".into()).unwrap();
         let event = CdpEvent::new("Runtime.event".into(), json!({}), Some("child".into()));
-
-        // Act
-        for _ in 0..=MAX_CDP_SESSION_EVENTS {
+        for _ in 0..129 {
             registry.record(&event);
         }
 
+        // Act
+        let drained = registry
+            .drain(token, CDP_SESSION_EVENT_BATCH_LIMIT)
+            .unwrap();
+
         // Assert
-        assert_eq!(
-            registry.entries[&token].events.len(),
-            MAX_CDP_SESSION_EVENTS
-        );
-        assert!(matches!(
-            registry.drain(token, 8),
-            Err(HostError::ResourceExhausted(_))
-        ));
+        assert_eq!(drained.len(), CDP_SESSION_EVENT_BATCH_LIMIT);
+        assert_eq!(registry.entries[&token].events.len(), 65);
+        assert!(!registry.entries[&token].overflowed);
     }
 }

@@ -223,7 +223,7 @@ fn deferred_typed_failure_is_installed_before_notification() {
 }
 
 #[test]
-fn declared_pending_call_bound_must_match_runtime_before_pool_installation() {
+fn runtime_pending_call_bound_must_cover_deferred_profile() {
     // Arrange
     let (dispatcher, _pool, _resources) = super::fixture(8, 1);
     let selected = profile(1)
@@ -235,6 +235,22 @@ fn declared_pending_call_bound_must_match_runtime_before_pool_installation() {
     // Assert
     assert!(matches!(result, Err(DisposalReservationError::Invalid(_))));
     assert_eq!(budget.metrics().unwrap().active_leases, 0);
+}
+
+#[test]
+fn runtime_pending_call_bound_may_exceed_deferred_profile() {
+    // Arrange
+    let (dispatcher, _pool, _resources) = super::fixture(8, 1);
+    let selected = profile(1)
+        .with_deferred_commit(NonZeroUsize::new(1).unwrap())
+        .unwrap();
+    let budget = resources(selected.requirements());
+
+    // Act
+    let result = selected.bind(&dispatcher.lifecycle_handle(), &budget);
+
+    // Assert
+    assert!(result.is_ok());
 }
 
 #[test]

@@ -16,6 +16,10 @@ function fixture(frameWaitForUrl, enabled = true) {
       calls.push([pageId, frameId, waitUntil, timeout]);
       return frameWaitForUrl(matcher);
     },
+    async frameWaitForTitle(pageId, frameId, matcher, timeout) {
+      calls.push(['frameWaitForTitle', pageId, frameId, timeout]);
+      return frameWaitForUrl(matcher);
+    },
   };
   const frame = {
     _id: 'frame-2',
@@ -189,12 +193,30 @@ test('live cancellation requests fail closed before starting a native wait', asy
   assert.equal(calls.length, 0);
 });
 
+test('title expectation delegates title observation and timeout to Rust', async () => {
+  // Arrange
+  const title = 'Hello from Rust';
+  const { adapter, frame, calls } = fixture(matcher => {
+    assert.equal(matcher(title), true);
+    return title;
+  });
+
+  // Act
+  const result = await adapter.expect(frame, 'to.have.title', {
+    expectedText: [{ string: title }], timeout: 456,
+  });
+
+  // Assert
+  assert.deepEqual(result, { matches: true, received: { value: title } });
+  assert.deepEqual(calls, [['frameWaitForTitle', 'page-1', 'frame-2', 456]]);
+});
+
 test('unsupported expressions fail before starting a native wait', async () => {
   // Arrange
   const { adapter, frame, calls } = fixture(() => undefined);
 
   // Act
-  const pending = adapter.expect(frame, 'to.have.title', { expectedText: [{ string: 'title' }] });
+  const pending = adapter.expect(frame, 'to.have.text', { expectedText: [{ string: 'text' }] });
 
   // Assert
   await assert.rejects(pending, UnsupportedOperationError);

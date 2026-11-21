@@ -1,6 +1,6 @@
 //! Optional Page media emulation through the exact published Chromium route.
 //!
-//! The leaf owns one fixed, resource-accounted Page override table. It starts
+//! The leaf owns one allocator-backed Page override table. It starts
 //! no task, browser process, or event queue. One admitted host operation issues
 //! one bounded CDP command on the Page's current session; language bindings
 //! only adapt Playwright-shaped enum strings.
@@ -21,9 +21,6 @@ use serde::Serialize;
 
 use crate::{HostError, HostSession};
 
-const MAX_PAGES: usize = 64;
-#[cfg(feature = "context-forced-colors")]
-const MAX_CONTEXTS: usize = 16;
 const STORAGE_BYTES: u64 = 16 * 1024;
 const SCOPE: ResourceScope = ResourceScope::extension(132, 1);
 
@@ -39,9 +36,9 @@ pub(crate) fn requirements() -> ResourceRequirements {
 
 pub(crate) struct Installation {
     gate: tokio::sync::Mutex<()>,
-    pages: Mutex<[Option<PageState>; MAX_PAGES]>,
+    pages: Mutex<Vec<PageState>>,
     #[cfg(feature = "context-forced-colors")]
-    contexts: Mutex<[Option<ContextState>; MAX_CONTEXTS]>,
+    contexts: Mutex<Vec<ContextState>>,
     default_options: Option<PersistentContextMediaOptions>,
     _storage: ResourceLease,
 }
@@ -59,9 +56,9 @@ impl Installation {
             .map_err(HostError::backend)?;
         Ok(Self {
             gate: tokio::sync::Mutex::new(()),
-            pages: Mutex::new([None; MAX_PAGES]),
+            pages: Mutex::new(Vec::new()),
             #[cfg(feature = "context-forced-colors")]
-            contexts: Mutex::new([None; MAX_CONTEXTS]),
+            contexts: Mutex::new(Vec::new()),
             default_options,
             _storage: storage,
         })
@@ -78,7 +75,6 @@ impl Installation {
             .lock()
             .map_err(HostError::backend)?
             .iter()
-            .flatten()
             .find(|state| state.page == page)
             .copied()
         {
@@ -89,7 +85,6 @@ impl Installation {
             let contexts = self.contexts.lock().map_err(HostError::backend)?;
             return Ok(contexts
                 .iter()
-                .flatten()
                 .find(|state| state.context == context)
                 .map(|state| PageState::from_context(page, *state)));
         }
@@ -110,24 +105,15 @@ impl Installation {
         forced_colors: ContextForcedColors,
     ) -> Result<(), HostError> {
         let mut contexts = self.contexts.lock().map_err(HostError::backend)?;
-        if contexts
-            .iter()
-            .flatten()
-            .any(|state| state.context == context)
-        {
+        if contexts.iter().any(|state| state.context == context) {
             return Err(HostError::InvalidArgument(
                 "forced colors policy is already installed for this Context".into(),
             ));
         }
-        let slot = contexts
-            .iter_mut()
-            .find(|slot| slot.is_none())
-            .ok_or_else(|| {
-                HostError::ResourceExhausted(format!(
-                    "forced colors policy exceeds {MAX_CONTEXTS} live Contexts"
-                ))
-            })?;
-        *slot = Some(ContextState {
+        contexts.try_reserve(1).map_err(|error| {
+            HostError::ResourceExhausted(format!("forced colors policy allocation failed: {error}"))
+        })?;
+        contexts.push(ContextState {
             context,
             forced_colors: forced_colors.0,
         });
@@ -140,46 +126,26 @@ impl Installation {
         mut is_live: impl FnMut(ObjectId) -> bool,
     ) -> Result<(), HostError> {
         let mut contexts = self.contexts.lock().map_err(HostError::backend)?;
-        for slot in contexts.iter_mut() {
-            if slot.is_some_and(|state| !is_live(state.context)) {
-                *slot = None;
-            }
-        }
+        contexts.retain(|state| is_live(state.context));
         drop(contexts);
         let mut pages = self.pages.lock().map_err(HostError::backend)?;
-        for slot in pages.iter_mut() {
-            if slot.is_some_and(|state| state.context.is_some_and(|context| !is_live(context))) {
-                *slot = None;
-            }
-        }
+        pages.retain(|state| state.context.is_none_or(&mut is_live));
         Ok(())
     }
 
     #[cfg(feature = "context-forced-colors")]
     pub(crate) fn remove_context(&self, context: ObjectId) -> Result<(), HostError> {
         let mut contexts = self.contexts.lock().map_err(HostError::backend)?;
-        for slot in contexts.iter_mut() {
-            if slot.is_some_and(|state| state.context == context) {
-                *slot = None;
-            }
-        }
+        contexts.retain(|state| state.context != context);
         let mut pages = self.pages.lock().map_err(HostError::backend)?;
-        for slot in pages.iter_mut() {
-            if slot.is_some_and(|state| state.context == Some(context)) {
-                *slot = None;
-            }
-        }
+        pages.retain(|state| state.context != Some(context));
         Ok(())
     }
 
     #[cfg(feature = "context-forced-colors")]
     pub(crate) fn remove_page(&self, page: ObjectId) -> Result<(), HostError> {
         let mut pages = self.pages.lock().map_err(HostError::backend)?;
-        for slot in pages.iter_mut() {
-            if slot.is_some_and(|state| state.page == page) {
-                *slot = None;
-            }
-        }
+        pages.retain(|state| state.page != page);
         Ok(())
     }
 
@@ -187,7 +153,7 @@ impl Installation {
         &self,
         page: ObjectId,
         context: Option<ObjectId>,
-        active: &[Option<ObjectId>; MAX_PAGES],
+        active: &[ObjectId],
         options: MediaOptions<'_>,
     ) -> Result<PageState, HostError> {
         #[cfg(feature = "context-forced-colors")]
@@ -199,7 +165,6 @@ impl Installation {
                     .map(|contexts| {
                         contexts
                             .iter()
-                            .flatten()
                             .find(|state| state.context == context)
                             .map(|state| PageState::from_context(page, *state))
                     })
@@ -209,23 +174,8 @@ impl Installation {
         #[cfg(not(feature = "context-forced-colors"))]
         let _ = context;
         let mut pages = self.pages.lock().map_err(HostError::backend)?;
-        for entry in pages.iter_mut() {
-            if entry.is_some_and(|entry| !active.contains(&Some(entry.page))) {
-                *entry = None;
-            }
-        }
-        let previous = match pages
-            .iter()
-            .find(|entry| entry.is_some_and(|entry| entry.page == page))
-        {
-            Some(entry) => *entry,
-            None if pages.iter().any(Option::is_none) => None,
-            None => {
-                return Err(HostError::ResourceExhausted(
-                    "media override Page capacity exceeds 64".into(),
-                ));
-            }
-        };
+        pages.retain(|entry| active.contains(&entry.page));
+        let previous = pages.iter().find(|entry| entry.page == page).copied();
         #[cfg(feature = "context-forced-colors")]
         let mut state = previous.or(context_default).unwrap_or(PageState::new(page));
         #[cfg(not(feature = "context-forced-colors"))]
@@ -236,40 +186,21 @@ impl Installation {
 
     fn commit(&self, state: PageState) -> Result<(), HostError> {
         let mut pages = self.pages.lock().map_err(HostError::backend)?;
-        let slot = match pages
-            .iter_mut()
-            .find(|entry| entry.is_some_and(|entry| entry.page == state.page))
-        {
-            Some(entry) => entry,
-            None => pages
-                .iter_mut()
-                .find(|entry| entry.is_none())
-                .ok_or_else(|| {
-                    HostError::ResourceExhausted("media override Page capacity exceeds 64".into())
-                })?,
-        };
-        *slot = Some(state);
+        if let Some(slot) = pages.iter_mut().find(|entry| entry.page == state.page) {
+            *slot = state;
+        } else {
+            pages.try_reserve(1).map_err(|error| {
+                HostError::ResourceExhausted(format!(
+                    "media override Page registry allocation failed: {error}"
+                ))
+            })?;
+            pages.push(state);
+        }
         Ok(())
     }
 }
 
-const _: () = assert!(
-    std::mem::size_of::<Installation>()
-        + std::mem::size_of::<[Option<PageState>; MAX_PAGES]>()
-        + {
-            #[cfg(feature = "context-forced-colors")]
-            {
-                std::mem::size_of::<[Option<ContextState>; MAX_CONTEXTS]>()
-            }
-            #[cfg(not(feature = "context-forced-colors"))]
-            {
-                0
-            }
-        }
-        + 2 * std::mem::size_of::<usize>()
-        + std::mem::size_of::<playwright_rust_core::ResourceRequest>()
-        < STORAGE_BYTES as usize
-);
+const _: () = assert!(std::mem::size_of::<Installation>() < STORAGE_BYTES as usize);
 
 #[derive(Clone, Copy)]
 enum MediaType {
@@ -633,10 +564,10 @@ impl HostSession {
             let context = Some(route.browser_context_object_id());
             #[cfg(not(feature = "context-forced-colors"))]
             let context = None;
-            let mut active = [None; MAX_PAGES];
-            for (slot, route) in active.iter_mut().zip(topology.page_session_routes()) {
-                *slot = Some(route.object_id());
-            }
+            let active = topology
+                .page_session_routes()
+                .map(|route| route.object_id())
+                .collect::<Vec<_>>();
             (
                 live.composition.connection().clone(),
                 session_id,
@@ -831,11 +762,7 @@ mod tests {
         let context = ObjectId::new(11);
         let first_page = ObjectId::new(21);
         let second_page = ObjectId::new(22);
-        let active = std::array::from_fn(|index| match index {
-            0 => Some(first_page),
-            1 => Some(second_page),
-            _ => None,
-        });
+        let active = vec![first_page, second_page];
         installation
             .install_context(context, ContextForcedColors::new("active").unwrap())
             .unwrap();
@@ -850,14 +777,7 @@ mod tests {
             .initial_state(first_page, context, CdpContextOwnership::Owned)
             .unwrap()
             .unwrap();
-        assert!(
-            installation
-                .pages
-                .lock()
-                .unwrap()
-                .iter()
-                .all(Option::is_none)
-        );
+        assert!(installation.pages.lock().unwrap().is_empty());
         let overridden = installation
             .prepare(
                 first_page,
@@ -936,25 +856,28 @@ mod tests {
 
     #[cfg(feature = "context-forced-colors")]
     #[test]
-    fn context_policy_capacity_is_fixed_and_reusable() {
+    fn context_policy_grows_past_the_legacy_capacity() {
         // Arrange
         let resources = test_resources();
         let installation = Installation::new_with_default(&resources, None).unwrap();
         let active = ContextForcedColors::new("active").unwrap();
-        for id in 1..=MAX_CONTEXTS {
+        for id in 1..=129 {
             installation
                 .install_context(ObjectId::new(id as u64), active)
                 .unwrap();
         }
 
         // Act
-        let exhausted = installation.install_context(ObjectId::new(17), active);
-        installation.remove_context(ObjectId::new(1)).unwrap();
-        let reused = installation.install_context(ObjectId::new(17), active);
+        let retained = installation
+            .initial_state(
+                ObjectId::new(201),
+                ObjectId::new(129),
+                CdpContextOwnership::Owned,
+            )
+            .unwrap();
 
         // Assert
-        assert!(matches!(exhausted, Err(HostError::ResourceExhausted(_))));
-        assert!(reused.is_ok());
+        assert!(retained.is_some());
     }
 
     #[cfg(feature = "context-forced-colors")]
@@ -965,7 +888,7 @@ mod tests {
         let resources = test_resources();
         let installation = Installation::new_with_default(&resources, None).unwrap();
         let active = ContextForcedColors::new("active").unwrap();
-        for id in 1..=MAX_CONTEXTS {
+        for id in 1..=129 {
             installation
                 .install_context(ObjectId::new(id as u64), active)
                 .unwrap();
@@ -982,11 +905,11 @@ mod tests {
         installation
             .reconcile_contexts(|context| context != retired)
             .unwrap();
-        let replacement = ObjectId::new(17);
+        let replacement = ObjectId::new(130);
         let admitted = installation.install_context(replacement, active);
 
         // Assert: both the dead Context slot and its Page override are gone;
-        // live policies stay installed and the fixed capacity can be reused.
+        // live policies stay installed and allocator-backed storage keeps growing.
         assert!(admitted.is_ok());
         assert!(
             installation
@@ -1000,7 +923,7 @@ mod tests {
                 .lock()
                 .unwrap()
                 .iter()
-                .all(|slot| slot.is_none_or(|state| state.page != stale_page))
+                .all(|state| state.page != stale_page)
         );
         assert!(
             installation
@@ -1031,7 +954,7 @@ mod tests {
         installation
             .install_context(context, ContextForcedColors::new("active").unwrap())
             .unwrap();
-        let active = std::array::from_fn(|index| (index == 0).then_some(page));
+        let active = vec![page];
         let override_state = installation
             .prepare(
                 page,
@@ -1060,13 +983,6 @@ mod tests {
             serde_json::to_value(replacement.params()).unwrap()["features"][2]["value"],
             "active"
         );
-        assert!(
-            installation
-                .pages
-                .lock()
-                .unwrap()
-                .iter()
-                .all(Option::is_none)
-        );
+        assert!(installation.pages.lock().unwrap().is_empty());
     }
 }

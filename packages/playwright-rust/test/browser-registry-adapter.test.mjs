@@ -54,7 +54,7 @@ function fixture(profile = 'browser-registry', environment = { PLAYWRIGHT_BROWSE
   return { api: module.exports, calls, nativeLoads: () => nativeLoads, environments: () => environments, snapshotCalls: () => snapshotCalls };
 }
 
-for (const engine of ['chromium', 'firefox', 'webkit']) {
+for (const engine of ['chromium']) {
   test(`${engine} BrowserType path is synchronous Rust metadata without a session or file probe`, () => {
     // Arrange
     const { api, calls, nativeLoads, environments, snapshotCalls } = fixture();
@@ -90,7 +90,7 @@ test('browser-registry snapshots environment at import before the first native c
   // Act
   api.chromium.executablePath();
   environment.PLAYWRIGHT_BROWSERS_PATH = '/registry-C';
-  api.firefox.executablePath();
+  api.chromium.executablePath();
 
   // Assert
   assert.equal(snapshotCalls(), 1);

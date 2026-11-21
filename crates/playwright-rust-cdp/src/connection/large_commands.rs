@@ -15,6 +15,7 @@ const COMMAND_OVERHEAD: u64 = 1024;
 pub struct LargeCommandProfile {
     scope: ResourceScope,
     capacity: usize,
+    allocator_backed: bool,
     max_bytes: usize,
     fragment_bytes: usize,
     command_bytes: u64,
@@ -54,6 +55,7 @@ impl LargeCommandProfile {
         Ok(Self {
             scope,
             capacity,
+            allocator_backed: false,
             max_bytes,
             fragment_bytes,
             command_bytes,
@@ -64,6 +66,38 @@ impl LargeCommandProfile {
                 .with_metadata(1, leases),
         })
     }
+    pub fn new_allocator_backed(
+        scope: ResourceScope,
+        max_bytes: usize,
+        fragment_bytes: usize,
+    ) -> Result<Self> {
+        if max_bytes == 0 || fragment_bytes == 0 || fragment_bytes > max_bytes {
+            return Err(CdpError::InvalidConfiguration(
+                "invalid large-command limits",
+            ));
+        }
+        let invalid = || CdpError::InvalidConfiguration("large-command resource overflow");
+        let state_bytes = u64::try_from(fragment_bytes)
+            .map_err(|_| invalid())?
+            .checked_add(14)
+            .and_then(|bytes| bytes.checked_mul(4))
+            .and_then(|bytes| bytes.checked_add(CONTROL_BYTES))
+            .ok_or_else(invalid)?;
+        Ok(Self {
+            scope,
+            capacity: usize::MAX,
+            allocator_backed: true,
+            max_bytes,
+            fragment_bytes,
+            // Dynamic commands charge their observed allocations to the
+            // allocator instead of projecting max_bytes into a finite lease.
+            command_bytes: 0,
+            state_bytes,
+            requirements: ResourceRequirements::none()
+                .with_class(ResourceClass::BackendStateBytes, state_bytes, state_bytes)
+                .with_metadata(1, 1),
+        })
+    }
     pub const fn requirements(self) -> ResourceRequirements {
         self.requirements
     }
@@ -72,6 +106,9 @@ impl LargeCommandProfile {
     }
     pub const fn capacity(self) -> usize {
         self.capacity
+    }
+    pub const fn allocator_backed(self) -> bool {
+        self.allocator_backed
     }
     pub const fn fragment_bytes(self) -> usize {
         self.fragment_bytes
@@ -86,7 +123,8 @@ impl CdpConnectionProductionProfile {
             ));
         }
         if profile.max_bytes <= self.config.max_command_bytes
-            || profile.capacity > self.config.pending_command_capacity
+            || (!profile.allocator_backed
+                && profile.capacity > self.config.pending_command_capacity)
             || profile.fragment_bytes > self.config.max_command_bytes
         {
             return Err(CdpError::InvalidConfiguration(
@@ -163,7 +201,9 @@ impl Pool {
         self.state
             .active
             .fetch_update(Ordering::AcqRel, Ordering::Acquire, |active| {
-                (active < self.profile.capacity).then(|| active + 1)
+                active
+                    .checked_add(1)
+                    .filter(|next| self.profile.allocator_backed || *next <= self.profile.capacity)
             })
             .map_err(|active| CdpError::LimitExceeded {
                 resource: "large commands",
@@ -175,11 +215,13 @@ impl Pool {
             resource: None,
             fragment_bytes: self.profile.fragment_bytes,
         };
-        lease.resource = Some(self.ledger.reserve(
-            self.profile.scope,
-            ResourceClass::WireBytes,
-            self.profile.command_bytes,
-        )?);
+        if !self.profile.allocator_backed {
+            lease.resource = Some(self.ledger.reserve(
+                self.profile.scope,
+                ResourceClass::WireBytes,
+                self.profile.command_bytes,
+            )?);
+        }
         Ok(Arc::new(lease))
     }
 }

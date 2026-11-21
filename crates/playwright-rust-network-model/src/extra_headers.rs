@@ -77,7 +77,7 @@ impl std::error::Error for HeaderSyntaxError {}
 #[derive(Clone, Copy, Debug)]
 pub struct HeaderProfile {
     scope: ResourceScope,
-    owners: usize,
+    owners: Option<usize>,
     headers: usize,
     bytes: usize,
     owner_bytes: u64,
@@ -107,7 +107,7 @@ impl HeaderProfile {
             .ok_or(HeaderError::InvalidLimits)?;
         let profile = Self {
             scope,
-            owners,
+            owners: Some(owners),
             headers,
             bytes,
             owner_bytes,
@@ -115,8 +115,31 @@ impl HeaderProfile {
         profile.requirements()?;
         Ok(profile)
     }
+    /// Production compatibility profile. Header values keep their per-value
+    /// count/byte bounds, while the number of simultaneously retained values
+    /// is governed by allocator availability rather than a fabricated browser
+    /// object count.
+    pub fn new_allocator_backed(
+        scope: ResourceScope,
+        headers: usize,
+        bytes: usize,
+    ) -> Result<Self, HeaderError> {
+        let finite = Self::new(scope, 1, headers, bytes)?;
+        Ok(Self {
+            owners: None,
+            ..finite
+        })
+    }
+    pub const fn allocator_backed(self) -> bool {
+        self.owners.is_none()
+    }
     pub fn requirements(self) -> Result<ResourceRequirements, HeaderError> {
-        let owners = u64::try_from(self.owners).map_err(|_| HeaderError::InvalidLimits)?;
+        let owners = self
+            .owners
+            .map(u64::try_from)
+            .transpose()
+            .map_err(|_| HeaderError::InvalidLimits)?
+            .unwrap_or(0);
         let bytes = self
             .owner_bytes
             .checked_mul(owners)
@@ -124,8 +147,9 @@ impl HeaderProfile {
             .ok_or(HeaderError::InvalidLimits)?;
         let leases = self
             .owners
-            .checked_add(1)
-            .ok_or(HeaderError::InvalidLimits)?;
+            .map(|owners| owners.checked_add(1).ok_or(HeaderError::InvalidLimits))
+            .transpose()?
+            .unwrap_or(1);
         Ok(ResourceRequirements::none()
             .with_class(ResourceClass::LiveObject, owners, owners)
             .with_class(ResourceClass::BackendStateBytes, bytes, bytes)
@@ -144,7 +168,7 @@ fn pool_bytes() -> u64 {
 }
 struct Permit {
     pool: Arc<Pool>,
-    _lease: ResourceLease,
+    _lease: Option<ResourceLease>,
 }
 impl Drop for Permit {
     fn drop(&mut self) {
@@ -180,28 +204,41 @@ impl HeaderPool {
     }
     fn admit(&self) -> Result<Permit, HeaderError> {
         let profile = self.0.profile;
-        self.0
-            .active
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| {
-                (n < profile.owners).then_some(n + 1)
-            })
-            .map_err(|_| HeaderError::OwnerLimit)?;
-        let lease = self.0.resources.reserve_many(
-            profile.scope,
-            &[
-                ResourceRequest::new(ResourceClass::LiveObject, 1),
-                ResourceRequest::new(ResourceClass::BackendStateBytes, profile.owner_bytes),
-            ],
-        );
-        match lease {
-            Ok(lease) => Ok(Permit {
-                pool: self.0.clone(),
-                _lease: lease,
-            }),
-            Err(error) => {
-                self.0.active.fetch_sub(1, Ordering::AcqRel);
-                Err(HeaderError::Budget(error))
+        if let Some(limit) = profile.owners {
+            self.0
+                .active
+                .fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| {
+                    (n < limit).then_some(n + 1)
+                })
+                .map_err(|_| HeaderError::OwnerLimit)?;
+            let lease = self.0.resources.reserve_many(
+                profile.scope,
+                &[
+                    ResourceRequest::new(ResourceClass::LiveObject, 1),
+                    ResourceRequest::new(ResourceClass::BackendStateBytes, profile.owner_bytes),
+                ],
+            );
+            match lease {
+                Ok(lease) => Ok(Permit {
+                    pool: self.0.clone(),
+                    _lease: Some(lease),
+                }),
+                Err(error) => {
+                    self.0.active.fetch_sub(1, Ordering::AcqRel);
+                    Err(HeaderError::Budget(error))
+                }
             }
+        } else {
+            self.0
+                .active
+                .fetch_update(Ordering::AcqRel, Ordering::Acquire, |active| {
+                    active.checked_add(1)
+                })
+                .map_err(|_| HeaderError::OwnerLimit)?;
+            Ok(Permit {
+                pool: self.0.clone(),
+                _lease: None,
+            })
         }
     }
     fn copy(&self, input: &[HeaderRef<'_>]) -> Result<Arc<Snapshot>, HeaderError> {

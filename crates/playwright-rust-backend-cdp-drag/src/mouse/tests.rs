@@ -103,6 +103,12 @@ struct Setup {
 }
 impl Setup {
     fn new(capacity: usize) -> Self {
+        Self::with_profile(Some(capacity))
+    }
+    fn allocator_backed() -> Self {
+        Self::with_profile(None)
+    }
+    fn with_profile(capacity: Option<usize>) -> Self {
         let profile = DragDataProfile::new(
             ResourceScope::extension(14, 61),
             DragDataLimits {
@@ -119,7 +125,10 @@ impl Setup {
             .combine_concurrent(DragListenerFactory::requirements(1).unwrap())
             .combine_concurrent(DragMove::requirements(1).unwrap())
             .combine_concurrent(DragPage::requirements(4).unwrap())
-            .combine_concurrent(MouseDragDispatcher::requirements(capacity).unwrap());
+            .combine_concurrent(match capacity {
+                Some(capacity) => MouseDragDispatcher::requirements(capacity).unwrap(),
+                None => MouseDragDispatcher::allocator_backed_requirements(),
+            });
         let bytes = req.class(ResourceClass::BackendStateBytes);
         let resources = Arc::new(
             ProductionResourceLedger::new(
@@ -163,14 +172,23 @@ impl Setup {
             starts: AtomicUsize::new(0),
             after_move: Mutex::new(None),
         });
-        let (dispatcher, driver) = MouseDragDispatcher::new(
-            client.clone(),
-            page.clone(),
-            source.clone(),
-            ResourceScope::extension(14, 65),
-            capacity,
-            &resources,
-        )
+        let (dispatcher, driver) = match capacity {
+            Some(capacity) => MouseDragDispatcher::new(
+                client.clone(),
+                page.clone(),
+                source.clone(),
+                ResourceScope::extension(14, 65),
+                capacity,
+                &resources,
+            ),
+            None => MouseDragDispatcher::new_allocator_backed(
+                client.clone(),
+                page.clone(),
+                source.clone(),
+                ResourceScope::extension(14, 65),
+                &resources,
+            ),
+        }
         .unwrap();
         Self {
             input: CdpInputCoordinator::with_policy(CdpInputPolicy::Interleaved),
@@ -468,7 +486,7 @@ async fn legacy_exclusive_transaction_rejects_interception_without_native_effect
 #[test]
 fn slot_masks_keep_word_boundaries_independent() {
     // Arrange
-    let mut mask = SlotMask::default();
+    let mut mask = SlotMask::with_slots(1024).unwrap();
     let slots = [0, 31, 32, 63, 64, 127, 128, 511, 512, 519, 1023];
     // Act
     for slot in slots {
@@ -614,6 +632,166 @@ async fn held_left_move_uses_capture_and_installs_active_page_drag() {
     assert_eq!(setup.source.starts.load(Ordering::SeqCst), 1);
     assert!(setup.page.is_dragging());
     assert_eq!(setup.drags()[0]["drag"], "Enter");
+    assert!(setup.dispatcher.is_drained());
+}
+
+#[tokio::test]
+async fn overlapping_drag_detection_waits_for_page_local_interception() {
+    // Arrange
+    let setup = Setup::new(4);
+    setup
+        .down(playwright_rust_cdp::MouseButton::Left)
+        .await
+        .unwrap();
+    let gate = Arc::new(Notify::new());
+    *setup.source.after_move.lock().unwrap() = Some(gate.clone());
+    let mut first_action = setup
+        .input
+        .begin_transaction(setup.client.clone(), None)
+        .await
+        .unwrap();
+    let mut first = first_action
+        .raw_mouse_click_with_dispatcher(
+            move_options(70.0, false),
+            |_| ready(Ok(())),
+            setup.dispatcher.clone(),
+        )
+        .unwrap();
+    pending(&mut first);
+    let mut second_action = setup
+        .input
+        .begin_transaction(setup.client.clone(), None)
+        .await
+        .unwrap();
+    let mut second = second_action
+        .raw_mouse_click_with_dispatcher(
+            move_options(80.0, false),
+            |_| ready(Ok(())),
+            setup.dispatcher.clone(),
+        )
+        .unwrap();
+    pending(&mut second);
+    assert_eq!(setup.source.starts.load(Ordering::SeqCst), 1);
+
+    // Act
+    gate.notify_one();
+    (&mut first).await.unwrap();
+    first.retire().await.unwrap();
+    pending(&mut second);
+    gate.notify_one();
+    (&mut second).await.unwrap();
+    second.retire().await.unwrap();
+
+    // Assert
+    assert_eq!(setup.source.starts.load(Ordering::SeqCst), 2);
+    assert_eq!(setup.pointers().len(), 3);
+    assert!(setup.dispatcher.is_drained());
+}
+
+#[tokio::test]
+async fn cancelled_drag_detection_waiter_never_snapshots_or_starts_native_work() {
+    // Arrange
+    let setup = Setup::new(4);
+    setup
+        .down(playwright_rust_cdp::MouseButton::Left)
+        .await
+        .unwrap();
+    let gate = Arc::new(Notify::new());
+    *setup.source.after_move.lock().unwrap() = Some(gate.clone());
+    let mut first_action = setup
+        .input
+        .begin_transaction(setup.client.clone(), None)
+        .await
+        .unwrap();
+    let mut first = first_action
+        .raw_mouse_click_with_dispatcher(
+            move_options(70.0, false),
+            |_| ready(Ok(())),
+            setup.dispatcher.clone(),
+        )
+        .unwrap();
+    pending(&mut first);
+    let mut second_action = setup
+        .input
+        .begin_transaction(setup.client.clone(), None)
+        .await
+        .unwrap();
+    let mut second = second_action
+        .raw_mouse_click_with_dispatcher(
+            move_options(80.0, false),
+            |_| ready(Ok(())),
+            setup.dispatcher.clone(),
+        )
+        .unwrap();
+    pending(&mut second);
+
+    // Act
+    second.retire().await.unwrap();
+    gate.notify_one();
+    (&mut first).await.unwrap();
+    first.retire().await.unwrap();
+
+    // Assert
+    assert_eq!(setup.source.starts.load(Ordering::SeqCst), 1);
+    assert_eq!(setup.pointers().len(), 2);
+    assert!(setup.dispatcher.is_drained());
+}
+
+#[tokio::test]
+async fn queued_move_rechecks_page_drag_state_before_starting_another_capture() {
+    // Arrange
+    let setup = Setup::new(4);
+    setup
+        .down(playwright_rust_cdp::MouseButton::Left)
+        .await
+        .unwrap();
+    setup.source.drag.store(true, Ordering::SeqCst);
+    let gate = Arc::new(Notify::new());
+    *setup.source.after_move.lock().unwrap() = Some(gate.clone());
+    let mut first_action = setup
+        .input
+        .begin_transaction(setup.client.clone(), None)
+        .await
+        .unwrap();
+    let mut first = first_action
+        .raw_mouse_click_with_dispatcher(
+            move_options(70.0, false),
+            |_| ready(Ok(())),
+            setup.dispatcher.clone(),
+        )
+        .unwrap();
+    pending(&mut first);
+    let mut second_action = setup
+        .input
+        .begin_transaction(setup.client.clone(), None)
+        .await
+        .unwrap();
+    let mut second = second_action
+        .raw_mouse_click_with_dispatcher(
+            move_options(80.0, false),
+            |_| ready(Ok(())),
+            setup.dispatcher.clone(),
+        )
+        .unwrap();
+    pending(&mut second);
+
+    // Act
+    gate.notify_one();
+    (&mut first).await.unwrap();
+    first.retire().await.unwrap();
+    (&mut second).await.unwrap();
+    second.retire().await.unwrap();
+
+    // Assert
+    assert_eq!(setup.source.starts.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        setup
+            .drags()
+            .iter()
+            .map(|event| event["drag"].as_str().unwrap())
+            .collect::<Vec<_>>(),
+        ["Enter", "Over"]
+    );
     assert!(setup.dispatcher.is_drained());
 }
 
@@ -912,6 +1090,45 @@ async fn capacity_bounds_outstanding_dispatch_and_quarantine_preserves_both_slot
     assert_eq!(setup.dispatcher.quarantined_operations(), 2);
     first_gate.notify_one();
     second_gate.notify_one();
+    setup.driver.retire_quarantined().await.unwrap();
+    assert!(setup.dispatcher.is_drained());
+}
+
+#[tokio::test]
+async fn allocator_backed_dispatcher_has_no_playwright_visible_operation_count_limit() {
+    // Arrange
+    let mut setup = Setup::allocator_backed();
+    let gate = Arc::new(Notify::new());
+    setup
+        .client
+        .set_pointer_gates(std::iter::repeat_n(Some(gate.clone()), 1025));
+    let mut action = setup
+        .input
+        .begin_transaction(setup.client.clone(), None)
+        .await
+        .unwrap();
+    let mut operations = Vec::new();
+    operations.try_reserve(1025).unwrap();
+
+    // Act
+    for index in 0..1025 {
+        let mut operation = action
+            .raw_mouse_click_with_dispatcher(
+                move_options(index as f64, true),
+                |_| ready(Ok(())),
+                setup.dispatcher.clone(),
+            )
+            .unwrap();
+        pending(&mut operation);
+        operations.push(operation);
+    }
+
+    // Assert
+    assert_eq!(operations.len(), 1025);
+    assert!(!setup.dispatcher.is_drained());
+    drop(operations);
+    assert_eq!(setup.dispatcher.quarantined_operations(), 1025);
+    gate.notify_waiters();
     setup.driver.retire_quarantined().await.unwrap();
     assert!(setup.dispatcher.is_drained());
 }

@@ -1,5 +1,7 @@
-//! Explicit, bounded Context settings. Retained snapshots/bindings contain no
-//! topology, registry, HostSession, browser transport or execution runtime.
+//! Explicit Context settings with selectable finite or allocator-backed
+//! ownership. Retained snapshots/bindings contain no topology, registry,
+//! HostSession, browser transport or execution runtime.
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use crate::HostError;
@@ -32,9 +34,94 @@ pub struct ContextMetadataMetrics {
     pub pending_creations: usize,
 }
 
+struct ContextResourcesInner {
+    finite: Option<ResourceLedger>,
+    states: AtomicU64,
+    conversions: AtomicU64,
+    bytes: AtomicU64,
+}
+
+#[derive(Clone)]
+struct ContextResources(Arc<ContextResourcesInner>);
+
+impl ContextResources {
+    fn finite(resources: ResourceLedger) -> Self {
+        Self(Arc::new(ContextResourcesInner {
+            finite: Some(resources),
+            states: AtomicU64::new(0),
+            conversions: AtomicU64::new(0),
+            bytes: AtomicU64::new(0),
+        }))
+    }
+
+    fn allocator_backed() -> Self {
+        Self(Arc::new(ContextResourcesInner {
+            finite: None,
+            states: AtomicU64::new(0),
+            conversions: AtomicU64::new(0),
+            bytes: AtomicU64::new(0),
+        }))
+    }
+
+    fn shares_budget_with(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
+
+    fn allocator_counter(&self, class: ResourceClass) -> &AtomicU64 {
+        match class {
+            ResourceClass::LiveObject => &self.0.states,
+            ResourceClass::EventItem => &self.0.conversions,
+            _ => unreachable!("Context metadata uses only state and conversion counts"),
+        }
+    }
+
+    fn metrics(&self) -> Result<(u64, u64, u64), HostError> {
+        if let Some(resources) = &self.0.finite {
+            let metrics = resources.metrics().map_err(exhausted)?;
+            return Ok((
+                metrics.class(ResourceClass::LiveObject).current,
+                metrics.class(ResourceClass::EventItem).current,
+                metrics.class(ResourceClass::BackendStateBytes).current,
+            ));
+        }
+        Ok((
+            self.0.states.load(Ordering::Acquire),
+            self.0.conversions.load(Ordering::Acquire),
+            self.0.bytes.load(Ordering::Acquire),
+        ))
+    }
+}
+
+fn checked_add(counter: &AtomicU64, amount: u64, label: &str) -> Result<(), HostError> {
+    counter
+        .fetch_update(Ordering::AcqRel, Ordering::Acquire, |current| {
+            current.checked_add(amount)
+        })
+        .map(|_| ())
+        .map_err(|_| exhausted(format!("Context metadata {label} counter overflow")))
+}
+
 struct Storage {
-    _count: ResourceLease,
-    _bytes: ResourceLease,
+    resources: ContextResources,
+    class: ResourceClass,
+    bytes: u64,
+    allocator_charged: bool,
+    _count: Option<ResourceLease>,
+    _bytes: Option<ResourceLease>,
+}
+
+impl Drop for Storage {
+    fn drop(&mut self) {
+        if self.allocator_charged {
+            self.resources
+                .allocator_counter(self.class)
+                .fetch_sub(1, Ordering::Release);
+            self.resources
+                .0
+                .bytes
+                .fetch_sub(self.bytes, Ordering::Release);
+        }
+    }
 }
 pub struct ContextConversion(Storage);
 impl ContextConversion {
@@ -47,24 +134,41 @@ fn exhausted(error: impl std::fmt::Display) -> HostError {
     HostError::ResourceExhausted(error.to_string())
 }
 fn reserve(
-    resources: &ResourceLedger,
+    resources: &ContextResources,
     class: ResourceClass,
     bytes: usize,
 ) -> Result<Storage, HostError> {
-    let count = resources.reserve(SCOPE, class, 1).map_err(exhausted)?;
-    let bytes = resources
-        .reserve(
-            SCOPE,
-            ResourceClass::BackendStateBytes,
-            u64::try_from(bytes).map_err(exhausted)?,
-        )
-        .map_err(exhausted)?;
+    let bytes = u64::try_from(bytes).map_err(exhausted)?;
+    if let Some(ledger) = &resources.0.finite {
+        let count = ledger.reserve(SCOPE, class, 1).map_err(exhausted)?;
+        let byte_lease = ledger
+            .reserve(SCOPE, ResourceClass::BackendStateBytes, bytes)
+            .map_err(exhausted)?;
+        return Ok(Storage {
+            resources: resources.clone(),
+            class,
+            bytes,
+            allocator_charged: false,
+            _count: Some(count),
+            _bytes: Some(byte_lease),
+        });
+    }
+    let counter = resources.allocator_counter(class);
+    checked_add(counter, 1, "object")?;
+    if let Err(error) = checked_add(&resources.0.bytes, bytes, "byte") {
+        counter.fetch_sub(1, Ordering::Release);
+        return Err(error);
+    }
     Ok(Storage {
-        _count: count,
-        _bytes: bytes,
+        resources: resources.clone(),
+        class,
+        bytes,
+        allocator_charged: true,
+        _count: None,
+        _bytes: None,
     })
 }
-fn conversion(resources: &ResourceLedger, bytes: usize) -> Result<ContextConversion, HostError> {
+fn conversion(resources: &ContextResources, bytes: usize) -> Result<ContextConversion, HostError> {
     let bytes = bytes
         .checked_add(std::mem::size_of::<ContextConversion>())
         .ok_or_else(|| exhausted("Context conversion storage overflow"))?;
@@ -82,7 +186,7 @@ struct Settings {
 #[derive(Clone)]
 pub struct ContextSnapshot {
     settings: Option<Arc<Settings>>,
-    resources: ResourceLedger,
+    resources: ContextResources,
 }
 impl std::fmt::Debug for ContextSnapshot {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -180,11 +284,12 @@ struct State {
     external: ContextSnapshot,
 }
 struct Inner {
-    resources: ResourceLedger,
-    limits: ContextMetadataLimits,
+    resources: ContextResources,
+    active_context_limit: Option<usize>,
+    base_url_bytes: usize,
     owned_contexts_only: bool,
     state: Mutex<State>,
-    _index: ResourceLease,
+    _index: Option<ResourceLease>,
 }
 #[derive(Clone)]
 pub struct ContextMetadata(Arc<Inner>);
@@ -238,19 +343,21 @@ impl ContextMetadata {
                 limits.conversions as u64,
             )
             .with_class(ResourceClass::BackendStateBytes, limits.bytes, limits.bytes);
-        let resources = ProductionResourceLedger::new(bounds, requirements)
+        let ledger = ProductionResourceLedger::new(bounds, requirements)
             .and_then(|ledger| ledger.claim(requirements))
             .map_err(exhausted)?;
-        let index = resources
+        let index = ledger
             .reserve(SCOPE, ResourceClass::BackendStateBytes, bytes as u64)
             .map_err(exhausted)?;
+        let resources = ContextResources::finite(ledger);
         let external = ContextSnapshot {
             settings: None,
             resources: resources.clone(),
         };
         Ok(Self(Arc::new(Inner {
             resources,
-            limits,
+            active_context_limit: Some(limits.active_contexts),
+            base_url_bytes: limits.base_url_bytes,
             owned_contexts_only: false,
             state: Mutex::new(State {
                 entries: Vec::with_capacity(limits.active_contexts),
@@ -258,7 +365,37 @@ impl ContextMetadata {
                 closed: false,
                 external,
             }),
-            _index: index,
+            _index: Some(index),
+        })))
+    }
+
+    /// Playwright-compatible ownership has no aggregate Context, settings,
+    /// binding, conversion, or metadata-byte count. Each value still validates
+    /// its own base URL before allocation and remains exactly owned until
+    /// commit, cancellation, native retirement, or last-reference drop.
+    pub fn new_allocator_backed(base_url_bytes: usize) -> Result<Self, HostError> {
+        if base_url_bytes == 0 {
+            return Err(HostError::InvalidArgument(
+                "Context metadata base URL capacity must be positive".into(),
+            ));
+        }
+        let resources = ContextResources::allocator_backed();
+        let external = ContextSnapshot {
+            settings: None,
+            resources: resources.clone(),
+        };
+        Ok(Self(Arc::new(Inner {
+            resources,
+            active_context_limit: None,
+            base_url_bytes,
+            owned_contexts_only: false,
+            state: Mutex::new(State {
+                entries: Vec::new(),
+                reserved: 0,
+                closed: false,
+                external,
+            }),
+            _index: None,
         })))
     }
 
@@ -283,7 +420,7 @@ impl ContextMetadata {
     /// an owned persistent-browser session. This must happen before the book
     /// is cloned into topology publication so identity cannot change later.
     pub fn with_external_base_url(self, base_url: &str) -> Result<Self, HostError> {
-        if base_url.len() > self.0.limits.base_url_bytes {
+        if base_url.len() > self.0.base_url_bytes {
             return Err(exhausted("Context baseURL exceeds metadata byte limit"));
         }
         if Arc::strong_count(&self.0) != 1 {
@@ -319,7 +456,7 @@ impl ContextMetadata {
         &self,
         base_url: Option<&str>,
     ) -> Result<ContextReservation, HostError> {
-        if base_url.is_some_and(|value| value.len() > self.0.limits.base_url_bytes) {
+        if base_url.is_some_and(|value| value.len() > self.0.base_url_bytes) {
             return Err(exhausted("Context baseURL exceeds metadata byte limit"));
         }
         let storage = conversion(
@@ -338,8 +475,15 @@ impl ContextMetadata {
             if state.closed {
                 return Err(HostError::TargetClosed);
             }
-            if state.entries.len() + state.reserved >= self.0.limits.active_contexts {
-                return Err(exhausted("Context metadata registry is full"));
+            if let Some(limit) = self.0.active_context_limit {
+                if state.entries.len() + state.reserved >= limit {
+                    return Err(exhausted("Context metadata registry is full"));
+                }
+            } else {
+                let additional = state.reserved.saturating_add(1);
+                state.entries.try_reserve(additional).map_err(|error| {
+                    exhausted(format!("Context registry allocation failed: {error}"))
+                })?;
             }
             state.reserved += 1;
             reservation.registered = true;
@@ -406,11 +550,11 @@ impl ContextMetadata {
     }
     pub fn metrics(&self) -> Result<ContextMetadataMetrics, HostError> {
         let state = self.0.state.lock().map_err(HostError::backend)?;
-        let metrics = self.0.resources.metrics().map_err(exhausted)?;
+        let (states, conversions, bytes) = self.0.resources.metrics()?;
         Ok(ContextMetadataMetrics {
-            states: metrics.class(ResourceClass::LiveObject).current,
-            conversions: metrics.class(ResourceClass::EventItem).current,
-            bytes: metrics.class(ResourceClass::BackendStateBytes).current,
+            states,
+            conversions,
+            bytes,
             active_contexts: state.entries.len(),
             pending_creations: state.reserved,
         })

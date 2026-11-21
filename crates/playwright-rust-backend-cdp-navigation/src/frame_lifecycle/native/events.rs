@@ -20,18 +20,20 @@ impl CdpFrameLifecycle {
             .frame_index(id)
             .ok_or(NativeLifecycleError::UnknownFrame)?;
         self.validate_id(loader)?;
-        let previous = self.frames[index].unwrap();
-        if previous.document.is_some() && self.stored_id(index, previous.loader_len) == loader {
+        if self.frames[index].as_ref().is_some_and(|previous| {
+            previous.document.is_some() && self.frame_loader(index, previous) == loader
+        }) {
             return Ok(NativeLifecycleNotice::Ignored);
         }
         let request = self.requests.iter().enumerate().find_map(|(i, row)| {
-            row.filter(|r| {
-                r.frame == id
-                    && r.document
-                    && self.stored_id(self.request_cell(i), r.request_len) == loader
-            })
-            .map(|r| r.id)
+            row.as_ref()
+                .filter(|r| r.frame == id && r.document && self.request_native_id(i, r) == loader)
+                .map(|r| r.id)
         });
+        let owned_loader = self
+            .allocator_backed
+            .then(|| Self::owned_id(loader))
+            .transpose()?;
         self.next_document = self
             .next_document
             .checked_add(1)
@@ -46,10 +48,13 @@ impl CdpFrameLifecycle {
             },
         )?;
         self.prune(Some((id, request)))?;
-        self.write_id(index, loader);
+        if !self.allocator_backed {
+            self.write_id(index, loader);
+        }
         self.frames[index] = Some(NativeFrame {
             id,
             loader_len: loader.len(),
+            loader: owned_loader,
             document: Some(document),
         });
         Ok(NativeLifecycleNotice::Committed {
@@ -95,11 +100,11 @@ impl CdpFrameLifecycle {
                 let index = self
                     .frame_index(frame)
                     .ok_or(NativeLifecycleError::UnknownFrame)?;
-                let row = self.frames[index].unwrap();
+                let row = self.frames[index].as_ref().unwrap();
                 let loader = field(p, "loaderId")?;
                 let Some(document) = row
                     .document
-                    .filter(|_| self.stored_id(index, row.loader_len) == loader)
+                    .filter(|_| self.frame_loader(index, row) == loader)
                 else {
                     return Ok(NativeLifecycleNotice::Ignored);
                 };
@@ -135,15 +140,18 @@ impl CdpFrameLifecycle {
                 let Some(index) = self.request_index(session, native, routes)? else {
                     return Ok(NativeLifecycleNotice::Ignored);
                 };
-                let row = self.requests[index].unwrap();
+                let (request_id, request_frame) = {
+                    let row = self.requests[index].as_ref().unwrap();
+                    (row.id, row.frame)
+                };
                 if event.method == "Network.responseReceived" {
                     let response = p
                         .get("response")
                         .filter(|v| v.is_object())
                         .ok_or(NativeLifecycleError::InvalidEvent("response"))?;
                     return Ok(NativeLifecycleNotice::Response {
-                        frame: row.frame,
-                        request: row.id,
+                        frame: request_frame,
+                        request: request_id,
                         response,
                     });
                 }
@@ -159,19 +167,23 @@ impl CdpFrameLifecycle {
                 } else {
                     None
                 };
-                self.lifecycle
-                    .apply(now, LifecycleInput::RequestFinished { request: row.id })?;
+                self.lifecycle.apply(
+                    now,
+                    LifecycleInput::RequestFinished {
+                        request: request_id,
+                    },
+                )?;
                 self.requests[index] = None;
                 match failure {
                     Some((error_text, canceled)) => Ok(NativeLifecycleNotice::RequestFailed {
-                        frame: row.frame,
-                        request: row.id,
+                        frame: request_frame,
+                        request: request_id,
                         error_text,
                         canceled,
                     }),
                     None => Ok(NativeLifecycleNotice::RequestFinished {
-                        frame: row.frame,
-                        request: row.id,
+                        frame: request_frame,
+                        request: request_id,
                     }),
                 }
             }
@@ -211,8 +223,15 @@ impl CdpFrameLifecycle {
         self.validate_id(native_id)?;
         self.validate_id(session)?;
         let previous = self.request_index(session, native_id, routes)?;
-        let old = previous.and_then(|i| self.requests[i]);
-        if old.is_some_and(|old| old.frame != frame || old.document != document) {
+        let old = previous.and_then(|index| {
+            self.requests[index]
+                .as_ref()
+                .map(|request| (request.id, request.frame, request.document, request.favicon))
+        });
+        if old
+            .as_ref()
+            .is_some_and(|old| old.1 != frame || old.2 != document)
+        {
             return Err(LifecycleError::ConflictingIdentity.into());
         }
         let redirect = match p.get("redirectResponse") {
@@ -223,18 +242,35 @@ impl CdpFrameLifecycle {
         if previous.is_some() && !redirect {
             return Ok(NativeLifecycleNotice::Ignored);
         }
-        let favicon = url.ends_with("/favicon.ico") || old.is_some_and(|r| r.favicon);
-        let index = previous
-            .or_else(|| self.requests.iter().position(Option::is_none))
-            .ok_or(LifecycleError::RequestCapacity)?;
+        let favicon =
+            url.ends_with("/favicon.ico") || old.as_ref().is_some_and(|request| request.3);
+        let index = match previous.or_else(|| self.requests.iter().position(Option::is_none)) {
+            Some(index) => index,
+            None if self.allocator_backed => {
+                self.requests
+                    .try_reserve(1)
+                    .map_err(|_| LifecycleError::Allocation)?;
+                self.requests.push(None);
+                self.requests.len() - 1
+            }
+            None => return Err(LifecycleError::RequestCapacity.into()),
+        };
+        let owned_native_id = self
+            .allocator_backed
+            .then(|| Self::owned_id(native_id))
+            .transpose()?;
+        let owned_session = self
+            .allocator_backed
+            .then(|| Self::owned_id(session))
+            .transpose()?;
         self.next_request = self
             .next_request
             .checked_add(1)
             .ok_or(LifecycleError::SizeOverflow)?;
         let request = ObjectId::new(self.next_request);
-        if let Some(old) = old {
+        if let Some(old) = old.as_ref() {
             self.lifecycle
-                .apply(now, LifecycleInput::RequestFinished { request: old.id })?;
+                .apply(now, LifecycleInput::RequestFinished { request: old.0 })?;
         }
         self.lifecycle.apply(
             now,
@@ -244,13 +280,17 @@ impl CdpFrameLifecycle {
                 favicon,
             },
         )?;
-        self.write_id(self.request_cell(index), native_id);
-        self.write_id(self.request_cell(index) + 1, session);
+        if !self.allocator_backed {
+            self.write_id(self.request_cell(index), native_id);
+            self.write_id(self.request_cell(index) + 1, session);
+        }
         self.requests[index] = Some(NativeRequest {
             id: request,
             frame,
             request_len: native_id.len(),
             session_len: session.len(),
+            native_id: owned_native_id,
+            session: owned_session,
             document,
             favicon,
         });
@@ -258,7 +298,7 @@ impl CdpFrameLifecycle {
             frame,
             request,
             document_loader: document.then_some(loader),
-            redirected_from: old.map(|r| r.id),
+            redirected_from: old.map(|request| request.0),
         })
     }
 }

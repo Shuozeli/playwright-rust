@@ -112,3 +112,25 @@ test('Unobserved beforeunload dialog is auto-accepted', async () => {
   // Assert
   assert.deepEqual(calls, [[native, true, undefined]]);
 });
+
+test('Unobserved dialog auto handling bypasses public tracing actions', async () => {
+  // Arrange
+  const traceCalls = [];
+  const AutoDialog = require('../src/dialog.cjs')({
+    mapError: error => error,
+    runTracingAction(owner, action, detail, operation) {
+      traceCalls.push([owner, action, detail]);
+      return operation();
+    },
+  });
+  const { calls, page } = fixture();
+  const native = { owner: 11 };
+  const dialog = new AutoDialog(page, native, 'alert', 'stop', '');
+
+  // Act
+  await dialog._autoHandle();
+
+  // Assert
+  assert.deepEqual(calls, [[native, false, undefined]]);
+  assert.deepEqual(traceCalls, []);
+});

@@ -75,6 +75,42 @@ fn retained_profile_rejects_fewer_than_two_native_owner_units() {
 }
 
 #[tokio::test]
+async fn allocator_backed_retained_profile_owns_129_elements_without_a_count_cap() {
+    // Arrange
+    let profile = ResolutionProfile::new_allocator_backed(ResourceScope::extension(168, 3))
+        .with_retained_reference()
+        .unwrap();
+    let resources =
+        ProductionResourceLedger::new(ResourceLimits::deny_all(0, 0), profile.requirements())
+            .unwrap();
+    let service = CdpLocatorResolutionService::new(
+        profile,
+        &resources,
+        Arc::new(AtomicObjectIdSource::new(1).unwrap()),
+    )
+    .unwrap();
+    let client = Arc::new(FakeCdpClient::from_html(""));
+    client.set_object_backend_node("source-element", 73);
+    client.set_adopted_node_response(73, 19, adopted());
+    client.set_evaluate_response(json!({"result":{"type":"boolean", "value":true}}));
+
+    // Act
+    let mut owners = Vec::new();
+    for _ in 0..129 {
+        owners.push(service.call(request(&client)).await.unwrap());
+    }
+
+    // Assert
+    assert!(profile.allocator_backed());
+    assert_eq!(owners.len(), 129);
+    assert_eq!(resources.metrics().unwrap().active_leases, 0);
+    for owner in owners {
+        owner.release().await.unwrap();
+    }
+    assert!(service.is_cleanup_healthy());
+}
+
+#[tokio::test]
 async fn compiled_retained_feature_does_not_implicitly_select_its_resource_profile() {
     // Arrange
     let (mut service, client, resources) = fixture();

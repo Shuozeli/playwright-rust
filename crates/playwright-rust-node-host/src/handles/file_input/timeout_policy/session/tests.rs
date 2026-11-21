@@ -12,12 +12,13 @@ fn owners() -> Arc<Owners> {
 }
 
 fn membership(context: u64, pages: &[u64]) -> Membership {
-    let mut result = Membership::default();
-    result.contexts[0] = Some(ObjectId::new(context));
-    for (slot, page) in result.pages.iter_mut().zip(pages) {
-        *slot = Some((ObjectId::new(*page), ObjectId::new(context)));
+    Membership {
+        contexts: vec![ObjectId::new(context)],
+        pages: pages
+            .iter()
+            .map(|page| (ObjectId::new(*page), ObjectId::new(context)))
+            .collect(),
     }
-    result
 }
 
 fn session(budget: &TimeoutPolicyBudget, owners: &Arc<Owners>) -> TimeoutPolicySession {
@@ -240,8 +241,8 @@ fn lookup_prunes_retired_index_entries_without_revoking_returned_metadata() {
     assert_eq!(retired.settings().local_default().unwrap(), Some(3.25));
     assert_eq!(current.settings().local_default().unwrap(), None);
     let state = index.0.index.lock().unwrap();
-    assert_eq!(state.contexts.iter().flatten().count(), 1);
-    assert_eq!(state.pages.iter().flatten().count(), 1);
+    assert_eq!(state.contexts.len(), 1);
+    assert_eq!(state.pages.len(), 1);
     drop(state);
     assert_eq!(budget.inner.resources.metrics().unwrap().active_leases, 7);
     drop(retired);
@@ -266,10 +267,7 @@ fn repeated_page_churn_reuses_fixed_index_slots_and_cell_admission() {
 
     // Assert
     assert_eq!(budget.inner.resources.metrics().unwrap().active_leases, 3);
-    assert_eq!(
-        index.0.index.lock().unwrap().pages.iter().flatten().count(),
-        1
-    );
+    assert_eq!(index.0.index.lock().unwrap().pages.len(), 1);
 }
 
 #[test]
@@ -299,40 +297,26 @@ fn close_is_shared_and_does_not_invalidate_a_returned_page_cell() {
 }
 
 #[test]
-fn held_closed_index_keeps_its_admission_until_the_last_clone_drops() {
+fn allocator_backed_sessions_admit_more_than_the_legacy_limit() {
     // Arrange
     let budget = TimeoutPolicyBudget::new().unwrap();
-    let origins: Vec<_> = (0..MAX_SESSIONS + 1).map(|_| owners()).collect();
-    let mut indexes: Vec<_> = origins[..MAX_SESSIONS]
+    let origins: Vec<_> = (0..129).map(|_| owners()).collect();
+    let indexes: Vec<_> = origins
         .iter()
         .map(|owners| session(&budget, owners))
         .collect();
     indexes[0].close();
 
     // Act
-    let refused = budget.session_for_origin(Arc::downgrade(&origins[MAX_SESSIONS]), false);
-    drop(indexes.pop());
-    let replacement = budget.session_for_origin(Arc::downgrade(&origins[MAX_SESSIONS]), false);
+    let additional = session(&budget, &owners());
 
     // Assert
-    assert!(matches!(refused, Err(HostError::ResourceExhausted(_))));
-    assert!(replacement.is_ok());
-    assert_eq!(
-        budget.inner.indexes.metrics().unwrap().active_leases,
-        MAX_SESSIONS
-    );
-    drop(replacement);
+    assert_eq!(indexes.len(), 129);
+    assert_eq!(budget.inner.indexes.metrics().unwrap().active_leases, 130);
+    drop(additional);
     drop(indexes);
     assert_eq!(budget.inner.indexes.metrics().unwrap().active_leases, 0);
-    assert!(
-        budget
-            .inner
-            .sessions
-            .lock()
-            .unwrap()
-            .iter()
-            .all(Option::is_none)
-    );
+    assert!(budget.inner.sessions.lock().unwrap().is_empty());
 }
 
 #[test]
@@ -371,8 +355,8 @@ fn failed_page_cell_admission_does_not_leave_a_new_context_index_entry() {
     // Assert
     assert!(matches!(result, Err(HostError::ResourceExhausted(_))));
     let state = index.0.index.lock().unwrap();
-    assert!(state.contexts.iter().all(Option::is_none));
-    assert!(state.pages.iter().all(Option::is_none));
+    assert!(state.contexts.is_empty());
+    assert!(state.pages.is_empty());
     let after = budget.inner.resources.metrics().unwrap();
     assert_eq!(after.active_leases, before.active_leases);
     assert_eq!(

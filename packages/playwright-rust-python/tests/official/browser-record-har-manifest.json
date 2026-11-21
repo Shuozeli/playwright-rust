@@ -1,0 +1,107 @@
+{
+  "schema": 1,
+  "repository": "https://github.com/microsoft/playwright-python.git",
+  "tag": "v1.58.0",
+  "commit": "47a5d35ef4f815a2021349f86ae391f7c20c02d6",
+  "corpus": {
+    "policy": "full-upstream-collection",
+    "testsTreeModules": 149,
+    "testsTreeTopLevelTestFunctions": 1990,
+    "examplesTreeModules": 8,
+    "expandedTests": 6526,
+    "defaultBrowsers": ["chromium", "firefox", "webkit"],
+    "ciPlatforms": ["linux", "darwin", "win32"],
+    "ciPythonVersions": ["3.9", "3.10", "3.11", "3.12", "3.13"],
+    "stableChannels": ["chrome", "msedge"],
+    "nonCollectedModules": [
+      {
+        "path": "tests/common/test_collect_handles.py",
+        "classification": "empty-placeholder",
+        "reason": "The pinned upstream file is zero bytes and defines no pytest tests."
+      }
+    ]
+  },
+  "bootstrapSelectionOnly": false,
+  "files": {
+    "tests/async/test_har.py": "e83ef4a6861262e71405b1666e86b6bbd489f4a7332750e90ab333fc9a7c6289",
+    "tests/sync/test_har.py": "a2a8d6d894ec79cb318bfb1d4531cb4f445dd3b69e8f2a173b3b50f1b8a299b5"
+  },
+  "cases": [
+    {
+      "id": "tests/async/test_har.py::test_should_work",
+      "capabilities": ["browser-context.record-har", "har.full", "har.embed"]
+    },
+    {
+      "id": "tests/async/test_har.py::test_should_omit_content",
+      "capabilities": ["browser-context.record-har", "har.content-omit"]
+    },
+    {
+      "id": "tests/async/test_har.py::test_should_omit_content_legacy",
+      "capabilities": ["browser-context.record-har", "har.omit-content-legacy"]
+    },
+    {
+      "id": "tests/async/test_har.py::test_should_attach_content",
+      "capabilities": ["browser-context.record-har", "har.content-attach", "har.zip"]
+    },
+    {
+      "id": "tests/async/test_har.py::test_should_not_omit_content",
+      "capabilities": ["browser-context.record-har", "har.omit-content-false", "har.embed"]
+    },
+    {
+      "id": "tests/async/test_har.py::test_should_include_content",
+      "capabilities": ["browser-context.record-har", "har.content-default", "har.embed"]
+    },
+    {
+      "id": "tests/async/test_har.py::test_should_default_to_full_mode",
+      "capabilities": ["browser-context.record-har", "har.mode-full-default"]
+    },
+    {
+      "id": "tests/async/test_har.py::test_should_support_minimal_mode",
+      "capabilities": ["browser-context.record-har", "har.mode-minimal"]
+    },
+    {
+      "id": "tests/async/test_har.py::test_should_filter_by_glob",
+      "capabilities": ["browser-context.record-har", "har.url-filter-glob"]
+    },
+    {
+      "id": "tests/async/test_har.py::test_should_filter_by_regexp",
+      "capabilities": ["browser-context.record-har", "har.url-filter-regexp"]
+    },
+    {
+      "id": "tests/sync/test_har.py::test_should_work",
+      "capabilities": ["sync.browser-context.record-har", "sync.har.full", "sync.har.embed"]
+    },
+    {
+      "id": "tests/sync/test_har.py::test_should_omit_content",
+      "capabilities": ["sync.browser-context.record-har", "sync.har.content-omit"]
+    },
+    {
+      "id": "tests/sync/test_har.py::test_should_omit_content_legacy",
+      "capabilities": ["sync.browser-context.record-har", "sync.har.omit-content-legacy"]
+    },
+    {
+      "id": "tests/sync/test_har.py::test_should_attach_content",
+      "capabilities": ["sync.browser-context.record-har", "sync.har.content-attach", "sync.har.zip"]
+    },
+    {
+      "id": "tests/sync/test_har.py::test_should_include_content",
+      "capabilities": ["sync.browser-context.record-har", "sync.har.content-default", "sync.har.embed"]
+    },
+    {
+      "id": "tests/sync/test_har.py::test_should_default_to_full_mode",
+      "capabilities": ["sync.browser-context.record-har", "sync.har.mode-full-default"]
+    },
+    {
+      "id": "tests/sync/test_har.py::test_should_support_minimal_mode",
+      "capabilities": ["sync.browser-context.record-har", "sync.har.mode-minimal"]
+    },
+    {
+      "id": "tests/sync/test_har.py::test_should_filter_by_glob",
+      "capabilities": ["sync.browser-context.record-har", "sync.har.url-filter-glob"]
+    },
+    {
+      "id": "tests/sync/test_har.py::test_should_filter_by_regexp",
+      "capabilities": ["sync.browser-context.record-har", "sync.har.url-filter-regexp"]
+    }
+  ]
+}

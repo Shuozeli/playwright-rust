@@ -1221,14 +1221,15 @@ impl LocatorScreenshotInstallationProfile {
     }
 }
 
-/// Fixed reservation for native target/session strings retained by page
-/// routing.
+/// Native target/session strings retained by Page routing.
 ///
 /// Every route owns one target/session pair for stable identity comparison,
 /// and its `CdpSession` owns a second pair for command dispatch. The profile
 /// therefore reserves four native-ID string slots per live Page. Frame-world
 /// routes, including locator utility worlds, have independent capability
-/// budgets and do not inflate this base Page route.
+/// budgets and do not inflate this base Page route. Allocator-backed topology
+/// skips a fictitious up-front reservation and accounts through ordinary map
+/// allocation instead.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct CdpPageRouteProductionProfile {
     resource_scope: ResourceScope,
@@ -1244,10 +1245,17 @@ impl CdpPageRouteProductionProfile {
         topology: CdpTopologyProductionProfile,
     ) -> Self {
         let limits = topology.limits();
-        let maximum_retained_bytes = u64::try_from(limits.pages)
-            .unwrap_or(u64::MAX)
-            .saturating_mul(4)
-            .saturating_mul(u64::try_from(limits.native_id_bytes).unwrap_or(u64::MAX));
+        // Allocator-backed topology retains Page routes in ordinary maps. The
+        // `usize::MAX` object-count sentinel is not a request to reserve that
+        // many native-ID bytes up front.
+        let maximum_retained_bytes = if limits.pages == usize::MAX {
+            0
+        } else {
+            u64::try_from(limits.pages)
+                .unwrap_or(u64::MAX)
+                .saturating_mul(4)
+                .saturating_mul(u64::try_from(limits.native_id_bytes).unwrap_or(u64::MAX))
+        };
         let requirements = if maximum_retained_bytes == 0 {
             ResourceRequirements::none()
         } else {
@@ -1282,6 +1290,10 @@ impl CdpPageRouteProductionProfile {
 
     pub const fn maximum_retained_bytes(self) -> u64 {
         self.maximum_retained_bytes
+    }
+
+    pub const fn allocator_backed(self) -> bool {
+        self.max_pages == usize::MAX
     }
 
     pub const fn requirements(self) -> ResourceRequirements {
@@ -1329,6 +1341,28 @@ impl ChromiumHandleRouteProductionProfile {
             max_preview_bytes,
             maximum_retained_bytes,
             requirements,
+        }
+    }
+
+    /// Selects allocator-backed retained-route storage while preserving the
+    /// per-route native-id and preview bounds.
+    pub fn new_allocator_backed(
+        resource_scope: ResourceScope,
+        max_native_id_bytes: usize,
+        max_preview_bytes: usize,
+    ) -> Self {
+        let leaf = ChromiumHandleLeafRouteProfile::new_allocator_backed(
+            resource_scope,
+            max_native_id_bytes,
+            max_preview_bytes,
+        );
+        Self {
+            resource_scope,
+            max_handles: usize::MAX,
+            max_native_id_bytes,
+            max_preview_bytes,
+            maximum_retained_bytes: 0,
+            requirements: leaf.requirements(),
         }
     }
 
@@ -1624,6 +1658,7 @@ pub struct ChromiumNetworkEventsProductionProfile {
     max_page_lanes: usize,
     max_browser_contexts: usize,
     max_related_sessions: usize,
+    allocator_backed_adapters: bool,
     subscription_retained_bytes: usize,
     subscription_requirements: ResourceRequirements,
     requirements: ResourceRequirements,
@@ -1650,11 +1685,102 @@ impl ChromiumNetworkEventsProductionProfile {
         )
     }
 
+    /// Uses allocator failure as the BrowserContext registry boundary while
+    /// retaining the independent finite Page-lane admission bound.
+    ///
+    /// This profile is valid only when related network sessions are not
+    /// selected: Service Worker adapters need their own independent resource
+    /// policy rather than borrowing the allocator-backed Context registry.
+    pub fn new_with_allocator_backed_contexts(
+        adapter: CdpNetworkEventProductionProfile,
+        max_page_lanes: usize,
+    ) -> Result<Self, ChromiumCompositionError> {
+        Self::new_with_context_and_related_session_policy(
+            adapter,
+            max_page_lanes,
+            usize::MAX,
+            0,
+            false,
+            true,
+            false,
+        )
+    }
+
+    /// Uses allocator failure as the aggregate Page-adapter and
+    /// BrowserContext-registry boundary. Per-request and per-field protocol
+    /// limits remain owned by the leaf adapter profile.
+    pub fn new_allocator_backed(
+        adapter: CdpNetworkEventProductionProfile,
+    ) -> Result<Self, ChromiumCompositionError> {
+        Self::new_with_context_and_related_session_policy(
+            adapter,
+            usize::MAX,
+            usize::MAX,
+            0,
+            false,
+            true,
+            true,
+        )
+    }
+
+    /// Uses allocator failure as the aggregate Page, BrowserContext, and
+    /// related-session boundary. Per-request and per-field protocol limits
+    /// remain owned by the leaf adapter profile.
+    pub fn new_allocator_backed_with_unbounded_related_sessions(
+        adapter: CdpNetworkEventProductionProfile,
+    ) -> Result<Self, ChromiumCompositionError> {
+        Self::new_with_context_and_related_session_policy(
+            adapter,
+            usize::MAX,
+            usize::MAX,
+            usize::MAX,
+            true,
+            true,
+            true,
+        )
+    }
+
     pub fn new_with_context_and_related_session_limit(
         adapter: CdpNetworkEventProductionProfile,
         max_page_lanes: usize,
         max_browser_contexts: usize,
         max_related_sessions: usize,
+    ) -> Result<Self, ChromiumCompositionError> {
+        Self::new_with_context_and_related_session_policy(
+            adapter,
+            max_page_lanes,
+            max_browser_contexts,
+            max_related_sessions,
+            false,
+            false,
+            false,
+        )
+    }
+
+    pub fn new_with_context_and_unbounded_related_sessions(
+        adapter: CdpNetworkEventProductionProfile,
+        max_page_lanes: usize,
+        max_browser_contexts: usize,
+    ) -> Result<Self, ChromiumCompositionError> {
+        Self::new_with_context_and_related_session_policy(
+            adapter,
+            max_page_lanes,
+            max_browser_contexts,
+            usize::MAX,
+            true,
+            false,
+            false,
+        )
+    }
+
+    fn new_with_context_and_related_session_policy(
+        adapter: CdpNetworkEventProductionProfile,
+        max_page_lanes: usize,
+        max_browser_contexts: usize,
+        max_related_sessions: usize,
+        unbounded_related_sessions: bool,
+        allocator_backed_contexts: bool,
+        allocator_backed_adapters: bool,
     ) -> Result<Self, ChromiumCompositionError> {
         if max_page_lanes == 0 {
             return Err(ChromiumCompositionError::InvalidNetworkEventsSetup(
@@ -1671,29 +1797,63 @@ impl ChromiumNetworkEventsProductionProfile {
                 "related network sessions require a non-zero native scope byte limit".to_owned(),
             ));
         }
-        let page_retained_bytes = adapter
-            .limits()
-            .native_id_bytes
-            .checked_add(NETWORK_SUBSCRIPTION_LANE_BOOKKEEPING_BYTES)
-            .and_then(|bytes| bytes.checked_add(NETWORK_DRIVER_PAGE_CONTEXT_BYTES))
-            .and_then(|bytes| bytes.checked_mul(max_page_lanes))
-            .ok_or_else(|| {
-                ChromiumCompositionError::InvalidNetworkEventsSetup(
-                    "network subscription registry size overflows usize".to_owned(),
-                )
-            })?;
-        let subscription_retained_bytes = NETWORK_SUBSCRIPTION_CONTEXT_BOOKKEEPING_BYTES
-            .checked_mul(max_browser_contexts)
+        if allocator_backed_contexts
+            && (max_browser_contexts != usize::MAX
+                || (max_related_sessions != 0 && !unbounded_related_sessions))
+        {
+            return Err(ChromiumCompositionError::InvalidNetworkEventsSetup(
+                "allocator-backed BrowserContexts require the usize::MAX sentinel and either no related sessions or an unbounded related-session policy"
+                    .to_owned(),
+            ));
+        }
+        if allocator_backed_adapters
+            && (!allocator_backed_contexts
+                || max_page_lanes != usize::MAX
+                || (max_related_sessions != 0 && !unbounded_related_sessions))
+        {
+            return Err(ChromiumCompositionError::InvalidNetworkEventsSetup(
+                "allocator-backed network adapters require allocator-backed Contexts, the usize::MAX Page sentinel, and either no related sessions or an unbounded related-session policy"
+                    .to_owned(),
+            ));
+        }
+        let page_retained_bytes = if allocator_backed_adapters {
+            0
+        } else {
+            adapter
+                .limits()
+                .native_id_bytes
+                .checked_add(NETWORK_SUBSCRIPTION_LANE_BOOKKEEPING_BYTES)
+                .and_then(|bytes| bytes.checked_add(NETWORK_DRIVER_PAGE_CONTEXT_BYTES))
+                .and_then(|bytes| bytes.checked_mul(max_page_lanes))
+                .ok_or_else(|| {
+                    ChromiumCompositionError::InvalidNetworkEventsSetup(
+                        "network subscription registry size overflows usize".to_owned(),
+                    )
+                })?
+        };
+        let context_retained_bytes = if allocator_backed_contexts {
+            Some(0)
+        } else {
+            NETWORK_SUBSCRIPTION_CONTEXT_BOOKKEEPING_BYTES.checked_mul(max_browser_contexts)
+        };
+        let subscription_retained_bytes = context_retained_bytes
             .and_then(|bytes| bytes.checked_add(page_retained_bytes))
             .and_then(|bytes| {
-                adapter
-                    .limits()
-                    .native_id_bytes
-                    .checked_add(NETWORK_CONTEXT_TRANSITION_PAGE_BOOKKEEPING_BYTES)
-                    .and_then(|per_page| per_page.checked_mul(max_page_lanes))
-                    .and_then(|transition| bytes.checked_add(transition))
+                if allocator_backed_adapters {
+                    Some(bytes)
+                } else {
+                    adapter
+                        .limits()
+                        .native_id_bytes
+                        .checked_add(NETWORK_CONTEXT_TRANSITION_PAGE_BOOKKEEPING_BYTES)
+                        .and_then(|per_page| per_page.checked_mul(max_page_lanes))
+                        .and_then(|transition| bytes.checked_add(transition))
+                }
             })
             .and_then(|bytes| {
+                if unbounded_related_sessions {
+                    return Some(bytes);
+                }
                 adapter
                     .limits()
                     .native_id_bytes
@@ -1704,6 +1864,9 @@ impl ChromiumNetworkEventsProductionProfile {
                     .and_then(|registration| bytes.checked_add(registration))
             })
             .and_then(|bytes| {
+                if unbounded_related_sessions {
+                    return Some(bytes);
+                }
                 adapter
                     .limits()
                     .native_scope_bytes
@@ -1726,12 +1889,36 @@ impl ChromiumNetworkEventsProductionProfile {
         })?;
         let subscription_requirements = ResourceRequirements::none()
             .with_class(ResourceClass::BackendStateBytes, retained, retained)
-            .with_metadata(1, max_page_lanes);
+            .with_metadata(
+                1,
+                if allocator_backed_adapters {
+                    1
+                } else {
+                    max_page_lanes
+                },
+            );
         let mut requirements = ResourceRequirements::none();
         // One extra adapter is reserved for an atomic same-Page session
-        // replacement. It overlaps the old lane only until publication
-        // commits or rolls back and never increases the public Page count.
-        for _ in 0..=max_page_lanes {
+        // replacement. A bounded Context profile also reserves one Service
+        // Worker adapter per Context. Allocator-backed profiles acquire Page
+        // and Service Worker Context adapters independently on demand.
+        let adapter_slots = if allocator_backed_adapters {
+            0
+        } else {
+            max_page_lanes
+                .checked_add(if allocator_backed_contexts {
+                    0
+                } else {
+                    max_browser_contexts
+                })
+                .and_then(|slots| slots.checked_add(1))
+                .ok_or_else(|| {
+                    ChromiumCompositionError::InvalidNetworkEventsSetup(
+                        "network adapter count overflows usize".to_owned(),
+                    )
+                })?
+        };
+        for _ in 0..adapter_slots {
             requirements = requirements.combine_concurrent(adapter.requirements());
         }
         requirements = requirements.combine_concurrent(subscription_requirements);
@@ -1740,6 +1927,7 @@ impl ChromiumNetworkEventsProductionProfile {
             max_page_lanes,
             max_browser_contexts,
             max_related_sessions,
+            allocator_backed_adapters,
             subscription_retained_bytes,
             subscription_requirements,
             requirements,
@@ -1760,6 +1948,10 @@ impl ChromiumNetworkEventsProductionProfile {
 
     pub const fn max_related_sessions(self) -> usize {
         self.max_related_sessions
+    }
+
+    pub const fn allocator_backed_adapters(self) -> bool {
+        self.allocator_backed_adapters
     }
 
     pub const fn subscription_retained_bytes(self) -> usize {
@@ -2022,6 +2214,10 @@ impl ChromiumAttachProductionProfile {
     /// Derive the fanout after adding extensions; validation rejects a stale
     /// previously-derived capacity. This neither subscribes nor installs a task.
     pub fn with_extension_event_subscribers(mut self, additional: usize) -> Result<Self, CdpError> {
+        if self.extension_event_subscribers == usize::MAX || additional == usize::MAX {
+            self.extension_event_subscribers = usize::MAX;
+            return Ok(self);
+        }
         self.extension_event_subscribers = self
             .extension_event_subscribers
             .checked_add(additional)
@@ -2029,6 +2225,14 @@ impl ChromiumAttachProductionProfile {
                 "extension event subscriber capacity overflow",
             ))?;
         Ok(self)
+    }
+
+    /// Select allocator-backed subscriber bookkeeping for outer components
+    /// whose persistent cursor count follows dynamically discovered objects.
+    /// Event item/byte backpressure remains bounded independently.
+    pub const fn with_allocator_backed_extension_event_subscribers(mut self) -> Self {
+        self.extension_event_subscribers = usize::MAX;
+        self
     }
 
     /// Installs caller-driven CDP topology-event ingestion. This adds no
@@ -2302,22 +2506,30 @@ impl ChromiumAttachProductionProfile {
         self.page_events
     }
 
-    /// Maximum event cursors required when every selected component is used at
-    /// its declared concurrency. Network events may use either one shared
-    /// driver or one cursor per Page lane, so the Page-lane limit is the safe
-    /// composable upper bound.
+    /// Maximum event cursors required when every selected component is active.
+    /// Allocator-backed operation ownership does not mean all retained callers
+    /// execute simultaneously: the runtime's active-command scheduler is the
+    /// upper bound for navigation and Locator cursors. Network events may use
+    /// either one shared driver or one cursor per Page lane, so the Page-lane
+    /// limit remains their safe composable upper bound.
     pub fn required_reclaiming_event_subscribers(&self) -> usize {
         let topology = usize::from(self.topology_events.is_some());
         let page_load = usize::from(self.page_events);
         let network = self
             .network_events
             .map_or(0, ChromiumNetworkEventsProductionProfile::max_page_lanes);
-        let navigation = self
-            .navigation
-            .map_or(0, |profile| profile.backend().max_concurrent_operations());
-        let locator = self
-            .locator
-            .map_or(0, |profile| profile.backend().max_concurrent_actions());
+        let navigation = self.navigation.map_or(0, |profile| {
+            profile
+                .backend()
+                .max_concurrent_operations()
+                .min(self.runtime.active_commands)
+        });
+        let locator = self.locator.map_or(0, |profile| {
+            profile
+                .backend()
+                .max_concurrent_actions()
+                .min(self.runtime.active_commands)
+        });
         topology
             .saturating_add(page_load)
             .saturating_add(network)
@@ -4038,13 +4250,18 @@ impl ChromiumNetworkSubscriptionRegistry {
         profile: ChromiumNetworkEventsProductionProfile,
         resources: &ProductionResourceLedger,
     ) -> Result<Self, ProductionResourceError> {
-        let ledger = resources.claim(profile.subscription_requirements())?;
-        let resource = ledger.reserve(
-            profile.adapter().resource_scope(),
-            ResourceClass::BackendStateBytes,
-            u64::try_from(profile.subscription_retained_bytes())
-                .expect("validated network registry retention should fit u64"),
-        )?;
+        let (ledger, resource) = if profile.subscription_retained_bytes() == 0 {
+            (None, None)
+        } else {
+            let ledger = resources.claim(profile.subscription_requirements())?;
+            let resource = ledger.reserve(
+                profile.adapter().resource_scope(),
+                ResourceClass::BackendStateBytes,
+                u64::try_from(profile.subscription_retained_bytes())
+                    .expect("validated network registry retention should fit u64"),
+            )?;
+            (Some(ledger), Some(resource))
+        };
         Ok(Self {
             shared: Arc::new(ChromiumNetworkSubscriptionShared {
                 state: Mutex::new(ChromiumNetworkSubscriptionState {
@@ -4055,8 +4272,8 @@ impl ChromiumNetworkSubscriptionRegistry {
                 }),
                 max_page_lanes: profile.max_page_lanes(),
                 max_browser_contexts: profile.max_browser_contexts(),
-                ledger: Some(ledger),
-                _resource: Some(resource),
+                ledger,
+                _resource: resource,
             }),
         })
     }
@@ -5087,10 +5304,14 @@ impl CdpPageServices {
             ..CdpServiceRoutes::default()
         };
         if let Some(readiness) = &self.world_readiness {
-            next.readiness_frames
-                .reserve_exact(readiness.profile.max_frames());
+            if readiness.profile.max_frames() != usize::MAX {
+                next.readiness_frames
+                    .reserve_exact(readiness.profile.max_frames());
+            }
             for (frame, page) in topology.frame_page_routes() {
-                if next.readiness_frames.len() >= readiness.profile.max_frames() {
+                if readiness.profile.max_frames() != usize::MAX
+                    && next.readiness_frames.len() >= readiness.profile.max_frames()
+                {
                     return Err(CdpPageRouteError::CapacityExceeded {
                         actual: next.readiness_frames.len().saturating_add(1),
                         limit: readiness.profile.max_frames(),
@@ -5242,7 +5463,9 @@ impl CdpPageServices {
             retained_bytes = retained_bytes.saturating_add(entry_bytes.saturating_mul(2));
             next.pages.insert(route.object_id(), entry);
         }
-        if retained_bytes > self.profile.maximum_retained_bytes() {
+        if !self.profile.allocator_backed()
+            && retained_bytes > self.profile.maximum_retained_bytes()
+        {
             return Err(CdpPageRouteError::RetainedBytesInvariant {
                 actual: retained_bytes,
                 maximum: self.profile.maximum_retained_bytes(),
@@ -5331,7 +5554,9 @@ impl CdpPageServices {
                 evaluation_retained_bytes = evaluation_retained_bytes.saturating_add(entry_bytes);
                 next.frame_evaluations.insert(route.object_id(), entry);
             }
-            if evaluation_retained_bytes > route_profile.maximum_route_retained_bytes() {
+            if !route_profile.context_routes_allocator_backed()
+                && evaluation_retained_bytes > route_profile.maximum_route_retained_bytes()
+            {
                 return Err(CdpPageRouteError::EvaluationRetainedBytesInvariant {
                     actual: evaluation_retained_bytes,
                     maximum: route_profile.maximum_route_retained_bytes(),
@@ -5422,7 +5647,9 @@ impl CdpPageServices {
                 next.frame_handle_evaluations
                     .insert(route.object_id(), entry);
             }
-            if evaluation_retained_bytes > route_profile.maximum_route_retained_bytes() {
+            if !route_profile.context_routes_allocator_backed()
+                && evaluation_retained_bytes > route_profile.maximum_route_retained_bytes()
+            {
                 return Err(CdpPageRouteError::HandleEvaluationRetainedBytesInvariant {
                     actual: evaluation_retained_bytes,
                     maximum: route_profile.maximum_route_retained_bytes(),
@@ -5637,7 +5864,9 @@ impl CdpPageServices {
                     frame_context_retained_bytes.saturating_add(entry_bytes);
                 next.frame_contexts.insert(route.object_id(), entry);
             }
-            if frame_context_retained_bytes > maximum_route_retained_bytes {
+            if max_context_routes != usize::MAX
+                && frame_context_retained_bytes > maximum_route_retained_bytes
+            {
                 return Err(CdpPageRouteError::LocatorRetainedBytesInvariant {
                     actual: frame_context_retained_bytes,
                     maximum: maximum_route_retained_bytes,
@@ -5828,7 +6057,9 @@ impl CdpPageServices {
                             );
                         retained_bytes.saturating_add(entry_bytes)
                     });
-            if retained_bytes > route_profile.maximum_route_retained_bytes() {
+            if !route_profile.context_routes_allocator_backed()
+                && retained_bytes > route_profile.maximum_route_retained_bytes()
+            {
                 return Err(CdpPageRouteError::LocatorRetainedBytesInvariant {
                     actual: retained_bytes,
                     maximum: route_profile.maximum_route_retained_bytes(),
@@ -13517,7 +13748,7 @@ pub struct ChromiumNetworkEventDriver {
 pub enum ChromiumNetworkEventPoll {
     Empty,
     Ignored,
-    Batch(CdpNetworkEventBatch),
+    Batch(Box<CdpNetworkEventBatch>),
 }
 
 /// A non-owning coordination handle for publishing Page routes into the
@@ -13532,6 +13763,7 @@ struct ChromiumNetworkEventDriverShared {
     subscriptions: ChromiumNetworkSubscriptionRegistry,
     object_ids: Arc<dyn ObjectIdSource>,
     adapter_profile: CdpNetworkEventProductionProfile,
+    allocator_backed_adapters: bool,
     resources: ProductionResourceLedger,
     max_page_lanes: usize,
     max_related_sessions: usize,
@@ -13547,17 +13779,29 @@ struct ChromiumNetworkEventDriverState {
 
 struct ChromiumRelatedNetworkSession {
     page: ObjectId,
-    parent_session_id: Box<str>,
+    parent_session_id: Option<Box<str>>,
+    service_worker: bool,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ChromiumNetworkAdapterKind {
+    Page,
+    ServiceWorkerContext,
 }
 
 struct ChromiumNetworkPageAdapter {
     browser_context_object_id: ObjectId,
+    kind: ChromiumNetworkAdapterKind,
     adapter: CdpNetworkEventAdapter,
 }
 
 impl ChromiumNetworkPageAdapter {
     fn page(&self) -> ObjectId {
         self.adapter.page()
+    }
+
+    fn is_page(&self) -> bool {
+        self.kind == ChromiumNetworkAdapterKind::Page
     }
 
     fn session_id(&self) -> &str {
@@ -13841,7 +14085,13 @@ impl ChromiumNetworkEventDriver {
         self.shared
             .state
             .lock()
-            .map(|state| state.adapters.len())
+            .map(|state| {
+                state
+                    .adapters
+                    .values()
+                    .filter(|adapter| adapter.is_page())
+                    .count()
+            })
             .unwrap_or_default()
     }
 
@@ -14030,7 +14280,7 @@ impl ChromiumNetworkEventDriver {
             },
         };
         match self.route_event(event)? {
-            Some(batch) => Ok(ChromiumNetworkEventPoll::Batch(batch)),
+            Some(batch) => Ok(ChromiumNetworkEventPoll::Batch(Box::new(batch))),
             None => Ok(ChromiumNetworkEventPoll::Ignored),
         }
     }
@@ -14062,39 +14312,58 @@ impl ChromiumNetworkEventDriver {
         }
         if self.shared.max_related_sessions != 0 {
             if event.method == "Target.attachedToTarget" {
+                if event
+                    .params
+                    .get("targetInfo")
+                    .and_then(|target| target.get("type"))
+                    .and_then(serde_json::Value::as_str)
+                    == Some("service_worker")
+                {
+                    // Service Workers are registered by their Context owner
+                    // before debugger resume. They must never fall through to
+                    // the Page-related Worker route for this same event.
+                    return Ok(None);
+                }
                 register_related_network_session(&self.shared, &mut state, &event)?;
                 return Ok(None);
             }
             if event.method == "Target.detachedFromTarget" {
                 if let Some(batch) = retire_related_network_session(&mut state, &event)? {
-                    let page = batch
-                        .page()
-                        .expect("a related-session retirement batch retains its Page");
-                    state.unpublished_batch = Some(page);
+                    let owner = batch
+                        .owner()
+                        .expect("a related-session retirement batch retains its owner");
+                    state.unpublished_batch = Some(owner);
                     return Ok(Some(batch));
                 }
                 return Ok(None);
             }
         }
         let event_session = event.session_id.as_deref();
-        let related_page = event_session.and_then(|session_id| {
+        let related = event_session.and_then(|session_id| {
             state
                 .related_sessions
                 .get(session_id)
-                .map(|route| route.page)
+                .map(|route| (route.page, route.service_worker))
         });
+        let related_page = related.map(|(page, _)| page);
         let Some(adapter) = state.adapters.values_mut().find(|adapter| {
             event_session == Some(adapter.session_id()) || related_page == Some(adapter.page())
         }) else {
             return Ok(None);
         };
         let page = adapter.page();
-        let batch = if related_page.is_some() {
+        let mut batch = if related_page.is_some() {
             adapter.map_related_session_event(&event)
         } else {
             adapter.map_event(&event)
         }
         .map_err(|source| ChromiumNetworkEventDriverError::Native { page, source })?;
+        if related.is_some_and(|(_, service_worker)| service_worker) && !batch.is_empty() {
+            batch.mark_service_worker(
+                page,
+                event_session.expect("a related Service Worker event has a session"),
+            );
+        }
         if batch.is_empty() {
             Ok(None)
         } else {
@@ -14293,6 +14562,9 @@ impl ChromiumNetworkPageRegistrationHandle {
             ChromiumNetworkEventDriverError::PageRoutes(CdpPageRouteError::StatePoisoned)
         })?;
         for (page, adapter) in &state.adapters {
+            if !adapter.is_page() {
+                continue;
+            }
             let Some(route) = routes.pages.get(page) else {
                 continue;
             };
@@ -14306,9 +14578,9 @@ impl ChromiumNetworkPageRegistrationHandle {
         }
         let retired = state
             .adapters
-            .keys()
-            .filter(|page| !routes.pages.contains_key(page))
-            .copied()
+            .iter()
+            .filter(|(page, adapter)| adapter.is_page() && !routes.pages.contains_key(page))
+            .map(|(page, _)| *page)
             .collect::<Vec<_>>();
         drop(routes);
         for page in &retired {
@@ -14361,12 +14633,13 @@ impl ChromiumNetworkPageRegistrationHandle {
                     ChromiumNetworkEventDriverError::SessionReplacementRequiresRetirement { page },
                 );
             }
-            let adapter = CdpNetworkEventAdapter::new_with_production_resources(
+            let adapter = new_network_event_adapter(
                 page,
                 new_session_id.clone(),
                 Arc::clone(&driver.object_ids),
                 driver.adapter_profile,
                 &driver.resources,
+                driver.allocator_backed_adapters,
             )
             .map_err(ChromiumNetworkEventDriverError::Production)?;
             #[cfg(feature = "request-frame")]
@@ -14507,6 +14780,7 @@ impl ChromiumNetworkPageRegistrationHandle {
                     prepared.page,
                     ChromiumNetworkPageAdapter {
                         browser_context_object_id,
+                        kind: ChromiumNetworkAdapterKind::Page,
                         adapter: pending.adapter,
                     },
                 )
@@ -14652,6 +14926,9 @@ impl ChromiumNetworkPageRegistrationHandle {
         let publication = publish();
         Ok(publication.map(|published| {
             let mut retired = 0usize;
+            state
+                .related_sessions
+                .retain(|_, route| route.page != browser_context);
             state.adapters.retain(|_page, adapter| {
                 let belongs_to_context = adapter.browser_context_object_id == browser_context;
                 if belongs_to_context {
@@ -14831,6 +15108,23 @@ impl ChromiumNetworkPageRegistrationHandle {
             route.session_id.clone(),
         )
     }
+
+    /// Registers one browser-root Service Worker session against its exact
+    /// BrowserContext. The driver owns one independent normalizer per Context;
+    /// it never borrows a Page lane merely to publish Context events.
+    pub fn register_service_worker(
+        &self,
+        browser_context: ObjectId,
+        session_id: &str,
+    ) -> Result<bool, ChromiumNetworkEventDriverError> {
+        let driver = self.driver()?;
+        let mut state = driver
+            .state
+            .lock()
+            .map_err(|_| ChromiumNetworkEventDriverError::DriverUnavailable)?;
+        ensure_network_batch_published(&state)?;
+        register_service_worker_network_session(&driver, &mut state, browser_context, session_id)
+    }
 }
 
 impl Drop for ChromiumNetworkEventDriver {
@@ -14847,11 +15141,34 @@ impl Drop for ChromiumNetworkEventDriver {
                 false,
             );
         }
-        let pages: Vec<_> = state.adapters.keys().copied().collect();
+        let pages: Vec<_> = state
+            .adapters
+            .iter()
+            .filter_map(|(owner, adapter)| adapter.is_page().then_some(*owner))
+            .collect();
         for page in pages {
             retire_network_page(&self.shared, &mut state, page);
         }
+        state.related_sessions.clear();
+        state.adapters.clear();
         state.pending_page_registration.take();
+    }
+}
+
+fn new_network_event_adapter(
+    page: ObjectId,
+    session_id: String,
+    object_ids: Arc<dyn ObjectIdSource>,
+    profile: CdpNetworkEventProductionProfile,
+    resources: &ProductionResourceLedger,
+    allocator_backed: bool,
+) -> Result<CdpNetworkEventAdapter, CdpNetworkEventProductionError> {
+    if allocator_backed {
+        CdpNetworkEventAdapter::new_allocator_backed(page, session_id, object_ids, profile)
+    } else {
+        CdpNetworkEventAdapter::new_with_production_resources(
+            page, session_id, object_ids, profile, resources,
+        )
     }
 }
 
@@ -14869,17 +15186,24 @@ fn register_exact_network_page(
             Err(ChromiumNetworkEventDriverError::SessionReplacementRequiresRetirement { page })
         };
     }
-    if state.adapters.len() >= driver.max_page_lanes {
+    if state
+        .adapters
+        .values()
+        .filter(|adapter| adapter.is_page())
+        .count()
+        >= driver.max_page_lanes
+    {
         return Err(ChromiumNetworkEventDriverError::PageLaneCapacityExceeded {
             limit: driver.max_page_lanes,
         });
     }
-    let adapter = CdpNetworkEventAdapter::new_with_production_resources(
+    let adapter = new_network_event_adapter(
         page,
         session_id.clone(),
         Arc::clone(&driver.object_ids),
         driver.adapter_profile,
         &driver.resources,
+        driver.allocator_backed_adapters,
     )
     .map_err(ChromiumNetworkEventDriverError::Production)?;
     driver
@@ -14890,7 +15214,82 @@ fn register_exact_network_page(
         page,
         ChromiumNetworkPageAdapter {
             browser_context_object_id,
+            kind: ChromiumNetworkAdapterKind::Page,
             adapter,
+        },
+    );
+    Ok(true)
+}
+
+fn register_service_worker_network_session(
+    driver: &ChromiumNetworkEventDriverShared,
+    state: &mut ChromiumNetworkEventDriverState,
+    browser_context: ObjectId,
+    session_id: &str,
+) -> Result<bool, ChromiumNetworkEventDriverError> {
+    let scope_limit = driver.adapter_profile.limits().native_scope_bytes;
+    if session_id.is_empty() {
+        return Err(ChromiumNetworkEventDriverError::Native {
+            page: browser_context,
+            source: CdpNetworkEventError::EmptySessionId,
+        });
+    }
+    if session_id.len() > scope_limit {
+        return Err(ChromiumNetworkEventDriverError::Native {
+            page: browser_context,
+            source: CdpNetworkEventError::FieldLimitExceeded {
+                field: "service worker sessionId",
+                actual: session_id.len(),
+                limit: scope_limit,
+            },
+        });
+    }
+    if let Some(current) = state.related_sessions.get(session_id) {
+        return if current.page == browser_context && current.service_worker {
+            Ok(false)
+        } else {
+            Err(ChromiumNetworkEventDriverError::RelatedSessionConflict {
+                session_id: session_id.to_owned(),
+            })
+        };
+    }
+    if state.related_sessions.len() >= driver.max_related_sessions {
+        return Err(
+            ChromiumNetworkEventDriverError::RelatedSessionCapacityExceeded {
+                limit: driver.max_related_sessions,
+            },
+        );
+    }
+    match state.adapters.entry(browser_context) {
+        std::collections::btree_map::Entry::Vacant(entry) => {
+            let adapter = new_network_event_adapter(
+                browser_context,
+                "__pw_service_worker_context__".to_owned(),
+                Arc::clone(&driver.object_ids),
+                driver.adapter_profile,
+                &driver.resources,
+                driver.allocator_backed_adapters,
+            )
+            .map_err(ChromiumNetworkEventDriverError::Production)?;
+            entry.insert(ChromiumNetworkPageAdapter {
+                browser_context_object_id: browser_context,
+                kind: ChromiumNetworkAdapterKind::ServiceWorkerContext,
+                adapter,
+            });
+        }
+        std::collections::btree_map::Entry::Occupied(entry) if entry.get().is_page() => {
+            return Err(ChromiumNetworkEventDriverError::RelatedSessionConflict {
+                session_id: session_id.to_owned(),
+            });
+        }
+        std::collections::btree_map::Entry::Occupied(_) => {}
+    }
+    state.related_sessions.insert(
+        session_id.into(),
+        ChromiumRelatedNetworkSession {
+            page: browser_context,
+            parent_session_id: None,
+            service_worker: true,
         },
     );
     Ok(true)
@@ -14915,6 +15314,7 @@ fn retire_network_page(
     state
         .adapters
         .remove(&page)
+        .filter(ChromiumNetworkPageAdapter::is_page)
         .map(|mut adapter| adapter.drain_active())
         .unwrap_or_default()
 }
@@ -14984,7 +15384,10 @@ fn register_related_network_session(
         }
     }
     if let Some(current) = state.related_sessions.get(session_id) {
-        if current.page == page && current.parent_session_id.as_ref() == parent_session_id {
+        if current.page == page
+            && current.parent_session_id.as_deref() == Some(parent_session_id)
+            && !current.service_worker
+        {
             return Ok(());
         }
         return Err(ChromiumNetworkEventDriverError::RelatedSessionConflict {
@@ -15002,7 +15405,8 @@ fn register_related_network_session(
         session_id.into(),
         ChromiumRelatedNetworkSession {
             page,
-            parent_session_id: parent_session_id.into(),
+            parent_session_id: Some(parent_session_id.into()),
+            service_worker: false,
         },
     );
     Ok(())
@@ -15026,6 +15430,7 @@ fn retire_related_network_session(
         return Ok(None);
     };
     let page = route.page;
+    let service_worker = route.service_worker;
     let mut retired = vec![session_id.to_owned()];
     let mut cursor = 0;
     while cursor < retired.len() {
@@ -15033,7 +15438,7 @@ fn retire_related_network_session(
         let children = state
             .related_sessions
             .iter()
-            .filter(|(_, route)| route.parent_session_id.as_ref() == parent)
+            .filter(|(_, route)| route.parent_session_id.as_deref() == Some(parent))
             .map(|(candidate, _)| candidate.to_string())
             .collect::<Vec<_>>();
         for child in children {
@@ -15053,7 +15458,19 @@ fn retire_related_network_session(
     for session in retired {
         cleanup.extend(adapter.drain_related_session(&session));
     }
-    let batch = CdpNetworkEventBatch::from_retirement(page, cleanup);
+    let remove_service_worker_adapter = service_worker
+        && !state
+            .related_sessions
+            .values()
+            .any(|route| route.service_worker && route.page == page);
+    if remove_service_worker_adapter {
+        state.adapters.remove(&page);
+    }
+    let batch = if service_worker {
+        CdpNetworkEventBatch::from_service_worker_retirement(page, session_id, cleanup)
+    } else {
+        CdpNetworkEventBatch::from_retirement(page, cleanup)
+    };
     Ok((!batch.is_empty()).then_some(batch))
 }
 
@@ -15062,8 +15479,10 @@ impl Drop for ChromiumNetworkEventDriverShared {
         let Ok(state) = self.state.lock() else {
             return;
         };
-        for page in state.adapters.keys().copied() {
-            self.subscriptions.forget_page(page);
+        for (owner, adapter) in &state.adapters {
+            if adapter.is_page() {
+                self.subscriptions.forget_page(*owner);
+            }
         }
     }
 }
@@ -15265,6 +15684,7 @@ impl AttachedChromiumComposition {
             subscriptions: subscriptions.clone(),
             object_ids: self.object_ids.clone(),
             adapter_profile: profile.adapter(),
+            allocator_backed_adapters: profile.allocator_backed_adapters(),
             resources: self.prepared.resources.clone(),
             max_page_lanes: profile.max_page_lanes(),
             max_related_sessions: profile.max_related_sessions(),
@@ -15368,12 +15788,13 @@ impl AttachedChromiumComposition {
             return Err(ChromiumNetworkEventLaneError::PageServicesLedgerMismatch);
         }
         let object_ids: Arc<dyn ObjectIdSource> = self.object_ids.clone();
-        let adapter = CdpNetworkEventAdapter::new_with_production_resources(
+        let adapter = new_network_event_adapter(
             page,
             route.session_id.clone(),
             object_ids,
             profile.adapter(),
             &self.prepared.resources,
+            profile.allocator_backed_adapters(),
         )
         .map_err(ChromiumNetworkEventLaneError::Production)?;
         let receiver = self
@@ -17447,14 +17868,39 @@ mod tests {
         ChromiumBrowserContextNewPageCommandService,
     ) {
         let adapter = CdpNetworkEventProductionProfile::new(
-            NetworkLifecycleLimits::new(2, 64, 256, 16, 32, 8, 256, 64, 64, 128),
+            NetworkLifecycleLimits::new(2, 64, 256, 16, 32, 8, 256, 64, 64, 128)
+                .with_native_scope_bytes(64),
             ResourceScope::extension(95, 2),
         )
         .expect("network adapter profile should validate");
-        let network = ChromiumNetworkEventsProductionProfile::new_with_context_limit(adapter, 1, 1)
-            .expect("one Page lane and Context should validate");
+        let network =
+            ChromiumNetworkEventsProductionProfile::new_with_context_and_related_session_limit(
+                adapter, 1, 1, 1,
+            )
+            .expect("one Page lane, Context, and related session should validate");
+        network_page_creation_state_with_profile(network)
+    }
+
+    #[allow(clippy::type_complexity)]
+    fn network_page_creation_state_with_profile(
+        network: ChromiumNetworkEventsProductionProfile,
+    ) -> (
+        PageCloseRuntime,
+        Arc<Mutex<ProductionCdpTopology>>,
+        Arc<FakeCdpClient>,
+        Arc<RecordingSessionFactory>,
+        CdpPageServices,
+        super::ChromiumNetworkEventDriver,
+        ChromiumBrowserContextNewPageCommandService,
+    ) {
+        let adapter = network.adapter();
+        let runtime_live_objects = if network.allocator_backed_adapters() {
+            usize::MAX
+        } else {
+            24
+        };
         let profile = base_profile_with_runtime(
-            RuntimeLimits::new(24, 4)
+            RuntimeLimits::new(runtime_live_objects, 4)
                 .with_active_commands(2)
                 .with_control_messages(8),
         )
@@ -17524,9 +17970,10 @@ mod tests {
             subscriptions,
             object_ids: Arc::new(AtomicObjectIdSource::new(20).unwrap()),
             adapter_profile: adapter,
+            allocator_backed_adapters: network.allocator_backed_adapters(),
             resources: prepared.resources().clone(),
-            max_page_lanes: 1,
-            max_related_sessions: 0,
+            max_page_lanes: network.max_page_lanes(),
+            max_related_sessions: network.max_related_sessions(),
         });
         let driver = super::ChromiumNetworkEventDriver {
             receiver: browser.subscribe_events().into(),
@@ -18638,6 +19085,40 @@ mod tests {
     }
 
     #[test]
+    fn allocator_backed_navigation_uses_active_command_cursor_bound() {
+        // Arrange
+        let active_commands = 3;
+        let navigation = NavigationInstallationProfile::new(
+            playwright_rust_backend_cdp::CdpNavigationProductionProfile::new_allocator_backed(
+                ResourceScope::extension(7, 2),
+                CdpNavigationLimits::new(1024, 256, 16, 16, 2048, 256),
+            ),
+            playwright_rust_codec_navigation::NavigationCodecLimits::new(2048, 16, 2048),
+            wire_profile(),
+        );
+        let profile = base_profile_with_runtime(
+            RuntimeLimits::new(usize::MAX, usize::MAX).with_active_commands(active_commands),
+        )
+        .with_navigation(navigation);
+
+        // Act
+        let selected = profile
+            .clone()
+            .with_derived_reclaiming_event_fanout()
+            .expect("finite active work should produce a finite fanout");
+
+        // Assert
+        assert_eq!(
+            profile.required_reclaiming_event_subscribers(),
+            active_commands
+        );
+        assert_eq!(
+            selected.connection().reclaiming_event_subscribers(),
+            Some(active_commands)
+        );
+    }
+
+    #[test]
     fn extension_event_cursors_are_included_and_stale_fanout_is_rejected() {
         // Arrange
         let base = base_profile().with_navigation(navigation_profile());
@@ -18679,18 +19160,40 @@ mod tests {
     }
 
     #[test]
-    fn extension_event_cursor_count_overflow_is_rejected_before_installation() {
+    fn allocator_backed_extension_event_cursors_select_dynamic_fanout() {
+        // Arrange
+        let profile = base_profile().with_navigation(navigation_profile());
+
+        // Act
+        let selected = profile
+            .with_allocator_backed_extension_event_subscribers()
+            .with_extension_event_subscribers(1)
+            .unwrap()
+            .with_derived_reclaiming_event_fanout()
+            .unwrap();
+
+        // Assert
+        assert_eq!(selected.required_reclaiming_event_subscribers(), usize::MAX);
+        assert_eq!(
+            selected.connection().reclaiming_event_subscribers(),
+            Some(usize::MAX)
+        );
+    }
+
+    #[test]
+    fn extension_event_cursor_count_maximum_selects_allocator_backed_policy() {
         // Arrange
         let profile = base_profile()
             .with_extension_event_subscribers(usize::MAX)
             .unwrap();
+
         // Act
-        let overflow = profile.with_extension_event_subscribers(1);
+        let selected = profile
+            .with_extension_event_subscribers(1)
+            .expect("the allocator-backed sentinel should absorb later dynamic subscribers");
+
         // Assert
-        assert!(matches!(
-            overflow,
-            Err(playwright_rust_cdp::connection::CdpError::InvalidConfiguration(_))
-        ));
+        assert_eq!(selected.required_reclaiming_event_subscribers(), usize::MAX);
     }
 
     #[test]
@@ -24586,6 +25089,79 @@ mod tests {
     }
 
     #[test]
+    fn allocator_backed_network_contexts_keep_page_adapters_independently_bounded() {
+        // Arrange
+        let lifecycle = NetworkLifecycleLimits::new(2, 64, 256, 16, 32, 8, 256, 64, 64, 128);
+        let adapter =
+            CdpNetworkEventProductionProfile::new(lifecycle, ResourceScope::extension(95, 2))
+                .expect("network adapter profile should validate");
+        let bounded = ChromiumNetworkEventsProductionProfile::new_with_context_limit(adapter, 2, 8)
+            .expect("bounded Context profile should validate");
+
+        // Act
+        let allocator_backed =
+            ChromiumNetworkEventsProductionProfile::new_with_allocator_backed_contexts(adapter, 2)
+                .expect("allocator-backed Context profile should validate");
+
+        // Assert
+        assert_eq!(allocator_backed.max_browser_contexts(), usize::MAX);
+        assert_eq!(allocator_backed.max_page_lanes(), 2);
+        assert_eq!(allocator_backed.max_related_sessions(), 0);
+        assert!(
+            allocator_backed.subscription_retained_bytes() < bounded.subscription_retained_bytes()
+        );
+        assert!(
+            allocator_backed
+                .requirements()
+                .class(ResourceClass::BackendStateBytes)
+                .global
+                < bounded
+                    .requirements()
+                    .class(ResourceClass::BackendStateBytes)
+                    .global
+        );
+    }
+
+    #[test]
+    fn allocator_backed_network_profile_removes_aggregate_page_and_context_caps() {
+        // Arrange
+        let lifecycle = NetworkLifecycleLimits::new(2, 64, 256, 16, 32, 8, 256, 64, 64, 128);
+        let adapter =
+            CdpNetworkEventProductionProfile::new(lifecycle, ResourceScope::extension(95, 2))
+                .expect("network adapter profile should validate");
+
+        // Act
+        let profile = ChromiumNetworkEventsProductionProfile::new_allocator_backed(adapter)
+            .expect("allocator-backed network profile should validate");
+
+        // Assert
+        assert_eq!(profile.max_page_lanes(), usize::MAX);
+        assert_eq!(profile.max_browser_contexts(), usize::MAX);
+        assert_eq!(profile.max_related_sessions(), 0);
+        assert!(profile.allocator_backed_adapters());
+    }
+
+    #[test]
+    fn allocator_backed_related_network_profile_removes_all_aggregate_caps() {
+        // Arrange
+        let lifecycle = NetworkLifecycleLimits::new(2, 64, 256, 16, 32, 8, 256, 64, 64, 128)
+            .with_native_scope_bytes(64);
+        let adapter =
+            CdpNetworkEventProductionProfile::new(lifecycle, ResourceScope::extension(95, 2))
+                .expect("network adapter profile should validate");
+
+        // Act
+        let profile = ChromiumNetworkEventsProductionProfile::new_allocator_backed_with_unbounded_related_sessions(adapter)
+            .expect("allocator-backed related network profile should validate");
+
+        // Assert
+        assert_eq!(profile.max_page_lanes(), usize::MAX);
+        assert_eq!(profile.max_browser_contexts(), usize::MAX);
+        assert_eq!(profile.max_related_sessions(), usize::MAX);
+        assert!(profile.allocator_backed_adapters());
+    }
+
+    #[test]
     fn dedicated_remote_network_profile_installs_one_cross_event_ordered_lane() {
         // Arrange
         let lifecycle = NetworkLifecycleLimits::new(2, 64, 256, 16, 32, 8, 256, 64, 64, 128);
@@ -27081,6 +27657,7 @@ mod tests {
             ObjectId::new(3),
             super::ChromiumNetworkPageAdapter {
                 browser_context_object_id: ObjectId::new(2),
+                kind: super::ChromiumNetworkAdapterKind::Page,
                 adapter: CdpNetworkEventAdapter::new(
                     ObjectId::new(3),
                     "session-a".to_owned(),
@@ -27094,6 +27671,7 @@ mod tests {
             ObjectId::new(5),
             super::ChromiumNetworkPageAdapter {
                 browser_context_object_id: ObjectId::new(2),
+                kind: super::ChromiumNetworkAdapterKind::Page,
                 adapter: CdpNetworkEventAdapter::new(
                     ObjectId::new(5),
                     "session-b".to_owned(),
@@ -27121,6 +27699,7 @@ mod tests {
             subscriptions: subscriptions.clone(),
             object_ids,
             adapter_profile,
+            allocator_backed_adapters: false,
             resources,
             max_page_lanes: 2,
             max_related_sessions: 0,
@@ -27199,6 +27778,7 @@ mod tests {
             ObjectId::new(3),
             super::ChromiumNetworkPageAdapter {
                 browser_context_object_id: ObjectId::new(2),
+                kind: super::ChromiumNetworkAdapterKind::Page,
                 adapter: CdpNetworkEventAdapter::new(
                     ObjectId::new(3),
                     "session-a".to_owned(),
@@ -27226,6 +27806,7 @@ mod tests {
             subscriptions,
             object_ids,
             adapter_profile,
+            allocator_backed_adapters: false,
             resources,
             max_page_lanes: 1,
             max_related_sessions: 2,
@@ -27297,6 +27878,102 @@ mod tests {
                 object_id: ObjectId::new(10),
             }]
         );
+    }
+
+    #[tokio::test]
+    async fn service_worker_network_uses_an_exact_context_lane_without_page_ownership() {
+        // Arrange
+        let (_runtime, _topology, browser, _factory, _services, mut driver, _service) =
+            network_page_creation_state();
+        let context = ObjectId::new(2);
+        let registration = driver.registration_handle();
+        assert!(
+            registration
+                .register_service_worker(context, "service-worker-a")
+                .expect("Service Worker lane should register")
+        );
+        browser.send_event(CdpEvent::new(
+            "Target.attachedToTarget".to_owned(),
+            serde_json::json!({
+                "sessionId": "service-worker-a",
+                "targetInfo": {"type": "service_worker"}
+            }),
+            Some("browser-session".to_owned()),
+        ));
+        browser.send_event(CdpEvent::new(
+            "Network.requestWillBeSent".to_owned(),
+            serde_json::json!({
+                "requestId": "service-worker-request",
+                "type": "Fetch",
+                "request": {
+                    "url": "https://example.test/service-worker-fetch",
+                    "method": "GET",
+                    "headers": {}
+                }
+            }),
+            Some("service-worker-a".to_owned()),
+        ));
+
+        // Act
+        assert!(
+            driver
+                .receive_once()
+                .await
+                .expect("Service Worker attachment should remain Context-owned")
+                .is_none()
+        );
+        let request = driver
+            .receive_once()
+            .await
+            .expect("Service Worker request should route")
+            .expect("Service Worker request should publish");
+
+        // Assert
+        assert_eq!(request.page(), None);
+        assert_eq!(request.owner(), Some(context));
+        assert_eq!(request.events().len(), 1);
+        let source = request
+            .service_worker()
+            .expect("Service Worker source should remain exact");
+        assert_eq!(source.context(), context);
+        assert_eq!(source.worker_id(), "service-worker-a");
+        driver
+            .acknowledge_batch_publication(context)
+            .expect("Context publication should release the barrier");
+        assert_eq!(driver.page_count(), 0);
+        assert_eq!(driver.related_session_count(), 1);
+    }
+
+    #[test]
+    fn allocator_backed_service_worker_network_exceeds_the_legacy_eight_adapter_cap() {
+        // Arrange
+        let adapter = CdpNetworkEventProductionProfile::new(
+            NetworkLifecycleLimits::new(2, 64, 256, 16, 32, 8, 256, 64, 64, 128)
+                .with_native_scope_bytes(64),
+            ResourceScope::extension(95, 2),
+        )
+        .expect("network adapter profile should validate");
+        let network = ChromiumNetworkEventsProductionProfile::new_allocator_backed_with_unbounded_related_sessions(adapter)
+            .expect("allocator-backed Service Worker profile should validate");
+        let (_runtime, _topology, _browser, _factory, _services, driver, _service) =
+            network_page_creation_state_with_profile(network);
+        let registration = driver.registration_handle();
+
+        // Act
+        for index in 0..129_u64 {
+            assert!(
+                registration
+                    .register_service_worker(
+                        ObjectId::new(index + 2),
+                        &format!("service-worker-{index}"),
+                    )
+                    .expect("Service Worker lane should register")
+            );
+        }
+
+        // Assert
+        assert_eq!(driver.related_session_count(), 129);
+        assert_eq!(driver.shared.state.lock().unwrap().adapters.len(), 129);
     }
 
     #[test]

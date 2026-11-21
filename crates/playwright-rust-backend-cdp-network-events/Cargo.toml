@@ -10,6 +10,7 @@ homepage.workspace = true
 [features]
 default = []
 request-frame = []
+response-connection-details = []
 response-security-details = []
 request-timing = [
     "playwright-rust-cap-network-events/request-timing",

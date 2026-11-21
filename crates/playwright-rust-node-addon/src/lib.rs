@@ -18,6 +18,10 @@ mod cdp_sessions;
 #[cfg(feature = "context-cookies")]
 mod context_cookies;
 mod context_settings;
+#[cfg(feature = "context-storage-state")]
+mod context_storage_state;
+#[cfg(feature = "context-tracing-screenshots")]
+mod context_tracing;
 mod deferred_conversion;
 mod environment;
 mod evaluation_value;
@@ -28,6 +32,8 @@ mod frame_navigation;
 mod frame_tree;
 #[cfg(feature = "handles")]
 mod handles;
+#[cfg(feature = "har-recording")]
+mod har_recording;
 #[cfg(feature = "history-navigation")]
 mod history_navigation;
 mod keyboard;
@@ -39,6 +45,8 @@ mod native_napi;
 mod node_reference;
 #[cfg(feature = "page-dialogs")]
 mod page_dialogs;
+#[cfg(feature = "page-pdf")]
+mod page_pdf;
 #[cfg(feature = "page-routes")]
 mod page_routes;
 mod page_snapshot;
@@ -64,6 +72,8 @@ mod url_value;
     feature = "playwright-server-connect-session"
 ))]
 mod user_agent_runtime;
+#[cfg(feature = "video-recording")]
+mod video_recording;
 #[cfg(feature = "handles")]
 mod wait_admission;
 #[cfg(feature = "wait-for-timeout")]
@@ -82,7 +92,11 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use bindgen_prelude::Buffer;
-#[cfg(any(feature = "request-history", feature = "response-finished"))]
+#[cfg(any(
+    feature = "request-history",
+    feature = "response-finished",
+    feature = "worker-events"
+))]
 use bindgen_prelude::External;
 use bindgen_prelude::{PromiseRaw, ToNapiValue};
 use napi_derive::napi;
@@ -106,6 +120,13 @@ pub fn cdp_handshake_headers_enabled() -> bool {
 #[napi]
 pub fn cdp_default_user_agent_enabled() -> bool {
     cfg!(feature = "cdp-default-user-agent")
+}
+
+/// Profile-local ABI proof for the bounded runtime-identity tuple argument.
+#[cfg(feature = "cdp-default-user-agent")]
+#[napi]
+pub fn cdp_default_user_agent_abi_shape() -> u32 {
+    2
 }
 
 /// Build identity for Playwright-compatible CDP HTTP discovery errors.
@@ -207,6 +228,62 @@ pub fn persistent_context_preflight_enabled() -> bool {
     cfg!(feature = "persistent-context-preflight")
 }
 
+/// Build identity for the default-Context locale applied during an owned
+/// persistent Chromium launch.
+#[napi]
+pub fn persistent_context_locale_enabled() -> bool {
+    cfg!(feature = "persistent-context-locale")
+}
+
+/// Build identity for the default-Context timezone applied during an owned
+/// persistent Chromium launch.
+#[napi]
+pub fn persistent_context_timezone_enabled() -> bool {
+    cfg!(feature = "persistent-context-timezone")
+}
+
+/// Build identity for the default-Context geolocation applied during an owned
+/// persistent Chromium launch.
+#[napi]
+pub fn persistent_context_geolocation_enabled() -> bool {
+    cfg!(feature = "persistent-context-geolocation")
+}
+
+/// Build identity for permissions installed on the default Context of an
+/// owned persistent Chromium launch.
+#[napi]
+pub fn persistent_context_geolocation_permission_enabled() -> bool {
+    cfg!(feature = "persistent-context-geolocation-permission")
+}
+
+/// Build identity for HTTP credentials installed on the default Context of an
+/// owned persistent Chromium launch.
+#[napi]
+pub fn persistent_context_http_credentials_enabled() -> bool {
+    cfg!(feature = "persistent-context-http-credentials")
+}
+
+/// Build identity for default-Context offline emulation during an owned
+/// persistent Chromium launch.
+#[napi]
+pub fn persistent_context_offline_enabled() -> bool {
+    cfg!(feature = "persistent-context-offline")
+}
+
+/// Build identity for the default-Context CSP bypass policy during an owned
+/// persistent Chromium launch.
+#[napi]
+pub fn persistent_context_bypass_csp_enabled() -> bool {
+    cfg!(feature = "persistent-context-bypass-csp")
+}
+
+/// Build identity for disabling JavaScript in the default Context of an owned
+/// persistent Chromium launch.
+#[napi]
+pub fn persistent_context_javascript_disabled_enabled() -> bool {
+    cfg!(feature = "persistent-context-javascript-disabled")
+}
+
 /// Build identity only; no session, task, transport or allocation is created.
 #[napi]
 pub fn drag_runtime_enabled() -> bool {
@@ -266,6 +343,24 @@ pub fn page_dialogs_enabled() -> bool {
 #[napi]
 pub fn page_routes_enabled() -> bool {
     cfg!(feature = "page-routes")
+}
+
+/// Build identity for Rust-owned Page and BrowserContext HAR replay.
+#[napi]
+pub fn har_replay_enabled() -> bool {
+    cfg!(feature = "har-replay")
+}
+
+/// Build identity for Context-owned HAR recording and its exact FFI port.
+#[napi]
+pub fn har_recording_enabled() -> bool {
+    cfg!(feature = "har-recording")
+}
+
+/// Build identity for the independently selectable HAR RegExp matcher.
+#[napi(js_name = "harRecordingRegExpEnabled")]
+pub fn har_recording_reg_exp_enabled() -> bool {
+    cfg!(feature = "har-recording-regexp")
 }
 
 /// Build identity for the bounded, opt-in RegExp Page.route matcher.
@@ -330,11 +425,36 @@ pub fn console_events_enabled() -> bool {
     cfg!(feature = "console-events")
 }
 
+/// Build identity for Rust-owned BrowserContext trace console events.
+#[napi]
+pub fn context_tracing_console_enabled() -> bool {
+    cfg!(feature = "context-tracing-console")
+}
+
+/// Build identity for Rust-owned BrowserContext trace network snapshots.
+#[napi]
+pub fn context_tracing_network_enabled() -> bool {
+    cfg!(feature = "context-tracing-network")
+}
+
+/// Build identity for Rust-owned APIRequestContext network tracing.
+#[napi]
+pub fn api_request_tracing_enabled() -> bool {
+    cfg!(feature = "api-request-tracing")
+}
+
 /// Build identity only; Page binding transport remains an explicitly selected
 /// leaf.
 #[napi]
 pub fn page_bindings_enabled() -> bool {
     cfg!(feature = "page-bindings")
+}
+
+/// Build identity only; BrowserContext bindings extend the Page binding
+/// transport while keeping registration state in the Rust host.
+#[napi]
+pub fn context_bindings_enabled() -> bool {
+    cfg!(feature = "context-bindings")
 }
 
 /// Build identity only; Page init-script persistence is independently selected.
@@ -390,6 +510,12 @@ pub fn request_gc_enabled() -> bool {
     cfg!(feature = "request-gc")
 }
 
+/// Build identity only; Chromium PDF export remains an independently selected leaf.
+#[napi]
+pub fn page_pdf_enabled() -> bool {
+    cfg!(feature = "page-pdf")
+}
+
 /// Build identity only; navigation response bodies remain independently selected.
 #[napi]
 pub fn response_body_enabled() -> bool {
@@ -419,6 +545,18 @@ pub fn request_frame_enabled() -> bool {
 #[napi]
 pub fn response_events_enabled() -> bool {
     cfg!(feature = "response-events")
+}
+
+/// Build identity for Context-owned Chromium Service Worker publication.
+#[napi]
+pub fn service_worker_events_enabled() -> bool {
+    cfg!(feature = "service-worker-events")
+}
+
+/// Build identity for Service Worker requests published on BrowserContext.
+#[napi]
+pub fn worker_network_events_enabled() -> bool {
+    cfg!(feature = "worker-network-events")
 }
 
 /// Build identity only; terminal response observation remains independently
@@ -476,6 +614,12 @@ pub fn context_cookies_enabled() -> bool {
     cfg!(feature = "context-cookies")
 }
 
+/// Build identity for bounded BrowserContext storage-state collection.
+#[napi]
+pub fn context_storage_state_enabled() -> bool {
+    cfg!(feature = "context-storage-state")
+}
+
 /// Build identity only; large evaluation input copies remain opt-in.
 #[napi(js_name = "largeEvaluationInputsEnabled")]
 pub fn large_evaluation_inputs_enabled() -> bool {
@@ -498,6 +642,42 @@ pub fn context_proxy_enabled() -> bool {
 #[napi]
 pub fn context_offline_enabled() -> bool {
     cfg!(feature = "context-offline")
+}
+
+/// Build identity only; Context locale emulation remains independently selectable.
+#[napi]
+pub fn context_locale_enabled() -> bool {
+    cfg!(feature = "context-locale")
+}
+
+/// Build identity only; Context timezone emulation remains independently selectable.
+#[napi]
+pub fn context_timezone_enabled() -> bool {
+    cfg!(feature = "context-timezone")
+}
+
+/// Build identity only; Context geolocation remains independently selectable.
+#[napi]
+pub fn context_geolocation_enabled() -> bool {
+    cfg!(feature = "context-geolocation")
+}
+
+/// Build identity for Chromium BrowserContext permission overrides.
+#[napi]
+pub fn context_geolocation_permission_enabled() -> bool {
+    cfg!(feature = "context-geolocation-permission")
+}
+
+/// Build identity for Chromium BrowserContext HTTP authentication.
+#[napi]
+pub fn context_http_credentials_enabled() -> bool {
+    cfg!(feature = "context-http-credentials")
+}
+
+/// Build identity only; Context certificate-error policy remains independently selectable.
+#[napi]
+pub fn ignore_https_errors_enabled() -> bool {
+    cfg!(feature = "ignore-https-errors")
 }
 
 /// Build identity only; Context CSP bypass remains independently selectable.
@@ -733,6 +913,9 @@ pub struct SessionMetrics {
 pub struct NavigationResponse {
     pub request_id: Option<String>,
     pub request: Option<NativeNavigationRequest>,
+    pub context_id: Option<String>,
+    pub service_worker_id: Option<String>,
+    pub from_service_worker: bool,
     pub url: String,
     pub status: i64,
     pub status_text: String,
@@ -745,6 +928,9 @@ pub struct NavigationResponse {
 pub struct NavigationResponse {
     pub request_id: Option<String>,
     pub request: Option<NativeNavigationRequest>,
+    pub context_id: Option<String>,
+    pub service_worker_id: Option<String>,
+    pub from_service_worker: bool,
     pub url: String,
     pub status: i64,
     pub status_text: String,
@@ -760,10 +946,65 @@ pub struct NativeNavigationRequestHeader {
     pub value: String,
 }
 
+#[cfg(feature = "worker-events")]
+#[napi(object, object_from_js = false)]
+pub struct NativeWorkerDescriptor {
+    pub id: String,
+    pub url: String,
+    pub owner: External<Arc<playwright_rust_node_host::worker_events::WorkerOwner>>,
+}
+
+#[cfg(feature = "service-worker-events")]
+#[napi(object, object_from_js = false)]
+pub struct NativeServiceWorkerNotice {
+    pub kind: String,
+    pub context_id: String,
+    pub worker: NativeWorkerDescriptor,
+}
+
+#[cfg(feature = "worker-events")]
+fn native_worker_descriptor(
+    owner: Arc<playwright_rust_node_host::worker_events::WorkerOwner>,
+) -> NativeWorkerDescriptor {
+    NativeWorkerDescriptor {
+        id: owner.id().to_owned(),
+        url: owner.url().to_owned(),
+        owner: External::new(owner),
+    }
+}
+
+#[cfg(feature = "service-worker-events")]
+struct HostServiceWorkerNotice(playwright_rust_node_host::worker_events::ServiceWorkerNotice);
+
+#[cfg(feature = "service-worker-events")]
+impl ToNapiValue for HostServiceWorkerNotice {
+    unsafe fn to_napi_value(
+        env: napi_runtime::sys::napi_env,
+        value: Self,
+    ) -> napi::Result<napi_runtime::sys::napi_value> {
+        let notice = value.0;
+        let result = NativeServiceWorkerNotice {
+            kind: match notice.kind {
+                playwright_rust_node_host::worker_events::WorkerNoticeKind::Created => {
+                    "created".to_owned()
+                }
+                playwright_rust_node_host::worker_events::WorkerNoticeKind::Closed => {
+                    "closed".to_owned()
+                }
+            },
+            context_id: notice.context.get().to_string(),
+            worker: native_worker_descriptor(notice.owner),
+        };
+        unsafe { NativeServiceWorkerNotice::to_napi_value(env, result) }
+    }
+}
+
 #[cfg(not(feature = "request-post-data-json"))]
 #[napi(object)]
 pub struct NativeNavigationRequest {
     pub id: String,
+    pub context_id: Option<String>,
+    pub service_worker_id: Option<String>,
     pub url: String,
     pub method: String,
     pub resource_type: String,
@@ -771,6 +1012,7 @@ pub struct NativeNavigationRequest {
     pub post_data: Option<Buffer>,
     pub is_navigation_request: bool,
     pub frame_id: Option<String>,
+    pub frame_available: bool,
     pub redirected_from: Option<String>,
 }
 
@@ -781,6 +1023,8 @@ pub struct NativeNavigationRequest {
 #[napi(object)]
 pub struct NativeNavigationRequest {
     pub id: String,
+    pub context_id: Option<String>,
+    pub service_worker_id: Option<String>,
     pub url: String,
     pub method: String,
     pub resource_type: String,
@@ -788,6 +1032,7 @@ pub struct NativeNavigationRequest {
     pub post_data: Option<Buffer>,
     pub is_navigation_request: bool,
     pub frame_id: Option<String>,
+    pub frame_available: bool,
     pub redirected_from: Option<String>,
     pub post_data_json_available: bool,
     pub post_data_json: Option<serde_json::Value>,
@@ -811,6 +1056,8 @@ impl From<&playwright_rust_node_host::network_events::NetworkRequestRecord>
             };
         Self {
             id: value.id.clone(),
+            context_id: value.context_id.clone(),
+            service_worker_id: value.service_worker_id.clone(),
             url: value.url.clone(),
             method: value.method.clone(),
             resource_type: value.resource_type.to_ascii_lowercase(),
@@ -828,6 +1075,7 @@ impl From<&playwright_rust_node_host::network_events::NetworkRequestRecord>
                 .frame_available
                 .then(|| value.frame_id.clone())
                 .flatten(),
+            frame_available: value.frame_available,
             redirected_from: value.redirected_from.clone(),
             #[cfg(feature = "request-post-data-json")]
             post_data_json_available: true,
@@ -843,7 +1091,9 @@ impl From<&playwright_rust_node_host::network_events::NetworkRequestRecord>
 #[napi(object, object_from_js = false)]
 pub struct NativeRequestNotice {
     pub sequence: u64,
-    pub page_id: String,
+    pub page_id: Option<String>,
+    pub context_id: Option<String>,
+    pub service_worker_id: Option<String>,
     pub kind: String,
     pub request: NativeNavigationRequest,
     pub failure_text: Option<String>,
@@ -853,7 +1103,9 @@ pub struct NativeRequestNotice {
 #[napi(object, object_from_js = false)]
 pub struct NativeRequestNotice {
     pub sequence: u64,
-    pub page_id: String,
+    pub page_id: Option<String>,
+    pub context_id: Option<String>,
+    pub service_worker_id: Option<String>,
     pub kind: String,
     pub request: NativeNavigationRequest,
     pub failure_text: Option<String>,
@@ -888,9 +1140,14 @@ impl ToNapiValue for HostRequestNotice {
 fn native_request_notice(
     notice: playwright_rust_node_host::network_events::RequestNotice,
 ) -> NativeRequestNotice {
+    let service_worker_id = notice.request.service_worker_id.clone();
     NativeRequestNotice {
         sequence: notice.sequence,
-        page_id: notice.page.get().to_string(),
+        page_id: service_worker_id
+            .is_none()
+            .then(|| notice.page.get().to_string()),
+        context_id: notice.request.context_id.clone(),
+        service_worker_id,
         kind: notice.kind.as_str().to_owned(),
         request: NativeNavigationRequest::from(&notice.request),
         failure_text: notice.failure_text,
@@ -907,7 +1164,9 @@ fn native_request_notice(
 #[napi(object, object_from_js = false)]
 pub struct NativeResponseNotice {
     pub sequence: u64,
-    pub page_id: String,
+    pub page_id: Option<String>,
+    pub context_id: Option<String>,
+    pub service_worker_id: Option<String>,
     pub native_request_id: Option<String>,
     pub response: NavigationResponse,
 }
@@ -920,7 +1179,9 @@ pub struct NativeResponseNotice {
 #[napi(object, object_from_js = false)]
 pub struct NativeResponseNotice {
     pub sequence: u64,
-    pub page_id: String,
+    pub page_id: Option<String>,
+    pub context_id: Option<String>,
+    pub service_worker_id: Option<String>,
     pub native_request_id: Option<String>,
     pub response: NavigationResponse,
     pub history_owner:
@@ -935,7 +1196,9 @@ pub struct NativeResponseNotice {
 #[napi(object, object_from_js = false)]
 pub struct NativeResponseNotice {
     pub sequence: u64,
-    pub page_id: String,
+    pub page_id: Option<String>,
+    pub context_id: Option<String>,
+    pub service_worker_id: Option<String>,
     pub native_request_id: Option<String>,
     pub response: NavigationResponse,
     pub finished_owner:
@@ -950,7 +1213,9 @@ pub struct NativeResponseNotice {
 #[napi(object, object_from_js = false)]
 pub struct NativeResponseNotice {
     pub sequence: u64,
-    pub page_id: String,
+    pub page_id: Option<String>,
+    pub context_id: Option<String>,
+    pub service_worker_id: Option<String>,
     pub native_request_id: Option<String>,
     pub response: NavigationResponse,
     pub finished_owner:
@@ -993,13 +1258,16 @@ impl ToNapiValue for HostResponseNotice {
 #[cfg(any(feature = "response-events", feature = "request-history"))]
 fn native_response_notice(
     sequence: u64,
-    page_id: String,
+    owner_id: String,
     native_request_id: Option<String>,
     response: playwright_rust_node_host::network_events::NetworkResponseRecord,
     #[cfg(feature = "request-history")] history_owner: Option<
         Arc<playwright_rust_node_host::network_events::RequestHistoryOwner>,
     >,
 ) -> NativeResponseNotice {
+    let context_id = response.context_id.clone();
+    let service_worker_id = response.service_worker_id.clone();
+    let page_id = service_worker_id.is_none().then_some(owner_id);
     #[cfg(feature = "request-history")]
     let request = history_owner
         .as_deref()
@@ -1014,10 +1282,15 @@ fn native_response_notice(
     NativeResponseNotice {
         sequence,
         page_id,
+        context_id: context_id.clone(),
+        service_worker_id: service_worker_id.clone(),
         native_request_id,
         response: NavigationResponse {
             request_id: Some(response.request_id),
             request,
+            context_id,
+            service_worker_id,
+            from_service_worker: response.from_service_worker,
             url: response.url,
             status: response.status,
             status_text: response.status_text,
@@ -1155,6 +1428,9 @@ impl From<playwright_rust_node_host::ResponseMetadata> for NavigationResponse {
         Self {
             request_id: value.request_id,
             request,
+            context_id: None,
+            service_worker_id: None,
+            from_service_worker: false,
             url: value.url,
             status: value.status,
             status_text: value.status_text,
@@ -1280,13 +1556,128 @@ pub struct NativeSession {
     selectors: playwright_rust_node_host::selector_registry::SelectorRegistry,
 }
 
-#[cfg(feature = "context-proxy")]
+#[cfg(feature = "official-test-browser-kill")]
+#[napi]
+impl NativeSession {
+    #[napi]
+    pub fn kill_owned_browser_for_tests<'env>(
+        &self,
+        env: &'env Env,
+    ) -> napi::Result<PromiseRaw<'env, Unknown<'env>>> {
+        let execution = self
+            .ffi
+            .admit(FfiLane::Close, boundary::SMALL_ALLOWANCE)
+            .map_err(binding_error)?;
+        let host = Arc::clone(&self.host);
+        boundary::spawn_published(env, execution, self.publications.clone(), async move {
+            host.kill_owned_browser_for_tests().await
+        })
+    }
+}
+
+#[cfg(feature = "context-geolocation-permission")]
+fn context_permission_input_allowance(
+    permissions: &[String],
+    origin_bytes: usize,
+) -> napi::Result<u64> {
+    permissions.iter().try_fold(
+        boundary::SMALL_ALLOWANCE
+            .checked_add(u64::try_from(origin_bytes).map_err(|_| {
+                binding_error(HostError::ResourceExhausted(
+                    "permission origin byte length overflow".into(),
+                ))
+            })?)
+            .ok_or_else(|| {
+                binding_error(HostError::ResourceExhausted(
+                    "permission FFI allowance overflow".into(),
+                ))
+            })?,
+        |total, permission| {
+            total
+                .checked_add(u64::try_from(permission.len()).map_err(|_| {
+                    binding_error(HostError::ResourceExhausted(
+                        "permission name byte length overflow".into(),
+                    ))
+                })?)
+                .ok_or_else(|| {
+                    binding_error(HostError::ResourceExhausted(
+                        "permission FFI allowance overflow".into(),
+                    ))
+                })
+        },
+    )
+}
+
+#[cfg(feature = "context-geolocation-permission")]
+#[napi]
+impl NativeSession {
+    #[napi]
+    pub fn grant_context_permissions<'env>(
+        &self,
+        env: &'env Env,
+        context_id: JsString<'_>,
+        permissions: Vec<String>,
+        origin: Option<JsString<'_>>,
+    ) -> napi::Result<PromiseRaw<'env, Unknown<'env>>> {
+        let allowance = context_permission_input_allowance(
+            &permissions,
+            origin
+                .as_ref()
+                .map(JsString::utf8_len)
+                .transpose()?
+                .unwrap_or(0),
+        )?;
+        let execution = self
+            .ffi
+            .admit(FfiLane::Command, allowance)
+            .map_err(binding_error)?;
+        let context_id = boundary::bounded_string(context_id, 20, "context ID")?;
+        let origin = origin
+            .map(|value| boundary::bounded_string(value, 16 * 1024, "permission origin"))
+            .transpose()?;
+        let host = self.host.clone();
+        boundary::spawn_published(env, execution, self.publications.clone(), async move {
+            host.grant_context_permissions(&context_id, &permissions, origin.as_deref())
+                .await
+        })
+    }
+
+    #[napi]
+    pub fn clear_context_permissions<'env>(
+        &self,
+        env: &'env Env,
+        context_id: JsString<'_>,
+    ) -> napi::Result<PromiseRaw<'env, Unknown<'env>>> {
+        let execution = self
+            .ffi
+            .admit(FfiLane::Command, boundary::SMALL_ALLOWANCE)
+            .map_err(binding_error)?;
+        let context_id = boundary::bounded_string(context_id, 20, "context ID")?;
+        let host = self.host.clone();
+        boundary::spawn_published(env, execution, self.publications.clone(), async move {
+            host.clear_context_permissions(&context_id).await
+        })
+    }
+}
+
 #[napi(object)]
 pub struct NativeContextProxy {
     pub server: String,
     pub bypass: Option<String>,
     pub username: Option<String>,
     pub password: Option<String>,
+}
+
+#[cfg(feature = "context-proxy")]
+impl NativeContextProxy {
+    fn into_host(self) -> std::result::Result<playwright_rust_node_host::ContextProxy, HostError> {
+        playwright_rust_node_host::ContextProxy::new(
+            self.server,
+            self.bypass,
+            self.username,
+            self.password,
+        )
+    }
 }
 
 #[cfg(feature = "context-api-request")]
@@ -1306,6 +1697,77 @@ impl NativeSession {
             Arc::clone(&self.host),
             context_id,
             options,
+        )
+    }
+}
+
+#[cfg(feature = "service-worker-events")]
+#[napi]
+impl NativeSession {
+    #[napi]
+    pub fn next_service_worker_notice<'env>(
+        &self,
+        env: &'env Env,
+    ) -> napi::Result<PromiseRaw<'env, Unknown<'env>>> {
+        let execution = self
+            .ffi
+            .admit(FfiLane::Watch, boundary::SMALL_ALLOWANCE)
+            .map_err(binding_error)?;
+        let host = Arc::clone(&self.host);
+        boundary::spawn_published(env, execution, self.publications.clone(), async move {
+            host.next_service_worker_notice()
+                .await
+                .map(HostServiceWorkerNotice)
+        })
+    }
+
+    #[napi]
+    pub fn context_service_workers(
+        &self,
+        context_id: JsString<'_>,
+    ) -> napi::Result<Vec<NativeWorkerDescriptor>> {
+        let context_id = boundary::bounded_string(context_id, 20, "BrowserContext ID")?;
+        self.host
+            .context_service_workers(&context_id)
+            .map(|workers| workers.into_iter().map(native_worker_descriptor).collect())
+            .map_err(binding_error)
+    }
+}
+
+#[cfg(feature = "worker-events")]
+#[napi]
+impl NativeSession {
+    #[napi]
+    pub fn worker_evaluate<'env>(
+        &self,
+        env: &'env Env,
+        owner: &External<Arc<playwright_rust_node_host::worker_events::WorkerOwner>>,
+        source: JsString<'env>,
+        is_function: bool,
+        argument: Unknown<'env>,
+    ) -> napi::Result<PromiseRaw<'env, Unknown<'env>>> {
+        let execution = self
+            .ffi
+            .admit(
+                FfiLane::Command,
+                playwright_rust_node_host::evaluation::FFI_ALLOWANCE,
+            )
+            .map_err(binding_error)?;
+        let source = evaluation_value::source(env, source, is_function)?;
+        let input = self.conversions.prepare(env, argument)?;
+        self.conversions.schedule(
+            env,
+            deferred_conversion::EvaluationCall {
+                publications: self.publications.clone(),
+                execution,
+                host: Arc::clone(&self.host),
+                target: deferred_conversion::EvaluationTarget::WorkerValue(Arc::clone(
+                    owner.as_ref(),
+                )),
+                source,
+                is_function,
+                input,
+            },
         )
     }
 }
@@ -1432,6 +1894,36 @@ impl NativeSession {
     }
 }
 
+#[cfg(feature = "ignore-https-errors")]
+#[napi]
+impl NativeSession {
+    #[napi]
+    pub fn new_context_with_ignore_https_errors<'env>(
+        &self,
+        env: &'env Env,
+        base_url: Option<JsString<'_>>,
+        enabled: bool,
+    ) -> napi::Result<PromiseRaw<'env, Unknown<'env>>> {
+        let execution = self
+            .ffi
+            .admit(FfiLane::Command, boundary::SMALL_ALLOWANCE)
+            .map_err(binding_error)?;
+        let base_url = context_settings::read_base_url(env, base_url)?;
+        let host = self.host.clone();
+        boundary::spawn_published(env, execution, self.publications.clone(), async move {
+            ContextDescriptor::try_from(
+                host.new_context_with_ignore_https_errors(
+                    base_url.as_deref(),
+                    #[cfg(feature = "device-emulation")]
+                    None,
+                    enabled,
+                )
+                .await?,
+            )
+        })
+    }
+}
+
 #[cfg(feature = "bypass-csp")]
 #[napi]
 impl NativeSession {
@@ -1516,9 +2008,541 @@ impl NativeSession {
     }
 }
 
+#[cfg(feature = "context-locale")]
+fn context_locale_input_allowance(lengths: &[usize]) -> napi::Result<u64> {
+    lengths
+        .iter()
+        .try_fold(boundary::SMALL_ALLOWANCE, |total, length| {
+            let length = u64::try_from(*length).map_err(|_| {
+                binding_error(HostError::ResourceExhausted(
+                    "Context locale FFI input byte length overflow".into(),
+                ))
+            })?;
+            total.checked_add(length).ok_or_else(|| {
+                binding_error(HostError::ResourceExhausted(
+                    "Context locale FFI input byte allowance overflow".into(),
+                ))
+            })
+        })
+}
+
+#[cfg(feature = "context-geolocation")]
+#[napi]
+impl NativeSession {
+    #[napi]
+    pub fn set_context_geolocation<'env>(
+        &self,
+        env: &'env Env,
+        context_id: JsString<'_>,
+        geolocation: Option<NativeContextGeolocation>,
+    ) -> napi::Result<PromiseRaw<'env, Unknown<'env>>> {
+        let execution = self
+            .ffi
+            .admit(FfiLane::Command, boundary::SMALL_ALLOWANCE)
+            .map_err(binding_error)?;
+        let context_id = boundary::bounded_string(context_id, 20, "context ID")?;
+        let geolocation = geolocation
+            .map(NativeContextGeolocation::into_host)
+            .transpose()
+            .map_err(binding_error)?;
+        let host = self.host.clone();
+        boundary::spawn_published(env, execution, self.publications.clone(), async move {
+            host.set_context_geolocation(&context_id, geolocation).await
+        })
+    }
+}
+
+#[cfg(feature = "context-http-credentials")]
+fn context_http_credentials_input_allowance(
+    context_id_bytes: usize,
+    credentials: Option<&NativeContextHttpCredentials>,
+) -> napi::Result<u64> {
+    let credential_bytes = credentials
+        .map_or(Some(0), |credentials| {
+            credentials
+                .username
+                .len()
+                .checked_add(credentials.password.len())
+                .and_then(|total| {
+                    total.checked_add(credentials.origin.as_ref().map_or(0, String::len))
+                })
+        })
+        .ok_or_else(|| {
+            binding_error(HostError::ResourceExhausted(
+                "Context HTTP credentials input byte length overflow".into(),
+            ))
+        })?;
+    let input_bytes = context_id_bytes
+        .checked_add(credential_bytes)
+        .ok_or_else(|| {
+            binding_error(HostError::ResourceExhausted(
+                "Context HTTP credentials input byte length overflow".into(),
+            ))
+        })?;
+    boundary::SMALL_ALLOWANCE
+        .checked_add(u64::try_from(input_bytes).map_err(|_| {
+            binding_error(HostError::ResourceExhausted(
+                "Context HTTP credentials FFI input byte length overflow".into(),
+            ))
+        })?)
+        .ok_or_else(|| {
+            binding_error(HostError::ResourceExhausted(
+                "Context HTTP credentials FFI input byte allowance overflow".into(),
+            ))
+        })
+}
+
+#[cfg(feature = "context-http-credentials")]
+#[napi]
+impl NativeSession {
+    #[napi]
+    pub fn set_context_http_credentials<'env>(
+        &self,
+        env: &'env Env,
+        context_id: JsString<'_>,
+        credentials: Option<NativeContextHttpCredentials>,
+    ) -> napi::Result<PromiseRaw<'env, Unknown<'env>>> {
+        let allowance =
+            context_http_credentials_input_allowance(context_id.utf8_len()?, credentials.as_ref())?;
+        let execution = self
+            .ffi
+            .admit(FfiLane::Command, allowance)
+            .map_err(binding_error)?;
+        let context_id = boundary::bounded_string(context_id, 20, "context ID")?;
+        let credentials = credentials
+            .map(NativeContextHttpCredentials::into_host)
+            .transpose()
+            .map_err(binding_error)?;
+        let host = self.host.clone();
+        boundary::spawn_published(env, execution, self.publications.clone(), async move {
+            host.set_context_http_credentials(&context_id, credentials)
+                .await
+        })
+    }
+}
+
+#[cfg(feature = "context-locale")]
+#[napi]
+impl NativeSession {
+    #[napi]
+    pub fn new_context_with_locale<'env>(
+        &self,
+        env: &'env Env,
+        base_url: Option<JsString<'_>>,
+        locale: JsString<'_>,
+    ) -> napi::Result<PromiseRaw<'env, Unknown<'env>>> {
+        let allowance = context_locale_input_allowance(&[
+            base_url
+                .as_ref()
+                .map(JsString::utf8_len)
+                .transpose()?
+                .unwrap_or(0),
+            locale.utf8_len()?,
+        ])?;
+        let execution = self
+            .ffi
+            .admit(FfiLane::Command, allowance)
+            .map_err(binding_error)?;
+        let base_url = context_settings::read_base_url(env, base_url)?;
+        let locale =
+            playwright_rust_node_host::ContextLocale::new(locale.into_utf8()?.into_owned()?)
+                .map_err(binding_error)?;
+        let policies =
+            playwright_rust_node_host::ContextPolicyOptions::default().with_locale(Some(locale));
+        let host = self.host.clone();
+        boundary::spawn_published(env, execution, self.publications.clone(), async move {
+            ContextDescriptor::try_from(
+                host.new_context_with_policies(
+                    base_url.as_deref(),
+                    #[cfg(feature = "device-emulation")]
+                    None,
+                    policies,
+                )
+                .await?,
+            )
+        })
+    }
+}
+
+#[napi(object)]
+pub struct NativeDeviceContextOptions {
+    pub user_agent: Option<String>,
+    pub viewport_width: Option<u32>,
+    pub viewport_height: Option<u32>,
+    pub screen_width: Option<u32>,
+    pub screen_height: Option<u32>,
+    pub device_scale_factor: Option<f64>,
+    pub is_mobile: Option<bool>,
+    pub has_touch: Option<bool>,
+}
+
+#[cfg(feature = "device-emulation")]
+impl NativeDeviceContextOptions {
+    fn into_host(
+        self,
+    ) -> std::result::Result<playwright_rust_node_host::DeviceContextOptions, HostError> {
+        let viewport = match (self.viewport_width, self.viewport_height) {
+            (Some(width), Some(height)) => Some((width, height)),
+            (None, None) => None,
+            _ => {
+                return Err(HostError::InvalidArgument(
+                    "device viewport requires both width and height".into(),
+                ));
+            }
+        };
+        let screen = match (self.screen_width, self.screen_height) {
+            (Some(width), Some(height)) => Some((width, height)),
+            (None, None) => None,
+            _ => {
+                return Err(HostError::InvalidArgument(
+                    "device screen requires both width and height".into(),
+                ));
+            }
+        };
+        playwright_rust_node_host::DeviceContextOptions::new(
+            self.user_agent,
+            viewport,
+            screen,
+            self.device_scale_factor,
+            self.is_mobile,
+            self.has_touch,
+        )
+    }
+}
+
+#[cfg(any(
+    feature = "extra-headers",
+    feature = "context-locale",
+    feature = "context-timezone",
+    feature = "context-geolocation",
+    feature = "context-geolocation-permission",
+    feature = "context-http-credentials",
+    feature = "context-offline",
+    feature = "context-proxy",
+    feature = "ignore-https-errors",
+    feature = "bypass-csp"
+))]
+#[napi(object)]
+pub struct NativeContextGeolocation {
+    pub longitude: f64,
+    pub latitude: f64,
+    pub accuracy: Option<f64>,
+}
+
+#[cfg(any(
+    feature = "extra-headers",
+    feature = "context-locale",
+    feature = "context-timezone",
+    feature = "context-geolocation",
+    feature = "context-geolocation-permission",
+    feature = "context-http-credentials",
+    feature = "context-offline",
+    feature = "context-proxy",
+    feature = "ignore-https-errors",
+    feature = "bypass-csp"
+))]
+#[napi(object)]
+pub struct NativeContextHttpCredentials {
+    pub username: String,
+    pub password: String,
+    pub origin: Option<String>,
+    pub send_always: Option<bool>,
+}
+
+#[cfg(feature = "context-http-credentials")]
+impl NativeContextHttpCredentials {
+    fn into_host(
+        self,
+    ) -> std::result::Result<playwright_rust_node_host::ContextHttpCredentials, HostError> {
+        playwright_rust_node_host::ContextHttpCredentials::new_with_send(
+            self.username,
+            self.password,
+            self.origin,
+            self.send_always.unwrap_or(false),
+        )
+    }
+}
+
+#[cfg(feature = "context-geolocation")]
+impl NativeContextGeolocation {
+    fn into_host(
+        self,
+    ) -> std::result::Result<playwright_rust_node_host::ContextGeolocation, HostError> {
+        playwright_rust_node_host::ContextGeolocation::new(
+            self.longitude,
+            self.latitude,
+            self.accuracy.unwrap_or(0.0),
+        )
+    }
+}
+
+#[cfg(any(
+    feature = "extra-headers",
+    feature = "context-locale",
+    feature = "context-timezone",
+    feature = "context-geolocation",
+    feature = "context-geolocation-permission",
+    feature = "context-http-credentials",
+    feature = "context-offline",
+    feature = "context-proxy",
+    feature = "ignore-https-errors",
+    feature = "bypass-csp"
+))]
+#[napi(object)]
+pub struct NativeContextCreationOptions {
+    /// Keeps the N-API object nonempty in an extra-headers-only build. Callers
+    /// leave this unset; it is not a browser policy.
+    pub reserved: Option<bool>,
+    pub device: Option<NativeDeviceContextOptions>,
+    pub locale: Option<String>,
+    pub timezone_id: Option<String>,
+    pub geolocation: Option<NativeContextGeolocation>,
+    pub permissions: Option<Vec<String>>,
+    pub http_credentials: Option<NativeContextHttpCredentials>,
+    pub offline: Option<bool>,
+    pub proxy: Option<NativeContextProxy>,
+    pub ignore_https_errors: Option<bool>,
+    pub bypass_csp: Option<bool>,
+}
+
+#[cfg(any(
+    feature = "extra-headers",
+    feature = "context-locale",
+    feature = "context-timezone",
+    feature = "context-geolocation",
+    feature = "context-geolocation-permission",
+    feature = "context-http-credentials",
+    feature = "context-offline",
+    feature = "context-proxy",
+    feature = "ignore-https-errors",
+    feature = "bypass-csp"
+))]
+pub(crate) struct HostContextCreationOptions {
+    #[cfg(feature = "device-emulation")]
+    device: Option<playwright_rust_node_host::DeviceContextOptions>,
+    policies: playwright_rust_node_host::ContextPolicyOptions,
+}
+
+#[cfg(any(
+    feature = "extra-headers",
+    feature = "context-locale",
+    feature = "context-timezone",
+    feature = "context-geolocation",
+    feature = "context-geolocation-permission",
+    feature = "context-http-credentials",
+    feature = "context-offline",
+    feature = "context-proxy",
+    feature = "ignore-https-errors",
+    feature = "bypass-csp"
+))]
+impl NativeContextCreationOptions {
+    pub(crate) fn ffi_allowance(&self, base: u64) -> napi::Result<u64> {
+        #[cfg(feature = "context-locale")]
+        let locale_bytes = self.locale.as_ref().map(String::len).unwrap_or(0);
+        #[cfg(not(feature = "context-locale"))]
+        let locale_bytes = 0;
+        let locale_bytes = u64::try_from(locale_bytes).map_err(|_| {
+            binding_error(HostError::ResourceExhausted(
+                "Context locale FFI input byte length overflow".into(),
+            ))
+        })?;
+        let allowance = base.checked_add(locale_bytes).ok_or_else(|| {
+            binding_error(HostError::ResourceExhausted(
+                "Context policy FFI input byte allowance overflow".into(),
+            ))
+        })?;
+        #[cfg(feature = "context-timezone")]
+        let timezone_bytes = self.timezone_id.as_ref().map(String::len).unwrap_or(0);
+        #[cfg(not(feature = "context-timezone"))]
+        let timezone_bytes = 0;
+        let timezone_bytes = u64::try_from(timezone_bytes).map_err(|_| {
+            binding_error(HostError::ResourceExhausted(
+                "Context timezone FFI input byte length overflow".into(),
+            ))
+        })?;
+        let allowance = allowance.checked_add(timezone_bytes).ok_or_else(|| {
+            binding_error(HostError::ResourceExhausted(
+                "Context policy FFI input byte allowance overflow".into(),
+            ))
+        })?;
+        #[cfg(feature = "context-geolocation-permission")]
+        let permission_bytes = self
+            .permissions
+            .as_ref()
+            .into_iter()
+            .flatten()
+            .try_fold(0usize, |total, permission| {
+                total.checked_add(permission.len())
+            })
+            .ok_or_else(|| {
+                binding_error(HostError::ResourceExhausted(
+                    "Context permission input byte length overflow".into(),
+                ))
+            })?;
+        #[cfg(not(feature = "context-geolocation-permission"))]
+        let permission_bytes = 0;
+        let allowance = allowance
+            .checked_add(u64::try_from(permission_bytes).map_err(|_| {
+                binding_error(HostError::ResourceExhausted(
+                    "Context permission FFI input byte length overflow".into(),
+                ))
+            })?)
+            .ok_or_else(|| {
+                binding_error(HostError::ResourceExhausted(
+                    "Context policy FFI input byte allowance overflow".into(),
+                ))
+            })?;
+        #[cfg(feature = "context-http-credentials")]
+        let credential_bytes = if let Some(credentials) = self.http_credentials.as_ref() {
+            credentials
+                .username
+                .len()
+                .checked_add(credentials.password.len())
+                .and_then(|total| {
+                    total.checked_add(credentials.origin.as_ref().map_or(0, String::len))
+                })
+                .ok_or_else(|| {
+                    binding_error(HostError::ResourceExhausted(
+                        "Context HTTP credentials input byte length overflow".into(),
+                    ))
+                })?
+        } else {
+            0
+        };
+        #[cfg(not(feature = "context-http-credentials"))]
+        let credential_bytes = 0;
+        allowance
+            .checked_add(u64::try_from(credential_bytes).map_err(|_| {
+                binding_error(HostError::ResourceExhausted(
+                    "Context HTTP credentials FFI input byte length overflow".into(),
+                ))
+            })?)
+            .ok_or_else(|| {
+                binding_error(HostError::ResourceExhausted(
+                    "Context policy FFI input byte allowance overflow".into(),
+                ))
+            })
+    }
+
+    pub(crate) fn into_host(self) -> std::result::Result<HostContextCreationOptions, HostError> {
+        let policies = playwright_rust_node_host::ContextPolicyOptions::default();
+        #[cfg(feature = "context-locale")]
+        let policies = policies.with_locale(
+            self.locale
+                .map(playwright_rust_node_host::ContextLocale::new)
+                .transpose()?,
+        );
+        #[cfg(feature = "context-timezone")]
+        let policies = policies.with_timezone(
+            self.timezone_id
+                .map(playwright_rust_node_host::ContextTimezone::new)
+                .transpose()?,
+        );
+        #[cfg(feature = "context-geolocation")]
+        let policies = policies.with_geolocation(
+            self.geolocation
+                .map(NativeContextGeolocation::into_host)
+                .transpose()?,
+        );
+        #[cfg(feature = "context-geolocation-permission")]
+        let policies =
+            policies.with_permissions(playwright_rust_node_host::ContextPermissions::new(
+                self.permissions.unwrap_or_default(),
+            )?);
+        #[cfg(feature = "context-http-credentials")]
+        let policies = policies.with_http_credentials(
+            self.http_credentials
+                .map(NativeContextHttpCredentials::into_host)
+                .transpose()?,
+        );
+        #[cfg(feature = "context-offline")]
+        let policies = policies.with_offline(self.offline.unwrap_or(false));
+        #[cfg(feature = "context-proxy")]
+        let policies =
+            policies.with_proxy(self.proxy.map(NativeContextProxy::into_host).transpose()?);
+        #[cfg(feature = "ignore-https-errors")]
+        let policies = policies.with_ignore_https_errors(self.ignore_https_errors.unwrap_or(false));
+        #[cfg(feature = "bypass-csp")]
+        let policies = policies.with_bypass_csp(self.bypass_csp.unwrap_or(false));
+        Ok(HostContextCreationOptions {
+            #[cfg(feature = "device-emulation")]
+            device: self
+                .device
+                .map(NativeDeviceContextOptions::into_host)
+                .transpose()?,
+            policies,
+        })
+    }
+}
+
+#[cfg(any(
+    feature = "extra-headers",
+    feature = "context-locale",
+    feature = "context-timezone",
+    feature = "context-geolocation",
+    feature = "context-geolocation-permission",
+    feature = "context-http-credentials",
+    feature = "context-offline",
+    feature = "context-proxy",
+    feature = "ignore-https-errors",
+    feature = "bypass-csp"
+))]
+#[napi]
+impl NativeSession {
+    #[napi]
+    pub fn new_context_with_policies<'env>(
+        &self,
+        env: &'env Env,
+        base_url: Option<JsString<'_>>,
+        options: NativeContextCreationOptions,
+    ) -> napi::Result<PromiseRaw<'env, Unknown<'env>>> {
+        let allowance = options.ffi_allowance(boundary::SMALL_ALLOWANCE)?;
+        let execution = self
+            .ffi
+            .admit(FfiLane::Command, allowance)
+            .map_err(binding_error)?;
+        let base_url = context_settings::read_base_url(env, base_url)?;
+        let options = options.into_host().map_err(binding_error)?;
+        let host = self.host.clone();
+        boundary::spawn_published(env, execution, self.publications.clone(), async move {
+            ContextDescriptor::try_from(
+                host.new_context_with_policies(
+                    base_url.as_deref(),
+                    #[cfg(feature = "device-emulation")]
+                    options.device,
+                    options.policies,
+                )
+                .await?,
+            )
+        })
+    }
+}
+
 #[cfg(feature = "device-emulation")]
 #[napi]
 impl NativeSession {
+    #[napi]
+    pub fn new_context_with_device_options<'env>(
+        &self,
+        env: &'env Env,
+        base_url: Option<JsString<'_>>,
+        options: NativeDeviceContextOptions,
+    ) -> napi::Result<PromiseRaw<'env, Unknown<'env>>> {
+        let execution = self
+            .ffi
+            .admit(FfiLane::Command, boundary::SMALL_ALLOWANCE)
+            .map_err(binding_error)?;
+        let base_url = context_settings::read_base_url(env, base_url)?;
+        let device = options.into_host().map_err(binding_error)?;
+        let host = self.host.clone();
+        boundary::spawn_published(env, execution, self.publications.clone(), async move {
+            ContextDescriptor::try_from(
+                host.new_context_with_device_options(base_url.as_deref(), Some(device))
+                    .await?,
+            )
+        })
+    }
+
     #[napi]
     pub fn new_context_with_has_touch<'env>(
         &self,
@@ -1545,6 +2569,37 @@ impl NativeSession {
             ContextDescriptor::try_from(
                 host.new_context_with_device_options(base_url.as_deref(), Some(device))
                     .await?,
+            )
+        })
+    }
+}
+
+#[cfg(all(feature = "device-emulation", feature = "ignore-https-errors"))]
+#[napi]
+impl NativeSession {
+    #[napi]
+    pub fn new_context_with_device_options_and_ignore_https_errors<'env>(
+        &self,
+        env: &'env Env,
+        base_url: Option<JsString<'_>>,
+        options: NativeDeviceContextOptions,
+        enabled: bool,
+    ) -> napi::Result<PromiseRaw<'env, Unknown<'env>>> {
+        let execution = self
+            .ffi
+            .admit(FfiLane::Command, boundary::SMALL_ALLOWANCE)
+            .map_err(binding_error)?;
+        let base_url = context_settings::read_base_url(env, base_url)?;
+        let device = options.into_host().map_err(binding_error)?;
+        let host = self.host.clone();
+        boundary::spawn_published(env, execution, self.publications.clone(), async move {
+            ContextDescriptor::try_from(
+                host.new_context_with_ignore_https_errors(
+                    base_url.as_deref(),
+                    Some(device),
+                    enabled,
+                )
+                .await?,
             )
         })
     }
@@ -1611,6 +2666,24 @@ impl Drop for NativeSession {
 }
 
 #[cfg(feature = "init-scripts")]
+fn init_script_input_allowance(lengths: &[usize]) -> napi::Result<u64> {
+    lengths
+        .iter()
+        .try_fold(boundary::SMALL_ALLOWANCE, |total, length| {
+            let length = u64::try_from(*length).map_err(|_| {
+                binding_error(HostError::ResourceExhausted(
+                    "init-script FFI input byte length overflow".into(),
+                ))
+            })?;
+            total.checked_add(length).ok_or_else(|| {
+                binding_error(HostError::ResourceExhausted(
+                    "init-script FFI input byte allowance overflow".into(),
+                ))
+            })
+        })
+}
+
+#[cfg(feature = "init-scripts")]
 #[napi]
 impl NativeSession {
     #[napi]
@@ -1620,16 +2693,13 @@ impl NativeSession {
         context_id: JsString<'env>,
         source: JsString<'env>,
     ) -> napi::Result<PromiseRaw<'env, Unknown<'env>>> {
+        let allowance = init_script_input_allowance(&[context_id.utf8_len()?, source.utf8_len()?])?;
         let execution = self
             .ffi
-            .admit(FfiLane::Command, boundary::SMALL_ALLOWANCE)
+            .admit(FfiLane::Command, allowance)
             .map_err(binding_error)?;
         let context_id = boundary::bounded_string(context_id, 20, "context ID")?;
-        let source = boundary::bounded_string(
-            source,
-            playwright_rust_node_host::init_scripts::MAX_SOURCE_BYTES,
-            "init script",
-        )?;
+        let source = source.into_utf8()?.into_owned()?;
         let host = Arc::clone(&self.host);
         boundary::spawn_published(env, execution, self.publications.clone(), async move {
             host.context_add_init_script(&context_id, source).await
@@ -1643,16 +2713,13 @@ impl NativeSession {
         page_id: JsString<'env>,
         source: JsString<'env>,
     ) -> napi::Result<PromiseRaw<'env, Unknown<'env>>> {
+        let allowance = init_script_input_allowance(&[page_id.utf8_len()?, source.utf8_len()?])?;
         let execution = self
             .ffi
-            .admit(FfiLane::Command, boundary::SMALL_ALLOWANCE)
+            .admit(FfiLane::Command, allowance)
             .map_err(binding_error)?;
         let page_id = boundary::bounded_string(page_id, 20, "page ID")?;
-        let source = boundary::bounded_string(
-            source,
-            playwright_rust_node_host::init_scripts::MAX_SOURCE_BYTES,
-            "init script",
-        )?;
+        let source = source.into_utf8()?.into_owned()?;
         let host = Arc::clone(&self.host);
         boundary::spawn_published(env, execution, self.publications.clone(), async move {
             host.page_add_init_script(&page_id, source).await
@@ -1780,6 +2847,60 @@ impl NativeSession {
     }
 }
 
+#[cfg(feature = "frame-expect-title")]
+#[napi]
+impl NativeSession {
+    #[napi]
+    pub fn frame_wait_for_title<'env>(
+        &self,
+        env: &'env Env,
+        page_id: JsString<'env>,
+        frame_id: JsString<'env>,
+        matcher: napi::bindgen_prelude::Function<'env, String, bool>,
+        timeout_ms: u32,
+    ) -> napi::Result<PromiseRaw<'env, Unknown<'env>>> {
+        let execution = self
+            .ffi
+            .admit(FfiLane::Command, boundary::READ_ALLOWANCE)
+            .map_err(binding_error)?;
+        let page_id = boundary::bounded_string(page_id, 20, "page ID")?;
+        let frame_id = boundary::bounded_string(frame_id, 20, "frame ID")?;
+        let matcher = matcher
+            .build_threadsafe_function::<String>()
+            .callee_handled::<false>()
+            .max_queue_size::<8>()
+            .build()?;
+        let matcher = Arc::new(matcher);
+        let host = Arc::clone(&self.host);
+        let port = self.publications.clone();
+        let publications = port.publications();
+        boundary::spawn_with_env(
+            env,
+            execution,
+            async move {
+                let result = host
+                    .frame_wait_for_title(&page_id, &frame_id, timeout_ms, move |candidate| {
+                        let matcher = Arc::clone(&matcher);
+                        async move { matcher.call_async_catch(candidate).await }
+                    })
+                    .await;
+                let result = match result {
+                    Ok(title) => Ok(title),
+                    Err(playwright_rust_node_host::UrlWaitError::Host(error)) => {
+                        Err(binding_error(error))
+                    }
+                    Err(playwright_rust_node_host::UrlWaitError::Matcher(error)) => Err(error),
+                };
+                Ok((result, publications.fence()?))
+            },
+            move |env, (result, fence)| {
+                port.publish(env, fence)?;
+                result
+            },
+        )
+    }
+}
+
 #[cfg(feature = "request-events")]
 #[napi]
 impl NativeSession {
@@ -1869,6 +2990,28 @@ impl NativeSession {
         let host = Arc::clone(&self.host);
         boundary::spawn_published(env, execution, self.publications.clone(), async move {
             host.page_expose_binding(&page_id, name, needs_handle).await
+        })
+    }
+
+    #[cfg(feature = "context-bindings")]
+    #[napi]
+    pub fn context_expose_binding<'env>(
+        &self,
+        env: &'env Env,
+        context_id: JsString<'env>,
+        name: JsString<'env>,
+        needs_handle: bool,
+    ) -> napi::Result<PromiseRaw<'env, Unknown<'env>>> {
+        let execution = self
+            .ffi
+            .admit(FfiLane::Command, boundary::SMALL_ALLOWANCE)
+            .map_err(binding_error)?;
+        let context_id = boundary::bounded_string(context_id, 20, "browser context ID")?;
+        let name = boundary::bounded_string(name, 256, "binding name")?;
+        let host = Arc::clone(&self.host);
+        boundary::spawn_published(env, execution, self.publications.clone(), async move {
+            host.context_expose_binding(&context_id, name, needs_handle)
+                .await
         })
     }
 

@@ -79,6 +79,59 @@ impl CommandCancellation<GoForward> for CdpNavigationService {
 }
 
 impl CdpNavigationService {
+    pub(super) async fn remember_current_history_response(&self, result: &GotoResult) {
+        let (Some(loader_id), Some(response)) = (&result.loader_id, &result.response) else {
+            return;
+        };
+        let id = match self.client.page_get_navigation_history().await {
+            Ok(history) => current_history_entry_id(&history).ok().flatten(),
+            Err(_) => None,
+        };
+        let Ok(mut entries) = self.history_responses.lock() else {
+            return;
+        };
+        if let Some(entry) = entries.iter_mut().find(|entry| {
+            entry.frame_id == result.frame_id
+                && (id.is_some_and(|id| entry.id == Some(id)) || entry.url == result.url)
+        }) {
+            entry.id = id.or(entry.id);
+            entry.url = result.url.clone();
+            entry.loader_id = Some(loader_id.clone());
+            entry.response = response.clone();
+            return;
+        }
+        if entries.try_reserve(1).is_err() {
+            return;
+        }
+        entries.push(HistoryResponseEntry {
+            frame_id: result.frame_id.clone(),
+            id,
+            url: result.url.clone(),
+            loader_id: Some(loader_id.clone()),
+            response: response.clone(),
+        });
+    }
+
+    fn cached_history_response(
+        &self,
+        frame_id: &str,
+        id: i64,
+        url: &str,
+    ) -> Option<HistoryResponseEntry> {
+        let entries = self.history_responses.lock().ok()?;
+        entries
+            .iter()
+            .rev()
+            .find(|entry| entry.frame_id == frame_id && entry.id == Some(id))
+            .or_else(|| {
+                entries
+                    .iter()
+                    .rev()
+                    .find(|entry| entry.frame_id == frame_id && entry.url == url)
+            })
+            .cloned()
+    }
+
     async fn traverse_history(
         &self,
         direction: HistoryDirection,
@@ -146,6 +199,20 @@ impl CdpNavigationService {
             if !event_matches_session(&event, expected_session.as_deref()) {
                 continue;
             }
+            if let Some((frame_id, url)) =
+                back_forward_cache_restore(&event, &frame_id, self.limits)?
+            {
+                let cached = self.cached_history_response(&frame_id, target.id, &url);
+                return Ok(HistoryNavigationResult {
+                    navigation: Some(HistoryNavigationEntry {
+                        frame_id,
+                        loader_id: cached.as_ref().and_then(|entry| entry.loader_id.clone()),
+                        url,
+                        same_document: false,
+                        response: cached.map(|entry| history_response(entry.response)),
+                    }),
+                });
+            }
             if let Some(observed_url) = same_document_history_url(&event, &frame_id, self.limits)? {
                 if observed_url != target.url {
                     continue;
@@ -193,6 +260,65 @@ impl CdpNavigationService {
             });
         }
     }
+}
+
+fn current_history_entry_id(
+    value: &serde_json::Value,
+) -> Result<Option<i64>, OperationError<NavigationErrorDetails>> {
+    let current = value
+        .get("currentIndex")
+        .and_then(serde_json::Value::as_i64)
+        .ok_or_else(|| invalid_event("Page.getNavigationHistory is missing currentIndex"))?;
+    let entries = value
+        .get("entries")
+        .and_then(serde_json::Value::as_array)
+        .ok_or_else(|| invalid_event("Page.getNavigationHistory is missing entries"))?;
+    let Ok(current) = usize::try_from(current) else {
+        return Err(invalid_event(
+            "Page.getNavigationHistory currentIndex is negative",
+        ));
+    };
+    let Some(entry) = entries.get(current) else {
+        return Ok(None);
+    };
+    entry
+        .get("id")
+        .and_then(serde_json::Value::as_i64)
+        .map(Some)
+        .ok_or_else(|| invalid_event("Page.getNavigationHistory entry is missing id"))
+}
+
+fn back_forward_cache_restore(
+    event: &CdpEvent,
+    frame_id: &str,
+    limits: CdpNavigationLimits,
+) -> Result<Option<(String, String)>, OperationError<NavigationErrorDetails>> {
+    if event.method != "Page.frameNavigated"
+        || event.params.get("type").and_then(serde_json::Value::as_str)
+            != Some("BackForwardCacheRestore")
+    {
+        return Ok(None);
+    }
+    let Some(frame) = event.params.get("frame") else {
+        return Ok(None);
+    };
+    if frame.get("id").and_then(serde_json::Value::as_str) != Some(frame_id) {
+        return Ok(None);
+    }
+    let loader_id = frame
+        .get("loaderId")
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| invalid_event("BFCache restore is missing loaderId"))?;
+    validate_native_id("BFCache loader ID", loader_id, limits.native_id_bytes)?;
+    let url = frame
+        .get("url")
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| invalid_event("BFCache restore is missing URL"))?;
+    validate_navigation_value("BFCache URL", url, limits.url_bytes)?;
+    Ok(Some((
+        compact_navigation_string(frame_id.to_owned()),
+        compact_navigation_string(url.to_owned()),
+    )))
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -296,19 +422,23 @@ fn history_entry(result: GotoResult) -> HistoryNavigationEntry {
         loader_id: result.loader_id,
         url: result.url,
         same_document: result.same_document,
-        response: result.response.map(|response| HistoryNavigationResponse {
-            url: response.url,
-            status: response.status,
-            status_text: response.status_text,
-            headers: response
-                .headers
-                .into_iter()
-                .map(|header| HistoryHeader {
-                    name: header.name,
-                    value: header.value,
-                })
-                .collect(),
-        }),
+        response: result.response.map(history_response),
+    }
+}
+
+fn history_response(response: NavigationResponse) -> HistoryNavigationResponse {
+    HistoryNavigationResponse {
+        url: response.url,
+        status: response.status,
+        status_text: response.status_text,
+        headers: response
+            .headers
+            .into_iter()
+            .map(|header| HistoryHeader {
+                name: header.name,
+                value: header.value,
+            })
+            .collect(),
     }
 }
 
@@ -512,6 +642,54 @@ mod tests {
         assert_eq!(
             url.unwrap().as_deref(),
             Some("https://example.test/#/active")
+        );
+    }
+
+    #[test]
+    fn current_history_entry_id_selects_the_active_native_entry() {
+        // Arrange
+        let history = serde_json::json!({
+            "currentIndex": 1,
+            "entries": [
+                { "id": 10, "url": "https://example.test/one" },
+                { "id": 11, "url": "https://example.test/two" }
+            ]
+        });
+
+        // Act
+        let id = current_history_entry_id(&history);
+
+        // Assert
+        assert_eq!(id.unwrap(), Some(11));
+    }
+
+    #[test]
+    fn back_forward_cache_restore_exposes_committed_frame_and_url() {
+        // Arrange
+        let event = CdpEvent::new(
+            "Page.frameNavigated".to_owned(),
+            serde_json::json!({
+                "type": "BackForwardCacheRestore",
+                "frame": {
+                    "id": "frame-1",
+                    "loaderId": "loader-restored",
+                    "url": "https://example.test/restored"
+                }
+            }),
+            None,
+        );
+
+        // Act
+        let restored =
+            back_forward_cache_restore(&event, "frame-1", CdpNavigationLimits::default());
+
+        // Assert
+        assert_eq!(
+            restored.unwrap(),
+            Some((
+                "frame-1".to_owned(),
+                "https://example.test/restored".to_owned()
+            ))
         );
     }
 }

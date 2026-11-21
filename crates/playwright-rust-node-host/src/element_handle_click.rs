@@ -132,7 +132,6 @@ impl ClickOwner {
             y,
             group,
             &self.handles.cleanup,
-            self.handles.parent_hit_slots.clone(),
         )
         .await;
         if hit

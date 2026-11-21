@@ -43,25 +43,10 @@ use std::{
     time::Duration,
 };
 
-#[cfg(feature = "frame-navigation-burst-20")]
-const MAX_OPERATIONS: u64 = 21;
-#[cfg(not(feature = "frame-navigation-burst-20"))]
-const MAX_OPERATIONS: u64 = 8;
-#[cfg(feature = "frame-navigation-burst-20")]
-const MAX_WAITERS: u64 = 20;
-#[cfg(not(feature = "frame-navigation-burst-20"))]
-const MAX_WAITERS: u64 = 8;
-#[cfg(feature = "frame-navigation-burst-20")]
-const MAX_COMMANDS: u64 = 20;
-#[cfg(not(feature = "frame-navigation-burst-20"))]
-const MAX_COMMANDS: u64 = 8;
 const MAX_URL_BYTES: usize = 16 * 1024;
 // Two caller-owned strings (bounded capacity, not just length), executor/Select
 // state and timer storage. Native command copies and response owners have their
 // own profiles. The embedding task's stack/allocator metadata remain external.
-const OPERATION_BYTES: u64 = 2 * MAX_URL_BYTES as u64 + 16 * 1024;
-const OPERATION_SCOPE: ResourceScope = ResourceScope::extension(126, 1);
-
 struct Slots {
     // High 32 bits count waiters, low 32 bits count all operations. One CAS
     // admits both counts atomically, so a 21st waiter cannot steal the burst
@@ -111,17 +96,10 @@ impl Slots {
     fn admit(self: &Arc<Self>, kind: OperationKind) -> Result<OperationSlot, HostError> {
         self.active
             .fetch_update(Ordering::AcqRel, Ordering::Acquire, |counts| {
-                let active = counts & u64::from(u32::MAX);
-                let waiters = counts >> 32;
-                let commands = active - waiters;
-                let lane_has_space = match kind {
-                    OperationKind::Waiter => waiters < MAX_WAITERS,
-                    OperationKind::Command => commands < MAX_COMMANDS,
-                };
-                (active < MAX_OPERATIONS && lane_has_space).then_some(counts + kind.increment())
+                counts.checked_add(kind.increment())
             })
             .map_err(|_| {
-                HostError::ResourceExhausted("Frame navigation operation capacity exhausted".into())
+                HostError::ResourceExhausted("Frame navigation operation count overflow".into())
             })?;
         Ok(OperationSlot(self.clone(), kind))
     }
@@ -141,7 +119,6 @@ struct PreparedNavigationWait {
     deadline: Option<tokio::time::Instant>,
     timeout_ms: u32,
     _operation: tokio_util::task::task_tracker::TaskTrackerToken,
-    _storage: ResourceLease,
     // A Future dropped before polling releases storage before its count slot.
     _admission: OperationSlot,
 }
@@ -154,7 +131,6 @@ struct PreparedLoadStateWait {
     deadline: Option<tokio::time::Instant>,
     timeout_ms: u32,
     _operation: tokio_util::task::task_tracker::TaskTrackerToken,
-    _storage: ResourceLease,
     _admission: OperationSlot,
 }
 fn slot_requirements() -> ResourceRequirements {
@@ -165,27 +141,15 @@ fn slot_requirements() -> ResourceRequirements {
 }
 
 fn route_profile() -> Result<ChromiumFrameNavigationProfile, HostError> {
-    ChromiumFrameNavigationProfile::new(
+    ChromiumFrameNavigationProfile::new_allocator_backed(
         ResourceScope::extension(126, 0),
-        NonZeroUsize::new(128).expect("positive Frame limit"),
-        NonZeroUsize::new(8).expect("positive operation limit"),
         NonZeroUsize::new(256).expect("positive native ID limit"),
     )
     .map_err(HostError::backend)
 }
-fn operation_requirements() -> ResourceRequirements {
-    ResourceRequirements::none()
-        .with_class(
-            ResourceClass::BackendStateBytes,
-            OPERATION_BYTES * MAX_OPERATIONS,
-            OPERATION_BYTES * MAX_OPERATIONS,
-        )
-        .with_metadata(1, MAX_OPERATIONS as usize)
-}
 pub(crate) fn requirements() -> Result<ResourceRequirements, HostError> {
     Ok(route_profile()?
         .requirements()
-        .combine_concurrent(operation_requirements())
         .combine_concurrent(slot_requirements())
         .combine_concurrent(result::requirements()))
 }
@@ -497,16 +461,6 @@ impl HostSession {
             let admission = live.frame_navigation.slots.admit(OperationKind::Waiter)?;
             (page, admission)
         };
-        let storage = self
-            .resources
-            .claim(operation_requirements())
-            .map_err(HostError::backend)?
-            .reserve(
-                OPERATION_SCOPE,
-                ResourceClass::BackendStateBytes,
-                OPERATION_BYTES,
-            )
-            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
         // Read the revision first. If a transition occurs before the snapshot,
         // either the snapshot observes readiness or changed_after immediately
         // observes the advanced revision.
@@ -532,7 +486,6 @@ impl HostSession {
             deadline,
             timeout_ms,
             _operation: operation,
-            _storage: storage,
             _admission: admission,
         })
     }
@@ -550,7 +503,6 @@ impl HostSession {
             timeout_ms,
             _operation,
             _admission,
-            _storage,
         } = prepared;
         loop {
             let snapshot = page
@@ -623,7 +575,7 @@ impl HostSession {
                 .page(page_object)
                 .map_err(HostError::backend)?
                 .ok_or(HostError::TargetClosed)?;
-            let permit = live.frame_navigation.results.admit(&self.resources)?;
+            let permit = live.frame_navigation.results.admit()?;
             let admission = live.frame_navigation.slots.admit(OperationKind::Waiter)?;
             (page, permit, admission)
         };
@@ -636,16 +588,6 @@ impl HostSession {
                 "Frame does not belong to the selected Page".into(),
             ));
         }
-        let storage = self
-            .resources
-            .claim(operation_requirements())
-            .map_err(HostError::backend)?
-            .reserve(
-                OPERATION_SCOPE,
-                ResourceClass::BackendStateBytes,
-                OPERATION_BYTES,
-            )
-            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
         let deadline = (timeout_ms != 0)
             .then(|| tokio::time::Instant::now() + Duration::from_millis(u64::from(timeout_ms)));
         let at = deadline
@@ -676,7 +618,6 @@ impl HostSession {
             deadline,
             timeout_ms,
             _operation: operation,
-            _storage: storage,
             _admission: admission,
         })
     }
@@ -695,7 +636,6 @@ impl HostSession {
             timeout_ms,
             _operation,
             _admission,
-            _storage,
         } = prepared;
         let operation = async {
             let result = loop {
@@ -793,7 +733,7 @@ impl HostSession {
                 .ok_or(HostError::TargetClosed)?
                 .frame_navigation
                 .results
-                .admit(&self.resources)?
+                .admit()?
         };
         let wait = match params.wait_until {
             playwright_rust_cap_navigation::v1_2::WaitUntil::Commit => WaitUntil::Commit,
@@ -882,16 +822,6 @@ impl HostSession {
                 .slots
                 .admit(OperationKind::Command)?
         };
-        let _storage = self
-            .resources
-            .claim(operation_requirements())
-            .map_err(HostError::backend)?
-            .reserve(
-                OPERATION_SCOPE,
-                ResourceClass::BackendStateBytes,
-                OPERATION_BYTES,
-            )
-            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
         // Host clock boundary: start before the publication/route preparation,
         // not after it. The Page reducer still uses its injected clock origin.
         let deadline = (timeout_ms != 0)
@@ -965,7 +895,7 @@ impl HostSession {
 
 #[cfg(feature = "frame-navigation-burst-20")]
 async fn send_burst_navigation_fence(
-    queue: &tokio::sync::mpsc::Sender<crate::lifecycle::DriverRequest>,
+    queue: &tokio::sync::mpsc::UnboundedSender<crate::lifecycle::DriverRequest>,
     stop: &tokio_util::sync::CancellationToken,
     disconnected: &tokio_util::sync::CancellationToken,
     deadline: Option<tokio::time::Instant>,
@@ -975,7 +905,6 @@ async fn send_burst_navigation_fence(
     let publication = async {
         queue
             .send(crate::lifecycle::DriverRequest::Fence(done))
-            .await
             .map_err(|_| {
                 stop.cancel();
                 HostError::TargetClosed
@@ -1071,12 +1000,9 @@ mod tests {
     };
 
     #[test]
-    fn executor_admission_has_a_fixed_concurrent_ceiling_and_reclaims_on_drop() {
+    fn executor_admission_is_allocator_backed_and_reclaims_on_drop() {
         // Arrange
-        // A larger combined plan must not weaken this feature's count bound.
-        let requirements = operation_requirements()
-            .combine_concurrent(operation_requirements())
-            .combine_concurrent(slot_requirements());
+        let requirements = slot_requirements();
         let mut limits = ResourceLimits::deny_all(requirements.scopes, requirements.leases);
         for class in ResourceClass::ALL {
             let bound = requirements.class(class);
@@ -1085,15 +1011,15 @@ mod tests {
         let resources = ProductionResourceLedger::new(limits, requirements).unwrap();
         let ledger = resources.claim(requirements).unwrap();
         let slots = Slots::new(&resources).unwrap();
-        let mut leases: Vec<_> = (0..MAX_WAITERS)
+        let leases: Vec<_> = (0..129)
             .map(|_| slots.admit(OperationKind::Waiter).unwrap())
             .collect();
         // Act
-        let excess = slots.admit(OperationKind::Waiter);
+        let command = slots.admit(OperationKind::Command);
         // Assert
-        assert!(excess.is_err());
-        drop(leases.pop());
-        assert!(slots.admit(OperationKind::Waiter).is_ok());
+        assert!(command.is_ok());
+        assert_eq!(slots.active.load(Ordering::Acquire), (129_u64 << 32) + 130);
+        drop(command);
         drop(slots);
         assert!(
             ledger
@@ -1111,90 +1037,13 @@ mod tests {
     }
 
     #[cfg(feature = "frame-navigation-burst-20")]
-    #[test]
-    fn burst_profile_declares_twenty_waiters_plus_one_command_operation() {
-        // Arrange
-        let one = OPERATION_BYTES;
-
-        // Act
-        let declared = operation_requirements();
-
-        // Assert
-        assert_eq!(MAX_OPERATIONS, 21);
-        assert_eq!(MAX_WAITERS, 20);
-        assert_eq!(MAX_COMMANDS, 20);
-        assert_eq!(
-            declared.class(ResourceClass::BackendStateBytes).global,
-            21 * one
-        );
-        assert_eq!(declared.leases, 21);
-    }
-
-    #[cfg(feature = "frame-navigation-burst-20")]
-    #[test]
-    fn twenty_navigation_waiters_reject_a_twenty_first_waiter() {
-        // Arrange
-        let requirements = operation_requirements().combine_concurrent(slot_requirements());
-        let mut limits = ResourceLimits::deny_all(requirements.scopes, requirements.leases);
-        for class in ResourceClass::ALL {
-            let bound = requirements.class(class);
-            limits = limits.with_class(class, bound.global, bound.per_scope);
-        }
-        let resources = ProductionResourceLedger::new(limits, requirements).unwrap();
-        let slots = Slots::new(&resources).unwrap();
-        let waiters: Vec<_> = (0..20)
-            .map(|_| slots.admit(OperationKind::Waiter).unwrap())
-            .collect();
-
-        // Act
-        let rejected_waiter = slots.admit(OperationKind::Waiter);
-
-        // Assert
-        assert!(matches!(
-            rejected_waiter,
-            Err(HostError::ResourceExhausted(_))
-        ));
-        assert_eq!(slots.active.load(Ordering::Acquire), (20_u64 << 32) + 20);
-        drop(waiters);
-        assert_eq!(slots.active.load(Ordering::Acquire), 0);
-    }
-
-    #[cfg(feature = "frame-navigation-burst-20")]
-    #[test]
-    fn twenty_navigation_waiters_leave_one_goto_command_slot() {
-        // Arrange
-        let requirements = operation_requirements().combine_concurrent(slot_requirements());
-        let mut limits = ResourceLimits::deny_all(requirements.scopes, requirements.leases);
-        for class in ResourceClass::ALL {
-            let bound = requirements.class(class);
-            limits = limits.with_class(class, bound.global, bound.per_scope);
-        }
-        let resources = ProductionResourceLedger::new(limits, requirements).unwrap();
-        let slots = Slots::new(&resources).unwrap();
-        let waiters: Vec<_> = (0..20)
-            .map(|_| slots.admit(OperationKind::Waiter).unwrap())
-            .collect();
-
-        // Act
-        let goto = slots.admit(OperationKind::Command);
-
-        // Assert
-        assert!(goto.is_ok());
-        assert_eq!(slots.active.load(Ordering::Acquire), (20_u64 << 32) + 21);
-        drop(goto);
-        assert_eq!(slots.active.load(Ordering::Acquire), (20_u64 << 32) + 20);
-        drop(waiters);
-        assert_eq!(slots.active.load(Ordering::Acquire), 0);
-    }
-
-    #[cfg(feature = "frame-navigation-burst-20")]
     #[tokio::test]
-    async fn twenty_waiter_fences_and_goto_fence_drain_through_eight_item_queue() {
+    async fn navigation_fence_queue_grows_past_the_legacy_count() {
         // Arrange
-        let (queue, mut receiver) = tokio::sync::mpsc::channel(8);
+        let (queue, mut receiver) = tokio::sync::mpsc::unbounded_channel();
         let stop = tokio_util::sync::CancellationToken::new();
         let disconnected = tokio_util::sync::CancellationToken::new();
-        let mut fences: Vec<_> = (0..20)
+        let mut fences: Vec<_> = (0..129)
             .map(|_| {
                 Box::pin(send_burst_navigation_fence(
                     &queue,
@@ -1204,60 +1053,36 @@ mod tests {
                     0,
                 ))
             })
-            .chain(std::iter::once(Box::pin(send_burst_navigation_fence(
-                &queue,
-                &stop,
-                &disconnected,
-                None,
-                0,
-            ))))
             .collect();
-        let mut completed = [false; 21];
         let mut context = Context::from_waker(Waker::noop());
 
         // Act
         for fence in &mut fences {
             assert!(fence.as_mut().poll(&mut context).is_pending());
         }
-        assert_eq!(receiver.len(), 8);
-        for _ in 0..21 {
+        assert_eq!(receiver.len(), 129);
+        for _ in 0..129 {
             let crate::lifecycle::DriverRequest::Fence(reply) = receiver.try_recv().unwrap() else {
                 panic!("navigation publication must send only a fence");
             };
             reply.send(()).unwrap();
-            for (fence, done) in fences.iter_mut().zip(&mut completed) {
-                if !*done {
-                    if let std::task::Poll::Ready(result) = fence.as_mut().poll(&mut context) {
-                        result.unwrap();
-                        *done = true;
-                    }
-                }
-            }
+        }
+        for fence in fences {
+            fence.await.unwrap();
         }
 
         // Assert
-        assert!(completed.into_iter().all(|done| done));
         assert!(receiver.is_empty());
         assert!(!stop.is_cancelled());
     }
 
     #[cfg(feature = "frame-navigation-burst-20")]
     #[tokio::test]
-    async fn stopped_navigation_fence_does_not_enqueue_after_capacity_frees() {
+    async fn stopped_navigation_fence_releases_its_already_enqueued_reply() {
         // Arrange
-        let (queue, mut receiver) = tokio::sync::mpsc::channel(8);
+        let (queue, mut receiver) = tokio::sync::mpsc::unbounded_channel();
         let stop = tokio_util::sync::CancellationToken::new();
         let disconnected = tokio_util::sync::CancellationToken::new();
-        let mut receipts = Vec::new();
-        for _ in 0..8 {
-            let (reply, receipt) = tokio::sync::oneshot::channel();
-            assert!(
-                queue
-                    .try_send(crate::lifecycle::DriverRequest::Fence(reply))
-                    .is_ok()
-            );
-            receipts.push(receipt);
-        }
         let mut blocked = Box::pin(send_burst_navigation_fence(
             &queue,
             &stop,
@@ -1278,30 +1103,21 @@ mod tests {
 
         // Assert
         assert!(matches!(result, Err(HostError::TargetClosed)));
-        assert_eq!(receiver.len(), 8);
+        assert_eq!(receiver.len(), 1);
         assert!(matches!(
             receiver.try_recv(),
             Ok(crate::lifecycle::DriverRequest::Fence(_))
         ));
-        assert_eq!(receiver.len(), 7);
-        drop(receipts);
+        assert_eq!(receiver.len(), 0);
     }
 
     #[cfg(feature = "frame-navigation-burst-20")]
     #[tokio::test(start_paused = true)]
-    async fn timed_out_navigation_fence_does_not_enqueue_after_capacity_frees() {
+    async fn timed_out_navigation_fence_releases_its_already_enqueued_reply() {
         // Arrange
-        let (queue, mut receiver) = tokio::sync::mpsc::channel(8);
+        let (queue, mut receiver) = tokio::sync::mpsc::unbounded_channel();
         let stop = tokio_util::sync::CancellationToken::new();
         let disconnected = tokio_util::sync::CancellationToken::new();
-        for _ in 0..8 {
-            let (reply, _receipt) = tokio::sync::oneshot::channel();
-            assert!(
-                queue
-                    .try_send(crate::lifecycle::DriverRequest::Fence(reply))
-                    .is_ok()
-            );
-        }
         let deadline = tokio::time::Instant::now() + Duration::from_secs(1);
         let mut blocked = Box::pin(send_burst_navigation_fence(
             &queue,
@@ -1323,39 +1139,13 @@ mod tests {
 
         // Assert
         assert!(matches!(result, Err(HostError::Timeout(1_000))));
-        assert_eq!(receiver.len(), 8);
+        assert_eq!(receiver.len(), 1);
         assert!(matches!(
             receiver.try_recv(),
             Ok(crate::lifecycle::DriverRequest::Fence(_))
         ));
-        assert_eq!(receiver.len(), 7);
+        assert_eq!(receiver.len(), 0);
         assert!(!stop.is_cancelled());
-    }
-
-    #[cfg(not(feature = "frame-navigation-burst-20"))]
-    #[test]
-    fn ordinary_navigation_profile_retains_eight_shared_operations() {
-        // Arrange
-        let requirements = operation_requirements().combine_concurrent(slot_requirements());
-        let mut limits = ResourceLimits::deny_all(requirements.scopes, requirements.leases);
-        for class in ResourceClass::ALL {
-            let bound = requirements.class(class);
-            limits = limits.with_class(class, bound.global, bound.per_scope);
-        }
-        let resources = ProductionResourceLedger::new(limits, requirements).unwrap();
-        let slots = Slots::new(&resources).unwrap();
-        let waiters: Vec<_> = (0..8)
-            .map(|_| slots.admit(OperationKind::Waiter).unwrap())
-            .collect();
-
-        // Act
-        let goto = slots.admit(OperationKind::Command);
-
-        // Assert
-        assert_eq!(MAX_OPERATIONS, 8);
-        assert!(matches!(goto, Err(HostError::ResourceExhausted(_))));
-        drop(waiters);
-        assert_eq!(slots.active.load(Ordering::Acquire), 0);
     }
 
     #[test]

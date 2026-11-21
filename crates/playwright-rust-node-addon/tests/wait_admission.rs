@@ -1,60 +1,48 @@
 #[path = "../src/wait_admission.rs"]
 mod wait_admission;
 
-use playwright_rust_node_host::HostError;
-use wait_admission::{COMMAND_CAPACITY, MAX_LONG_WAITS, RESERVED_COMMANDS, WaitAdmissions};
+use wait_admission::WaitAdmissions;
 
 #[test]
-fn long_waits_leave_eight_command_slots_for_unblockers() {
+fn long_waits_are_allocator_backed_without_a_fabricated_count_cap() {
     // Arrange
     let waits = WaitAdmissions::new();
 
     // Act
-    let held: Vec<_> = (0..MAX_LONG_WAITS)
+    let held: Vec<_> = (0..129)
         .map(|_| waits.admit().expect("long wait slot"))
         .collect();
 
     // Assert
-    assert_eq!(held.len(), 24);
-    assert_eq!(COMMAND_CAPACITY - held.len(), RESERVED_COMMANDS);
-    assert_eq!(RESERVED_COMMANDS, 8);
+    assert_eq!(held.len(), 129);
 }
 
 #[test]
-fn an_excess_long_wait_is_rejected_immediately_across_session_clones() {
+fn cloned_sessions_do_not_reintroduce_a_process_local_wait_cap() {
     // Arrange
     let first_session = WaitAdmissions::new();
     let second_session = first_session.clone();
-    let _held: Vec<_> = (0..MAX_LONG_WAITS)
+    let _held: Vec<_> = (0..129)
         .map(|_| first_session.admit().expect("long wait slot"))
         .collect();
 
     // Act
-    let rejected = match second_session.admit() {
-        Ok(_) => panic!("excess long wait must be rejected"),
-        Err(error) => error,
-    };
+    let admitted = second_session.admit();
 
     // Assert
-    assert!(matches!(rejected, HostError::ResourceExhausted(_)));
-    assert_eq!(
-        rejected.to_string(),
-        "FFI long wait capacity exceeded (24); 8 Command slots reserved for unblockers"
-    );
+    assert!(admitted.is_ok());
 }
 
 #[test]
-fn dropping_a_completed_or_cancelled_wait_returns_its_slot() {
+fn sequential_waits_remain_available_after_each_admission() {
     // Arrange
     let waits = WaitAdmissions::new();
-    let mut held: Vec<_> = (0..MAX_LONG_WAITS)
-        .map(|_| waits.admit().expect("long wait slot"))
-        .collect();
-    drop(held.pop());
 
     // Act
-    let reclaimed = waits.admit();
+    let first = waits.admit();
+    let second = waits.admit();
 
     // Assert
-    assert!(reclaimed.is_ok());
+    assert!(first.is_ok());
+    assert!(second.is_ok());
 }

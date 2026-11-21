@@ -359,6 +359,19 @@ fn overflowing_profile_rejects_without_allocating() {
     assert!(matches!(result, Err(PayloadError::InvalidProfile)));
 }
 
+#[test]
+fn allocator_backed_profile_preserves_semantic_limits_without_a_call_ledger() {
+    // Arrange
+    let profile =
+        PayloadProfile::new_allocator_backed(ResourceScope::Connection, 4, 4096, 512).unwrap();
+
+    // Act
+    let requirements = profile.requirements().unwrap();
+
+    // Assert
+    assert_eq!(requirements, ResourceRequirements::none());
+}
+
 #[tokio::test]
 async fn unresolved_mime_rejects_before_browser_dispatch() {
     // Arrange

@@ -52,6 +52,7 @@ pub struct PageLifecycleObservationProfile {
     native: CdpFrameLifecycleProfile,
     scope: ResourceScope,
     navigation: Option<NavigationSlotsProfile>,
+    allocator_backed: bool,
 }
 impl PageLifecycleObservationProfile {
     pub const fn new(native: CdpFrameLifecycleProfile, scope: ResourceScope) -> Self {
@@ -59,6 +60,18 @@ impl PageLifecycleObservationProfile {
             native,
             scope,
             navigation: None,
+            allocator_backed: false,
+        }
+    }
+    pub const fn new_allocator_backed(
+        native: CdpFrameLifecycleProfile,
+        scope: ResourceScope,
+    ) -> Self {
+        Self {
+            native,
+            scope,
+            navigation: None,
+            allocator_backed: true,
         }
     }
     pub fn with_navigation_slots(mut self, scope: ResourceScope, slots: usize) -> Result<Self> {
@@ -68,7 +81,21 @@ impl PageLifecycleObservationProfile {
         self.navigation = Some(NavigationSlotsProfile::new(scope, slots)?);
         Ok(self)
     }
+    fn with_allocator_backed_navigation_slots(
+        mut self,
+        scope: ResourceScope,
+        slots: usize,
+    ) -> Result<Self> {
+        if scope == self.scope {
+            return Err("navigation index requires its own scope".into());
+        }
+        self.navigation = Some(NavigationSlotsProfile::new_allocator_backed(scope, slots)?);
+        Ok(self)
+    }
     fn owner_requirements(self) -> ResourceRequirements {
+        if self.allocator_backed {
+            return ResourceRequirements::none();
+        }
         // Includes the owner/Mutex, two Arc counters and conservative alignment
         // overhead. Inline native-body accounting is intentionally conservative.
         let bytes = (size_of::<PageLifecycleObservation>() + 2 * size_of::<usize>() + 256) as u64;
@@ -124,7 +151,7 @@ pub struct PageLifecycleObservation {
     sealed: AtomicBool,
     closed: tokio::sync::Notify,
     changed: tokio::sync::Notify,
-    _lease: ResourceLease,
+    _lease: Option<ResourceLease>,
 }
 impl PageLifecycleObservation {
     pub fn new(
@@ -150,12 +177,16 @@ impl PageLifecycleObservation {
         if page.get() == 0 || epoch == 0 {
             return Err("invalid Page lifecycle identity".into());
         }
-        let requirements = profile.owner_requirements();
-        let lease = resources.claim(requirements)?.reserve(
-            profile.scope,
-            ResourceClass::BackendStateBytes,
-            requirements.class(ResourceClass::BackendStateBytes).global,
-        )?;
+        let lease = if profile.allocator_backed {
+            None
+        } else {
+            let requirements = profile.owner_requirements();
+            Some(resources.claim(requirements)?.reserve(
+                profile.scope,
+                ResourceClass::BackendStateBytes,
+                requirements.class(ResourceClass::BackendStateBytes).global,
+            )?)
+        };
         let native = CdpFrameLifecycle::new(profile.native, epoch, resources)?;
         Ok(Self {
             page,

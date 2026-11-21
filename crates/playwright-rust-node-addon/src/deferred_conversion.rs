@@ -21,6 +21,8 @@ type Execution = FfiExecution<boundary::Published<EvaluationResult>>;
 
 pub enum EvaluationTarget {
     FrameValue(String),
+    #[cfg(feature = "worker-events")]
+    WorkerValue(Arc<playwright_rust_node_host::worker_events::WorkerOwner>),
     #[cfg(feature = "wait-for-function")]
     FrameWaitForFunction(
         String,
@@ -123,6 +125,18 @@ impl EvaluationCall {
                             EvaluateParams::expression(self.source)
                         };
                         host.frame_evaluate(&frame, params)
+                            .await
+                            .map(EvaluationOutput)
+                            .map(EvaluationResult::Value)
+                    }
+                    #[cfg(feature = "worker-events")]
+                    EvaluationTarget::WorkerValue(owner) => {
+                        let params = if self.is_function {
+                            EvaluateParams::function(self.source, argument)
+                        } else {
+                            EvaluateParams::expression(self.source)
+                        };
+                        host.worker_evaluate(owner, params)
                             .await
                             .map(EvaluationOutput)
                             .map(EvaluationResult::Value)
@@ -245,6 +259,10 @@ impl EvaluationCall {
                         .await
                         .map(EvaluationOutput)
                         .map(EvaluationResult::Value),
+                    #[cfg(feature = "worker-events")]
+                    EvaluationTarget::WorkerValue(_) => Err(HostError::UnsupportedOperation(
+                        "worker.evaluate arguments containing JSHandle are not installed".into(),
+                    )),
                     #[cfg(feature = "wait-for-function")]
                     EvaluationTarget::FrameWaitForFunction(frame, polling, timeout_ms) => host
                         .frame_wait_for_function_owned(

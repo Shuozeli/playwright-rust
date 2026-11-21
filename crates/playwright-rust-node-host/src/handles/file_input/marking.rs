@@ -225,43 +225,37 @@ pub(super) struct Installation {
 }
 impl Installation {
     fn backend_profile() -> Result<TargetMarkingProfile, HostError> {
-        TargetMarkingProfile::new(
+        Ok(TargetMarkingProfile::new_allocator_backed(
             ResourceScope::extension(183, 2),
-            markers::WORLD_SLOTS,
-            markers::CALLS,
-        )
-        .map_err(HostError::backend)
+        ))
     }
     fn state_profile() -> Result<UploadProfile, HostError> {
-        UploadProfile::new(
-            ResourceScope::extension(183, 3),
-            markers::WORLD_SLOTS,
-            16 * 1024,
-        )
-        .map_err(HostError::backend)
+        UploadProfile::new_allocator_backed(ResourceScope::extension(183, 3), 16 * 1024)
+            .map_err(HostError::backend)
     }
     fn call_profile() -> Result<UploadProfile, HostError> {
-        UploadProfile::new(ResourceScope::extension(183, 4), markers::CALLS, 16 * 1024)
+        UploadProfile::new_allocator_backed(ResourceScope::extension(183, 4), 16 * 1024)
             .map_err(HostError::backend)
     }
     #[cfg(feature = "retained-target-prevalidation")]
     fn preflight_backend_profile() -> Result<RetainedPreflightProfile, HostError> {
-        RetainedPreflightProfile::new(ResourceScope::extension(187, 1), markers::CALLS)
+        RetainedPreflightProfile::new_allocator_backed(ResourceScope::extension(187, 1))
             .map_err(HostError::backend)
     }
     #[cfg(feature = "retained-target-prevalidation")]
     fn preflight_owner_profile() -> Result<UploadProfile, HostError> {
-        UploadProfile::new(ResourceScope::extension(187, 2), markers::CALLS, 16 * 1024)
+        UploadProfile::new_allocator_backed(ResourceScope::extension(187, 2), 16 * 1024)
             .map_err(HostError::backend)
     }
     #[cfg(feature = "retained-serialized-payload-mutation")]
     fn mutation_backend_profile() -> Result<SerializedPayloadMutationProfile, HostError> {
-        SerializedPayloadMutationProfile::new(ResourceScope::extension(191, 1), 1)
-            .map_err(HostError::backend)
+        Ok(SerializedPayloadMutationProfile::new_allocator_backed(
+            ResourceScope::extension(191, 1),
+        ))
     }
     #[cfg(feature = "retained-serialized-payload-mutation")]
     fn mutation_owner_profile() -> Result<UploadProfile, HostError> {
-        UploadProfile::new(ResourceScope::extension(191, 2), 1, 16 * 1024)
+        UploadProfile::new_allocator_backed(ResourceScope::extension(191, 2), 16 * 1024)
             .map_err(HostError::backend)
     }
     pub(super) fn requirements() -> Result<ResourceRequirements, HostError> {
@@ -284,8 +278,8 @@ impl Installation {
         Ok(requirements)
     }
     pub(super) fn new(resources: &ProductionResourceLedger) -> Result<Self, HostError> {
-        let cleanup = TokioCleanupExecutor::new(markers::WORLD_SLOTS + markers::CALLS);
-        let creation = TokioCleanupExecutor::new(markers::WORLD_SLOTS);
+        let cleanup = TokioCleanupExecutor::new_allocator_backed();
+        let creation = TokioCleanupExecutor::new_allocator_backed();
         let backend = Arc::new(
             CdpTargetMarkingService::new(
                 Self::backend_profile()?,
@@ -307,7 +301,7 @@ impl Installation {
         let cache = MarkerCache::new(resources, service.clone(), creation.clone())
             .map_err(HostError::backend)?;
         #[cfg(feature = "retained-target-prevalidation")]
-        let preflight_cleanup = TokioCleanupExecutor::new(markers::CALLS);
+        let preflight_cleanup = TokioCleanupExecutor::new_allocator_backed();
         #[cfg(feature = "retained-target-prevalidation")]
         let preflight = Arc::new(
             FileInputPreflightOperationService::new(
@@ -325,7 +319,7 @@ impl Installation {
             .map_err(HostError::backend)?,
         );
         #[cfg(feature = "retained-serialized-payload-mutation")]
-        let mutation_cleanup = TokioCleanupExecutor::new(1);
+        let mutation_cleanup = TokioCleanupExecutor::new_allocator_backed();
         #[cfg(feature = "retained-serialized-payload-mutation")]
         let mutation = Arc::new(
             SerializedPayloadMutationOperationService::new(

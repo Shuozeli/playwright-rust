@@ -1,7 +1,7 @@
-//! Optional retained JavaScript Handles owned by dedicated Workers.
+//! Optional retained JavaScript Handles owned by dedicated and service Workers.
 //!
 //! Worker Handles deliberately do not enter the Frame/main-world portable
-//! route. They reuse the bounded CDP Handle backend while retaining the exact
+//! route. They reuse the CDP Handle backend while retaining the exact
 //! Worker owner, execution context and cleanup reservation in Rust.
 
 use std::collections::BTreeMap;
@@ -33,39 +33,34 @@ use crate::evaluation::{ERROR_BYTES, FFI_ALLOWANCE, GENERATED_SCRIPT_BYTES, SOUR
 use crate::worker_events::WorkerOwner;
 use crate::{HostError, HostSession};
 
-pub const MAX_WORKER_HANDLES: usize = 64;
+#[cfg(test)]
+const TEST_CLEANUP_SLOTS: usize = 64;
+#[cfg(test)]
+pub(crate) const MAX_WORKER_HANDLES: usize = 64;
+
 pub const MAX_CONCURRENT_WORKER_HANDLE_CALLS: usize = 8;
-pub(crate) const CLEANUP_SLOTS: usize = MAX_WORKER_HANDLES;
 const MAX_NATIVE_ID_BYTES: usize = 1024;
 const MAX_PREVIEW_BYTES: usize = 1024;
 const MAX_PROPERTIES: usize = 1024;
 const MAX_PROPERTY_NAME_BYTES: usize = 16 * 1024;
 const INSTALLATION_BYTES: u64 = 16 * 1024;
-const OWNER_BYTES: u64 = 16 * 1024;
 const TEMPORARY_NATIVE_HANDLES_PER_CALL: u64 = 3;
 const INSTALLATION_SCOPE: ResourceScope = ResourceScope::extension(184, 1);
-const OWNER_SCOPE: ResourceScope = ResourceScope::extension(184, 2);
 const CALL_SCOPE: ResourceScope = ResourceScope::extension(184, 3);
 
 pub(crate) const fn requirements() -> ResourceRequirements {
     ResourceRequirements::none()
         .with_class(
             ResourceClass::BackendStateBytes,
-            INSTALLATION_BYTES
-                + MAX_WORKER_HANDLES as u64 * OWNER_BYTES
-                + MAX_CONCURRENT_WORKER_HANDLE_CALLS as u64 * FFI_ALLOWANCE,
+            INSTALLATION_BYTES + MAX_CONCURRENT_WORKER_HANDLE_CALLS as u64 * FFI_ALLOWANCE,
             MAX_CONCURRENT_WORKER_HANDLE_CALLS as u64 * FFI_ALLOWANCE,
         )
         .with_class(
             ResourceClass::RemoteHandle,
-            MAX_WORKER_HANDLES as u64
-                + MAX_CONCURRENT_WORKER_HANDLE_CALLS as u64 * TEMPORARY_NATIVE_HANDLES_PER_CALL,
-            MAX_WORKER_HANDLES as u64,
+            MAX_CONCURRENT_WORKER_HANDLE_CALLS as u64 * TEMPORARY_NATIVE_HANDLES_PER_CALL,
+            MAX_CONCURRENT_WORKER_HANDLE_CALLS as u64 * TEMPORARY_NATIVE_HANDLES_PER_CALL,
         )
-        .with_metadata(
-            3,
-            1 + MAX_WORKER_HANDLES + MAX_CONCURRENT_WORKER_HANDLE_CALLS,
-        )
+        .with_metadata(3, 1 + MAX_CONCURRENT_WORKER_HANDLE_CALLS)
 }
 
 struct State {
@@ -78,18 +73,19 @@ pub(crate) struct Installation {
     resources: ResourceLedger,
     cleanup: TokioCleanupExecutor,
     state: Mutex<State>,
+    call_slots: Arc<tokio::sync::Semaphore>,
     active_calls: AtomicUsize,
     _storage: ResourceLease,
 }
 
 struct HandleAdmission {
     id: u64,
-    owner: ResourceLease,
     cleanup: TokioCleanupReservation,
 }
 
 struct CallSlot<'a> {
     installation: &'a Installation,
+    _permit: tokio::sync::OwnedSemaphorePermit,
     _resources: ResourceLease,
 }
 
@@ -164,7 +160,6 @@ struct HandleCore {
     kind: CdpHandleKind,
     preview: Box<str>,
     release: Mutex<ReleaseState>,
-    _owner: ResourceLease,
 }
 
 impl HandleCore {
@@ -270,13 +265,6 @@ impl Installation {
         resources: &ProductionResourceLedger,
         cleanup: TokioCleanupExecutor,
     ) -> Result<Arc<Self>, HostError> {
-        if std::mem::size_of::<HandleCore>() + MAX_NATIVE_ID_BYTES + MAX_PREVIEW_BYTES + 4096
-            > OWNER_BYTES as usize
-        {
-            return Err(HostError::ResourceExhausted(
-                "Worker Handle owner storage exceeds its budget".into(),
-            ));
-        }
         let ledger = resources
             .claim(requirements())
             .map_err(HostError::backend)?;
@@ -295,6 +283,9 @@ impl Installation {
                 next_id: 1,
                 handles: BTreeMap::new(),
             }),
+            call_slots: Arc::new(tokio::sync::Semaphore::new(
+                MAX_CONCURRENT_WORKER_HANDLE_CALLS,
+            )),
             active_calls: AtomicUsize::new(0),
             _storage: storage,
         }))
@@ -306,46 +297,23 @@ impl Installation {
             return Err(HostError::TargetClosed);
         }
         state.handles.retain(|_, handle| handle.strong_count() > 0);
-        if state.handles.len() >= MAX_WORKER_HANDLES {
-            return Err(HostError::ResourceExhausted(format!(
-                "Worker Handle capacity exceeded ({MAX_WORKER_HANDLES})"
-            )));
-        }
         let id = state.next_id;
         state.next_id = id.checked_add(1).ok_or_else(|| {
             HostError::ResourceExhausted("Worker Handle ID space exhausted".into())
         })?;
-        let owner = self
-            .resources
-            .reserve_many(
-                OWNER_SCOPE,
-                &[
-                    ResourceRequest::new(ResourceClass::BackendStateBytes, OWNER_BYTES),
-                    ResourceRequest::new(ResourceClass::RemoteHandle, 1),
-                ],
-            )
-            .map_err(|error| {
-                HostError::ResourceExhausted(format!(
-                    "Worker Handle capacity exceeded ({MAX_WORKER_HANDLES}): {error}"
-                ))
-            })?;
         let cleanup = self
             .cleanup
             .try_reserve()
             .map_err(cleanup_admission_error)?;
-        Ok(HandleAdmission { id, owner, cleanup })
+        Ok(HandleAdmission { id, cleanup })
     }
 
-    fn call_slot(&self) -> Result<CallSlot<'_>, HostError> {
-        self.active_calls
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |active| {
-                (active < MAX_CONCURRENT_WORKER_HANDLE_CALLS).then_some(active + 1)
-            })
-            .map_err(|_| {
-                HostError::ResourceExhausted(format!(
-                    "Worker Handle call concurrency exceeded ({MAX_CONCURRENT_WORKER_HANDLE_CALLS})"
-                ))
-            })?;
+    async fn call_slot(&self) -> Result<CallSlot<'_>, HostError> {
+        let permit = Arc::clone(&self.call_slots)
+            .acquire_owned()
+            .await
+            .map_err(|_| HostError::TargetClosed)?;
+        self.active_calls.fetch_add(1, Ordering::AcqRel);
         let resources = self.resources.reserve_many(
             CALL_SCOPE,
             &[
@@ -359,6 +327,7 @@ impl Installation {
         match resources {
             Ok(resources) => Ok(CallSlot {
                 installation: self,
+                _permit: permit,
                 _resources: resources,
             }),
             Err(error) => {
@@ -393,7 +362,6 @@ impl Installation {
                     reservation: Some(admission.cleanup),
                     completion,
                 }),
-                _owner: admission.owner,
             });
             state.handles.insert(core.id, Arc::downgrade(&core));
             handles.push(WorkerHandle { core });
@@ -478,7 +446,7 @@ impl Installation {
         params: EvaluateHandleParams,
     ) -> Result<WorkerHandle, HostError> {
         let unique_context_id = owner.ready_unique_context_id().await?;
-        let _call = self.call_slot()?;
+        let _call = self.call_slot().await?;
         let admission = self.admit_handle()?;
         let service = CdpHandleEvaluationService::from_evaluation(
             Self::evaluation(&owner, &unique_context_id),
@@ -506,7 +474,7 @@ impl Installation {
             }
             Err(error) => return Err(error),
         };
-        let _call = self.call_slot()?;
+        let _call = self.call_slot().await?;
         let admission = self.admit_handle()?;
         let native = target.core.native.read().await;
         let target_native = native
@@ -548,7 +516,7 @@ impl Installation {
             }
             Err(error) => return Err(error),
         };
-        let _call = self.call_slot()?;
+        let _call = self.call_slot().await?;
         let native = target.core.native.read().await;
         let target_native = native
             .as_ref()
@@ -587,6 +555,7 @@ impl Installation {
             state.closed = true;
             std::mem::take(&mut state.handles)
         };
+        self.call_slots.close();
         for handle in handles.into_values().filter_map(|handle| handle.upgrade()) {
             handle.request_dispose();
         }
@@ -605,7 +574,11 @@ impl HostSession {
         owner: Arc<WorkerOwner>,
         params: EvaluateHandleParams,
     ) -> Result<WorkerHandle, HostError> {
-        self.require_visible_page_id(owner.page())?;
+        if let Some(page) = owner.page() {
+            self.require_visible_page_id(page)?;
+        } else {
+            self.require_visible_context_id(owner.context())?;
+        }
         self.worker_events()?.require_current_owner(&owner)?;
         let installation = self.worker_handles()?;
         tokio::select! {
@@ -656,7 +629,11 @@ impl HostSession {
             return Err(HostError::TargetClosed);
         }
         let owner = target.core.owner.upgrade().ok_or(HostError::TargetClosed)?;
-        self.require_visible_page_id(owner.page())?;
+        if let Some(page) = owner.page() {
+            self.require_visible_page_id(page)?;
+        } else {
+            self.require_visible_context_id(owner.context())?;
+        }
         self.worker_events()?.require_current_owner(&owner)
     }
 
@@ -745,10 +722,39 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn worker_handle_calls_wait_instead_of_failing_at_the_legacy_count() {
+        // Arrange
+        let cleanup = TokioCleanupExecutor::new(TEST_CLEANUP_SLOTS);
+        let installation = Installation::new(&resources(), cleanup.clone()).unwrap();
+        let mut active = Vec::new();
+        for _ in 0..MAX_CONCURRENT_WORKER_HANDLE_CALLS {
+            active.push(installation.call_slot().await.unwrap());
+        }
+        let queued_installation = Arc::clone(&installation);
+        let queued = tokio::spawn(async move {
+            let _slot = queued_installation.call_slot().await?;
+            Ok::<(), HostError>(())
+        });
+        tokio::task::yield_now().await;
+
+        // Act
+        assert!(!queued.is_finished());
+        drop(active.pop());
+        let result = queued.await.unwrap();
+
+        // Assert
+        assert!(result.is_ok());
+        drop(active);
+        installation.close();
+        let report = cleanup.shutdown().await;
+        assert_eq!(report.metrics.failed, 0);
+    }
+
+    #[tokio::test]
     async fn worker_close_rejects_property_read_before_native_io() {
         // Arrange
         let fake = Arc::new(FakeCdpClient::from_html(""));
-        let cleanup = TokioCleanupExecutor::new(MAX_WORKER_HANDLES);
+        let cleanup = TokioCleanupExecutor::new(TEST_CLEANUP_SLOTS);
         let installation = Installation::new(&resources(), cleanup.clone()).unwrap();
         let owner = WorkerOwner::for_test(ObjectId::new(7), fake.clone());
         let handle = retained(
@@ -781,7 +787,7 @@ mod tests {
     async fn concurrent_dispose_requests_release_native_object_once() {
         // Arrange
         let fake = Arc::new(FakeCdpClient::from_html(""));
-        let cleanup = TokioCleanupExecutor::new(MAX_WORKER_HANDLES);
+        let cleanup = TokioCleanupExecutor::new(TEST_CLEANUP_SLOTS);
         let installation = Installation::new(&resources(), cleanup.clone()).unwrap();
         let owner = WorkerOwner::for_test(ObjectId::new(7), fake.clone());
         let handle = retained(
@@ -815,7 +821,7 @@ mod tests {
     async fn installation_close_drains_cleanup_while_descriptor_is_retained() {
         // Arrange
         let fake = Arc::new(FakeCdpClient::from_html(""));
-        let cleanup = TokioCleanupExecutor::new(MAX_WORKER_HANDLES);
+        let cleanup = TokioCleanupExecutor::new(TEST_CLEANUP_SLOTS);
         let installation = Installation::new(&resources(), cleanup.clone()).unwrap();
         let owner = WorkerOwner::for_test(ObjectId::new(7), fake.clone());
         let handle = retained(
@@ -845,7 +851,7 @@ mod tests {
     async fn disposed_descriptor_does_not_retain_worker_session_owner() {
         // Arrange
         let fake = Arc::new(FakeCdpClient::from_html(""));
-        let cleanup = TokioCleanupExecutor::new(MAX_WORKER_HANDLES);
+        let cleanup = TokioCleanupExecutor::new(TEST_CLEANUP_SLOTS);
         let installation = Installation::new(&resources(), cleanup.clone()).unwrap();
         let owner = WorkerOwner::for_test(ObjectId::new(7), fake.clone());
         let owner_witness = Arc::downgrade(&owner);
@@ -868,12 +874,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn handle_capacity_is_hard_bounded_before_native_io() {
+    async fn finite_cleanup_profile_applies_backpressure_before_native_io() {
         // Arrange
         let fake = Arc::new(FakeCdpClient::from_html(""));
-        let cleanup = TokioCleanupExecutor::new(MAX_WORKER_HANDLES);
+        let cleanup = TokioCleanupExecutor::new(TEST_CLEANUP_SLOTS);
         let installation = Installation::new(&resources(), cleanup.clone()).unwrap();
-        let admissions = (0..MAX_WORKER_HANDLES)
+        let admissions = (0..TEST_CLEANUP_SLOTS)
             .map(|_| installation.admit_handle().unwrap())
             .collect::<Vec<_>>();
 
@@ -889,12 +895,35 @@ mod tests {
         assert_eq!(report.metrics.failed, 0);
     }
 
+    #[tokio::test]
+    async fn allocator_backed_cleanup_admits_past_the_legacy_handle_count() {
+        // Arrange
+        let cleanup = TokioCleanupExecutor::new_allocator_backed();
+        let installation = Installation::new(&resources(), cleanup.clone()).unwrap();
+
+        // Act
+        let admissions = (0..129)
+            .map(|_| {
+                installation
+                    .admit_handle()
+                    .expect("Worker Handle count should not be API-limited")
+            })
+            .collect::<Vec<_>>();
+
+        // Assert
+        assert_eq!(admissions.len(), 129);
+        assert_eq!(cleanup.metrics().reserved, 129);
+        drop(admissions);
+        installation.close();
+        assert_eq!(cleanup.shutdown().await.metrics.failed, 0);
+    }
+
     #[cfg(feature = "worker-console-argument-handles")]
     #[tokio::test]
     async fn event_argument_adoption_preserves_order_and_exact_worker_owner() {
         // Arrange
         let fake = Arc::new(FakeCdpClient::from_html(""));
-        let cleanup = TokioCleanupExecutor::new(MAX_WORKER_HANDLES);
+        let cleanup = TokioCleanupExecutor::new(TEST_CLEANUP_SLOTS);
         let installation = Installation::new(&resources(), cleanup.clone()).unwrap();
         let owner = WorkerOwner::for_test(ObjectId::new(7), fake.clone());
         let arguments = serde_json::json!([
@@ -942,7 +971,7 @@ mod tests {
     async fn primitive_json_value_uses_retained_value_without_native_io() {
         // Arrange
         let fake = Arc::new(FakeCdpClient::from_html(""));
-        let cleanup = TokioCleanupExecutor::new(MAX_WORKER_HANDLES);
+        let cleanup = TokioCleanupExecutor::new(TEST_CLEANUP_SLOTS);
         let installation = Installation::new(&resources(), cleanup.clone()).unwrap();
         let owner = WorkerOwner::for_test(ObjectId::new(7), fake.clone());
         let client: Arc<dyn playwright_rust_cdp::CdpClient> = fake.clone();
@@ -979,7 +1008,7 @@ mod tests {
         fake.set_evaluate_response(serde_json::json!({
             "result": {"value": {"ok": true, "value": {"t": "str", "v": "done"}}}
         }));
-        let cleanup = TokioCleanupExecutor::new(MAX_WORKER_HANDLES);
+        let cleanup = TokioCleanupExecutor::new(TEST_CLEANUP_SLOTS);
         let installation = Installation::new(&resources(), cleanup.clone()).unwrap();
         let owner = WorkerOwner::for_test(ObjectId::new(7), fake.clone());
         let handle = retained(

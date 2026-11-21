@@ -1,17 +1,16 @@
-//! Bounded work owned and polled by the existing topology task. Cooperating
+//! Work owned and polled by the existing topology task. Cooperating
 //! with an await never cancels/restarts its in-progress topology transaction.
 use super::Request;
 use crate::HostError;
 use futures_util::{FutureExt, StreamExt, future::BoxFuture, stream::FuturesUnordered};
 use std::{future::poll_fn, task::Poll};
 
-pub(super) const FUTURE_BYTES: usize = 64 * 1024;
 pub(crate) struct Jobs {
     pending: FuturesUnordered<BoxFuture<'static, ()>>,
     completed: std::sync::Arc<tokio::sync::Notify>,
 }
 impl Jobs {
-    /// The selected Installation body has already reserved queue/node storage.
+    /// Job nodes are owned by the exact in-flight operations.
     pub(crate) fn new() -> Self {
         Self {
             pending: FuturesUnordered::new(),
@@ -28,13 +27,6 @@ impl Jobs {
         &mut self,
         future: impl Future<Output = ()> + Send + 'static,
     ) -> Result<(), HostError> {
-        if self.pending.len() == super::MAX_REQUESTS
-            || std::mem::size_of_val(&future) > FUTURE_BYTES
-        {
-            return Err(HostError::ResourceExhausted(
-                "header driver job storage exhausted".into(),
-            ));
-        }
         self.pending.push(future.boxed());
         Ok(())
     }
@@ -60,21 +52,6 @@ mod tests {
         atomic::{AtomicUsize, Ordering},
     };
     use tokio::sync::oneshot;
-
-    #[test]
-    fn production_header_job_body_fits_its_reserved_slot() {
-        // Arrange
-        fn bytes<F: Future>(_: fn(Request) -> F) -> usize {
-            std::mem::size_of::<F>()
-        }
-        // Act
-        let actual = bytes(super::super::execute);
-        // Assert
-        assert!(
-            actual <= FUTURE_BYTES,
-            "job body {actual} exceeds {FUTURE_BYTES}"
-        );
-    }
 
     #[tokio::test]
     async fn completed_job_wakes_idle_topology_reconciliation() {
@@ -151,11 +128,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn job_drop_releases_pending_owners_and_capacity_rejects_before_allocating() {
+    async fn job_queue_grows_past_legacy_count_and_drop_releases_pending_owners() {
         // Arrange
         let mut jobs = Jobs::new();
-        let active = Arc::new(AtomicUsize::new(super::super::MAX_REQUESTS));
-        for _ in 0..super::super::MAX_REQUESTS {
+        let active = Arc::new(AtomicUsize::new(129));
+        for _ in 0..129 {
             let held = Held(active.clone());
             jobs.insert(async move {
                 let _held = held;
@@ -164,10 +141,10 @@ mod tests {
             .unwrap();
         }
         // Act
-        let excess = jobs.insert(std::future::pending());
+        let additional = jobs.insert(std::future::pending());
         drop(jobs);
         // Assert
-        assert!(matches!(excess, Err(HostError::ResourceExhausted(_))));
+        assert!(additional.is_ok());
         assert_eq!(active.load(Ordering::Acquire), 0);
     }
 }

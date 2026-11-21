@@ -15,7 +15,6 @@ doctest = false
 default = []
 browser-registry = ["dep:playwright-rust-browser-registry"]
 fresh-launch = ["dep:tempfile", "playwright-rust-node-host/owned-launch"]
-owned-process-startup = ["dep:playwright-rust-owned-process-startup"]
 playwright-server-initialize = ["dep:playwright-rust-playwright-server-initialize"]
 playwright-server-connect-session = [
     "dep:playwright-rust-playwright-server-connect",
@@ -45,6 +44,7 @@ persistent-context-emulate-media = ["persistent-context", "emulate-media", "play
 persistent-context-extra-headers = ["persistent-context", "extra-headers", "playwright-rust-node-host/persistent-context-extra-headers"]
 persistent-context-bypass-csp = ["persistent-context", "bypass-csp", "playwright-rust-node-host/persistent-context-bypass-csp"]
 persistent-context-javascript-disabled = ["persistent-context", "javascript-disabled", "playwright-rust-node-host/persistent-context-javascript-disabled"]
+video-recording = ["persistent-context", "browser-registry", "playwright-rust-node-host/video-recording"]
 context-cookies = ["playwright-rust-node-host/context-cookies"]
 context-strict-selectors = []
 context-storage-state = ["context-cookies", "dep:serde_json", "playwright-rust-node-host/context-storage-state"]
@@ -66,6 +66,7 @@ page-bindings = ["handles", "playwright-rust-node-host/page-bindings"]
 context-bindings = ["page-bindings", "playwright-rust-node-host/context-bindings"]
 page-events = ["playwright-rust-node-host/page-events"]
 frame-events = ["page-events", "playwright-rust-node-host/frame-events"]
+frame-detach-events = ["page-events", "playwright-rust-node-host/frame-detach-events"]
 console-events = ["page-events", "playwright-rust-node-host/console-events"]
 console-argument-handles = ["console-events", "handles", "playwright-rust-node-host/console-argument-handles"]
 page-dialogs = ["page-events", "playwright-rust-node-host/page-dialogs"]
@@ -79,6 +80,8 @@ route-fulfill-path = ["page-routes", "playwright-rust-node-host/route-fulfill-pa
 route-fulfill-api-response = ["page-routes", "api-request"]
 route-fetch = ["context-api-request", "page-routes", "route-fulfill-api-response"]
 har-replay = ["page-routes", "playwright-rust-node-host/har-replay"]
+har-recording = ["har-replay", "playwright-rust-node-host/har-recording"]
+har-recording-regexp = ["har-recording", "playwright-rust-node-host/har-recording-regexp"]
 wait-for-function = ["handles", "playwright-rust-node-host/wait-for-function"]
 wait-for-timeout = ["playwright-rust-node-host/wait-for-timeout"]
 file-input = ["playwright-rust-node-host/file-input"]
@@ -133,11 +136,12 @@ navigation-response-finished = ["frame-navigation", "response-finished", "reques
 response-security-details = ["request-history", "playwright-rust-node-host/response-security-details"]
 download-events = ["playwright-rust-node-host/download-events"]
 worker-events = ["page-events", "playwright-rust-node-host/worker-events"]
+service-worker-events = ["worker-events", "playwright-rust-node-host/service-worker-events"]
 worker-handle-evaluation = ["worker-events", "handles", "playwright-rust-node-host/worker-handle-evaluation"]
 worker-console-events = ["worker-events", "console-events", "playwright-rust-node-host/worker-console-events"]
 worker-console-argument-handles = ["worker-console-events", "worker-handle-evaluation", "playwright-rust-node-host/worker-console-argument-handles"]
 worker-error-events = ["worker-events", "page-errors", "playwright-rust-node-host/worker-error-events"]
-worker-network-events = ["worker-events", "request-events", "response-events", "playwright-rust-node-host/worker-network-events"]
+worker-network-events = ["service-worker-events", "context-network-events", "request-history", "request-events", "response-events", "playwright-rust-node-host/worker-network-events"]
 init-scripts = ["playwright-rust-node-host/init-scripts"]
 service-worker-policy = ["init-scripts", "playwright-rust-node-host/service-worker-policy"]
 api-request = [
@@ -176,7 +180,6 @@ playwright-rust-api-request-transport = { workspace = true, optional = true }
 playwright-rust-cap-navigation = { workspace = true, optional = true }
 playwright-rust-browser-registry = { workspace = true, optional = true }
 playwright-rust-node-host = { path = "../playwright-rust-node-host" }
-playwright-rust-owned-process-startup = { path = "../playwright-rust-owned-process-startup", optional = true }
 playwright-rust-playwright-server-initialize = { workspace = true, optional = true }
 playwright-rust-playwright-server-browser-ops = { workspace = true, optional = true }
 playwright-rust-playwright-server-connect = { workspace = true, optional = true }

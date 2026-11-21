@@ -134,6 +134,10 @@ fn limits() -> FileInputLimits {
 fn profile(capacity: usize) -> WorkProfile {
     WorkProfile::new(capacity, limits(), ResourceScope::Connection, 4096).unwrap()
 }
+
+fn allocator_profile() -> WorkProfile {
+    WorkProfile::new_allocator_backed(limits(), ResourceScope::Connection, 4096).unwrap()
+}
 fn queue_plan(profile: WorkProfile) -> ProductionResourceLedger {
     let requirements = profile.requirements().unwrap();
     let mut limits = ResourceLimits::deny_all(requirements.scopes, requirements.leases);
@@ -214,6 +218,41 @@ async fn real_path_preparation_runs_through_the_admitted_executor() {
     assert_source_released(&sources);
     drop(executor);
     assert_eq!(queue.metrics().unwrap().active_leases, 0);
+}
+
+#[tokio::test]
+async fn allocator_backed_executor_retains_more_than_the_legacy_job_count() {
+    // Arrange
+    let profile = allocator_profile();
+    let queue = queue_plan(profile);
+    let source = source_ledger();
+    let executor = FileInputExecutor::new(
+        profile,
+        &queue,
+        source.clone(),
+        Handle::current(),
+        Arc::new(FakeFs::new()),
+        Arc::new(PinnedMime),
+    )
+    .unwrap();
+
+    // Act
+    let jobs: Vec<_> = (0..129)
+        .map(|_| {
+            executor
+                .submit_paths(Path::new("/base"), &["a.txt"], BrowserLocation::Separate)
+                .unwrap()
+        })
+        .collect();
+
+    // Assert
+    assert_eq!(executor.outstanding(), 129);
+    for job in jobs {
+        drop(job.await.unwrap());
+    }
+    assert_eq!(executor.outstanding(), 0);
+    executor.close_and_drain().await;
+    assert_source_released(&source);
 }
 
 #[tokio::test]

@@ -49,28 +49,20 @@ fn all_batch_entries_share_one_call_but_have_distinct_owner_allowances() {
     let batch = owners.admit_batch().unwrap();
 
     // Assert
-    assert_eq!(batch.entries.len(), MAX_HANDLES);
+    assert_eq!(batch.entries.len(), MAX_PROPERTY_HANDLES);
     assert_eq!(owners.capacity.calls.load(Ordering::Acquire), 1);
-    assert_eq!(owners.capacity.owners.load(Ordering::Acquire), MAX_HANDLES);
+    assert_eq!(
+        owners.capacity.owners.load(Ordering::Acquire),
+        MAX_PROPERTY_HANDLES
+    );
     for entry in &batch.entries {
         assert!(Arc::ptr_eq(&entry.call, &batch.call));
     }
     for pair in batch.entries.windows(2) {
         assert!(!Arc::ptr_eq(&pair[0].owner, &pair[1].owner));
     }
-    assert_eq!(
-        bytes(&resources),
-        STATE_BYTES + OWNER_BYTES * MAX_HANDLES as u64 + CALL_BYTES
-    );
-    assert!(
-        owners
-            .state
-            .lock()
-            .unwrap()
-            .tickets
-            .iter()
-            .all(Option::is_none)
-    );
+    assert_eq!(bytes(&resources), STATE_BYTES);
+    assert!(owners.state.lock().unwrap().tickets.is_empty());
     drop(batch);
     assert_eq!(owners.capacity.calls.load(Ordering::Acquire), 0);
     assert_eq!(owners.capacity.owners.load(Ordering::Acquire), 0);
@@ -78,7 +70,7 @@ fn all_batch_entries_share_one_call_but_have_distinct_owner_allowances() {
 }
 
 #[test]
-fn batch_reserves_only_available_owners_without_overflowing_existing_admission() {
+fn batch_and_single_admission_grow_past_the_legacy_owner_count() {
     // Arrange
     let (owners, resources) = owners();
     let existing = [owners.admit().unwrap(), owners.admit().unwrap()];
@@ -86,17 +78,17 @@ fn batch_reserves_only_available_owners_without_overflowing_existing_admission()
 
     // Act
     let batch = owners.admit_batch().unwrap();
-    let overflow = owners.admit();
+    let additional = owners.admit().unwrap();
 
     // Assert
-    assert_eq!(batch.entries.len(), MAX_HANDLES - existing.len());
-    assert_eq!(owners.capacity.owners.load(Ordering::Acquire), MAX_HANDLES);
-    assert_eq!(owners.capacity.calls.load(Ordering::Acquire), 3);
-    assert!(matches!(overflow, Err(HostError::ResourceExhausted(_))));
+    assert_eq!(batch.entries.len(), MAX_PROPERTY_HANDLES);
     assert_eq!(
-        bytes(&resources),
-        STATE_BYTES + OWNER_BYTES * MAX_HANDLES as u64 + CALL_BYTES * 3
+        owners.capacity.owners.load(Ordering::Acquire),
+        MAX_PROPERTY_HANDLES + existing.len() + 1
     );
+    assert_eq!(owners.capacity.calls.load(Ordering::Acquire), 4);
+    assert_eq!(bytes(&resources), STATE_BYTES);
+    drop(additional);
     drop(batch);
     assert_eq!(bytes(&resources), baseline);
     drop(existing);
@@ -104,31 +96,29 @@ fn batch_reserves_only_available_owners_without_overflowing_existing_admission()
 }
 
 #[test]
-fn batch_call_saturation_fails_before_reserving_any_owner_or_ticket() {
+fn batch_admission_grows_past_the_legacy_call_count_without_static_reservations() {
     // Arrange
     let (owners, resources) = owners();
-    let calls = (0..MAX_CALLS)
+    let calls = (0..MAX_HANDLES)
         .map(|_| owners.admit_call().unwrap())
         .collect::<Vec<_>>();
     let baseline = resources.metrics().unwrap();
 
     // Act
-    let overflow = owners.admit_batch();
+    let batch = owners.admit_batch().unwrap();
 
-    // Assert: this admission layer cannot submit any native cleanup work.
-    assert!(matches!(overflow, Err(HostError::ResourceExhausted(_))));
+    // Assert: allocator-backed calls do not consume a fixed resource ledger.
     assert_eq!(resources.metrics().unwrap(), baseline);
-    assert_eq!(owners.capacity.owners.load(Ordering::Acquire), 0);
-    assert_eq!(owners.capacity.calls.load(Ordering::Acquire), MAX_CALLS);
-    assert!(
-        owners
-            .state
-            .lock()
-            .unwrap()
-            .tickets
-            .iter()
-            .all(Option::is_none)
+    assert_eq!(
+        owners.capacity.owners.load(Ordering::Acquire),
+        MAX_PROPERTY_HANDLES
     );
+    assert_eq!(
+        owners.capacity.calls.load(Ordering::Acquire),
+        MAX_HANDLES + 1
+    );
+    assert!(owners.state.lock().unwrap().tickets.is_empty());
+    drop(batch);
     drop(calls);
     assert_eq!(bytes(&resources), STATE_BYTES);
 }
@@ -146,70 +136,70 @@ fn truncating_unused_batch_entries_returns_owner_capacity_but_retains_its_call()
     // Assert
     assert_eq!(owners.capacity.owners.load(Ordering::Acquire), 2);
     assert_eq!(owners.capacity.calls.load(Ordering::Acquire), 1);
-    assert_eq!(
-        bytes(&resources),
-        STATE_BYTES + OWNER_BYTES * 2 + CALL_BYTES
-    );
+    assert_eq!(bytes(&resources), STATE_BYTES);
     let replacement = owners.admit_batch().unwrap();
-    assert_eq!(replacement.entries.len(), MAX_HANDLES - 2);
+    assert_eq!(replacement.entries.len(), MAX_PROPERTY_HANDLES);
     assert_eq!(owners.capacity.calls.load(Ordering::Acquire), 2);
     drop(replacement);
     drop(batch);
     // A name/result consumer can share the same allowance without a new lease.
     assert_eq!(owners.capacity.owners.load(Ordering::Acquire), 0);
     assert_eq!(owners.capacity.calls.load(Ordering::Acquire), 1);
-    assert_eq!(bytes(&resources), STATE_BYTES + CALL_BYTES);
+    assert_eq!(bytes(&resources), STATE_BYTES);
     drop(call);
     assert_eq!(bytes(&resources), STATE_BYTES);
 }
 
 #[test]
-fn zero_result_batch_still_consumes_one_shared_call_slot() {
+fn zero_result_batch_does_not_block_later_allocator_backed_calls() {
     // Arrange
     let (owners, resources) = owners();
     let mut batch = owners.admit_batch().unwrap();
     batch.entries.clear();
-    let calls = (1..MAX_CALLS)
+    let calls = (0..MAX_HANDLES)
         .map(|_| owners.admit_call().unwrap())
         .collect::<Vec<_>>();
 
     // Act
-    let overflow = owners.admit_batch();
+    let additional = owners.admit_batch().unwrap();
 
     // Assert
     assert!(batch.entries.is_empty());
-    assert!(matches!(overflow, Err(HostError::ResourceExhausted(_))));
-    assert_eq!(owners.capacity.owners.load(Ordering::Acquire), 0);
-    assert_eq!(owners.capacity.calls.load(Ordering::Acquire), MAX_CALLS);
     assert_eq!(
-        bytes(&resources),
-        STATE_BYTES + CALL_BYTES * MAX_CALLS as u64
+        owners.capacity.owners.load(Ordering::Acquire),
+        MAX_PROPERTY_HANDLES
     );
+    assert_eq!(
+        owners.capacity.calls.load(Ordering::Acquire),
+        MAX_HANDLES + 2
+    );
+    assert_eq!(bytes(&resources), STATE_BYTES);
+    drop(additional);
     drop(batch);
-    assert_eq!(owners.capacity.calls.load(Ordering::Acquire), MAX_CALLS - 1);
+    assert_eq!(owners.capacity.calls.load(Ordering::Acquire), MAX_HANDLES);
     drop(calls);
     assert_eq!(bytes(&resources), STATE_BYTES);
 }
 
 #[test]
-fn full_owner_capacity_can_admit_an_empty_batch_without_creating_another_owner() {
+fn retained_owner_count_does_not_reduce_later_batch_admission() {
     // Arrange
     let (owners, resources) = owners();
     let full = owners.admit_batch().unwrap();
 
     // Act
-    let empty = owners.admit_batch().unwrap();
+    let second = owners.admit_batch().unwrap();
 
     // Assert
-    assert_eq!(full.entries.len(), MAX_HANDLES);
-    assert!(empty.entries.is_empty());
-    assert_eq!(owners.capacity.owners.load(Ordering::Acquire), MAX_HANDLES);
-    assert_eq!(owners.capacity.calls.load(Ordering::Acquire), 2);
+    assert_eq!(full.entries.len(), MAX_PROPERTY_HANDLES);
+    assert_eq!(second.entries.len(), MAX_PROPERTY_HANDLES);
     assert_eq!(
-        bytes(&resources),
-        STATE_BYTES + OWNER_BYTES * MAX_HANDLES as u64 + CALL_BYTES * 2
+        owners.capacity.owners.load(Ordering::Acquire),
+        2 * MAX_PROPERTY_HANDLES
     );
-    drop((empty, full));
+    assert_eq!(owners.capacity.calls.load(Ordering::Acquire), 2);
+    assert_eq!(bytes(&resources), STATE_BYTES);
+    drop((second, full));
     assert_eq!(bytes(&resources), STATE_BYTES);
 }
 
@@ -410,7 +400,7 @@ async fn named_siblings_retain_the_shared_call_until_the_last_name_is_consumed()
         .collect::<Vec<_>>();
     drop((call, work));
     assert_eq!(resources.metrics().unwrap(), admitted);
-    let other_calls = (1..MAX_CALLS)
+    let other_calls = (0..MAX_HANDLES)
         .map(|_| owners.admit_call().unwrap())
         .collect::<Vec<_>>();
 
@@ -418,18 +408,19 @@ async fn named_siblings_retain_the_shared_call_until_the_last_name_is_consumed()
     let first = named.remove(0).into_handle();
 
     // Assert
-    assert_eq!(owners.capacity.calls.load(Ordering::Acquire), MAX_CALLS);
-    assert!(matches!(
-        owners.admit_call(),
-        Err(HostError::ResourceExhausted(_))
-    ));
-    assert_eq!(named[0].name().len(), 16 * 1024);
+    let additional = owners.admit_call().unwrap();
     assert_eq!(
-        bytes(&resources),
-        STATE_BYTES + OWNER_BYTES * 2 + CALL_BYTES * MAX_CALLS as u64
+        owners.capacity.calls.load(Ordering::Acquire),
+        MAX_HANDLES + 2
     );
+    assert_eq!(named[0].name().len(), 16 * 1024);
+    assert_eq!(bytes(&resources), STATE_BYTES);
     let last = named.pop().unwrap().into_handle();
-    assert_eq!(owners.capacity.calls.load(Ordering::Acquire), MAX_CALLS - 1);
+    assert_eq!(
+        owners.capacity.calls.load(Ordering::Acquire),
+        MAX_HANDLES + 1
+    );
+    drop(additional);
     drop(other_calls);
     first.dispose().await.unwrap();
     last.dispose().await.unwrap();

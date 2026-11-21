@@ -11,7 +11,7 @@ use playwright_rust_composition_chromium_keyboard::{
 use playwright_rust_core::{
     CallMetadata, CancellationReason, Command, CommandCancellation, CommandSpec, ObjectId,
     OperationContext, OperationError, ProductionResourceLedger, ResourceClass, ResourceLease,
-    ResourceLedger, ResourceRequirements, ResourceScope,
+    ResourceLimits, ResourceRequirements, ResourceScope,
 };
 use playwright_rust_runtime::TargetedService;
 use std::{
@@ -25,13 +25,12 @@ use std::{
     time::Duration,
 };
 
-const RETAINED: usize = 16;
 pub(crate) const EXECUTING: usize = 8;
 const STATE_SCOPE: ResourceScope = ResourceScope::extension(120, 18);
 const STATE_BYTES: u64 = 4096;
-// Includes invocation/argument future storage and retained CdpSession + Arc
-// controls + two <=256-byte native IDs selected by this host's topology profile.
-// The connection and injected input state retain their own production ledgers.
+// Test-only layout guard for invocation/native-binding frames. Retained calls
+// themselves grow through the allocator instead of a fabricated aggregate cap.
+#[cfg(test)]
 const CALL_BYTES: u64 = 8192;
 
 fn backend_profile() -> Result<CdpKeyboardProductionProfile, HostError> {
@@ -43,17 +42,21 @@ fn backend_profile() -> Result<CdpKeyboardProductionProfile, HostError> {
     .map_err(HostError::backend)
 }
 fn storage_requirements() -> ResourceRequirements {
-    let bytes = STATE_BYTES + RETAINED as u64 * (CALL_BYTES + KEYBOARD_TEXT_MAX_BYTES as u64);
     ResourceRequirements::none()
-        .with_class(ResourceClass::BackendStateBytes, bytes, bytes)
-        .with_metadata(1, RETAINED + 1)
+        .with_class(ResourceClass::BackendStateBytes, STATE_BYTES, STATE_BYTES)
+        .with_metadata(1, 1)
 }
 pub(crate) fn requirements() -> Result<ResourceRequirements, HostError> {
-    let mut required = storage_requirements().combine_concurrent(backend_profile()?.requirements());
-    for _ in 0..RETAINED {
-        required = required.combine_concurrent(ChromiumKeyboardPage::route_requirements());
+    Ok(storage_requirements().combine_concurrent(backend_profile()?.requirements()))
+}
+fn route_resources() -> Result<ProductionResourceLedger, HostError> {
+    let required = ChromiumKeyboardPage::route_requirements();
+    let mut limits = ResourceLimits::deny_all(required.scopes, required.leases);
+    for class in ResourceClass::ALL {
+        let bound = required.class(class);
+        limits = limits.with_class(class, bound.global, bound.per_scope);
     }
-    Ok(required)
+    ProductionResourceLedger::new(limits, required).map_err(HostError::backend)
 }
 struct HostDelay;
 impl CdpKeyboardDelay for HostDelay {
@@ -74,18 +77,17 @@ struct Slots {
     _state: ResourceLease,
 }
 struct CallLease {
-    _storage: ResourceLease,
+    _route_resources: ProductionResourceLedger,
     slots: Arc<Slots>,
 }
 impl Drop for CallLease {
     fn drop(&mut self) {
-        self.slots.count.fetch_sub(1, Ordering::AcqRel);
+        let previous = self.slots.count.fetch_sub(1, Ordering::AcqRel);
+        debug_assert!(previous > 0);
     }
 }
 pub(crate) struct Installation {
     factory: CdpKeyboardServiceFactory,
-    resources: ProductionResourceLedger,
-    ledger: ResourceLedger,
     slots: Arc<Slots>,
     #[cfg(feature = "drag-runtime")]
     drag: Option<Arc<crate::drag::host::Installation>>,
@@ -122,8 +124,6 @@ impl Installation {
                 platform,
             )
             .map_err(HostError::backend)?,
-            resources: resources.clone(),
-            ledger,
             slots: Arc::new(Slots {
                 count: AtomicUsize::new(0),
                 _state: state,
@@ -138,30 +138,19 @@ impl Installation {
                 "Keyboard argument exceeds 1 MiB".into(),
             ));
         }
+        let route_resources = route_resources()?;
         self.slots
             .count
             .fetch_update(Ordering::AcqRel, Ordering::Acquire, |count| {
-                (count < RETAINED).then_some(count + 1)
+                count.checked_add(1)
             })
             .map_err(|_| {
-                HostError::ResourceExhausted(
-                    "Keyboard retained invocation capacity exceeded".into(),
-                )
+                HostError::ResourceExhausted("Keyboard retained invocation count overflow".into())
             })?;
-        match self.ledger.reserve(
-            STATE_SCOPE,
-            ResourceClass::BackendStateBytes,
-            CALL_BYTES + argument_bytes as u64,
-        ) {
-            Ok(storage) => Ok(CallLease {
-                _storage: storage,
-                slots: self.slots.clone(),
-            }),
-            Err(error) => {
-                self.slots.count.fetch_sub(1, Ordering::AcqRel);
-                Err(HostError::ResourceExhausted(error.to_string()))
-            }
-        }
+        Ok(CallLease {
+            _route_resources: route_resources,
+            slots: self.slots.clone(),
+        })
     }
     fn bind(
         &self,
@@ -186,7 +175,7 @@ impl Installation {
             client,
             input,
             &self.factory,
-            &self.resources,
+            &lease._route_resources,
             drag.as_ref().map(|controller| {
                 controller.dispatcher.clone()
                     as Arc<dyn playwright_rust_composition_chromium_keyboard::CdpKeyDownInterceptor>
@@ -194,8 +183,9 @@ impl Installation {
         )
         .map_err(HostError::backend)?;
         #[cfg(not(feature = "drag-runtime"))]
-        let route = ChromiumKeyboardPage::bind(page, client, input, &self.factory, &self.resources)
-            .map_err(HostError::backend)?;
+        let route =
+            ChromiumKeyboardPage::bind(page, client, input, &self.factory, &lease._route_resources)
+                .map_err(HostError::backend)?;
         Ok(Arc::new(Invocation {
             route,
             _lease: lease,

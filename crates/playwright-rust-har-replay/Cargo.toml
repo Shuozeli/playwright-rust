@@ -1,6 +1,6 @@
 [package]
 name = "playwright-rust-har-replay"
-description = "Backend-neutral bounded HAR replay policy for Playwright Rust"
+description = "Backend-neutral HAR replay policy with opt-in limits for Playwright Rust"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

@@ -145,7 +145,7 @@ async fn result_finishing_after_owner_close_is_rejected_but_cleaned() {
 }
 
 #[tokio::test]
-async fn result_capacity_is_retained_through_cleanup_and_descriptor_lifetime() {
+async fn retained_results_grow_past_the_legacy_owner_count() {
     // Arrange
     let (owners, _) = owners();
     let cleanup = TokioCleanupExecutor::new(MAX_HANDLES);
@@ -158,10 +158,11 @@ async fn result_capacity_is_retained_through_cleanup_and_descriptor_lifetime() {
     }
 
     // Act
-    let overflow = owners.admit();
+    let additional = owners.admit();
 
     // Assert
-    assert!(matches!(overflow, Err(HostError::ResourceExhausted(_))));
+    assert!(additional.is_ok());
+    drop(additional);
     owners.close();
     owners.wait().await;
     let report = cleanup.shutdown().await;
@@ -171,26 +172,34 @@ async fn result_capacity_is_retained_through_cleanup_and_descriptor_lifetime() {
 }
 
 #[test]
-fn in_flight_capacity_is_independent_of_ready_result_capacity() {
+fn in_flight_calls_grow_past_the_legacy_capacity() {
     // Arrange
     let (owners, resources) = owners();
-    let admissions = (0..MAX_CALLS)
+    let admissions = (0..MAX_HANDLES)
         .map(|_| owners.admit().unwrap())
         .collect::<Vec<_>>();
 
     // Act
-    let overflow = owners.admit();
+    let additional = owners.admit().unwrap();
 
     // Assert
-    assert!(matches!(overflow, Err(HostError::ResourceExhausted(_))));
+    assert_eq!(
+        owners.capacity.calls.load(Ordering::Acquire),
+        MAX_HANDLES + 1
+    );
+    assert_eq!(
+        owners.capacity.owners.load(Ordering::Acquire),
+        MAX_HANDLES + 1
+    );
     assert_eq!(
         resources
             .metrics()
             .unwrap()
             .class(ResourceClass::BackendStateBytes)
             .current,
-        STATE_BYTES + (CALL_BYTES + OWNER_BYTES) * MAX_CALLS as u64
+        STATE_BYTES
     );
+    drop(additional);
     drop(admissions);
     assert_eq!(
         resources
@@ -381,7 +390,7 @@ async fn dispose_reports_missing_acknowledgement_when_cleanup_deadline_drops_job
 }
 
 #[tokio::test]
-async fn read_calls_share_the_bounded_creation_call_allowance() {
+async fn read_and_creation_calls_grow_past_the_legacy_allowance() {
     // Arrange
     let (owner, resources) = owners();
     let cleanup = TokioCleanupExecutor::new(1);
@@ -392,31 +401,28 @@ async fn read_calls_share_the_bounded_creation_call_allowance() {
         Arc::new(AtomicUsize::new(0)),
     );
     let pending = owner.retain(initializer, ticket, admission).unwrap();
-    let calls = (0..MAX_CALLS)
+    let calls = (0..MAX_HANDLES)
         .map(|_| owner.admit_read(&pending).unwrap())
         .collect::<Vec<_>>();
 
     // Act
-    let read_overflow = owner.admit_read(&pending);
-    let creation_overflow = owner.admit();
+    let additional_read = owner.admit_read(&pending).unwrap();
+    let additional_creation = owner.admit().unwrap();
 
     // Assert
-    assert!(matches!(
-        read_overflow,
-        Err(HostError::ResourceExhausted(_))
-    ));
-    assert!(matches!(
-        creation_overflow,
-        Err(HostError::ResourceExhausted(_))
-    ));
+    assert_eq!(
+        owner.capacity.calls.load(Ordering::Acquire),
+        MAX_HANDLES + 2
+    );
     assert_eq!(
         resources
             .metrics()
             .unwrap()
             .class(ResourceClass::BackendStateBytes)
             .current,
-        STATE_BYTES + OWNER_BYTES + CALL_BYTES * MAX_CALLS as u64
+        STATE_BYTES
     );
+    drop((additional_read, additional_creation));
     drop(calls);
     pending.dispose().await.unwrap();
     assert_eq!(cleanup.shutdown().await.metrics.completed, 1);

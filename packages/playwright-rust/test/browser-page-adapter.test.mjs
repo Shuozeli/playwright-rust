@@ -83,6 +83,10 @@ function fixture(offline = false, navigation = false, timeoutSettings = true) {
     if (specifier === 'node:fs') return { existsSync: () => true };
     if (specifier === './native-artifact.cjs') return {
       nativeArtifact: { path: artifact, profile: 'default' },
+      nativeFeatures: () => [
+        'context-timezone', 'context-geolocation', 'context-geolocation-permission',
+        'context-http-credentials', 'context-offline',
+      ],
       verifyNativeArtifact() {},
     };
     if (specifier === artifact) return { NativeEnvironment };
@@ -359,6 +363,179 @@ test('Browser newContext matches null viewport conflict errors before native adm
   for (const [options, message] of cases)
     await assert.rejects(browser.newContext(options), error => error.message === `browser.newContext: ${message}`);
   assert.deepEqual(value.calls, []);
+});
+
+test('Browser newContext accepts timezoneId and delegates it to the generic Rust policy port', async () => {
+  // Arrange
+  const value = fixture();
+  value.session.newContextWithPolicies = async (...args) => {
+    value.calls.push(['newContextWithPolicies', ...args]);
+    return { id: 'timezone-context', settings: {} };
+  };
+  const browser = await value.api.chromium.connectOverCDP('http://example.invalid:9222');
+  const timezoneId = 'x'.repeat(4096);
+
+  // Act
+  const context = await browser.newContext({ timezoneId });
+
+  // Assert
+  assert.equal(context.browser(), browser);
+  assert.deepEqual(value.calls, [
+    ['newContextWithPolicies', undefined, { timezoneId }],
+  ]);
+});
+
+test('Browser geolocation creation and runtime updates share the typed Rust owner', async () => {
+  // Arrange
+  const value = fixture();
+  value.session.newContextWithPolicies = async (...args) => {
+    value.calls.push(['newContextWithPolicies', ...args]);
+    return { id: 'geolocation-context', settings: {} };
+  };
+  value.session.setContextGeolocation = async (...args) => {
+    value.calls.push(['setContextGeolocation', ...args]);
+  };
+  const browser = await value.api.chromium.connectOverCDP('http://example.invalid:9222');
+
+  // Act
+  const context = await browser.newContext({ geolocation: { longitude: 10, latitude: 20 } });
+  await context.setGeolocation({ longitude: -30, latitude: 40, accuracy: 5 });
+  await context.setGeolocation(null);
+
+  // Assert
+  assert.deepEqual(value.calls, [
+    ['newContextWithPolicies', undefined, {
+      geolocation: { longitude: 10, latitude: 20, accuracy: 0 },
+    }],
+    ['setContextGeolocation', 'geolocation-context', {
+      longitude: -30, latitude: 40, accuracy: 5,
+    }],
+    ['setContextGeolocation', 'geolocation-context', undefined],
+  ]);
+});
+
+test('Browser permissions creation and runtime updates share the typed Rust owner', async () => {
+  // Arrange
+  const value = fixture();
+  value.session.newContextWithPolicies = async (...args) => {
+    value.calls.push(['newContextWithPolicies', ...args]);
+    return { id: 'permission-context', settings: {} };
+  };
+  value.session.grantContextPermissions = async (...args) => {
+    value.calls.push(['grantContextPermissions', ...args]);
+  };
+  value.session.clearContextPermissions = async (...args) => {
+    value.calls.push(['clearContextPermissions', ...args]);
+  };
+  const browser = await value.api.chromium.connectOverCDP('http://example.invalid:9222');
+
+  // Act
+  const context = await browser.newContext({ permissions: ['geolocation'] });
+  await context.grantPermissions(['camera', 'microphone'], { origin: 'https://example.test' });
+  await context.clearPermissions();
+
+  // Assert
+  assert.deepEqual(value.calls, [
+    ['newContextWithPolicies', undefined, { permissions: ['geolocation'] }],
+    ['grantContextPermissions', 'permission-context', ['camera', 'microphone'], 'https://example.test'],
+    ['clearContextPermissions', 'permission-context'],
+  ]);
+  await assert.rejects(context.grantPermissions(['camera', 42]), /permissions\[1\] must be a string/);
+  await assert.rejects(context.grantPermissions(['camera'], { origin: 42 }), /origin must be a string/);
+});
+
+test('Browser HTTP credentials creation and runtime updates share the typed Rust owner', async () => {
+  // Arrange
+  const value = fixture();
+  value.session.newContextWithPolicies = async (...args) => {
+    value.calls.push(['newContextWithPolicies', ...args]);
+    return { id: 'credentials-context', settings: {} };
+  };
+  value.session.setContextHttpCredentials = async (...args) => {
+    value.calls.push(['setContextHttpCredentials', ...args]);
+  };
+  const browser = await value.api.chromium.connectOverCDP('http://example.invalid:9222');
+
+  // Act
+  const context = await browser.newContext({
+    httpCredentials: {
+      username: 'user', password: 'pass', origin: 'https://example.test', send: 'always',
+    },
+  });
+  await context.setHTTPCredentials({ username: 'next-user', password: 'next-pass' });
+  await context.setHTTPCredentials(null);
+
+  // Assert
+  assert.deepEqual(value.calls, [
+    ['newContextWithPolicies', undefined, {
+      httpCredentials: {
+        username: 'user', password: 'pass', origin: 'https://example.test', sendAlways: true,
+      },
+    }],
+    ['setContextHttpCredentials', 'credentials-context', {
+      username: 'next-user', password: 'next-pass',
+    }],
+    ['setContextHttpCredentials', 'credentials-context', undefined],
+  ]);
+  await assert.rejects(
+    context.setHTTPCredentials({ username: 'missing-password' }),
+    /username and password must be strings/,
+  );
+});
+
+test('Context runtime HTTP credentials require their opt-in native capability', async () => {
+  // Arrange
+  const value = fixture();
+  const browser = await value.api.chromium.connectOverCDP('http://example.invalid:9222');
+  const page = await browser.newPage();
+
+  // Act
+  const pending = page.context().setHTTPCredentials({ username: 'user', password: 'pass' });
+
+  // Assert
+  await assert.rejects(pending, /select context-http-credentials native profile/);
+  assert.deepEqual(value.calls, [['newBrowserPage', undefined, false]]);
+});
+
+test('BrowserContext exposes bindings and functions through the Rust context owner', async () => {
+  // Arrange
+  const value = fixture();
+  value.session.contextExposeBinding = async (...args) => {
+    value.calls.push(['contextExposeBinding', ...args]);
+  };
+  const browser = await value.api.chromium.connectOverCDP('http://example.invalid:9222');
+  const page = await browser.newPage();
+  const context = page.context();
+  const callback = () => 17;
+
+  // Act
+  await context.exposeBinding('shared', callback, { handle: true });
+  await context.exposeFunction('sum', (left, right) => left + right);
+
+  // Assert
+  assert.deepEqual(value.calls, [
+    ['newBrowserPage', undefined, false],
+    ['contextExposeBinding', 'implicit-context', 'shared', true],
+    ['contextExposeBinding', 'implicit-context', 'sum', false],
+  ]);
+  assert.equal(context._bindings.get('shared').callback, callback);
+  assert.equal(await context._bindings.get('sum').callback({}, 5, 6), 11);
+  await assert.rejects(context.exposeBinding('', callback), /name must be a non-empty string/);
+  await assert.rejects(context.exposeBinding('bad', callback, { handle: 'yes' }), /handle must be a boolean/);
+});
+
+test('BrowserContext binding methods require their opt-in native capability', async () => {
+  // Arrange
+  const value = fixture();
+  const browser = await value.api.chromium.connectOverCDP('http://example.invalid:9222');
+  const page = await browser.newPage();
+
+  // Act
+  const pending = page.context().exposeFunction('shared', () => 17);
+
+  // Assert
+  await assert.rejects(pending, /select context-bindings native profile/);
+  assert.deepEqual(value.calls, [['newBrowserPage', undefined, false]]);
 });
 
 test('Context offline creation and runtime toggles delegate to opt-in Rust methods', async () => {

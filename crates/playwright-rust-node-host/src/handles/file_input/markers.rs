@@ -1,4 +1,4 @@
-//! Bounded exact-world marker cache. No persistent Handle, host operation token,
+//! Allocator-backed exact-world marker cache. No persistent Handle, host operation token,
 //! or adoption route owner is stored here. The world factory supplies a NEW,
 //! independently admitted snapshot for each persistent marker installation.
 
@@ -12,8 +12,8 @@ use playwright_rust_composition_chromium_file_input::{
 };
 use playwright_rust_composition_chromium_locator_resolution::{OwnedElement, ResolutionRouteOwner};
 use playwright_rust_core::{
-    ObjectId, ProductionResourceLedger, ResourceClass, ResourceLease, ResourceLedger,
-    ResourceRequirements, ResourceScope,
+    ObjectId, ProductionResourceLedger, ResourceClass, ResourceLease, ResourceRequirements,
+    ResourceScope,
 };
 use playwright_rust_runtime::{CleanupFailure, CleanupReservation, ReservedCleanupExecutor};
 use playwright_rust_runtime_tokio::{TokioCleanupExecutor, TokioCleanupReservation};
@@ -28,10 +28,6 @@ use std::{
 };
 use tokio::sync::Notify;
 
-pub(crate) const CURRENT_WORLDS: usize = 64;
-pub(crate) const RETIRING_WORLDS: usize = 8;
-pub(crate) const WORLD_SLOTS: usize = CURRENT_WORLDS + RETIRING_WORLDS;
-pub(crate) const CALLS: usize = 8;
 const MAX_WORLD_BYTES: usize = 1024;
 const ADMIN_BYTES: u64 = 128 * 1024;
 const WORLD_BYTES: u64 = 16 * 1024;
@@ -175,7 +171,7 @@ struct State {
     sealed: bool,
     next_generation: u64,
     waiters: usize,
-    entries: [Option<Entry>; WORLD_SLOTS],
+    entries: Vec<Option<Entry>>,
 }
 struct Inner {
     state: Mutex<State>,
@@ -183,7 +179,6 @@ struct Inner {
     changed: Notify,
     service: Arc<Service>,
     drivers: TokioCleanupExecutor,
-    ledger: ResourceLedger,
     _storage: ResourceLease,
 }
 
@@ -191,31 +186,25 @@ struct Inner {
 /// but never keep HostSession or its operation tracker alive.
 pub(crate) struct MarkerCache(Arc<Inner>);
 
-// Fixed slots plus all maximum world strings, Flight/Notify/Arc backing,
-// detached close arrays and bounded administration/control temporaries.
-const FIXED_BYTES: usize = std::mem::size_of::<Inner>()
-    + WORLD_SLOTS
-        * (MAX_WORLD_BYTES + std::mem::size_of::<Flight>() + 4 * std::mem::size_of::<usize>())
-    + 2 * std::mem::size_of::<[Option<Arc<Marker>>; WORLD_SLOTS]>()
-    + std::mem::size_of::<[Option<Arc<Flight>>; WORLD_SLOTS]>()
-    + 4096;
+// Fixed administration only. Cache entries, strings, flights and detached
+// close batches are ordinary allocator-backed compatibility state.
+const FIXED_BYTES: usize = std::mem::size_of::<Inner>() + 4096;
 const _: () = assert!(FIXED_BYTES <= ADMIN_BYTES as usize);
 
 impl MarkerCache {
     pub(crate) fn requirements() -> ResourceRequirements {
-        let bytes = ADMIN_BYTES + WORLD_SLOTS as u64 * WORLD_BYTES + CALLS as u64 * WAITER_BYTES;
         ResourceRequirements::none()
-            .with_class(ResourceClass::BackendStateBytes, bytes, bytes)
-            .with_metadata(1, 1 + WORLD_SLOTS + CALLS)
+            .with_class(ResourceClass::BackendStateBytes, ADMIN_BYTES, ADMIN_BYTES)
+            .with_metadata(1, 1)
     }
     pub(crate) fn new(
         resources: &ProductionResourceLedger,
         service: Arc<Service>,
         drivers: TokioCleanupExecutor,
     ) -> Result<Self, MarkerCacheError> {
-        if drivers.job_timeout().is_some() || drivers.metrics().capacity < WORLD_SLOTS {
+        if drivers.job_timeout().is_some() || drivers.metrics().capacity != usize::MAX {
             return Err(HostError::InvalidArgument(
-                "marker creation executor needs 72 untimed slots".into(),
+                "marker creation executor must be untimed and allocator-backed".into(),
             )
             .into());
         }
@@ -230,13 +219,12 @@ impl MarkerCache {
                 sealed: false,
                 next_generation: 0,
                 waiters: 0,
-                entries: std::array::from_fn(|_| None),
+                entries: Vec::new(),
             }),
             healthy: AtomicBool::new(true),
             changed: Notify::new(),
             service,
             drivers,
-            ledger,
             _storage: storage,
         })))
     }
@@ -274,14 +262,10 @@ impl MarkerCache {
             if !self.is_cleanup_healthy() {
                 return Err(MarkerCacheError::Cleanup);
             }
-            if state.waiters == CALLS {
-                return Err(capacity("marker lookup/call capacity exceeded (8)"));
-            }
-            let waiter_storage = self
-                .0
-                .ledger
-                .reserve(SCOPE, ResourceClass::BackendStateBytes, WAITER_BYTES)
-                .map_err(|e| HostError::ResourceExhausted(e.to_string()))?;
+            let next_waiters = state
+                .waiters
+                .checked_add(1)
+                .ok_or_else(|| capacity("marker waiter count exhausted"))?;
             let exact = state
                 .entries
                 .iter()
@@ -298,40 +282,17 @@ impl MarkerCache {
                         .as_ref()
                         .is_some_and(|e| !e.retiring && e.key.same_route(&key))
                 });
-                let current = state
-                    .entries
-                    .iter()
-                    .flatten()
-                    .filter(|e| !e.retiring)
-                    .count();
-                let retiring = state
-                    .entries
-                    .iter()
-                    .flatten()
-                    .filter(|e| e.retiring)
-                    .count();
-                if old.is_some() && retiring == RETIRING_WORLDS {
-                    return Err(capacity("marker retirement capacity exceeded (8)"));
-                }
-                if old.is_none() && current == CURRENT_WORLDS {
-                    return Err(capacity("marker world capacity exceeded (64)"));
-                }
-                let slot = state
-                    .entries
-                    .iter()
-                    .position(Option::is_none)
-                    .ok_or_else(|| capacity("marker world slots exhausted"))?;
+                let slot = if let Some(slot) = state.entries.iter().position(Option::is_none) {
+                    slot
+                } else {
+                    state.entries.push(None);
+                    state.entries.len() - 1
+                };
                 let generation = state
                     .next_generation
                     .checked_add(1)
                     .ok_or_else(|| capacity("marker cache generations exhausted"))?;
-                let storage = self
-                    .0
-                    .ledger
-                    .reserve(SCOPE, ResourceClass::BackendStateBytes, WORLD_BYTES)
-                    .map_err(|e| HostError::ResourceExhausted(e.to_string()))?;
                 let flight = Arc::new(Flight::new());
-                // All cache-ledger admission precedes old-owner detachment.
                 // Executor admission runs later outside this lock, because its
                 // reporter and reservation Drop can synchronously call Rust.
                 if let Some(old) = old {
@@ -354,24 +315,24 @@ impl MarkerCache {
                     flight: flight.clone(),
                     route: None,
                 });
-                (
-                    slot,
-                    generation,
-                    flight,
-                    Some(Arc::new(WorldStorage { _lease: storage })),
-                )
+                (slot, generation, flight, Some(Arc::new(WorldStorage)))
             };
-            state.waiters += 1;
+            let next_entry_waiters = state.entries[slot]
+                .as_ref()
+                .expect("admitted entry")
+                .waiters
+                .checked_add(1)
+                .ok_or_else(|| capacity("marker entry waiter count exhausted"))?;
+            state.waiters = next_waiters;
             state.entries[slot]
                 .as_mut()
                 .expect("admitted entry")
-                .waiters += 1;
+                .waiters = next_entry_waiters;
             (
                 Waiter {
                     inner: self.0.clone(),
                     slot,
                     generation,
-                    storage: Some(waiter_storage),
                 },
                 flight,
                 fresh,
@@ -476,14 +437,18 @@ impl MarkerCache {
     /// Route callbacks, strong-route drops, owner drops and wakeups are outside
     /// the cache lock. Generation checks reject stale observations after reuse.
     fn sweep(&self) {
-        let observations: [Option<(u64, Weak<dyn MarkerRoute>)>; WORLD_SLOTS] = {
+        let observations: Vec<Option<(u64, Weak<dyn MarkerRoute>)>> = {
             let state = self.0.state.lock().unwrap_or_else(|p| p.into_inner());
             if state.sealed {
                 return;
             }
-            std::array::from_fn(|slot| {
-                state.entries[slot].as_ref().and_then(|entry| {
-                    (!entry.retiring && matches!(entry.phase, Phase::Creating | Phase::Ready(_)))
+            state
+                .entries
+                .iter()
+                .map(|entry| {
+                    entry.as_ref().and_then(|entry| {
+                        (!entry.retiring
+                            && matches!(entry.phase, Phase::Creating | Phase::Ready(_)))
                         .then(|| {
                             entry
                                 .route
@@ -491,25 +456,23 @@ impl MarkerCache {
                                 .map(|route| (entry.generation, route.clone()))
                         })
                         .flatten()
+                    })
+                })
+                .collect()
+        };
+        let stale: Vec<Option<u64>> = observations
+            .into_iter()
+            .map(|observation| {
+                observation.and_then(|(generation, route)| {
+                    let current = route.upgrade().is_some_and(|route| route.is_current());
+                    (!current).then_some(generation)
                 })
             })
-        };
-        let stale: [Option<u64>; WORLD_SLOTS] = observations.map(|observation| {
-            observation.and_then(|(generation, route)| {
-                let current = route.upgrade().is_some_and(|route| route.is_current());
-                (!current).then_some(generation)
-            })
-        });
+            .collect();
         let (markers, flights) = {
             let mut state = self.0.state.lock().unwrap_or_else(|p| p.into_inner());
-            let mut retiring = state
-                .entries
-                .iter()
-                .flatten()
-                .filter(|e| e.retiring)
-                .count();
-            let mut markers: [Option<Arc<Marker>>; WORLD_SLOTS] = std::array::from_fn(|_| None);
-            let mut flights: [Option<Arc<Flight>>; WORLD_SLOTS] = std::array::from_fn(|_| None);
+            let mut markers = Vec::new();
+            let mut flights = Vec::new();
             for (slot, generation) in stale.into_iter().enumerate() {
                 let Some(generation) = generation else {
                     continue;
@@ -520,22 +483,17 @@ impl MarkerCache {
                 else {
                     continue;
                 };
-                if retiring < RETIRING_WORLDS {
-                    entry.retiring = true;
-                    retiring += 1;
-                }
-                // If overflow retirement is full, keep this unusable current
-                // slot charged until actual cleanup, rather than free it early.
+                entry.retiring = true;
                 if let Phase::Ready(marker) = std::mem::replace(&mut entry.phase, Phase::Abandoned)
                 {
-                    markers[slot] = Some(marker);
+                    markers.push(marker);
                 }
-                flights[slot] = Some(entry.flight.clone());
+                flights.push(entry.flight.clone());
             }
             (markers, flights)
         };
-        let changed = flights.iter().any(Option::is_some);
-        for flight in flights.into_iter().flatten() {
+        let changed = !flights.is_empty();
+        for flight in flights {
             flight.finish(Outcome::Error(closed()));
         }
         drop(markers);
@@ -559,24 +517,18 @@ impl MarkerCache {
         let (markers, flights) = {
             let mut state = self.0.state.lock().unwrap_or_else(|p| p.into_inner());
             state.sealed = true;
-            let mut markers: [Option<Arc<Marker>>; WORLD_SLOTS] = std::array::from_fn(|_| None);
-            let mut flights: [Option<Arc<Flight>>; WORLD_SLOTS] = std::array::from_fn(|_| None);
-            for (slot, entry) in state.entries.iter_mut().enumerate() {
-                if let Some(entry) = entry {
-                    // Once sealed, all 72 occupied slots may drain concurrently;
-                    // the 8-slot replacement headroom limits OPEN admission only.
-                    entry.retiring = true;
-                    if let Phase::Ready(marker) =
-                        std::mem::replace(&mut entry.phase, Phase::Retiring)
-                    {
-                        markers[slot] = Some(marker);
-                    }
-                    flights[slot] = Some(entry.flight.clone());
+            let mut markers = Vec::new();
+            let mut flights = Vec::new();
+            for entry in state.entries.iter_mut().flatten() {
+                entry.retiring = true;
+                if let Phase::Ready(marker) = std::mem::replace(&mut entry.phase, Phase::Retiring) {
+                    markers.push(marker);
                 }
+                flights.push(entry.flight.clone());
             }
             (markers, flights)
         };
-        for flight in flights.into_iter().flatten() {
+        for flight in flights {
             flight.finish(Outcome::Error(closed()));
         }
         drop(markers);
@@ -623,9 +575,7 @@ pub(crate) struct Metrics {
     pub(crate) waiters: usize,
 }
 
-struct WorldStorage {
-    _lease: ResourceLease,
-}
+struct WorldStorage;
 struct Completion {
     inner: Weak<Inner>,
     slot: usize,
@@ -802,21 +752,12 @@ struct Waiter {
     inner: Arc<Inner>,
     slot: usize,
     generation: u64,
-    storage: Option<ResourceLease>,
 }
 impl Drop for Waiter {
     fn drop(&mut self) {
-        // Future/lease payload fields are destroyed before this admission.
-        self.storage = None;
         let flight = {
             let mut state = self.inner.state.lock().unwrap_or_else(|p| p.into_inner());
             state.waiters -= 1;
-            let retiring = state
-                .entries
-                .iter()
-                .flatten()
-                .filter(|e| e.retiring)
-                .count();
             if let Some(entry) = state.entries[self.slot]
                 .as_mut()
                 .filter(|e| e.generation == self.generation)
@@ -824,9 +765,7 @@ impl Drop for Waiter {
                 entry.waiters -= 1;
                 if entry.waiters == 0 && matches!(entry.phase, Phase::Creating) {
                     entry.phase = Phase::Abandoned;
-                    if retiring < RETIRING_WORLDS {
-                        entry.retiring = true;
-                    }
+                    entry.retiring = true;
                     Some(entry.flight.clone())
                 } else {
                     None

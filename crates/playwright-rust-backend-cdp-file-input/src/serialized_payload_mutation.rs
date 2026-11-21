@@ -4,7 +4,7 @@
 use super::{PayloadError, PayloadTarget};
 use playwright_rust_cdp::connection::CdpError;
 use playwright_rust_core::{
-    ProductionResourceError, ProductionResourceLedger, ResourceClass, ResourceError,
+    ProductionResourceError, ProductionResourceLedger, ResourceClass, ResourceError, ResourceLease,
     ResourceLedger, ResourceRequest, ResourceRequirements, ResourceScope,
 };
 use serde_json::{Map, Value};
@@ -53,6 +53,7 @@ impl std::error::Error for SerializedPayloadMutationError {}
 pub struct SerializedPayloadMutationProfile {
     scope: ResourceScope,
     calls: usize,
+    allocator_backed: bool,
 }
 
 impl SerializedPayloadMutationProfile {
@@ -60,12 +61,27 @@ impl SerializedPayloadMutationProfile {
         if calls == 0 {
             return Err(SerializedPayloadMutationError::InvalidProfile);
         }
-        let profile = Self { scope, calls };
+        let profile = Self {
+            scope,
+            calls,
+            allocator_backed: false,
+        };
         profile.requirements()?;
         Ok(profile)
     }
 
+    pub fn new_allocator_backed(scope: ResourceScope) -> Self {
+        Self {
+            scope,
+            calls: usize::MAX,
+            allocator_backed: true,
+        }
+    }
+
     pub fn requirements(self) -> Result<ResourceRequirements, SerializedPayloadMutationError> {
+        if self.allocator_backed {
+            return Ok(ResourceRequirements::none());
+        }
         let calls = u64::try_from(self.calls)
             .map_err(|_| SerializedPayloadMutationError::InvalidProfile)?;
         let bytes = CONTROL_BYTES
@@ -75,6 +91,10 @@ impl SerializedPayloadMutationProfile {
             .with_class(ResourceClass::ActiveCommand, calls, calls)
             .with_class(ResourceClass::BackendStateBytes, bytes, bytes)
             .with_metadata(1, self.calls))
+    }
+
+    pub const fn allocator_backed(self) -> bool {
+        self.allocator_backed
     }
 }
 
@@ -96,6 +116,22 @@ impl CdpSerializedPayloadMutationService {
         })
     }
 
+    fn admit(&self) -> Result<Option<ResourceLease>, SerializedPayloadMutationError> {
+        if self.profile.allocator_backed {
+            return Ok(None);
+        }
+        self.ledger
+            .reserve_many(
+                self.profile.scope,
+                &[
+                    ResourceRequest::new(ResourceClass::ActiveCommand, 1),
+                    ResourceRequest::new(ResourceClass::BackendStateBytes, CONTROL_BYTES),
+                ],
+            )
+            .map(Some)
+            .map_err(SerializedPayloadMutationError::Budget)
+    }
+
     /// Consume one already-imported graph and mutate the caller-retained,
     /// already-retargeted INPUT in its exact utility world and object group.
     pub async fn apply_on_target(
@@ -104,16 +140,7 @@ impl CdpSerializedPayloadMutationService {
         graph: Value,
     ) -> Result<(), SerializedPayloadMutationError> {
         validate_graph(&graph)?;
-        let _lease = self
-            .ledger
-            .reserve_many(
-                self.profile.scope,
-                &[
-                    ResourceRequest::new(ResourceClass::ActiveCommand, 1),
-                    ResourceRequest::new(ResourceClass::BackendStateBytes, CONTROL_BYTES),
-                ],
-            )
-            .map_err(SerializedPayloadMutationError::Budget)?;
+        let _lease = self.admit()?;
         let arguments = arguments(target.object_id, graph);
         let response = target
             .client

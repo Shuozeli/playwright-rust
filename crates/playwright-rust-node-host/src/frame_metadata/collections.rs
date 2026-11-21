@@ -1,9 +1,8 @@
-//! Pre-admitted, metadata-only collection revisions on the existing watermark.
-//! Native topology producers must reserve before activation and stage a complete
-//! coherent projection. This module neither discovers nor owns browser objects.
+//! Metadata-only collection revisions on the existing watermark. Native
+//! topology producers stage a complete coherent projection. This module
+//! neither discovers nor owns browser objects.
 use super::{
-    FrameChange, FrameChangeValue, FrameMetadata, FramePublications, HostError, ResourceClass,
-    ResourceLease, SCOPE,
+    FrameChange, FrameChangeValue, FrameMetadata, FramePublications, HostError, ResourceLease,
 };
 use crate::{
     context_metadata::ContextSnapshot,
@@ -11,9 +10,6 @@ use crate::{
 };
 use playwright_rust_core::ObjectId;
 use std::sync::{Arc, Weak};
-
-pub(super) const CONTEXTS: usize = 16;
-pub(super) const PAGES: usize = 16;
 
 mod visibility;
 pub use visibility::{
@@ -70,18 +66,16 @@ impl CollectionRevision {
     }
 }
 
-/// The complete queue slot, both fixed vectors and Arc body exist before native
-/// creation. Filling/staging an admitted reservation makes no new allocation.
+/// The complete queue slot and Arc body exist before publication. Collection
+/// vectors grow through fallible allocator-backed reservations.
 pub struct CollectionReservation {
     book: Weak<FrameMetadata>,
-    event: ResourceLease,
+    event: Option<ResourceLease>,
     revision: CollectionRevision,
 }
 
 const STORAGE_BYTES: usize = std::mem::size_of::<Projection>()
     + 2 * std::mem::size_of::<usize>()
-    + CONTEXTS * std::mem::size_of::<CollectionContext>()
-    + PAGES * std::mem::size_of::<CollectionPage>()
     // Conservatively retain the reservation's body allowance until the final
     // revision reader releases it, including producer/publication overlap.
     + std::mem::size_of::<CollectionReservation>()
@@ -168,11 +162,10 @@ impl CollectionReservation {
                 "invalid or duplicate collection Context identity".into(),
             ));
         }
-        if projection.contexts.len() == CONTEXTS {
-            return Err(HostError::ResourceExhausted(
-                "published Context capacity exceeded (16)".into(),
-            ));
-        }
+        projection
+            .contexts
+            .try_reserve(1)
+            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
         projection.contexts.push(CollectionContext { id, settings });
         Ok(())
     }
@@ -194,11 +187,6 @@ impl CollectionReservation {
                 "invalid collection Page identity or missing Context".into(),
             ));
         }
-        if projection.pages.len() == PAGES {
-            return Err(HostError::ResourceExhausted(
-                "published Page capacity exceeded (16)".into(),
-            ));
-        }
         let main_frame = tree.main_frame_snapshot()?;
         if main_frame.id().get() == 0
             || main_frame.id() == id
@@ -216,6 +204,10 @@ impl CollectionReservation {
                 "collection main Frame already belongs to a Page".into(),
             ));
         }
+        projection
+            .pages
+            .try_reserve(1)
+            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
         projection.pages.push(CollectionPage {
             id,
             context,
@@ -267,20 +259,10 @@ impl FramePublications {
                 "collection publication requires a preallocated metadata queue".into(),
             ));
         }
-        let event = self
-            .0
-            .resources
-            .reserve(SCOPE, ResourceClass::EventItem, 1)
-            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
+        let event = self.0.reserve_event()?;
         let storage = factory.reserve_collection_storage(STORAGE_BYTES)?;
-        let mut contexts = Vec::new();
-        contexts
-            .try_reserve_exact(CONTEXTS)
-            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
-        let mut pages = Vec::new();
-        pages
-            .try_reserve_exact(PAGES)
-            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
+        let contexts = Vec::new();
+        let pages = Vec::new();
         Ok(CollectionReservation {
             book: Arc::downgrade(&self.0),
             event,

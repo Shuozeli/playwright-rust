@@ -22,7 +22,7 @@ fn selected_profile_declares_shared_handle_routes_and_independent_evaluation() {
     let evaluation = factory.profile().handle_evaluation().unwrap();
     let topology = factory.profile().topology().limits();
     // Assert
-    assert_eq!(lifecycle.routes().max_handles(), MAX_HANDLES);
+    assert_eq!(lifecycle.routes().max_handles(), usize::MAX);
     assert_eq!(
         lifecycle.routes().max_native_id_bytes(),
         MAX_NATIVE_ID_BYTES
@@ -32,7 +32,8 @@ fn selected_profile_declares_shared_handle_routes_and_independent_evaluation() {
         lifecycle.routes().resource_scope(),
         evaluation.backend().resource_scope()
     );
-    assert_eq!(evaluation.backend().max_concurrent_operations(), MAX_CALLS);
+    assert_eq!(evaluation.backend().max_concurrent_operations(), usize::MAX);
+    assert_eq!(evaluation.backend().requirements().leases, 0);
     assert!(factory.profile().handle_element_adoption().is_none());
     assert_eq!(
         lifecycle
@@ -40,17 +41,11 @@ fn selected_profile_declares_shared_handle_routes_and_independent_evaluation() {
             .requirements()
             .class(ResourceClass::RemoteHandle)
             .global,
-        MAX_HANDLES as u64
+        0
     );
-    assert_eq!(
-        lifecycle.routes().maximum_retained_bytes(),
-        MAX_HANDLES as u64
-            * ((MAX_NATIVE_ID_BYTES + MAX_PREVIEW_BYTES) as u64
-                + playwright_rust_composition_chromium_handle_lifecycle::native_release::ROUTE_OWNER_BYTES)
-    );
-    let maximum_objects = 1 + topology.contexts + topology.pages + topology.frames + MAX_HANDLES;
-    assert_eq!(maximum_objects, 161);
-    assert!(maximum_objects <= factory.profile().runtime().live_objects);
+    assert_eq!(lifecycle.routes().maximum_retained_bytes(), 0);
+    assert_eq!(factory.profile().runtime().live_objects, usize::MAX);
+    assert_eq!(topology.frames, usize::MAX);
 }
 
 #[tokio::test]
@@ -219,17 +214,17 @@ async fn host_profile_handle_leaf_creates_disposes_and_retires_with_page() {
             check(element.object_kind == playwright_rust_browser_model::ELEMENT_HANDLE_OBJECT_KIND.tag,
                 "element classified as another Handle kind")?;
         }
-        let overflow = create.call(Command::<EvaluateHandle>::new(CallId::new(100),
+        let additional = create.call(Command::<EvaluateHandle>::new(CallId::new(100),
             page.main_frame_id, CallMetadata::default(), EvaluateHandleParams::function_without_argument(source)))
-            .await.unwrap().into_outcome();
-        check(overflow.is_err_and(|error| error.kind() == playwright_rust_core::FailureKind::ResourceExhausted),
-            "handle limit did not reject overflow")?;
+            .await.unwrap().into_outcome().map_err(|error| HostError::operation(error, 0))?;
+        check(additional.object_kind == playwright_rust_browser_model::ELEMENT_HANDLE_OBJECT_KIND.tag,
+            "allocator-backed route did not publish the 130th Handle")?;
         let counter = runtime.call(Command::<playwright_rust_cap_evaluation::EvaluateValue>::new(CallId::new(101),
             page.main_frame_id, CallMetadata::default(), playwright_rust_cap_evaluation::EvaluateParams::expression("globalThis.__playwright_rustHandleCount")))
             .await.unwrap().into_outcome().map_err(|error| HostError::operation(error, 0))?;
         check(counter.into_value() == playwright_rust_cap_evaluation::EvaluationValue::Number(
-            playwright_rust_cap_evaluation::EvaluationNumber::new(MAX_HANDLES as f64).unwrap()),
-            "overflow executed browser code before capacity rejection")?;
+            playwright_rust_cap_evaluation::EvaluationNumber::new((MAX_HANDLES + 1) as f64).unwrap()),
+            "allocator-backed Handle creation count differs from browser execution")?;
         page_close
             .call(Command::<PageClose>::new(
                 CallId::new(102),
@@ -246,7 +241,7 @@ async fn host_profile_handle_leaf_creates_disposes_and_retires_with_page() {
             routes.metrics().unwrap().current == 0,
             "Page close retained a Handle route",
         )?;
-        check(routes.metrics().unwrap().parent_retired == MAX_HANDLES as u64,
+        check(routes.metrics().unwrap().parent_retired == (MAX_HANDLES + 1) as u64,
             "Page handle retirement count differs from admitted capacity")?;
         check(
             attached
@@ -258,7 +253,7 @@ async fn host_profile_handle_leaf_creates_disposes_and_retires_with_page() {
                 == 0,
             "remote handle budget not returned",
         )?;
-        println!("selected Handle profile: created/read/disposed; {MAX_HANDLES} retained elements; overflow has no browser effect; Page close returned all native route leases");
+        println!("selected Handle profile: created/read/disposed; allocator-backed routes retained more than the legacy count; Page close retired all native routes");
         Ok(())
     }
     .await;

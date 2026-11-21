@@ -6,6 +6,28 @@ use std::task::{Context, Waker};
 fn large() -> LargeCommandProfile {
     LargeCommandProfile::new(ResourceScope::extension(147, 1), 1, 1024, 64).unwrap()
 }
+
+#[test]
+fn allocator_backed_profile_accepts_the_address_space_limit_without_a_wire_projection() {
+    // Arrange
+    let profile = LargeCommandProfile::new_allocator_backed(
+        ResourceScope::extension(147, 2),
+        usize::MAX,
+        64 * 1024,
+    )
+    .unwrap();
+
+    // Act
+    let requirements = profile.requirements();
+
+    // Assert
+    assert!(profile.allocator_backed());
+    assert_eq!(profile.capacity(), usize::MAX);
+    assert_eq!(profile.max_bytes(), usize::MAX);
+    assert_eq!(requirements.class(ResourceClass::WireBytes).global, 0);
+    assert!(requirements.class(ResourceClass::BackendStateBytes).global > 0);
+}
+
 fn base() -> CdpConnectionProductionProfile {
     CdpConnectionProductionProfile::new(
         ResourceScope::Connection,
@@ -169,6 +191,42 @@ async fn oversized_ordinary_command_stays_rejected_while_selected_large_command_
     assert_eq!(connection.large_command_metrics().unwrap().active, 0);
 }
 
+#[tokio::test]
+async fn allocator_backed_large_command_serializes_beyond_the_retired_init_script_cap() {
+    // Arrange
+    let large =
+        LargeCommandProfile::new_allocator_backed(ResourceScope::extension(147, 2), usize::MAX, 64)
+            .unwrap();
+    let profile = base().with_large_commands(large).unwrap();
+    let resources = production_resources(&profile);
+    let (connection, mut wire) = test_production_connection_with_writer(&profile, &resources);
+    let source = "x".repeat(128 * 1024 + 1);
+
+    // Act
+    let mut native = Box::pin(connection.send_large_command_to_settlement_with_session(
+        "Page.addScriptToEvaluateOnNewDocument",
+        serde_json::json!({ "source": source }),
+        Some("native-session"),
+    ));
+    assert!(poll(native.as_mut()).is_pending());
+    let outbound = wire.recv().await.unwrap();
+    let sent = frame(&outbound);
+
+    // Assert
+    assert_eq!(
+        sent["params"]["source"].as_str().unwrap().len(),
+        128 * 1024 + 1
+    );
+    replies(
+        &connection,
+        vec![serde_json::json!({"id":sent["id"],"result":{"identifier":"script-1"}})],
+    )
+    .await;
+    drop(outbound);
+    assert_eq!(native.await.unwrap()["identifier"], "script-1");
+    assert_eq!(connection.large_command_metrics().unwrap().active, 0);
+}
+
 #[tokio::test(start_paused = true)]
 async fn large_slot_survives_timeout_and_unconsumed_reply_without_blocking_ordinary_admission() {
     // Arrange
@@ -308,4 +366,66 @@ fn large_profiles_reject_zero_overflow_and_invalid_fragment_limits() {
             .with_large_commands(LargeCommandProfile::new(scope, 1, 1024, 512).unwrap())
             .is_err()
     );
+}
+
+#[test]
+fn allocator_backed_large_commands_do_not_invent_a_static_concurrency_limit() {
+    // Arrange
+    let profile =
+        LargeCommandProfile::new_allocator_backed(ResourceScope::extension(147, 9), 1024, 64)
+            .unwrap();
+
+    // Act
+    let selected = base().with_large_commands(profile);
+    let requirements = profile.requirements();
+
+    // Assert
+    assert!(selected.is_ok());
+    assert_eq!(profile.capacity(), usize::MAX);
+    assert!(profile.allocator_backed());
+    assert_eq!(requirements.class(ResourceClass::WireBytes).global, 0);
+    assert!(requirements.class(ResourceClass::BackendStateBytes).global > 0);
+    assert_eq!(requirements.leases, 1);
+}
+
+#[test]
+fn allocator_backed_large_command_owners_grow_past_the_legacy_count() {
+    // Arrange
+    let command =
+        LargeCommandProfile::new_allocator_backed(ResourceScope::extension(147, 10), 1024, 64)
+            .unwrap();
+    let profile = CdpConnectionProductionProfile::new(
+        ResourceScope::Connection,
+        ConnectionConfig {
+            timeout: Duration::from_secs(1),
+            write_channel_capacity: 256,
+            pending_command_capacity: 256,
+            max_command_bytes: 256,
+            max_response_bytes: 256,
+            max_event_bytes: 256,
+            max_websocket_bytes: 256,
+            event_channel_capacity: 2,
+            max_protocol_error_bytes: 128,
+        },
+    )
+    .with_large_commands(command)
+    .unwrap();
+    let resources = production_resources(&profile);
+    let (connection, _wire) = test_production_connection_with_writer(&profile, &resources);
+
+    // Act
+    let sends: Vec<_> = (0..129)
+        .map(|_| {
+            connection.send_large_command_to_settlement_with_session(
+                "Runtime.callFunctionOn",
+                Value::Null,
+                None,
+            )
+        })
+        .collect();
+
+    // Assert
+    assert_eq!(connection.large_command_metrics().unwrap().active, 129);
+    drop(sends);
+    assert_eq!(connection.large_command_metrics().unwrap().active, 0);
 }

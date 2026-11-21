@@ -96,6 +96,40 @@ async fn shutdown_wakes_outside_registry_lock_with_admission_already_closed() {
     }
 }
 
+#[tokio::test]
+async fn shutdown_cancels_active_and_fifo_waiting_connects() {
+    // Arrange
+    let budget = budget();
+    let first = budget.admit::<()>(FfiLane::Connect, BASE_BYTES).unwrap();
+    let second = budget.admit::<()>(FfiLane::Connect, BASE_BYTES).unwrap();
+    let mut first_run = Box::pin(first.run(std::future::pending()));
+    let mut second_run = Box::pin(second.run(std::future::pending()));
+    assert!(poll_now(first_run.as_mut()).is_pending());
+    assert!(poll_now(second_run.as_mut()).is_pending());
+    let mut shutdown = Box::pin(budget.shutdown());
+
+    // Act
+    assert!(poll_now(shutdown.as_mut()).is_pending());
+    let Poll::Ready(first_ticket) = poll_now(first_run.as_mut()) else {
+        panic!("active Connect must observe environment shutdown");
+    };
+    let Poll::Ready(second_ticket) = poll_now(second_run.as_mut()) else {
+        panic!("waiting Connect must observe environment shutdown");
+    };
+
+    // Assert
+    assert!(matches!(poll_now(shutdown.as_mut()), Poll::Ready(Ok(()))));
+    assert!(matches!(
+        first_ticket.deliver(|outcome| outcome),
+        Err(HostError::TargetClosed)
+    ));
+    assert!(matches!(
+        second_ticket.deliver(|outcome| outcome),
+        Err(HostError::TargetClosed)
+    ));
+    assert_eq!(budget.metrics().unwrap(), FfiMetrics::default());
+}
+
 #[test]
 fn sealed_registry_rejects_eager_admission_before_cancellation_is_broadcast() {
     // Arrange: model shutdown's interval after sealing and before wakeups.
@@ -108,6 +142,35 @@ fn sealed_registry_rejects_eager_admission_before_cancellation_is_broadcast() {
 
     // Assert
     assert!(matches!(result, Err(HostError::TargetClosed)));
+    assert_eq!(budget.metrics().unwrap(), FfiMetrics::default());
+}
+
+#[test]
+fn sealed_registry_rejects_connect_promotion_before_startup_polling() {
+    // Arrange: model the interval after shutdown seals admission but before
+    // semaphore close and cancellation wake the waiting execution.
+    let budget = budget();
+    let execution = budget.admit::<()>(FfiLane::Connect, BASE_BYTES).unwrap();
+    let polls = Arc::new(AtomicUsize::new(0));
+    let observed_polls = Arc::clone(&polls);
+    let mut run = Box::pin(execution.run(std::future::poll_fn(move |_| {
+        observed_polls.fetch_add(1, Ordering::SeqCst);
+        Poll::Ready(Ok(()))
+    })));
+    budget.0.registry.lock().unwrap().closed = true;
+    assert!(!budget.0.stopped.is_cancelled());
+
+    // Act
+    let Poll::Ready(ticket) = poll_now(run.as_mut()) else {
+        panic!("sealed promotion must settle without polling startup");
+    };
+
+    // Assert
+    assert_eq!(polls.load(Ordering::SeqCst), 0);
+    assert!(matches!(
+        ticket.deliver(|outcome| outcome).unwrap(),
+        Err(HostError::TargetClosed)
+    ));
     assert_eq!(budget.metrics().unwrap(), FfiMetrics::default());
 }
 

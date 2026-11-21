@@ -13,10 +13,17 @@ cdp-default-user-agent = ["cdp-handshake-headers", "dep:playwright-rust-playwrig
 cdp-discovery-errors = []
 cdp-ws-close-reason = ["playwright-rust-cdp/cdp-ws-close-reason"]
 cdp-ws-invalid-frame = ["playwright-rust-cdp/cdp-ws-invalid-frame"]
-cdp-session = []
+cdp-session = ["playwright-rust-cdp/large-commands"]
 browser-cdp-session = ["cdp-session"]
 owned-launch = ["dep:playwright-rust-browser-provider", "dep:playwright-rust-composition-chromium-launch", "dep:playwright-rust-provider-chromium", "playwright-rust-composition-chromium-launch/startup-logs"]
+official-test-browser-kill = ["owned-launch"]
 playwright-trace = ["owned-launch", "dep:playwright-rust-trace-playwright-v8"]
+context-tracing-screenshots = ["playwright-trace", "dep:sha1", "dep:zip"]
+context-tracing-chunks = ["context-tracing-screenshots"]
+context-tracing-actions = ["context-tracing-chunks"]
+context-tracing-snapshots = ["context-tracing-actions"]
+context-tracing-console = ["context-tracing-screenshots", "console-events"]
+context-tracing-network = ["context-tracing-screenshots", "har-recording"]
 persistent-context-locale = ["owned-launch", "context-locale"]
 persistent-context-timezone = ["owned-launch", "context-timezone"]
 persistent-context-offline = ["owned-launch", "context-offline"]
@@ -30,7 +37,8 @@ persistent-context-emulate-media = ["owned-launch", "emulate-media"]
 persistent-context-extra-headers = ["owned-launch", "extra-headers"]
 persistent-context-bypass-csp = ["owned-launch", "bypass-csp"]
 persistent-context-javascript-disabled = ["owned-launch", "javascript-disabled"]
-context-cookies = ["dep:regex"]
+video-recording = ["page-events", "dep:base64"]
+context-cookies = ["dep:playwright-rust-ecmascript-regexp"]
 context-storage-state = ["context-cookies", "page-routes"]
 context-api-request = ["context-cookies", "device-emulation", "context-http-credentials", "ignore-https-errors"]
 retained-target-marking = ["retained-file-input", "playwright-rust-composition-chromium-file-input/retained-target-marking"]
@@ -65,17 +73,19 @@ file-chooser-native-paths = ["file-chooser-events"]
 page-errors = ["page-events"]
 page-routes = ["frame-lifecycle", "dep:base64"]
 route-request-history = ["page-routes", "request-history"]
-route-regexp = ["page-routes", "dep:regex"]
+route-regexp = ["page-routes", "dep:playwright-rust-ecmascript-regexp"]
 route-redirects = ["page-routes", "request-history"]
 route-fulfill-cors = ["page-routes"]
 route-fulfill-path = ["page-routes", "dep:mime_guess"]
-har-replay = ["page-routes", "dep:playwright-rust-har-replay"]
+har-replay = ["page-routes", "dep:playwright-rust-har-replay", "dep:zip"]
+har-recording = ["har-replay", "worker-network-events", "request-timing", "response-connection-details", "response-security-details", "dep:playwright-rust-har-recording"]
+har-recording-regexp = ["har-recording", "dep:playwright-rust-ecmascript-regexp"]
 console-events = ["frame-lifecycle"]
 console-argument-handles = ["console-events", "handles"]
 console-history = ["frame-lifecycle"]
 page-bindings = ["frame-lifecycle", "handles"]
 context-bindings = ["page-bindings"]
-init-scripts = []
+init-scripts = ["playwright-rust-cdp/large-commands"]
 service-worker-policy = ["init-scripts"]
 wait-for-function = ["handles"]
 wait-for-timeout = []
@@ -89,6 +99,7 @@ history-navigation = [
 ]
 url-glob = []
 url-wait = ["url-glob", "frame-lifecycle"]
+frame-expect-title = ["url-wait"]
 set-content = ["frame-lifecycle"]
 selector-registration = []
 light-selectors = ["handles"]
@@ -148,6 +159,11 @@ request-post-data-json = ["network-events"]
 request-history = ["network-events"]
 request-events = ["network-events"]
 response-events = ["network-events"]
+response-connection-details = [
+    "network-events",
+    "playwright-rust-backend-cdp/response-connection-details",
+    "playwright-rust-composition-chromium/response-connection-details",
+]
 response-finished = ["response-events"]
 navigation-response-finished = ["response-request", "response-finished"]
 response-security-details = [
@@ -157,11 +173,12 @@ response-security-details = [
 ]
 download-events = ["frame-lifecycle"]
 worker-events = ["page-events"]
+service-worker-events = ["worker-events"]
 worker-handle-evaluation = ["worker-events", "dep:playwright-rust-backend-cdp-handle-evaluation"]
 worker-console-events = ["worker-events", "console-events"]
 worker-console-argument-handles = ["worker-console-events", "worker-handle-evaluation"]
 worker-error-events = ["worker-events", "page-errors"]
-worker-network-events = ["worker-events", "request-events", "response-events"]
+worker-network-events = ["service-worker-events", "context-network-events", "request-history", "request-events", "response-events"]
 drag-source = ["dep:playwright-rust-backend-cdp-drag"]
 drag-runtime = ["drag-source", "playwright-rust-runtime/lifetime-handoff"]
 drag-and-drop = ["drag-runtime", "locator-bounding-box"]
@@ -175,6 +192,7 @@ playwright-rust-backend-cdp = { workspace = true, optional = true }
 playwright-rust-cap-network-events = { workspace = true, optional = true }
 playwright-rust-network-model = { workspace = true, optional = true }
 playwright-rust-har-replay = { workspace = true, optional = true }
+playwright-rust-har-recording = { workspace = true, optional = true }
 playwright-rust-runtime-control = { workspace = true, optional = true }
 playwright-rust-codec-handle-evaluation = { workspace = true, optional = true }
 playwright-rust-codec-handle-lifecycle = { workspace = true, optional = true }
@@ -189,6 +207,8 @@ playwright-rust-composition-chromium-file-input = { workspace = true, optional =
 futures-util = { workspace = true, optional = true }
 base64 = { workspace = true, optional = true }
 mime_guess = { workspace = true, optional = true }
+zip = { workspace = true, optional = true }
+sha1 = { workspace = true, optional = true }
 playwright-rust-input-model = { workspace = true }
 playwright-rust-backend-cdp-drag = { workspace = true, optional = true, features = ["mouse-dispatch"] }
 playwright-rust-cap-mouse = { workspace = true }
@@ -240,6 +260,7 @@ playwright-rust-composition-chromium-locator-resolution = { workspace = true }
 playwright-rust-cap-handle-evaluation = { workspace = true }
 playwright-rust-browser-model = { workspace = true }
 playwright-rust-core = { workspace = true }
+playwright-rust-ecmascript-regexp = { workspace = true, optional = true }
 playwright-rust-provider-cdp = { workspace = true }
 playwright-rust-provider-chromium = { workspace = true, optional = true }
 playwright-rust-plugin-chromium-session-initialization = { workspace = true }
@@ -257,12 +278,12 @@ tokio = { workspace = true }
 tokio-util = { workspace = true }
 tracing = { workspace = true }
 url = { workspace = true }
-regex = { version = "1", optional = true }
 zeroize = { workspace = true, optional = true }
 
 [dev-dependencies]
 futures-util = { workspace = true }
 playwright-rust-fake = { workspace = true }
+tempfile = { workspace = true }
 tokio = { workspace = true, features = ["test-util"] }
 tokio-tungstenite = { workspace = true }
 tracing-subscriber = { workspace = true }

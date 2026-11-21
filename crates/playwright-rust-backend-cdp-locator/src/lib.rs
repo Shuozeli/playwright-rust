@@ -288,14 +288,18 @@ impl CdpLocatorProductionProfile {
     ) -> Self {
         self.max_context_routes = max_context_routes;
         self.max_native_id_bytes = max_native_id_bytes;
-        self.maximum_route_retained_bytes = u64::try_from(max_context_routes)
-            .unwrap_or(u64::MAX)
-            .saturating_mul(
-                u64::try_from(max_native_id_bytes)
-                    .unwrap_or(u64::MAX)
-                    .saturating_mul(12)
-                    .saturating_add(CONTEXT_ROUTE_NUMERIC_ID_BYTES),
-            );
+        self.maximum_route_retained_bytes = if max_context_routes == usize::MAX {
+            0
+        } else {
+            u64::try_from(max_context_routes)
+                .unwrap_or(u64::MAX)
+                .saturating_mul(
+                    u64::try_from(max_native_id_bytes)
+                        .unwrap_or(u64::MAX)
+                        .saturating_mul(12)
+                        .saturating_add(CONTEXT_ROUTE_NUMERIC_ID_BYTES),
+                )
+        };
         let actions = u64::try_from(self.max_concurrent_actions).unwrap_or(u64::MAX);
         let selector_bytes = self
             .maximum_retained_bytes_per_action
@@ -370,6 +374,10 @@ impl CdpLocatorProductionProfile {
 
     pub const fn maximum_route_retained_bytes(self) -> u64 {
         self.maximum_route_retained_bytes
+    }
+
+    pub const fn context_routes_allocator_backed(self) -> bool {
+        self.max_context_routes == usize::MAX
     }
 
     pub const fn requirements(self) -> ResourceRequirements {
@@ -12247,6 +12255,27 @@ mod tests {
                 .class(ResourceClass::BackendStateBytes)
                 .current,
             0
+        );
+    }
+
+    #[test]
+    fn allocator_backed_context_routes_do_not_reserve_infinite_bytes() {
+        // Arrange
+        let ordinary = CdpLocatorProductionProfile::new(LOCATOR_SCOPE, 1);
+
+        // Act
+        let profile = ordinary.with_context_routes(usize::MAX, 64);
+
+        // Assert
+        assert!(profile.context_routes_allocator_backed());
+        assert_eq!(profile.maximum_route_retained_bytes(), 0);
+        assert_eq!(
+            profile
+                .requirements()
+                .class(ResourceClass::BackendStateBytes),
+            ordinary
+                .requirements()
+                .class(ResourceClass::BackendStateBytes)
         );
     }
 

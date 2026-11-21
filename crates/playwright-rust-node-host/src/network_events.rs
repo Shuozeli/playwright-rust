@@ -15,6 +15,8 @@ use std::collections::{BTreeMap, VecDeque};
 use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
 
+#[cfg(feature = "response-connection-details")]
+pub use playwright_rust_backend_cdp::CdpResponseConnectionDetails;
 #[cfg(feature = "response-security-details")]
 pub use playwright_rust_backend_cdp::CdpResponseSecurityDetails;
 use playwright_rust_backend_cdp::{CdpNetworkEventBatch, CdpNetworkEventEffect};
@@ -43,16 +45,11 @@ use crate::{CommandRuntime, HostError, HostSession, LiveSession};
 const MAX_WAITERS: usize = 32;
 const MAX_EVENTS_PER_WAITER: usize = 16;
 const MAX_QUEUED_BYTES: usize = 16 * 1024 * 1024;
-pub const MAX_REQUEST_SIZE_OWNERS: usize = 64;
 const STORAGE_BYTES: u64 = MAX_QUEUED_BYTES as u64 + 64 * 1024;
 const SCOPE: ResourceScope = ResourceScope::extension(135, 1);
 
 #[cfg(feature = "response-events")]
-pub const MAX_RESPONSE_EVENT_CONTEXTS: usize = 16;
-#[cfg(feature = "response-events")]
 pub const MAX_RESPONSE_EVENT_NOTICES: usize = 256;
-#[cfg(feature = "request-events")]
-pub const MAX_REQUEST_EVENT_CONTEXTS: usize = 16;
 #[cfg(feature = "request-events")]
 pub const MAX_REQUEST_EVENT_NOTICES: usize = 256;
 #[cfg(feature = "response-finished")]
@@ -63,24 +60,19 @@ pub const RESPONSE_FINISHED_STORAGE_BYTES: u64 = 64 * 1024;
 const RESPONSE_FINISHED_STORAGE_BYTES: u64 = 0;
 
 #[cfg(feature = "request-history")]
-const MAX_REQUEST_HISTORY_PAGES: usize = 16;
-#[cfg(feature = "request-history")]
 pub const MAX_REQUEST_HISTORY_ITEMS_PER_PAGE: usize = 100;
 #[cfg(feature = "request-history")]
 pub const MAX_REQUEST_HISTORY_NATIVE_ID_BYTES: usize = 4 * 1024;
 #[cfg(feature = "request-history")]
 pub const MAX_REQUEST_HISTORY_OWNERS_PER_PAGE: u64 = 256;
 #[cfg(feature = "request-history")]
-pub const MAX_REQUEST_HISTORY_OWNERS: u64 =
-    MAX_REQUEST_HISTORY_PAGES as u64 * MAX_REQUEST_HISTORY_OWNERS_PER_PAGE;
+pub const MAX_REQUEST_HISTORY_OWNERS: u64 = 4096;
 #[cfg(feature = "request-history")]
 pub const MAX_REQUEST_HISTORY_BYTES: u64 = 64 * 1024 * 1024;
 #[cfg(feature = "request-history")]
 const REQUEST_HISTORY_STORAGE_BYTES: u64 = (std::mem::size_of::<RequestHistory>()
     + std::mem::size_of::<RequestHistoryState>()
-    + MAX_REQUEST_HISTORY_PAGES
-        * (std::mem::size_of::<PageRequestHistory>()
-            + MAX_REQUEST_HISTORY_ITEMS_PER_PAGE * std::mem::size_of::<Arc<RequestHistoryOwner>>()))
+    + MAX_REQUEST_HISTORY_OWNERS as usize * std::mem::size_of::<Arc<RequestHistoryOwner>>())
     as u64;
 #[cfg(not(feature = "request-history"))]
 const REQUEST_HISTORY_STORAGE_BYTES: u64 = 0;
@@ -119,19 +111,15 @@ pub(crate) fn requirements() -> ResourceRequirements {
     let metadata_values = 1usize;
     #[cfg(feature = "request-history")]
     let (metadata_keys, metadata_values) = (
-        metadata_keys + MAX_REQUEST_HISTORY_PAGES,
+        metadata_keys,
         metadata_values + MAX_REQUEST_HISTORY_OWNERS as usize,
     );
     #[cfg(feature = "request-events")]
-    let (metadata_keys, metadata_values) = (
-        metadata_keys + MAX_REQUEST_EVENT_CONTEXTS,
-        metadata_values + MAX_REQUEST_EVENT_NOTICES,
-    );
+    let (metadata_keys, metadata_values) =
+        (metadata_keys, metadata_values + MAX_REQUEST_EVENT_NOTICES);
     #[cfg(feature = "response-events")]
-    let (metadata_keys, metadata_values) = (
-        metadata_keys + MAX_RESPONSE_EVENT_CONTEXTS,
-        metadata_values + MAX_RESPONSE_EVENT_NOTICES,
-    );
+    let (metadata_keys, metadata_values) =
+        (metadata_keys, metadata_values + MAX_RESPONSE_EVENT_NOTICES);
     #[cfg(feature = "response-finished")]
     let (metadata_keys, metadata_values) = (
         metadata_keys + 1,
@@ -218,6 +206,8 @@ pub struct NetworkRequestRecord {
     pub id: String,
     pub native_request_id: Option<String>,
     pub page_id: String,
+    pub context_id: Option<String>,
+    pub service_worker_id: Option<String>,
     pub url: String,
     pub method: String,
     pub resource_type: String,
@@ -252,10 +242,8 @@ enum RequestSizeState {
 pub struct RequestSizeOwner {
     request: ObjectId,
     page: ObjectId,
-    request_body_size: i64,
     state: Mutex<RequestSizeState>,
     notify: tokio::sync::Notify,
-    _slot: tokio::sync::OwnedSemaphorePermit,
 }
 
 impl std::fmt::Debug for RequestSizeOwner {
@@ -277,24 +265,12 @@ impl PartialEq for RequestSizeOwner {
 impl Eq for RequestSizeOwner {}
 
 impl RequestSizeOwner {
-    fn new(
-        page: ObjectId,
-        request: ObjectId,
-        value: &NetworkRequestRecord,
-        slot: tokio::sync::OwnedSemaphorePermit,
-    ) -> Self {
+    fn new(page: ObjectId, request: ObjectId) -> Self {
         Self {
             request,
             page,
-            request_body_size: value
-                .post_data
-                .as_ref()
-                .map_or(0, Vec::len)
-                .try_into()
-                .expect("network post-data bound fits i64"),
             state: Mutex::new(RequestSizeState::Pending),
             notify: tokio::sync::Notify::new(),
-            _slot: slot,
         }
     }
 
@@ -346,31 +322,7 @@ impl RequestSizeOwner {
         response: &NetworkResponseRecord,
         encoded_body_bytes: Option<u64>,
     ) -> Result<RequestSizes, String> {
-        let request_headers_size = request_headers_size(request)?;
-        let response_headers_size = response_headers_size(response)?;
-        let fallback_body_size = response
-            .headers
-            .iter()
-            .find(|(name, _)| name.eq_ignore_ascii_case("content-length"))
-            .and_then(|(_, value)| value.trim().parse::<i64>().ok())
-            .unwrap_or(0);
-        let (response_body_size, transfer_size) = if let Some(encoded) = encoded_body_bytes {
-            let transfer_size = i64::try_from(encoded)
-                .map_err(|_| "encoded response size exceeds i64".to_owned())?;
-            (transfer_size - response_headers_size, transfer_size)
-        } else {
-            let transfer_size = response_headers_size
-                .checked_add(fallback_body_size)
-                .ok_or_else(|| "response transfer size overflow".to_owned())?;
-            (fallback_body_size, transfer_size)
-        };
-        Ok(RequestSizes {
-            request_body_size: self.request_body_size,
-            request_headers_size,
-            response_body_size,
-            response_headers_size,
-            transfer_size,
-        })
+        completed_request_sizes(request, response, encoded_body_bytes)
     }
 
     fn settle(&self, outcome: Result<RequestSizes, String>) {
@@ -386,6 +338,43 @@ impl RequestSizeOwner {
         };
         self.notify.notify_waiters();
     }
+}
+
+pub(crate) fn completed_request_sizes(
+    request: &NetworkRequestRecord,
+    response: &NetworkResponseRecord,
+    encoded_body_bytes: Option<u64>,
+) -> Result<RequestSizes, String> {
+    let request_headers_size = request_headers_size(request)?;
+    let response_headers_size = response_headers_size(response)?;
+    let fallback_body_size = response
+        .headers
+        .iter()
+        .find(|(name, _)| name.eq_ignore_ascii_case("content-length"))
+        .and_then(|(_, value)| value.trim().parse::<i64>().ok())
+        .unwrap_or(0);
+    let (response_body_size, transfer_size) = if let Some(encoded) = encoded_body_bytes {
+        let transfer_size =
+            i64::try_from(encoded).map_err(|_| "encoded response size exceeds i64".to_owned())?;
+        (transfer_size - response_headers_size, transfer_size)
+    } else {
+        let transfer_size = response_headers_size
+            .checked_add(fallback_body_size)
+            .ok_or_else(|| "response transfer size overflow".to_owned())?;
+        (fallback_body_size, transfer_size)
+    };
+    Ok(RequestSizes {
+        request_body_size: request
+            .post_data
+            .as_ref()
+            .map_or(0, Vec::len)
+            .try_into()
+            .map_err(|_| "request body size exceeds i64".to_owned())?,
+        request_headers_size,
+        response_body_size,
+        response_headers_size,
+        transfer_size,
+    })
 }
 
 #[cfg(feature = "response-finished")]
@@ -484,11 +473,15 @@ impl ResponseFinishedOwner {
 pub struct NetworkResponseRecord {
     pub id: String,
     pub request_id: String,
+    pub context_id: Option<String>,
+    pub service_worker_id: Option<String>,
     pub url: String,
     pub status: i64,
     pub status_text: String,
     pub headers: Vec<(String, String)>,
     pub from_service_worker: bool,
+    #[cfg(feature = "response-connection-details")]
+    pub connection_details: Option<CdpResponseConnectionDetails>,
     #[cfg(feature = "response-security-details")]
     pub security_details: Option<CdpResponseSecurityDetails>,
     #[cfg(feature = "request-timing")]
@@ -602,6 +595,14 @@ pub enum NetworkEventRecord {
     },
 }
 
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub(crate) struct BatchPublication {
+    #[cfg(feature = "har-recording")]
+    pub response_body_request: Option<String>,
+    #[cfg(feature = "har-recording")]
+    pub request_terminal: bool,
+}
+
 #[derive(Clone, Debug)]
 pub struct NetworkWaitRecord {
     event: NetworkEventRecord,
@@ -670,6 +671,8 @@ impl NetworkRequestRecord {
             .len()
             .saturating_add(self.native_request_id.as_ref().map_or(0, String::len))
             .saturating_add(self.page_id.len())
+            .saturating_add(self.context_id.as_ref().map_or(0, String::len))
+            .saturating_add(self.service_worker_id.as_ref().map_or(0, String::len))
             .saturating_add(self.url.len())
             .saturating_add(self.method.len())
             .saturating_add(self.resource_type.len())
@@ -701,12 +704,20 @@ impl NetworkResponseRecord {
             .id
             .len()
             .saturating_add(self.request_id.len())
+            .saturating_add(self.context_id.as_ref().map_or(0, String::len))
+            .saturating_add(self.service_worker_id.as_ref().map_or(0, String::len))
             .saturating_add(self.url.len())
             .saturating_add(self.status_text.len())
             .saturating_add(header_bytes(&self.headers))
             .saturating_add(self.body.as_ref().map_or(0, |body| body.len()));
         #[cfg(feature = "request-timing")]
         let retained = retained.saturating_add(std::mem::size_of::<RequestTiming>());
+        #[cfg(feature = "response-connection-details")]
+        let retained = retained.saturating_add(
+            self.connection_details
+                .as_ref()
+                .map_or(0, CdpResponseConnectionDetails::retained_bytes),
+        );
         #[cfg(feature = "response-security-details")]
         let retained = retained.saturating_add(
             self.security_details
@@ -725,6 +736,8 @@ impl NetworkResponseRecord {
             .id
             .len()
             .saturating_add(self.request_id.len())
+            .saturating_add(self.context_id.as_ref().map_or(0, String::len))
+            .saturating_add(self.service_worker_id.as_ref().map_or(0, String::len))
             .saturating_add(self.url.len())
             .saturating_add(self.status_text.len())
             .saturating_add(header_bytes(&self.headers));
@@ -774,7 +787,7 @@ struct RequestHistoryOwnerState {
 
 #[cfg(feature = "request-history")]
 pub struct RequestHistoryOwner {
-    page: ObjectId,
+    owner: ObjectId,
     request_id: ObjectId,
     request: NetworkRequestRecord,
     redirected_from: Option<Arc<RequestHistoryOwner>>,
@@ -787,7 +800,7 @@ impl std::fmt::Debug for RequestHistoryOwner {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
             .debug_struct("RequestHistoryOwner")
-            .field("page", &self.page)
+            .field("owner", &self.owner)
             .field("request_id", &self.request_id)
             .field("request", &self.request)
             .finish_non_exhaustive()
@@ -811,14 +824,14 @@ impl RequestHistoryOwner {
     }
 
     fn new(
-        page: ObjectId,
+        owner: ObjectId,
         request_id: ObjectId,
         request: NetworkRequestRecord,
         redirected_from: Option<Arc<RequestHistoryOwner>>,
         lease: ResourceLease,
     ) -> Self {
         Self {
-            page,
+            owner,
             request_id,
             request,
             redirected_from,
@@ -836,9 +849,9 @@ impl RequestHistoryOwner {
     }
 
     /// The preceding redirect hop remains available for as long as this
-    /// request is retained, even after the Page's bounded history evicts it.
+    /// request is retained, even after its owner's bounded history evicts it.
     /// Each predecessor keeps its existing resource lease; a chain therefore
-    /// cannot bypass the configured per-Page owner and byte limits.
+    /// cannot bypass the configured per-root-object count and byte limits.
     pub fn redirected_from(&self) -> Option<Arc<Self>> {
         self.redirected_from.clone()
     }
@@ -916,7 +929,7 @@ impl RequestHistoryOwner {
         let Some(owner) = response.finished_owner else {
             return Ok(None);
         };
-        if owner.page != self.page || owner.request != self.request_id {
+        if owner.page != self.owner || owner.request != self.request_id {
             return Ok(None);
         }
         Ok(Some(owner))
@@ -949,10 +962,7 @@ impl RequestHistoryOwner {
                 })?;
             state
                 .lease
-                .try_replace(
-                    ResourceScope::Object(self.page),
-                    &Self::requests(retained_bytes)?,
-                )
+                .try_replace(SCOPE, &Self::requests(retained_bytes)?)
                 .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
             state.terminal = RequestTerminalOutcome::Failed(text.to_owned());
         } else {
@@ -976,10 +986,7 @@ impl RequestHistoryOwner {
                 })?;
             state
                 .lease
-                .try_replace(
-                    ResourceScope::Object(self.page),
-                    &Self::requests(retained_bytes)?,
-                )
+                .try_replace(SCOPE, &Self::requests(retained_bytes)?)
                 .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
             state.outcome = RequestHistoryOutcome::Response(Box::new(response));
         } else {
@@ -1004,20 +1011,20 @@ impl RequestHistoryOwner {
 }
 
 #[cfg(feature = "request-history")]
-struct PageRequestHistory {
-    page: Option<ObjectId>,
+struct RequestOwnerHistory {
+    owner: Option<ObjectId>,
     requests: VecDeque<Arc<RequestHistoryOwner>>,
 }
 
 #[cfg(feature = "request-history")]
-impl PageRequestHistory {
+impl RequestOwnerHistory {
     fn new() -> Result<Self, HostError> {
         let mut requests = VecDeque::new();
         requests
             .try_reserve_exact(MAX_REQUEST_HISTORY_ITEMS_PER_PAGE)
             .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
         Ok(Self {
-            page: None,
+            owner: None,
             requests,
         })
     }
@@ -1027,13 +1034,13 @@ impl PageRequestHistory {
             owner.close();
         }
         self.requests.clear();
-        self.page = None;
+        self.owner = None;
     }
 }
 
 #[cfg(feature = "request-history")]
 struct RequestHistoryState {
-    pages: Vec<PageRequestHistory>,
+    owners: Vec<RequestOwnerHistory>,
     active: BTreeMap<ObjectId, Weak<RequestHistoryOwner>>,
     closed: bool,
 }
@@ -1048,17 +1055,10 @@ struct RequestHistory {
 #[cfg(feature = "request-history")]
 impl RequestHistory {
     fn new(resources: ResourceLedger) -> Result<Self, HostError> {
-        let mut pages = Vec::new();
-        pages
-            .try_reserve_exact(MAX_REQUEST_HISTORY_PAGES)
-            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
-        for _ in 0..MAX_REQUEST_HISTORY_PAGES {
-            pages.push(PageRequestHistory::new()?);
-        }
         Ok(Self {
             resources,
             state: Mutex::new(RequestHistoryState {
-                pages,
+                owners: Vec::new(),
                 active: BTreeMap::new(),
                 closed: false,
             }),
@@ -1082,23 +1082,25 @@ impl RequestHistory {
                 "duplicate active request history identity".into(),
             ));
         }
-        let page_index = state
-            .pages
+        let owner_index = state
+            .owners
             .iter()
-            .position(|history| history.page == Some(page))
+            .position(|history| history.owner == Some(page))
             .or_else(|| {
                 state
-                    .pages
+                    .owners
                     .iter()
-                    .position(|history| history.page.is_none())
-            })
-            .ok_or_else(|| {
-                HostError::ResourceExhausted(format!(
-                    "request history exceeds {MAX_REQUEST_HISTORY_PAGES} live Pages"
-                ))
-            })?;
+                    .position(|history| history.owner.is_none())
+            });
+        let owner_index = if let Some(index) = owner_index {
+            index
+        } else {
+            state.owners.try_reserve(1).map_err(HostError::backend)?;
+            state.owners.push(RequestOwnerHistory::new()?);
+            state.owners.len() - 1
+        };
         let redirected_from = request.redirected_from.as_deref().and_then(|id| {
-            state.pages[page_index]
+            state.owners[owner_index]
                 .requests
                 .iter()
                 .rev()
@@ -1107,19 +1109,16 @@ impl RequestHistory {
         });
         let requests = RequestHistoryOwner::requests(request.retained_bytes())?;
         let evicted =
-            if state.pages[page_index].requests.len() == MAX_REQUEST_HISTORY_ITEMS_PER_PAGE {
-                state.pages[page_index].requests.pop_front()
+            if state.owners[owner_index].requests.len() == MAX_REQUEST_HISTORY_ITEMS_PER_PAGE {
+                state.owners[owner_index].requests.pop_front()
             } else {
                 None
             };
-        let lease = match self
-            .resources
-            .reserve_many(ResourceScope::Object(page), &requests)
-        {
+        let lease = match self.resources.reserve_many(SCOPE, &requests) {
             Ok(lease) => lease,
             Err(error) => {
                 if let Some(evicted) = evicted {
-                    state.pages[page_index].requests.push_front(evicted);
+                    state.owners[owner_index].requests.push_front(evicted);
                 }
                 return Err(HostError::ResourceExhausted(error.to_string()));
             }
@@ -1131,8 +1130,8 @@ impl RequestHistory {
             redirected_from,
             lease,
         ));
-        state.pages[page_index].page = Some(page);
-        state.pages[page_index]
+        state.owners[owner_index].owner = Some(page);
+        state.owners[owner_index]
             .requests
             .push_back(Arc::clone(&owner));
         state.active.insert(request_id, Arc::downgrade(&owner));
@@ -1161,9 +1160,9 @@ impl RequestHistory {
                     return Err(HostError::TargetClosed);
                 }
                 state
-                    .pages
+                    .owners
                     .iter()
-                    .find(|history| history.page == Some(page))
+                    .find(|history| history.owner == Some(page))
                     .and_then(|history| {
                         // CDP reuses the same native RequestId across redirect
                         // hops. The most recent portable request is the final
@@ -1265,20 +1264,23 @@ impl RequestHistory {
             return Err(HostError::TargetClosed);
         }
         Ok(state
-            .pages
+            .owners
             .iter()
-            .find(|history| history.page == Some(page))
+            .find(|history| history.owner == Some(page))
             .map(|history| history.requests.iter().cloned().collect())
             .unwrap_or_default())
     }
 
-    fn reconcile(&self, active_pages: &[ObjectId]) -> Result<(), HostError> {
+    fn reconcile(
+        &self,
+        active_pages: &[ObjectId],
+        active_contexts: &[ObjectId],
+    ) -> Result<(), HostError> {
         let mut state = self.state.lock().map_err(HostError::backend)?;
-        for history in &mut state.pages {
-            if history
-                .page
-                .is_some_and(|page| !active_pages.contains(&page))
-            {
+        for history in &mut state.owners {
+            if history.owner.is_some_and(|owner| {
+                !active_pages.contains(&owner) && !active_contexts.contains(&owner)
+            }) {
                 history.clear();
             }
         }
@@ -1286,7 +1288,7 @@ impl RequestHistory {
             let Some(owner) = owner.upgrade() else {
                 return false;
             };
-            if active_pages.contains(&owner.page) {
+            if active_pages.contains(&owner.owner) || active_contexts.contains(&owner.owner) {
                 true
             } else {
                 owner.close();
@@ -1303,7 +1305,7 @@ impl RequestHistory {
             return;
         };
         state.closed = true;
-        for history in &mut state.pages {
+        for history in &mut state.owners {
             history.clear();
         }
         for owner in state.active.values().filter_map(Weak::upgrade) {
@@ -1376,6 +1378,8 @@ fn request(
         id: value.request.get().to_string(),
         native_request_id: native_request_id.map(str::to_owned),
         page_id: value.parent.get().to_string(),
+        context_id: None,
+        service_worker_id: None,
         url: value.url.clone(),
         method: value.method.clone(),
         resource_type: value.resource_type.clone(),
@@ -1393,6 +1397,54 @@ fn request(
             .unwrap_or_else(RequestTiming::pending),
         size_owner: None,
     }
+}
+
+fn attach_service_worker_source(
+    event: &mut NetworkEventRecord,
+    context: ObjectId,
+    worker_id: &str,
+) {
+    let context_id = context.get().to_string();
+    let service_worker_id = worker_id.to_owned();
+    match event {
+        NetworkEventRecord::Request(request) => {
+            mark_service_worker_request(request, &context_id, &service_worker_id);
+        }
+        NetworkEventRecord::Response(response) => {
+            mark_service_worker_response(response, &context_id, &service_worker_id);
+        }
+        NetworkEventRecord::RequestFinished {
+            request, response, ..
+        }
+        | NetworkEventRecord::RequestFailed {
+            request, response, ..
+        } => {
+            mark_service_worker_request(request, &context_id, &service_worker_id);
+            if let Some(response) = response {
+                mark_service_worker_response(response, &context_id, &service_worker_id);
+            }
+        }
+    }
+}
+
+fn mark_service_worker_request(
+    request: &mut NetworkRequestRecord,
+    context_id: &str,
+    service_worker_id: &str,
+) {
+    request.context_id = Some(context_id.to_owned());
+    request.service_worker_id = Some(service_worker_id.to_owned());
+    request.frame_id = None;
+    request.frame_available = false;
+}
+
+fn mark_service_worker_response(
+    response: &mut NetworkResponseRecord,
+    context_id: &str,
+    service_worker_id: &str,
+) {
+    response.context_id = Some(context_id.to_owned());
+    response.service_worker_id = Some(service_worker_id.to_owned());
 }
 
 #[cfg(feature = "request-post-data-json")]
@@ -1546,11 +1598,15 @@ fn response_record(value: &ResponseInitializer, body: Option<Arc<[u8]>>) -> Netw
     NetworkResponseRecord {
         id: value.response.get().to_string(),
         request_id: value.request.get().to_string(),
+        context_id: None,
+        service_worker_id: None,
         url: value.url.clone(),
         status: value.status,
         status_text: value.status_text.clone(),
         headers: headers(&value.headers),
         from_service_worker: value.from_service_worker,
+        #[cfg(feature = "response-connection-details")]
+        connection_details: None,
         #[cfg(feature = "response-security-details")]
         security_details: None,
         #[cfg(feature = "request-timing")]
@@ -1621,6 +1677,43 @@ fn resolve_request_frame(
     match topology_frame {
         Some(frame) => (Some(frame), true),
         None => (None, false),
+    }
+}
+
+#[cfg(feature = "response-connection-details")]
+fn attach_response_connection(
+    effect: &CdpNetworkEventEffect,
+    event: &mut NetworkEventRecord,
+    batch: &CdpNetworkEventBatch,
+) {
+    let response_id = match effect {
+        CdpNetworkEventEffect::Response(value) => Some(value.payload().response),
+        CdpNetworkEventEffect::RequestFinished(value) => value
+            .payload()
+            .response
+            .as_ref()
+            .map(|response| response.response),
+        CdpNetworkEventEffect::RequestFailed(value) => value
+            .payload()
+            .response
+            .as_ref()
+            .map(|response| response.response),
+        CdpNetworkEventEffect::Request(_) => None,
+    };
+    let Some(details) = response_id.and_then(|id| batch.response_connection(id)) else {
+        return;
+    };
+    match event {
+        NetworkEventRecord::Response(response) => {
+            response.connection_details = Some(details.clone());
+        }
+        NetworkEventRecord::RequestFinished { response, .. }
+        | NetworkEventRecord::RequestFailed { response, .. } => {
+            if let Some(response) = response {
+                response.connection_details = Some(details.clone());
+            }
+        }
+        NetworkEventRecord::Request(_) => {}
     }
 }
 
@@ -1747,10 +1840,10 @@ impl State {
             })
     }
 
-    fn reconcile_request_notices(&mut self, active: &[ObjectId]) {
+    fn reconcile_request_notices(&mut self, active: &[ObjectId], active_contexts: &[ObjectId]) {
         let mut retired_bytes = 0usize;
         self.request_notices.retain(|notice| {
-            let retained = active.contains(&notice.page);
+            let retained = active.contains(&notice.page) || active_contexts.contains(&notice.page);
             if !retained {
                 retired_bytes = retired_bytes.saturating_add(notice.retained_bytes());
             }
@@ -1830,10 +1923,10 @@ impl State {
             })
     }
 
-    fn reconcile_response_notices(&mut self, active: &[ObjectId]) {
+    fn reconcile_response_notices(&mut self, active: &[ObjectId], active_contexts: &[ObjectId]) {
         let mut retired_bytes = 0usize;
         self.response_notices.retain(|notice| {
-            let retained = active.contains(&notice.page);
+            let retained = active.contains(&notice.page) || active_contexts.contains(&notice.page);
             if !retained {
                 retired_bytes = retired_bytes.saturating_add(notice.retained_bytes());
             }
@@ -1855,7 +1948,6 @@ pub(crate) struct Installation {
     transitions: tokio::sync::Mutex<()>,
     state: Mutex<State>,
     activator: ChromiumPageSubscriptionActivator,
-    size_owner_slots: Arc<tokio::sync::Semaphore>,
     #[cfg(feature = "response-finished")]
     response_finished_owner_slots: Arc<tokio::sync::Semaphore>,
     #[cfg(feature = "request-history")]
@@ -1931,7 +2023,6 @@ impl Installation {
                 closed: false,
             }),
             activator: ChromiumPageSubscriptionActivator::new(runtime.service().clone()),
-            size_owner_slots: Arc::new(tokio::sync::Semaphore::new(MAX_REQUEST_SIZE_OWNERS)),
             #[cfg(feature = "response-finished")]
             response_finished_owner_slots: Arc::new(tokio::sync::Semaphore::new(
                 MAX_RESPONSE_FINISHED_OWNERS,
@@ -1958,11 +2049,6 @@ impl Installation {
             }
             if state.history_contexts.contains(&context) {
                 return Ok(());
-            }
-            if state.history_contexts.len() == MAX_REQUEST_HISTORY_PAGES {
-                return Err(HostError::ResourceExhausted(format!(
-                    "request history exceeds {MAX_REQUEST_HISTORY_PAGES} live BrowserContexts"
-                )));
             }
             #[cfg(feature = "request-events")]
             let request_active = state.request_contexts.contains(&context);
@@ -2014,7 +2100,7 @@ impl Installation {
         }
         let inserted = {
             let mut state = self.state.lock().map_err(HostError::backend)?;
-            if state.closed || state.history_contexts.len() == MAX_REQUEST_HISTORY_PAGES {
+            if state.closed {
                 false
             } else {
                 state.history_contexts.insert(context);
@@ -2087,11 +2173,6 @@ impl Installation {
             if state.request_contexts.contains(&context) {
                 return Ok(());
             }
-            if state.request_contexts.len() == MAX_REQUEST_EVENT_CONTEXTS {
-                return Err(HostError::ResourceExhausted(format!(
-                    "request events exceed {MAX_REQUEST_EVENT_CONTEXTS} live BrowserContexts"
-                )));
-            }
             #[cfg(not(feature = "request-history"))]
             let inherited_history = false;
             #[cfg(feature = "request-history")]
@@ -2133,7 +2214,7 @@ impl Installation {
         }
         let inserted = {
             let mut state = self.state.lock().map_err(HostError::backend)?;
-            if state.closed || state.request_contexts.len() == MAX_REQUEST_EVENT_CONTEXTS {
+            if state.closed {
                 false
             } else {
                 state.request_contexts.insert(context);
@@ -2239,11 +2320,6 @@ impl Installation {
             if state.response_contexts.contains(&context) {
                 return Ok(());
             }
-            if state.response_contexts.len() == MAX_RESPONSE_EVENT_CONTEXTS {
-                return Err(HostError::ResourceExhausted(format!(
-                    "response events exceed {MAX_RESPONSE_EVENT_CONTEXTS} live BrowserContexts"
-                )));
-            }
             #[cfg(feature = "request-history")]
             let inherited_history = state.history_contexts.contains(&context);
             #[cfg(not(feature = "request-history"))]
@@ -2286,7 +2362,7 @@ impl Installation {
         }
         let inserted = {
             let mut state = self.state.lock().map_err(HostError::backend)?;
-            if state.closed || state.response_contexts.len() == MAX_RESPONSE_EVENT_CONTEXTS {
+            if state.closed {
                 false
             } else {
                 state.response_contexts.insert(context);
@@ -2575,28 +2651,37 @@ impl Installation {
         runtime: &CommandRuntime,
         #[cfg(feature = "request-frame")] topology: &CdpTopology,
         fulfilled_body: Option<Arc<[u8]>>,
+        #[cfg(feature = "har-recording")] har_recording: &crate::har_recording::Installation,
+        #[cfg(feature = "har-recording")] request_override: Option<
+            &crate::page_routes::RouteContinue,
+        >,
         public_notices: bool,
-    ) -> Result<(), HostError> {
+    ) -> Result<BatchPublication, HostError> {
         runtime
             .apply_network_lifecycle(batch.lifecycle())
             .map_err(HostError::backend)?;
-        let page = batch.page().ok_or_else(|| {
-            HostError::Backend("non-empty network batch has no Page source".into())
-        })?;
+        let page = batch
+            .owner()
+            .ok_or_else(|| HostError::Backend("non-empty network batch has no owner".into()))?;
         #[cfg(feature = "context-network-events")]
-        let context = self
-            .activator
-            .services()
-            .network_subscription_registry()
-            .map(|subscriptions| subscriptions.browser_context_for_page(page))
-            .transpose()
-            .map_err(HostError::backend)?
-            .flatten();
+        let context = match batch.service_worker() {
+            Some(service_worker) => Some(service_worker.context()),
+            None => self
+                .activator
+                .services()
+                .network_subscription_registry()
+                .map(|subscriptions| subscriptions.browser_context_for_page(page))
+                .transpose()
+                .map_err(HostError::backend)?
+                .flatten(),
+        };
         #[cfg(not(feature = "context-network-events"))]
         let context = None;
         let mut state = self.state.lock().map_err(HostError::backend)?;
         let mut retired_favicons = Vec::new();
         let mut fulfilled_body = fulfilled_body;
+        #[cfg(feature = "har-recording")]
+        let mut response_body_request = None;
         for effect in batch.events() {
             let request_id = request_identity(effect);
             #[cfg(feature = "request-frame")]
@@ -2615,7 +2700,9 @@ impl Installation {
             let frame = None;
             #[cfg(not(feature = "request-frame"))]
             let frame_available = true;
-            if is_favicon_request(effect, &state.favicon_requests) {
+            if batch.service_worker().is_none()
+                && is_favicon_request(effect, &state.favicon_requests)
+            {
                 if matches!(effect, CdpNetworkEventEffect::Request(_)) {
                     state
                         .favicon_requests
@@ -2645,8 +2732,24 @@ impl Installation {
                 frame_available,
                 batch.native_request_id(),
             );
+            if let Some(service_worker) = batch.service_worker() {
+                attach_service_worker_source(
+                    &mut event,
+                    service_worker.context(),
+                    service_worker.worker_id(),
+                );
+            }
+            #[cfg(feature = "response-connection-details")]
+            attach_response_connection(effect, &mut event, batch);
             #[cfg(feature = "response-security-details")]
             attach_response_security(effect, &mut event, batch);
+            #[cfg(feature = "har-recording")]
+            if let Some(request_id) = har_recording
+                .observe_with_request_override(batch.page(), context, &event, request_override)?
+                .response_body_request
+            {
+                response_body_request.get_or_insert(request_id);
+            }
             let targets = if public_notices {
                 state
                     .waiters
@@ -2784,22 +2887,7 @@ impl Installation {
                         | NetworkEventRecord::RequestFailed { .. }
                 )
             {
-                let slot = Arc::clone(&self.size_owner_slots)
-                    .try_acquire_owned()
-                    .map_err(|_| {
-                        HostError::ResourceExhausted(
-                            "request-size owner capacity exceeds 64".into(),
-                        )
-                    })?;
-                let request = match &event {
-                    NetworkEventRecord::Request(request)
-                    | NetworkEventRecord::RequestFinished { request, .. }
-                    | NetworkEventRecord::RequestFailed { request, .. } => request,
-                    NetworkEventRecord::Response(_) => unreachable!("matched request event"),
-                };
-                owner = Some(Arc::new(RequestSizeOwner::new(
-                    page, request_id, request, slot,
-                )));
+                owner = Some(Arc::new(RequestSizeOwner::new(page, request_id)));
             }
             if let (Some(request_id), Some(owner)) = (request_id, owner.as_ref()) {
                 attach_size_owner(&mut event, Arc::clone(owner));
@@ -2903,10 +2991,22 @@ impl Installation {
             state.favicon_requests.remove(&request);
         }
         drop(state);
+        #[cfg(feature = "har-recording")]
+        if batch.events().is_empty()
+            && !batch.retirement().is_empty()
+            && let Some(worker) = batch.service_worker()
+        {
+            har_recording.retire_service_worker(worker.context(), worker.worker_id())?;
+        }
         runtime
             .apply_network_lifecycle(batch.retirement())
             .map_err(HostError::backend)?;
-        Ok(())
+        Ok(BatchPublication {
+            #[cfg(feature = "har-recording")]
+            response_body_request,
+            #[cfg(feature = "har-recording")]
+            request_terminal: batch.events().iter().any(is_terminal),
+        })
     }
 
     pub(crate) fn reconcile(
@@ -2945,7 +3045,7 @@ impl Installation {
             let Some(owner) = owner.upgrade() else {
                 return false;
             };
-            if active.contains(&owner.page) {
+            if active.contains(&owner.page) || active_contexts.contains(&owner.page) {
                 true
             } else {
                 owner.close();
@@ -2957,7 +3057,7 @@ impl Installation {
             let Some(owner) = owner.upgrade() else {
                 return false;
             };
-            if active.contains(&owner.page) {
+            if active.contains(&owner.page) || active_contexts.contains(&owner.page) {
                 true
             } else {
                 owner.close();
@@ -2980,12 +3080,12 @@ impl Installation {
             .response_contexts
             .retain(|context| active_contexts.contains(context));
         #[cfg(feature = "request-events")]
-        state.reconcile_request_notices(active);
+        state.reconcile_request_notices(active, active_contexts);
         #[cfg(feature = "response-events")]
-        state.reconcile_response_notices(active);
+        state.reconcile_response_notices(active, active_contexts);
         drop(state);
         #[cfg(feature = "request-history")]
-        self.history.reconcile(active)?;
+        self.history.reconcile(active, active_contexts)?;
         Ok(())
     }
 
@@ -3376,7 +3476,6 @@ mod tests {
     #[cfg(feature = "request-history")]
     use playwright_rust_core::{
         ProductionResourceLedger, ResourceClass, ResourceLimits, ResourceRequirements,
-        ResourceScope,
     };
     #[cfg(feature = "response-security-details")]
     use playwright_rust_network_model::NetworkLifecycleLimits;
@@ -3389,6 +3488,11 @@ mod tests {
     use super::NetworkWaitScope;
     #[cfg(any(feature = "request-events", feature = "response-events"))]
     use super::State;
+    #[cfg(all(
+        feature = "response-security-details",
+        feature = "response-connection-details"
+    ))]
+    use super::attach_response_connection;
     #[cfg(feature = "request-post-data-json")]
     use super::request_post_data_json;
     #[cfg(feature = "request-frame")]
@@ -3400,11 +3504,11 @@ mod tests {
     #[cfg(feature = "response-finished")]
     use super::{MAX_RESPONSE_FINISHED_OWNERS, ResponseFinishedOwner};
     use super::{
-        NetworkEventKind, NetworkRequestRecord, NetworkResponseRecord, RequestSizeOwner,
-        RequestSizes,
+        NetworkEventKind, NetworkEventRecord, NetworkRequestRecord, NetworkResponseRecord,
+        RequestSizeOwner, RequestSizes,
     };
     #[cfg(feature = "request-history")]
-    use super::{NetworkEventRecord, RequestHistory, requirements};
+    use super::{RequestHistory, requirements};
     #[cfg(feature = "response-security-details")]
     use super::{attach_response_security, record};
     #[cfg(feature = "request-timing")]
@@ -3467,6 +3571,8 @@ mod tests {
             id: "2".into(),
             native_request_id: Some("native-2".into()),
             page_id: "1".into(),
+            context_id: None,
+            service_worker_id: None,
             url: "https://example.test/get?ignored=true".into(),
             method: "POST".into(),
             resource_type: "fetch".into(),
@@ -3639,11 +3745,15 @@ mod tests {
         NetworkResponseRecord {
             id: "3".into(),
             request_id: "2".into(),
+            context_id: None,
+            service_worker_id: None,
             url: "https://example.test/get?ignored=true".into(),
             status: 200,
             status_text: "OK".into(),
             headers: vec![("content-length".into(), "6".into())],
             from_service_worker: false,
+            #[cfg(feature = "response-connection-details")]
+            connection_details: None,
             #[cfg(feature = "request-timing")]
             timing: RequestTiming::pending(),
             body: None,
@@ -3652,6 +3762,34 @@ mod tests {
             #[cfg(feature = "response-security-details")]
             security_details: None,
         }
+    }
+
+    #[test]
+    fn service_worker_terminal_event_is_context_owned_without_a_frame() {
+        // Arrange
+        let mut event = NetworkEventRecord::RequestFinished {
+            request: request(),
+            response: Some(response()),
+            encoded_body_bytes: Some(6),
+        };
+
+        // Act
+        super::attach_service_worker_source(&mut event, ObjectId::new(9), "sw-session");
+
+        // Assert
+        let NetworkEventRecord::RequestFinished {
+            request, response, ..
+        } = event
+        else {
+            panic!("terminal fixture remains a request-finished event");
+        };
+        assert_eq!(request.context_id.as_deref(), Some("9"));
+        assert_eq!(request.service_worker_id.as_deref(), Some("sw-session"));
+        assert_eq!(request.frame_id, None);
+        assert!(!request.frame_available);
+        let response = response.expect("terminal event keeps its response");
+        assert_eq!(response.context_id.as_deref(), Some("9"));
+        assert_eq!(response.service_worker_id.as_deref(), Some("sw-session"));
     }
 
     #[cfg(feature = "response-security-details")]
@@ -3679,7 +3817,8 @@ mod tests {
                     "requestId": "native-1",
                     "response": {
                         "url": "https://example.test/fetch?1", "status": 200,
-                        "statusText": "OK", "headers": {},
+                        "statusText": "OK", "headers": {}, "protocol": "h2",
+                        "remoteIPAddress": "203.0.113.9", "remotePort": 443,
                         "securityDetails": {
                             "protocol": "TLS 1.3", "subjectName": "example.test",
                             "issuer": "Test Authority", "validFrom": 1.0, "validTo": 2.0
@@ -3697,6 +3836,47 @@ mod tests {
             ))
             .unwrap();
         (response, finished)
+    }
+
+    #[cfg(all(
+        feature = "response-security-details",
+        feature = "response-connection-details"
+    ))]
+    #[test]
+    fn response_connection_details_attach_to_response_and_terminal_records() {
+        // Arrange
+        let (response_batch, terminal_batch) = cdp_security_batches();
+        let mut response = record(&response_batch.events()[0], None, None, true, None);
+        let mut terminal = record(&terminal_batch.events()[0], None, None, true, None);
+
+        // Act
+        attach_response_connection(&response_batch.events()[0], &mut response, &response_batch);
+        attach_response_connection(&terminal_batch.events()[0], &mut terminal, &terminal_batch);
+
+        // Assert
+        let NetworkEventRecord::Response(response) = response else {
+            panic!("response record expected");
+        };
+        let response_details = response
+            .connection_details
+            .expect("response connection details should attach");
+        assert_eq!(response_details.http_version(), "HTTP/2.0");
+        assert_eq!(response_details.server_ip_address(), Some("203.0.113.9"));
+        assert_eq!(response_details.server_port(), Some(443));
+        let NetworkEventRecord::RequestFinished {
+            response: Some(response),
+            ..
+        } = terminal
+        else {
+            panic!("terminal response record expected");
+        };
+        assert_eq!(
+            response
+                .connection_details
+                .expect("terminal connection details should attach")
+                .http_version(),
+            "HTTP/2.0"
+        );
     }
 
     #[cfg(feature = "response-security-details")]
@@ -3953,7 +4133,7 @@ mod tests {
         let queued_bytes = state.queued_bytes;
 
         // Act
-        state.reconcile_response_notices(&[ObjectId::new(8)]);
+        state.reconcile_response_notices(&[ObjectId::new(8)], &[]);
 
         // Assert
         assert_eq!(state.response_notices.len(), 1);
@@ -4065,7 +4245,7 @@ mod tests {
         let queued_bytes = state.queued_bytes;
 
         // Act
-        state.reconcile_request_notices(&[ObjectId::new(8)]);
+        state.reconcile_request_notices(&[ObjectId::new(8)], &[]);
 
         // Assert
         assert_eq!(state.request_notices.len(), 1);
@@ -4118,16 +4298,22 @@ mod tests {
     }
 
     fn owner() -> Arc<RequestSizeOwner> {
-        let slots = Arc::new(tokio::sync::Semaphore::new(1));
-        let slot = slots
-            .try_acquire_owned()
-            .expect("one test owner fits its bounded slot");
-        Arc::new(RequestSizeOwner::new(
-            ObjectId::new(1),
-            ObjectId::new(2),
-            &request(),
-            slot,
-        ))
+        Arc::new(RequestSizeOwner::new(ObjectId::new(1), ObjectId::new(2)))
+    }
+
+    #[test]
+    fn request_size_owners_grow_past_the_retired_fixed_capacity() {
+        // Arrange
+        let page = ObjectId::new(1);
+
+        // Act
+        let owners = (1..=65)
+            .map(|request| Arc::new(RequestSizeOwner::new(page, ObjectId::new(request))))
+            .collect::<Vec<_>>();
+
+        // Assert
+        assert_eq!(owners.len(), 65);
+        assert_eq!(owners[64].request, ObjectId::new(65));
     }
 
     #[tokio::test]
@@ -4303,6 +4489,8 @@ mod tests {
             id: index.to_string(),
             native_request_id: Some(format!("native-{index}")),
             page_id: "7".into(),
+            context_id: None,
+            service_worker_id: None,
             url: format!("https://example.test/fetch?{index}"),
             method: "GET".into(),
             resource_type: "fetch".into(),
@@ -4324,11 +4512,15 @@ mod tests {
         NetworkResponseRecord {
             id: (10_000 + index).to_string(),
             request_id: index.to_string(),
+            context_id: None,
+            service_worker_id: None,
             url: url.clone(),
             status: 200,
             status_text: "OK".into(),
             headers: Vec::new(),
             from_service_worker: false,
+            #[cfg(feature = "response-connection-details")]
+            connection_details: None,
             #[cfg(feature = "request-timing")]
             timing: RequestTiming::pending(),
             body: Some(Arc::from(format!("url:{url}").into_bytes())),
@@ -4611,7 +4803,7 @@ mod tests {
 
     #[cfg(feature = "request-history")]
     #[tokio::test]
-    async fn closed_history_keeps_a_retained_request_response_and_its_page_lease() {
+    async fn closed_history_keeps_a_retained_request_response_and_its_shared_lease() {
         // Arrange
         let (resources, history) = history();
         let page = ObjectId::new(7);
@@ -4622,14 +4814,14 @@ mod tests {
         history
             .settle(request_id, Some(indexed_response(1)), true)
             .expect("response settles");
-        let scope = ResourceScope::Object(page);
+        let scope = super::SCOPE;
         let ledger = resources
             .claim(ResourceRequirements::none())
             .expect("read-only ledger claim fits");
         let before = ledger
             .scope_metrics(scope)
-            .expect("Page scope reads")
-            .expect("request owns its Page scope");
+            .expect("shared history scope reads")
+            .expect("request owns its shared history scope");
 
         // Act
         history.close();
@@ -4637,8 +4829,8 @@ mod tests {
         // Assert
         let after = ledger
             .scope_metrics(scope)
-            .expect("Page scope reads after close")
-            .expect("retained Request still owns its Page scope");
+            .expect("shared history scope reads after close")
+            .expect("retained Request still owns its shared history scope");
         let response = owner
             .response()
             .await
@@ -4656,7 +4848,7 @@ mod tests {
 
     #[cfg(feature = "request-history")]
     #[test]
-    fn dropping_the_last_retained_request_releases_its_page_scope_after_history_close() {
+    fn dropping_the_last_retained_request_releases_its_shared_scope_after_history_close() {
         // Arrange
         let (resources, history) = history();
         let page = ObjectId::new(7);
@@ -4664,15 +4856,15 @@ mod tests {
             .record_request(page, ObjectId::new(1), &indexed_request(1))
             .expect("request records");
         history.close();
-        let scope = ResourceScope::Object(page);
+        let scope = super::SCOPE;
         let ledger = resources
             .claim(ResourceRequirements::none())
             .expect("read-only ledger claim fits");
         assert_eq!(
             ledger
                 .scope_metrics(scope)
-                .expect("Page scope reads")
-                .expect("retained Request still owns its Page scope")
+                .expect("shared history scope reads")
+                .expect("retained Request still owns its shared history scope")
                 .active_leases,
             1
         );
@@ -4684,7 +4876,7 @@ mod tests {
         assert!(
             ledger
                 .scope_metrics(scope)
-                .expect("Page scope reads")
+                .expect("shared history scope reads")
                 .is_none()
         );
         assert_eq!(resources.metrics().expect("ledger reads").active_leases, 0);
@@ -5044,6 +5236,44 @@ mod tests {
         assert!(Arc::ptr_eq(&request_owner, &response_owner));
         assert_eq!(observed.status, 200);
         assert_eq!(observed.request_id, "1");
+    }
+
+    #[cfg(feature = "request-history")]
+    #[test]
+    fn context_owned_request_history_survives_without_an_active_page() {
+        // Arrange
+        let (_resources, history) = history();
+        let context = ObjectId::new(9);
+        history
+            .record_request(context, ObjectId::new(1), &indexed_request(1))
+            .expect("Context-owned request records");
+
+        // Act
+        history
+            .reconcile(&[], &[context])
+            .expect("active Context reconciles");
+
+        // Assert
+        assert_eq!(history.snapshot(context).unwrap().len(), 1);
+    }
+
+    #[cfg(feature = "request-history")]
+    #[test]
+    fn context_owned_request_history_retires_with_its_context() {
+        // Arrange
+        let (_resources, history) = history();
+        let context = ObjectId::new(9);
+        history
+            .record_request(context, ObjectId::new(1), &indexed_request(1))
+            .expect("Context-owned request records");
+
+        // Act
+        history
+            .reconcile(&[], &[])
+            .expect("retired Context reconciles");
+
+        // Assert
+        assert!(history.snapshot(context).unwrap().is_empty());
     }
 
     #[cfg(feature = "request-history")]

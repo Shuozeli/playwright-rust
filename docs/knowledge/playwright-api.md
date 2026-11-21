@@ -1,10 +1,13 @@
-<!-- agent-updated: 2026-11-14T05:28:56Z -->
+<!-- agent-updated: 2026-11-19T11:45:38Z -->
 
 # Playwright API Compatibility
 
 playwright-rust aims to provide a Rust API with the same mental model as [Playwright](https://playwright.dev). This document maps every Playwright public API to its playwright-rust status: **supported**, **planned**, or **out of scope**.
 
-> **Constraint:** playwright-rust only supports **remote CDP** — connecting to an externally-managed Chrome via WebSocket. No browser launch, no profiles, no tracing, no video.
+> **Constraint:** playwright-rust targets Chromium/CDP only. It supports both
+> dedicated remote-CDP attachment and opt-in owned Chromium launch; unsupported
+> capabilities such as tracing remain explicit gaps rather than implicit base
+> dependencies.
 
 Node NODE-427 adds opt-in `Browser.newContext({ hasTouch: true })` over the
 existing Rust device-emulation registry and completes native TouchEvent
@@ -213,9 +216,9 @@ Playwright
 | `context.addInitScript(script)` | `context.add_init_script()` | ✅ Node/Python opt-in | Bounded Rust scope + `Page.addScriptToEvaluateOnNewDocument` |
 | `context.routeFromHAR(har)` | `context.route_from_har()` | Partial: Python ABI 80 opt-in | Plain embedded HAR, bounded Rust Context scope and Page/OOPIF Fetch settlement |
 | `context.storageState()` | — | ❌ Out of scope | Requires local filesystem |
-| `context.route(url, handler)` | `context.route()` | Partial: Python ABI 81 opt-in | Bounded string patterns; Rust Context scope and Fetch settlement |
-| `context.unroute(url)` | — | Planned (Tier 3) | `Fetch.disable` |
-| `context.unrouteAll(opts)` | `context.unroute_all()` | Partial: Python ABI 82 opt-in | Default and `"wait"`; exact Context scope; `"ignoreErrors"` unsupported |
+| `context.route(url, handler)` | `context.route()` | ✅ Node opt-in; Python ABI 81 partial | Node string/RegExp patterns; Rust Context scope and Fetch settlement |
+| `context.unroute(url, handler?)` | `context.unroute()` | ✅ Node opt-in | Exact Context registration identities; handler-selective removal |
+| `context.unrouteAll(opts)` | `context.unroute_all()` | ✅ Node opt-in; Python ABI 82 partial | Node default, `"wait"`, and `"ignoreErrors"`; exact Context scope |
 | `context.exposeBinding()` | — | Planned (Tier 3) | `Runtime.addBinding` |
 | `context.exposeFunction()` | — | Planned (Tier 3) | `Runtime.addBinding` |
 | `context.tracing` | — | ❌ Out of scope | |
@@ -358,7 +361,7 @@ Playwright
 | `page.frames()` | `page.frames()` | ✅ Python | Published Rust Frame tree |
 | `page.frame(name)` | `page.frame()` | ✅ Python | Name/URL/regex/callable facade lookup |
 | `page.workers()` | — | ❌ Out of scope | |
-| `page.video()` | — | ❌ Out of scope | |
+| `page.video()` | `page.video` | Partial: Python owned Contexts | Rust-owned persistent/ordinary/implicit recording plus `path`/`save_as`/`delete`; remote transfer and Node gaps |
 | `page.coverage` | — | ❌ Out of scope | |
 | `page.keyboard` | `page.keyboard()` | ✅ Exists | Returns `Keyboard` |
 | `page.mouse` | `page.mouse()` | ✅ Exists | Returns `Mouse` |

@@ -62,8 +62,9 @@ pub struct HeaderSettingsProfile {
     scope: ResourceScope,
     contexts: usize,
     pages: usize,
-    writers: usize,
+    writers: Option<usize>,
     bytes: u64,
+    allocator_backed: bool,
 }
 impl HeaderSettingsProfile {
     pub fn new(scope: ResourceScope, contexts: usize, pages: usize) -> Result<Self, SettingsError> {
@@ -78,9 +79,25 @@ impl HeaderSettingsProfile {
             scope,
             contexts,
             pages,
-            writers: 1,
+            writers: Some(1),
             bytes,
+            allocator_backed: false,
         })
+    }
+    /// Production compatibility profile. Context/Page entries and overlapping
+    /// writers grow with live browser work and are reclaimed by exact owners.
+    pub fn new_allocator_backed(scope: ResourceScope) -> Result<Self, SettingsError> {
+        Ok(Self {
+            scope,
+            contexts: 0,
+            pages: 0,
+            writers: None,
+            bytes: profile_bytes(0, 0)?,
+            allocator_backed: true,
+        })
+    }
+    pub const fn allocator_backed(self) -> bool {
+        self.allocator_backed
     }
     /// Opt into a bounded number of overlapping native writes. Existing users
     /// retain the one-writer contract unless explicitly selecting this profile.
@@ -89,7 +106,7 @@ impl HeaderSettingsProfile {
             return Err(SettingsError::InvalidLimits);
         }
         self.bytes = profile_bytes(self.contexts + self.pages, writers)?;
-        self.writers = writers;
+        self.writers = Some(writers);
         Ok(self)
     }
     pub fn requirements(self) -> ResourceRequirements {
@@ -210,7 +227,7 @@ impl HeaderSettings {
             profile,
             state: Mutex::new(State {
                 entries: Vec::with_capacity(profile.contexts + profile.pages),
-                pending: Vec::with_capacity(profile.writers),
+                pending: Vec::with_capacity(profile.writers.unwrap_or(0)),
                 generation: 0,
                 closed: false,
             }),
@@ -241,7 +258,12 @@ impl HeaderSettings {
     ) -> Result<HeaderUpdate, SettingsError> {
         target.validate()?;
         let mut state = self.0.state()?;
-        if state.pending.len() == self.0.profile.writers {
+        if self
+            .0
+            .profile
+            .writers
+            .is_some_and(|writers| state.pending.len() == writers)
+        {
             return Err(SettingsError::Busy);
         }
         check_parent(&state, target)?;
@@ -249,7 +271,7 @@ impl HeaderSettings {
             .entries
             .iter()
             .position(|entry| entry.target == target);
-        if index.is_none() {
+        if index.is_none() && !self.0.profile.allocator_backed {
             let (count, limit) = match target {
                 Target::Context(_) => (
                     state
@@ -271,6 +293,16 @@ impl HeaderSettings {
             if count >= limit {
                 return Err(SettingsError::Capacity);
             }
+        }
+        state
+            .pending
+            .try_reserve(1)
+            .map_err(|_| SettingsError::Capacity)?;
+        if index.is_none() {
+            state
+                .entries
+                .try_reserve(1)
+                .map_err(|_| SettingsError::Capacity)?;
         }
         let generation = state
             .generation
@@ -341,6 +373,28 @@ impl HeaderSettings {
         self.0
             .pool
             .merge(context, page)
+            .map_err(SettingsError::Headers)
+    }
+
+    /// Resolve only BrowserContext headers for a Context-owned native target,
+    /// such as a Chromium Service Worker. Page overrides never participate.
+    pub fn effective_context(&self, context: ObjectId) -> Result<EffectiveHeaders, SettingsError> {
+        let target = Target::Context(context);
+        target.validate()?;
+        let state = self.0.state()?;
+        let context =
+            state
+                .entries
+                .iter()
+                .find_map(|entry| match (&entry.target, &entry.headers) {
+                    (Target::Context(id), Headers::Context(headers)) if *id == context => {
+                        Some(headers)
+                    }
+                    _ => None,
+                });
+        self.0
+            .pool
+            .merge(context, None)
             .map_err(SettingsError::Headers)
     }
 
@@ -570,7 +624,7 @@ impl HeaderUpdate {
         // An overlapping writer can change Page metadata after that dispatch;
         // concurrent profiles conservatively retain unrelated native uncertainty.
         if let Target::Context(context) = pending.target
-            && self.shared.profile.writers == 1
+            && self.shared.profile.writers == Some(1)
         {
             for entry in &mut state.entries {
                 if entry.target.context() == context {

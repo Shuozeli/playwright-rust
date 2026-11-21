@@ -68,6 +68,7 @@ pub enum ResolutionError {
 pub struct ResolutionProfile {
     scope: ResourceScope,
     requirements: ResourceRequirements,
+    allocator_backed: bool,
     #[cfg(feature = "retained-reference")]
     retained_reference: bool,
 }
@@ -88,6 +89,7 @@ impl ResolutionProfile {
         let selectors = peak(ATTEMPT_BYTES)?;
         Ok(Self {
             scope,
+            allocator_backed: false,
             #[cfg(feature = "retained-reference")]
             retained_reference: false,
             requirements: ResourceRequirements::none()
@@ -102,6 +104,20 @@ impl ResolutionProfile {
                 ),
         })
     }
+    /// Use ordinary allocator ownership instead of a fabricated aggregate
+    /// attempt/owner count. Selector and native-ID validity limits still apply.
+    pub const fn new_allocator_backed(scope: ResourceScope) -> Self {
+        Self {
+            scope,
+            requirements: ResourceRequirements::none(),
+            allocator_backed: true,
+            #[cfg(feature = "retained-reference")]
+            retained_reference: false,
+        }
+    }
+    pub const fn allocator_backed(self) -> bool {
+        self.allocator_backed
+    }
     pub const fn requirements(self) -> ResourceRequirements {
         self.requirements
     }
@@ -112,6 +128,10 @@ impl ResolutionProfile {
     #[cfg(feature = "retained-reference")]
     pub fn with_retained_reference(mut self) -> Result<Self, ResolutionError> {
         if !self.retained_reference {
+            if self.allocator_backed {
+                self.retained_reference = true;
+                return Ok(self);
+            }
             let attempts = self.requirements.class(ResourceClass::RemoteHandle).global / 2;
             if attempts == 0 {
                 return Err(ResolutionError::Setup(
@@ -209,7 +229,7 @@ pub struct ResolvedElement {
     utility_world: Arc<str>,
     object_id: Box<str>,
     group: String,
-    _owner: ResourceLease,
+    _owner: Option<ResourceLease>,
     cleanup: GroupCleanupGuard,
     release_mode: GroupReleaseMode,
 }
@@ -316,7 +336,8 @@ impl CdpLocatorResolutionService {
     fn prepare(
         &self,
         request: &ResolutionRequest,
-    ) -> Result<(String, String, ResourceLease, ResourceLease), ResolutionError> {
+    ) -> Result<(String, String, Option<ResourceLease>, Option<ResourceLease>), ResolutionError>
+    {
         if !self.is_cleanup_healthy() {
             return Err(ResolutionError::Admission(
                 "a prior native group cleanup failed",
@@ -328,18 +349,24 @@ impl CdpLocatorResolutionService {
             ));
         }
         measure_selector(&request.selector).map_err(ResolutionError::Selector)?;
-        let owner = self.ledger.reserve_many(
-            self.profile.scope,
-            &[
-                ResourceRequest::new(ResourceClass::RemoteHandle, 1),
-                ResourceRequest::new(ResourceClass::BackendStateBytes, OWNER_BYTES),
-            ],
-        )?;
-        let scratch = self.ledger.reserve(
-            self.profile.scope,
-            ResourceClass::SelectorBytes,
-            ATTEMPT_BYTES,
-        )?;
+        let (owner, scratch) = if self.profile.allocator_backed {
+            (None, None)
+        } else {
+            (
+                Some(self.ledger.reserve_many(
+                    self.profile.scope,
+                    &[
+                        ResourceRequest::new(ResourceClass::RemoteHandle, 1),
+                        ResourceRequest::new(ResourceClass::BackendStateBytes, OWNER_BYTES),
+                    ],
+                )?),
+                Some(self.ledger.reserve(
+                    self.profile.scope,
+                    ResourceClass::SelectorBytes,
+                    ATTEMPT_BYTES,
+                )?),
+            )
+        };
         let id = self
             .ids
             .next_object_id()

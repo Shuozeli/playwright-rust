@@ -13,7 +13,8 @@ use playwright_rust_cdp::domains::network::{Cookie, ResponseBody};
 use playwright_rust_cdp::domains::target::TargetInfo;
 use playwright_rust_cdp::generated::{page as cdp_page, target as cdp_target};
 use playwright_rust_cdp::{
-    CdpClient, KeyEventType, KeyboardEventParams, MouseButton, MouseEventType, TouchEventType,
+    CdpClient, KeyEventType, KeyboardEventParams, MouseButton, MouseEventType,
+    ServiceWorkerInitializationCommand, TouchEventType,
 };
 use serde_json::Value;
 
@@ -1668,6 +1669,21 @@ impl CdpClient for FakeCdpClient {
         Ok(())
     }
 
+    async fn service_worker_initialize_with_commands(
+        &self,
+        enable_network: bool,
+        commands: &[ServiceWorkerInitializationCommand],
+    ) -> CdpResult<()> {
+        self.runtime_enable().await?;
+        if enable_network {
+            self.network_enable().await?;
+        }
+        for command in commands {
+            self.record(command.method(), vec![command.params().clone()]);
+        }
+        self.runtime_run_if_waiting_for_debugger().await
+    }
+
     // ── Accessibility domain ──
 
     async fn accessibility_enable(&self) -> CdpResult<()> {
@@ -1696,6 +1712,15 @@ impl CdpClient for FakeCdpClient {
 
     async fn network_disable(&self) -> CdpResult<()> {
         self.record("Network.disable", vec![]);
+        let gate = self.network_gate.lock().unwrap().clone();
+        if let Some(gate) = gate {
+            gate.notified().await;
+        }
+        self.take_network_error()
+    }
+
+    async fn network_emulate_network_conditions(&self, params: Value) -> CdpResult<()> {
+        self.record("Network.emulateNetworkConditions", vec![params]);
         let gate = self.network_gate.lock().unwrap().clone();
         if let Some(gate) = gate {
             gate.notified().await;

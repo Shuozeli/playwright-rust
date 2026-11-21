@@ -235,11 +235,14 @@ type PendingMap = Arc<DashMap<u64, PendingEntry>>;
 struct PendingRegistration {
     id: u64,
     pending: PendingMap,
+    remove_on_drop: bool,
 }
 
 impl Drop for PendingRegistration {
     fn drop(&mut self) {
-        self.pending.remove(&self.id);
+        if self.remove_on_drop {
+            self.pending.remove(&self.id);
+        }
     }
 }
 
@@ -264,6 +267,20 @@ enum EnqueuedResponse {
 }
 
 impl EnqueuedCommand {
+    /// Leave the already-enqueued command owned by the connection until a
+    /// response, session retirement, or transport termination settles it.
+    /// This is for bootstrap commands whose acknowledgement can depend on
+    /// returning to the event loop; it spawns no detached waiter task.
+    pub fn leave_response_pending(self) {
+        let Self {
+            response,
+            mut _registration,
+            response_timeout: _,
+        } = self;
+        _registration.remove_on_drop = false;
+        drop(response);
+    }
+
     pub async fn response(self) -> Result<Value> {
         let Self {
             response,
@@ -293,6 +310,7 @@ struct OutboundMessage {
 #[derive(Clone, Debug)]
 struct CdpEventDelivery {
     mode: Arc<Mutex<Option<CdpEventDeliveryMode>>>,
+    resource: Arc<Mutex<Option<ResourceLease>>>,
 }
 
 #[derive(Debug)]
@@ -306,6 +324,7 @@ impl CdpEventDelivery {
         let (sender, _) = broadcast::channel(capacity);
         Self {
             mode: Arc::new(Mutex::new(Some(CdpEventDeliveryMode::Legacy(sender)))),
+            resource: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -314,7 +333,17 @@ impl CdpEventDelivery {
             .expect("validated production fanout limits must remain nonzero");
         Self {
             mode: Arc::new(Mutex::new(Some(CdpEventDeliveryMode::Reclaiming(fanout)))),
+            resource: Arc::new(Mutex::new(None)),
         }
+    }
+
+    fn bind_resource(&self, resource: Option<ResourceLease>) {
+        let mut retained = self
+            .resource
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        debug_assert!(retained.is_none());
+        *retained = resource;
     }
 
     fn subscribe_legacy(&self) -> Option<broadcast::Receiver<CdpEvent>> {
@@ -375,7 +404,8 @@ impl CdpEventDelivery {
             Some(CdpEventDeliveryMode::Reclaiming(fanout)) => {
                 fanout.send(event).map_err(|error| match error {
                     ReclaimingFanoutSendError::Closed(event)
-                    | ReclaimingFanoutSendError::SequenceExhausted(event) => event,
+                    | ReclaimingFanoutSendError::SequenceExhausted(event)
+                    | ReclaimingFanoutSendError::AllocationFailed(event, _) => event,
                 })
             }
             None => Err(event),
@@ -391,6 +421,10 @@ impl CdpEventDelivery {
         if let Some(CdpEventDeliveryMode::Reclaiming(fanout)) = mode {
             fanout.close();
         }
+        self.resource
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take();
     }
 }
 
@@ -427,7 +461,6 @@ pub struct CdpConnection {
     large_commands: Option<large_commands::Pool>,
     resources: Option<ConnectionResourceBudget>,
     _reader_resource: Option<ResourceLease>,
-    _event_delivery_resource: Option<ResourceLease>,
     #[cfg(feature = "cdp-ws-close-reason")]
     peer_close_reason: Arc<Mutex<Option<Box<str>>>>,
     shutdown: tokio_util::sync::CancellationToken,
@@ -452,6 +485,14 @@ const DEFAULT_PENDING_COMMAND_CAPACITY: usize = 256;
 /// the trusted-browser transport bounded while allowing a 50 MiB raw capture
 /// plus base64 and JSON overhead.
 const MAX_CDP_WEBSOCKET_BYTES: usize = 128 << 20;
+/// Explicit allocator-backed compatibility sentinel. A selected production
+/// profile may use this for trusted-browser inbound messages/results when the
+/// public API has no corresponding byte ceiling. It is never an allocation or
+/// reservation request.
+pub const UNBOUNDED_CDP_BYTES: usize = usize::MAX;
+/// Explicit allocator-backed event-count sentinel. It is valid only with the
+/// production reclaim-after-all-read fanout and never preallocates slots.
+pub const UNBOUNDED_CDP_EVENTS: usize = usize::MAX;
 
 fn command_response_timeout(timeout: Duration) -> Option<Duration> {
     (!timeout.is_zero()).then_some(timeout)
@@ -464,19 +505,26 @@ pub struct ConnectionConfig {
     pub timeout: Duration,
     /// Capacity of the write channel (commands queued to send).
     pub write_channel_capacity: usize,
-    /// Capacity of the event broadcast channel.
+    /// Capacity of the event channel. [`UNBOUNDED_CDP_EVENTS`] selects
+    /// allocator-backed production reclaiming fanout storage.
     pub event_channel_capacity: usize,
     /// Maximum commands that may be queued or awaiting a response.
     pub pending_command_capacity: usize,
     /// Maximum serialized size of one outgoing command.
     pub max_command_bytes: usize,
-    /// Maximum serialized size of one incoming command response.
+    /// Maximum serialized size of one incoming command response. The explicit
+    /// [`UNBOUNDED_CDP_BYTES`] sentinel delegates compatibility storage to the
+    /// allocator instead of projecting a finite protocol ceiling.
     pub max_response_bytes: usize,
-    /// Maximum serialized size of one incoming event.
+    /// Maximum serialized size of one incoming event. The explicit
+    /// [`UNBOUNDED_CDP_BYTES`] sentinel delegates compatibility storage to the
+    /// allocator instead of imposing a protocol-visible event ceiling.
     pub max_event_bytes: usize,
-    /// Maximum WebSocket frame and reassembled message size.
+    /// Maximum WebSocket frame and reassembled message size. The explicit
+    /// [`UNBOUNDED_CDP_BYTES`] sentinel disables tungstenite's size limit.
     pub max_websocket_bytes: usize,
-    /// Maximum retained text in a CDP protocol error.
+    /// Maximum retained text in a CDP protocol error. The explicit
+    /// [`UNBOUNDED_CDP_BYTES`] sentinel delegates storage to the allocator.
     pub max_protocol_error_bytes: usize,
 }
 
@@ -554,13 +602,16 @@ impl ConnectionConfig {
 
 /// Resource declaration for one production CDP WebSocket connection.
 ///
-/// The connection holds one fixed reader lease for the maximum raw-message and
-/// parsed-JSON overlap. Each admitted command reserves its complete outgoing
-/// construction or incoming-result peak. Each distinct event owns an exact
-/// item/byte lease shared by every subscriber. The declaration includes one
-/// additional event because input allocation precedes bounded queue admission.
-/// Reclaim-after-all-read fanout is an explicit opt-in that additionally
-/// declares its fixed slot/subscriber bookkeeping and one retained lease.
+/// A bounded connection holds one fixed reader lease for the maximum raw-message
+/// and parsed-JSON overlap. An allocator-backed compatibility profile records
+/// zero finite reader/result bytes instead of treating [`UNBOUNDED_CDP_BYTES`]
+/// as a reservation. Each admitted bounded command reserves its complete
+/// outgoing construction or incoming-result peak. Each distinct event owns an
+/// exact item/byte lease shared by every subscriber. The declaration includes
+/// one additional event because input allocation precedes bounded queue
+/// admission. Reclaim-after-all-read fanout is an explicit opt-in that
+/// additionally declares its fixed slot/subscriber bookkeeping and one retained
+/// lease.
 #[derive(Clone, Debug)]
 pub struct CdpConnectionProductionProfile {
     resource_scope: ResourceScope,
@@ -579,20 +630,33 @@ pub struct CdpConnectionProductionProfile {
 
 impl CdpConnectionProductionProfile {
     pub fn new(resource_scope: ResourceScope, config: ConnectionConfig) -> Self {
-        let reader_wire_bytes = usize_to_u64(config.max_websocket_bytes).saturating_mul(2);
-        let command_wire_bytes = usize_to_u64(config.max_command_bytes)
+        let reader_wire_bytes = accounted_wire_bytes(config.max_websocket_bytes).saturating_mul(2);
+        let command_wire_bytes = accounted_wire_bytes(config.max_command_bytes)
             .saturating_mul(2)
-            .max(usize_to_u64(config.max_response_bytes));
+            .max(accounted_wire_bytes(config.max_response_bytes));
         let pending = usize_to_u64(config.pending_command_capacity);
-        let events = usize_to_u64(config.event_channel_capacity).saturating_add(1);
+        let events = if config.event_channel_capacity == UNBOUNDED_CDP_EVENTS {
+            0
+        } else {
+            usize_to_u64(config.event_channel_capacity).saturating_add(1)
+        };
         let wire_bytes =
             reader_wire_bytes.saturating_add(pending.saturating_mul(command_wire_bytes));
-        let event_bytes = events.saturating_mul(usize_to_u64(config.max_event_bytes));
-        let retained_event_bytes = usize_to_u64(config.event_channel_capacity)
-            .saturating_mul(usize_to_u64(config.max_event_bytes));
+        let accounted_event_bytes = accounted_wire_bytes(config.max_event_bytes);
+        let event_bytes = events.saturating_mul(accounted_event_bytes);
+        let retained_event_bytes = if config.event_channel_capacity == UNBOUNDED_CDP_EVENTS {
+            0
+        } else {
+            usize_to_u64(config.event_channel_capacity).saturating_mul(accounted_event_bytes)
+        };
+        let retained_event_leases = if config.event_channel_capacity == UNBOUNDED_CDP_EVENTS {
+            0
+        } else {
+            config.event_channel_capacity
+        };
         let leases = config
             .pending_command_capacity
-            .saturating_add(config.event_channel_capacity)
+            .saturating_add(retained_event_leases)
             .saturating_add(2);
         let requirements = ResourceRequirements::none()
             .with_class(ResourceClass::WireBytes, wire_bytes, wire_bytes)
@@ -623,6 +687,16 @@ impl CdpConnectionProductionProfile {
     /// one additional maximum-size event remains declared so the reader can
     /// parse and admit the next item before bounded fanout replacement.
     pub fn with_retained_event_byte_capacity(mut self, retained_bytes: u64) -> Result<Self> {
+        if self.config.event_channel_capacity == UNBOUNDED_CDP_EVENTS {
+            return Err(CdpError::InvalidConfiguration(
+                "allocator-backed event count cannot select a finite retained-byte capacity",
+            ));
+        }
+        if self.config.max_event_bytes == UNBOUNDED_CDP_BYTES {
+            return Err(CdpError::InvalidConfiguration(
+                "allocator-backed event payloads cannot select a finite retained-byte capacity",
+            ));
+        }
         let one_event = usize_to_u64(self.config.max_event_bytes);
         if retained_bytes < one_event {
             return Err(CdpError::InvalidConfiguration(
@@ -672,6 +746,23 @@ impl CdpConnectionProductionProfile {
         self.reclaiming_event_subscribers = Some(max_subscribers);
         self.event_delivery_resource_bytes = retained;
         Ok(self)
+    }
+
+    fn validate_delivery(&self) -> Result<()> {
+        self.config.validate()?;
+        if self.config.event_channel_capacity == UNBOUNDED_CDP_EVENTS {
+            if self.reclaiming_event_subscribers.is_none() {
+                return Err(CdpError::InvalidConfiguration(
+                    "allocator-backed event capacity requires reclaiming fanout",
+                ));
+            }
+            if self.config.max_event_bytes != UNBOUNDED_CDP_BYTES {
+                return Err(CdpError::InvalidConfiguration(
+                    "allocator-backed event capacity requires allocator-backed event bytes",
+                ));
+            }
+        }
+        Ok(())
     }
 
     /// Retire already-admitted calls when Chrome announces their exact session
@@ -762,6 +853,14 @@ fn usize_to_u64(value: usize) -> u64 {
     u64::try_from(value).unwrap_or(u64::MAX)
 }
 
+fn accounted_wire_bytes(value: usize) -> u64 {
+    if value == UNBOUNDED_CDP_BYTES {
+        0
+    } else {
+        usize_to_u64(value)
+    }
+}
+
 impl CdpConnection {
     /// Resolves when this concrete browser-protocol transport is stopping.
     /// Await io_finished separately to prove both I/O tasks have retired.
@@ -797,6 +896,7 @@ impl CdpConnection {
     pub fn request_disconnect(&self) {
         self.shutdown.cancel();
         fail_all_pending(&self.pending);
+        self.event_delivery.close();
     }
 
     /// Waits for both native I/O tasks to finish cleanup, not merely receive
@@ -826,6 +926,11 @@ impl CdpConnection {
 
     /// Connect with full configuration.
     pub async fn connect_with_config(ws_url: &str, config: ConnectionConfig) -> Result<Arc<Self>> {
+        if config.event_channel_capacity == UNBOUNDED_CDP_EVENTS {
+            return Err(CdpError::InvalidConfiguration(
+                "allocator-backed event capacity requires production reclaiming fanout",
+            ));
+        }
         let event_delivery = CdpEventDelivery::legacy(config.event_channel_capacity);
         Self::connect_with_parts(
             ws_url,
@@ -848,6 +953,11 @@ impl CdpConnection {
         config: ConnectionConfig,
         headers: &CdpHandshakeHeaders,
     ) -> Result<Arc<Self>> {
+        if config.event_channel_capacity == UNBOUNDED_CDP_EVENTS {
+            return Err(CdpError::InvalidConfiguration(
+                "allocator-backed event capacity requires production reclaiming fanout",
+            ));
+        }
         let event_delivery = CdpEventDelivery::legacy(config.event_channel_capacity);
         Self::connect_with_parts(
             ws_url,
@@ -893,15 +1003,21 @@ impl CdpConnection {
         resources: &ProductionResourceLedger,
         #[cfg(feature = "cdp-handshake-headers")] headers: Option<&CdpHandshakeHeaders>,
     ) -> std::result::Result<Arc<Self>, CdpProductionConnectError> {
-        profile.config.validate()?;
+        profile.validate_delivery()?;
         let ledger = resources.claim(profile.requirements())?;
-        let reader_resource = ledger
-            .reserve(
-                profile.resource_scope(),
-                ResourceClass::WireBytes,
-                profile.reader_wire_bytes(),
+        let reader_resource = if profile.reader_wire_bytes() == 0 {
+            None
+        } else {
+            Some(
+                ledger
+                    .reserve(
+                        profile.resource_scope(),
+                        ResourceClass::WireBytes,
+                        profile.reader_wire_bytes(),
+                    )
+                    .map_err(CdpError::from)?,
             )
-            .map_err(CdpError::from)?;
+        };
         let event_delivery_resource = if profile.event_delivery_resource_bytes() == 0 {
             None
         } else {
@@ -928,7 +1044,7 @@ impl CdpConnection {
             config,
             event_delivery,
             Some(budget),
-            Some(reader_resource),
+            reader_resource,
             event_delivery_resource,
             #[cfg(feature = "cdp-handshake-headers")]
             headers,
@@ -946,6 +1062,7 @@ impl CdpConnection {
         #[cfg(feature = "cdp-handshake-headers")] headers: Option<&CdpHandshakeHeaders>,
     ) -> Result<Arc<Self>> {
         config.validate()?;
+        event_delivery.bind_resource(event_delivery_resource);
         #[cfg(feature = "large-commands")]
         let large_commands = resources
             .as_ref()
@@ -1049,7 +1166,6 @@ impl CdpConnection {
             large_commands,
             resources,
             _reader_resource: reader_resource,
-            _event_delivery_resource: event_delivery_resource,
             #[cfg(feature = "cdp-ws-close-reason")]
             peer_close_reason,
             shutdown,
@@ -1302,6 +1418,7 @@ impl CdpConnection {
             _registration: PendingRegistration {
                 id,
                 pending: Arc::clone(&self.pending),
+                remove_on_drop: true,
             },
             resource,
         })
@@ -1457,7 +1574,9 @@ impl CdpConnection {
             if let Some(id) = object.get("id").and_then(Value::as_u64) {
                 trace!(id, "received CDP response");
                 if let Some((_, entry)) = pending.remove(&id) {
-                    let result = if text.len() > max_response_bytes {
+                    let result = if max_response_bytes != UNBOUNDED_CDP_BYTES
+                        && text.len() > max_response_bytes
+                    {
                         Err(CdpError::LimitExceeded {
                             resource: "response bytes",
                             actual: text.len(),
@@ -1469,7 +1588,9 @@ impl CdpConnection {
                             .get("message")
                             .and_then(|m| m.as_str())
                             .unwrap_or("unknown error");
-                        if message.len() > max_protocol_error_bytes {
+                        if max_protocol_error_bytes != UNBOUNDED_CDP_BYTES
+                            && message.len() > max_protocol_error_bytes
+                        {
                             Err(CdpError::LimitExceeded {
                                 resource: "protocol error bytes",
                                 actual: message.len(),
@@ -1497,7 +1618,7 @@ impl CdpConnection {
 
             // Event (has "method" field, no "id")
             if let Some(Value::String(method)) = object.remove("method") {
-                if text.len() > max_event_bytes {
+                if max_event_bytes != UNBOUNDED_CDP_BYTES && text.len() > max_event_bytes {
                     error!(
                         actual = text.len(),
                         limit = max_event_bytes,
@@ -1537,25 +1658,41 @@ impl CdpConnection {
                 };
                 let params = object.remove("params").unwrap_or(Value::Null);
                 let event_resource = match &resources {
-                    Some(resources) => match resources.ledger.reserve_many(
-                        resources.profile.resource_scope(),
-                        &[
-                            ResourceRequest::new(ResourceClass::EventItem, 1),
-                            ResourceRequest::new(
-                                ResourceClass::EventBytes,
-                                usize_to_u64(text.len()),
-                            ),
-                        ],
-                    ) {
-                        Ok(resource) => Some(resource),
-                        Err(error) => {
-                            tracing::error!(
-                                %error,
-                                "CDP event resource budget was exhausted; closing connection"
-                            );
-                            break;
+                    Some(resources) => {
+                        let event_item = ResourceRequest::new(ResourceClass::EventItem, 1);
+                        let event_bytes = ResourceRequest::new(
+                            ResourceClass::EventBytes,
+                            usize_to_u64(text.len()),
+                        );
+                        let allocator_backed_items =
+                            resources.profile.config().event_channel_capacity
+                                == UNBOUNDED_CDP_EVENTS;
+                        let reservation =
+                            if allocator_backed_items && max_event_bytes == UNBOUNDED_CDP_BYTES {
+                                None
+                            } else if max_event_bytes == UNBOUNDED_CDP_BYTES {
+                                Some(resources.ledger.reserve_many(
+                                    resources.profile.resource_scope(),
+                                    std::slice::from_ref(&event_item),
+                                ))
+                            } else {
+                                Some(resources.ledger.reserve_many(
+                                    resources.profile.resource_scope(),
+                                    &[event_item, event_bytes],
+                                ))
+                            };
+                        match reservation {
+                            None => None,
+                            Some(Ok(resource)) => Some(resource),
+                            Some(Err(error)) => {
+                                tracing::error!(
+                                    %error,
+                                    "CDP event resource budget was exhausted; closing connection"
+                                );
+                                break;
+                            }
                         }
-                    },
+                    }
                     None => None,
                 };
                 let event = match event_resource {
@@ -1612,9 +1749,10 @@ fn fail_all_pending(pending: &PendingMap) {
 }
 
 fn cdp_websocket_config(max_websocket_bytes: usize) -> WebSocketConfig {
+    let maximum = (max_websocket_bytes != UNBOUNDED_CDP_BYTES).then_some(max_websocket_bytes);
     WebSocketConfig::default()
-        .max_message_size(Some(max_websocket_bytes))
-        .max_frame_size(Some(max_websocket_bytes))
+        .max_message_size(maximum)
+        .max_frame_size(maximum)
 }
 
 fn acquire_pending_slot(active: Arc<AtomicUsize>, limit: usize) -> Result<PendingCommandSlot> {
@@ -1716,7 +1854,6 @@ mod tests {
             large_commands: None,
             resources: None,
             _reader_resource: None,
-            _event_delivery_resource: None,
             #[cfg(feature = "cdp-ws-close-reason")]
             peer_close_reason: Arc::new(Mutex::new(None)),
             shutdown: tokio_util::sync::CancellationToken::new(),
@@ -1769,13 +1906,15 @@ mod tests {
         let ledger = resources
             .claim(profile.requirements())
             .expect("profile should be declared");
-        let reader_resource = ledger
-            .reserve(
-                profile.resource_scope(),
-                ResourceClass::WireBytes,
-                profile.reader_wire_bytes(),
-            )
-            .expect("reader peak should fit");
+        let reader_resource = (profile.reader_wire_bytes() != 0).then(|| {
+            ledger
+                .reserve(
+                    profile.resource_scope(),
+                    ResourceClass::WireBytes,
+                    profile.reader_wire_bytes(),
+                )
+                .expect("reader peak should fit")
+        });
         let event_delivery_resource = if profile.event_delivery_resource_bytes() == 0 {
             None
         } else {
@@ -1797,6 +1936,7 @@ mod tests {
             }
             None => CdpEventDelivery::legacy(config.event_channel_capacity),
         };
+        event_delivery.bind_resource(event_delivery_resource);
         (
             CdpConnection {
                 write_tx,
@@ -1815,8 +1955,7 @@ mod tests {
                     ledger,
                     profile: profile.clone(),
                 }),
-                _reader_resource: Some(reader_resource),
-                _event_delivery_resource: event_delivery_resource,
+                _reader_resource: reader_resource,
                 #[cfg(feature = "cdp-ws-close-reason")]
                 peer_close_reason: Arc::new(Mutex::new(None)),
                 shutdown: tokio_util::sync::CancellationToken::new(),
@@ -1983,6 +2122,19 @@ mod tests {
         );
         assert_eq!(config.max_frame_size, Some(MAX_CDP_WEBSOCKET_BYTES));
         assert_eq!(config.max_message_size, Some(MAX_CDP_WEBSOCKET_BYTES));
+    }
+
+    #[test]
+    fn websocket_config_can_delegate_message_size_to_the_allocator() {
+        // Arrange
+        let maximum = UNBOUNDED_CDP_BYTES;
+
+        // Act
+        let config = cdp_websocket_config(maximum);
+
+        // Assert
+        assert_eq!(config.max_frame_size, None);
+        assert_eq!(config.max_message_size, None);
     }
 
     #[test]
@@ -2170,6 +2322,88 @@ mod tests {
         }
         operation.await.unwrap().unwrap();
         assert!(wire.try_recv().is_err());
+        assert!(connection.pending.is_empty());
+        assert_eq!(connection.active_pending.load(Ordering::Acquire), 0);
+    }
+
+    #[tokio::test]
+    async fn service_worker_initialization_returns_before_command_responses() {
+        // Arrange
+        let mut connection = test_connection(ConnectionConfig::default());
+        let (sender, mut wire) = tokio::sync::mpsc::channel(2);
+        connection.write_tx = sender;
+        let connection = Arc::new(connection);
+        let client = crate::CdpSession::new(
+            Arc::clone(&connection),
+            "service-worker".into(),
+            "target".into(),
+        );
+
+        // Act
+        client.service_worker_initialize(false).await.unwrap();
+
+        // Assert
+        for expected in ["Runtime.enable", "Runtime.runIfWaitingForDebugger"] {
+            let outbound = wire.recv().await.unwrap();
+            let frame: Value = serde_json::from_str(outbound.message.to_text().unwrap()).unwrap();
+            assert_eq!(frame["method"], expected);
+            assert_eq!(frame["sessionId"], "service-worker");
+        }
+        assert_eq!(connection.pending.len(), 2);
+
+        connection.request_disconnect();
+
+        assert!(connection.pending.is_empty());
+        assert_eq!(connection.active_pending.load(Ordering::Acquire), 0);
+    }
+
+    #[tokio::test]
+    async fn service_worker_policies_are_queued_after_network_and_before_resume() {
+        // Arrange
+        let mut connection = test_connection(ConnectionConfig::default());
+        let (sender, mut wire) = tokio::sync::mpsc::channel(4);
+        connection.write_tx = sender;
+        let connection = Arc::new(connection);
+        let client = crate::CdpSession::new(
+            Arc::clone(&connection),
+            "service-worker".into(),
+            "target".into(),
+        );
+        let commands = [crate::ServiceWorkerInitializationCommand::new(
+            "Network.emulateNetworkConditions",
+            serde_json::json!({
+                "offline": true,
+                "latency": 0,
+                "downloadThroughput": -1,
+                "uploadThroughput": -1
+            }),
+        )];
+
+        // Act
+        client
+            .service_worker_initialize_with_commands(true, &commands)
+            .await
+            .unwrap();
+
+        // Assert
+        let mut observed = Vec::new();
+        for _ in 0..4 {
+            let outbound = wire.recv().await.unwrap();
+            let frame: Value = serde_json::from_str(outbound.message.to_text().unwrap()).unwrap();
+            observed.push(frame["method"].as_str().unwrap().to_owned());
+            assert_eq!(frame["sessionId"], "service-worker");
+        }
+        assert_eq!(
+            observed,
+            [
+                "Runtime.enable",
+                "Network.enable",
+                "Network.emulateNetworkConditions",
+                "Runtime.runIfWaitingForDebugger"
+            ]
+        );
+        assert_eq!(connection.pending.len(), 4);
+        connection.request_disconnect();
         assert!(connection.pending.is_empty());
         assert_eq!(connection.active_pending.load(Ordering::Acquire), 0);
     }
@@ -2451,6 +2685,98 @@ mod tests {
     }
 
     #[test]
+    fn production_profile_does_not_project_unbounded_inbound_bytes() {
+        // Arrange
+        let config = ConnectionConfig {
+            pending_command_capacity: 2,
+            event_channel_capacity: 3,
+            max_command_bytes: 10,
+            max_response_bytes: UNBOUNDED_CDP_BYTES,
+            max_event_bytes: UNBOUNDED_CDP_BYTES,
+            max_websocket_bytes: UNBOUNDED_CDP_BYTES,
+            ..ConnectionConfig::default()
+        };
+
+        // Act
+        let profile = CdpConnectionProductionProfile::new(ResourceScope::Connection, config);
+
+        // Assert
+        assert_eq!(profile.reader_wire_bytes(), 0);
+        assert_eq!(profile.command_wire_bytes(), 20);
+        assert_eq!(profile.retained_event_bytes(), 0);
+        assert_eq!(
+            profile
+                .requirements()
+                .class(ResourceClass::WireBytes)
+                .global,
+            40
+        );
+        assert_eq!(
+            profile
+                .requirements()
+                .class(ResourceClass::EventItem)
+                .global,
+            4
+        );
+        assert_eq!(
+            profile
+                .requirements()
+                .class(ResourceClass::EventBytes)
+                .global,
+            0
+        );
+        assert!(profile.with_retained_event_byte_capacity(1024).is_err());
+    }
+
+    #[test]
+    fn production_profile_supports_allocator_backed_event_count_without_projection() {
+        // Arrange
+        let profile = CdpConnectionProductionProfile::new(
+            ResourceScope::Connection,
+            ConnectionConfig {
+                pending_command_capacity: 2,
+                event_channel_capacity: UNBOUNDED_CDP_EVENTS,
+                max_event_bytes: UNBOUNDED_CDP_BYTES,
+                max_websocket_bytes: UNBOUNDED_CDP_BYTES,
+                ..ConnectionConfig::default()
+            },
+        );
+
+        // Act
+        let missing_fanout = profile.validate_delivery();
+        let profile = profile
+            .with_reclaiming_event_fanout(2)
+            .expect("allocator-backed reclaiming fanout should validate");
+
+        // Assert
+        assert!(matches!(
+            missing_fanout,
+            Err(CdpError::InvalidConfiguration(
+                "allocator-backed event capacity requires reclaiming fanout"
+            ))
+        ));
+        profile
+            .validate_delivery()
+            .expect("complete allocator-backed event profile should validate");
+        assert_eq!(profile.retained_event_bytes(), 0);
+        assert_eq!(
+            profile
+                .requirements()
+                .class(ResourceClass::EventItem)
+                .global,
+            0
+        );
+        assert_eq!(
+            profile
+                .requirements()
+                .class(ResourceClass::EventBytes)
+                .global,
+            0
+        );
+        assert!(profile.event_delivery_resource_bytes() > 0);
+    }
+
+    #[test]
     fn production_profile_rejects_event_byte_capacity_smaller_than_one_event() {
         // Arrange
         let profile = CdpConnectionProductionProfile::new(
@@ -2582,6 +2908,43 @@ mod tests {
                 .reclaiming_event_metrics()
                 .expect("reclaiming metrics should exist")
                 .queued_events,
+            0
+        );
+    }
+
+    #[test]
+    fn reclaiming_connection_releases_bookkeeping_when_disconnected() {
+        // Arrange
+        let profile = CdpConnectionProductionProfile::new(
+            ResourceScope::Connection,
+            ConnectionConfig {
+                event_channel_capacity: 2,
+                ..ConnectionConfig::default()
+            },
+        )
+        .with_reclaiming_event_fanout(2)
+        .expect("reclaiming fanout profile should validate");
+        let resources = production_resources(&profile);
+        let connection = test_production_connection(&profile, &resources);
+        assert_eq!(
+            resources
+                .metrics()
+                .expect("resource metrics should be readable")
+                .class(ResourceClass::BackendStateBytes)
+                .current,
+            profile.event_delivery_resource_bytes()
+        );
+
+        // Act
+        connection.request_disconnect();
+
+        // Assert
+        assert_eq!(
+            resources
+                .metrics()
+                .expect("resource metrics should be readable")
+                .class(ResourceClass::BackendStateBytes)
+                .current,
             0
         );
     }

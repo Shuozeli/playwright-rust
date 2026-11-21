@@ -27,6 +27,7 @@ pub struct PageDragSourceProfile {
     source_scope: ResourceScope,
     move_scope: ResourceScope,
     worlds: usize,
+    allocator_backed_worlds: bool,
     moves: usize,
 }
 impl PageDragSourceProfile {
@@ -45,6 +46,25 @@ impl PageDragSourceProfile {
             source_scope,
             move_scope,
             worlds,
+            allocator_backed_worlds: false,
+            moves,
+        })
+    }
+    pub fn new_allocator_backed_worlds(
+        source_scope: ResourceScope,
+        move_scope: ResourceScope,
+        moves: usize,
+    ) -> Result<Self> {
+        if !(1..=32).contains(&moves) || source_scope == move_scope {
+            return Err(error(
+                "drag source needs distinct scopes and 1..=32 retained moves",
+            ));
+        }
+        Ok(Self {
+            source_scope,
+            move_scope,
+            worlds: usize::MAX,
+            allocator_backed_worlds: true,
             moves,
         })
     }
@@ -54,14 +74,23 @@ impl PageDragSourceProfile {
             .with_class(ResourceClass::BackendStateBytes, bytes, bytes)
             .with_metadata(1, self.moves + 1);
         for _ in 0..self.moves {
-            required = required.combine_concurrent(DragMove::requirements(self.worlds)?);
+            let movement = if self.allocator_backed_worlds {
+                DragMove::allocator_backed_requirements()
+            } else {
+                DragMove::requirements(self.worlds)?
+            };
+            required = required.combine_concurrent(movement);
         }
         Ok(required)
     }
     fn retained_bytes(self) -> usize {
         std::mem::size_of::<RetainedWorlds>()
             + 2 * std::mem::size_of::<usize>()
-            + self.worlds * std::mem::size_of::<DragWorld<'_>>()
+            + if self.allocator_backed_worlds {
+                0
+            } else {
+                self.worlds * std::mem::size_of::<DragWorld<'_>>()
+            }
     }
 }
 fn state_bytes() -> usize {
@@ -208,15 +237,27 @@ impl DragMoveSource for PageDragMoveSource {
                 unique_context: world.utility_unique_id(),
             })
             .collect();
-        DragMove::start_with_world_lifetime(
-            self.0.profile.move_scope,
-            &self.0.resources,
-            &self.0.listeners,
-            &self.0.captures,
-            &worlds,
-            movement,
-            Some(retained.clone()),
-        )
+        if self.0.profile.allocator_backed_worlds {
+            DragMove::start_with_world_lifetime_allocator_backed(
+                self.0.profile.move_scope,
+                &self.0.resources,
+                &self.0.listeners,
+                &self.0.captures,
+                &worlds,
+                movement,
+                Some(retained.clone()),
+            )
+        } else {
+            DragMove::start_with_world_lifetime(
+                self.0.profile.move_scope,
+                &self.0.resources,
+                &self.0.listeners,
+                &self.0.captures,
+                &worlds,
+                movement,
+                Some(retained.clone()),
+            )
+        }
     }
 }
 

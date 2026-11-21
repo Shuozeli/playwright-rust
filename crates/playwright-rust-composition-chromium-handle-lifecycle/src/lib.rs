@@ -92,6 +92,20 @@ impl ChromiumHandleRouteProfile {
         }
     }
 
+    /// Uses ordinary allocator failure as the retained-route admission
+    /// boundary. Per-route native-id and preview limits still apply.
+    pub const fn new_allocator_backed(
+        scope: ResourceScope,
+        max_native_id_bytes: usize,
+        max_preview_bytes: usize,
+    ) -> Self {
+        Self::new(scope, usize::MAX, max_native_id_bytes, max_preview_bytes)
+    }
+
+    const fn allocator_backed(self) -> bool {
+        self.max_handles == usize::MAX
+    }
+
     pub const fn scope(self) -> ResourceScope {
         self.scope
     }
@@ -109,6 +123,9 @@ impl ChromiumHandleRouteProfile {
     }
 
     pub fn requirements(self) -> ResourceRequirements {
+        if self.allocator_backed() {
+            return ResourceRequirements::none();
+        }
         let handles = u64::try_from(self.max_handles).unwrap_or(u64::MAX);
         let bytes_per_handle = route_bytes(self.max_native_id_bytes, self.max_preview_bytes);
         if self.max_handles == 0 {
@@ -357,8 +374,10 @@ struct ChromiumHandleRouteEntry {
     owner_page: ObjectId,
     disposer: Option<Arc<dyn ChromiumHandleDisposer>>,
     payload: Arc<dyn Any + Send + Sync>,
+    #[cfg(feature = "native-release")]
+    identity: Arc<()>,
     retained_bytes: u64,
-    _resource: RouteResource,
+    _resource: Option<RouteResource>,
 }
 
 struct ChromiumHandleRouteState {
@@ -408,31 +427,38 @@ impl ChromiumHandleRoutes {
             .state
             .lock()
             .map_err(|_| ChromiumHandleRouteError::StatePoisoned)?;
-        if state.routes.len().saturating_add(state.reserved) >= self.profile.max_handles {
+        if !self.profile.allocator_backed()
+            && state.routes.len().saturating_add(state.reserved) >= self.profile.max_handles
+        {
             return Err(ChromiumHandleRouteError::CapacityExceeded {
                 limit: self.profile.max_handles,
             });
         }
-        let maximum_bytes = route_bytes(
-            self.profile.max_native_id_bytes,
-            self.profile.max_preview_bytes,
-        );
-        let lease = self
-            .ledger
-            .reserve_many(
-                self.profile.scope,
-                &[
-                    ResourceRequest::new(ResourceClass::RemoteHandle, 1),
-                    ResourceRequest::new(ResourceClass::BackendStateBytes, maximum_bytes),
-                ],
+        let lease = if self.profile.allocator_backed() {
+            None
+        } else {
+            let maximum_bytes = route_bytes(
+                self.profile.max_native_id_bytes,
+                self.profile.max_preview_bytes,
+            );
+            Some(
+                self.ledger
+                    .reserve_many(
+                        self.profile.scope,
+                        &[
+                            ResourceRequest::new(ResourceClass::RemoteHandle, 1),
+                            ResourceRequest::new(ResourceClass::BackendStateBytes, maximum_bytes),
+                        ],
+                    )
+                    .map_err(ChromiumHandleRouteError::Resources)?,
             )
-            .map_err(ChromiumHandleRouteError::Resources)?;
+        };
         state.reserved = state.reserved.saturating_add(1);
         state.metrics.reserved = state.reserved;
         drop(state);
         Ok(ChromiumHandleRouteReservation {
             routes: self.clone(),
-            lease: Some(lease),
+            lease,
             active: true,
         })
     }
@@ -448,32 +474,40 @@ impl ChromiumHandleRoutes {
         if count == 0 {
             return Err(ChromiumHandleRouteError::EmptyBatch);
         }
-        if state
-            .routes
-            .len()
-            .saturating_add(state.reserved)
-            .saturating_add(count)
-            > self.profile.max_handles
+        if !self.profile.allocator_backed()
+            && state
+                .routes
+                .len()
+                .saturating_add(state.reserved)
+                .saturating_add(count)
+                > self.profile.max_handles
         {
             return Err(ChromiumHandleRouteError::CapacityExceeded {
                 limit: self.profile.max_handles,
             });
         }
-        let maximum_bytes = route_bytes(
-            self.profile.max_native_id_bytes,
-            self.profile.max_preview_bytes,
-        );
-        let requests = [
-            ResourceRequest::new(ResourceClass::RemoteHandle, 1),
-            ResourceRequest::new(ResourceClass::BackendStateBytes, maximum_bytes),
-        ];
-        let mut leases = Vec::with_capacity(count);
-        for _ in 0..count {
-            leases.push(
-                self.ledger
-                    .reserve_many(self.profile.scope, &requests)
-                    .map_err(ChromiumHandleRouteError::Resources)?,
+        let mut leases = Vec::new();
+        leases
+            .try_reserve_exact(count)
+            .map_err(|_| ChromiumHandleRouteError::CapacityExceeded { limit: usize::MAX })?;
+        if self.profile.allocator_backed() {
+            leases.resize_with(count, || None);
+        } else {
+            let maximum_bytes = route_bytes(
+                self.profile.max_native_id_bytes,
+                self.profile.max_preview_bytes,
             );
+            let requests = [
+                ResourceRequest::new(ResourceClass::RemoteHandle, 1),
+                ResourceRequest::new(ResourceClass::BackendStateBytes, maximum_bytes),
+            ];
+            for _ in 0..count {
+                leases.push(Some(
+                    self.ledger
+                        .reserve_many(self.profile.scope, &requests)
+                        .map_err(ChromiumHandleRouteError::Resources)?,
+                ));
+            }
         }
         state.reserved = state.reserved.saturating_add(count);
         state.metrics.reserved = state.reserved;
@@ -810,15 +844,16 @@ impl ChromiumHandleRouteReservation {
             ));
         }
         let retained_bytes = route_bytes(spec.native_id_bytes, spec.preview_bytes);
-        let mut lease = self
-            .lease
-            .take()
-            .expect("route reservation must own one lease");
-        lease
-            .try_resize(ResourceClass::BackendStateBytes, retained_bytes)
-            .map_err(|error| {
-                ChromiumHandlePublicationError::Route(ChromiumHandleRouteError::Resources(error))
-            })?;
+        let mut lease = self.lease.take();
+        if let Some(lease) = &mut lease {
+            lease
+                .try_resize(ResourceClass::BackendStateBytes, retained_bytes)
+                .map_err(|error| {
+                    ChromiumHandlePublicationError::Route(ChromiumHandleRouteError::Resources(
+                        error,
+                    ))
+                })?;
+        }
         let mut state = self.routes.state.lock().map_err(|_| {
             ChromiumHandlePublicationError::Route(ChromiumHandleRouteError::StatePoisoned)
         })?;
@@ -837,8 +872,10 @@ impl ChromiumHandleRouteReservation {
                 owner_page: spec.owner_page,
                 disposer: spec.disposer,
                 payload: spec.payload,
+                #[cfg(feature = "native-release")]
+                identity: Arc::new(()),
                 retained_bytes,
-                _resource: route_resource(lease),
+                _resource: lease.map(route_resource),
             },
         );
         state.metrics.current = state.metrics.current.saturating_add(1);
@@ -883,7 +920,7 @@ where
 
 pub struct ChromiumHandleRouteBatchReservation {
     routes: ChromiumHandleRoutes,
-    leases: Vec<ResourceLease>,
+    leases: Vec<Option<ResourceLease>>,
     count: usize,
     active: bool,
 }
@@ -964,13 +1001,15 @@ impl ChromiumHandleRouteBatchReservation {
             retained.push(route_bytes(spec.native_id_bytes, spec.preview_bytes));
         }
         for (lease, retained_bytes) in self.leases.iter_mut().zip(&retained) {
-            lease
-                .try_resize(ResourceClass::BackendStateBytes, *retained_bytes)
-                .map_err(|error| {
-                    ChromiumHandlePublicationError::Route(ChromiumHandleRouteError::Resources(
-                        error,
-                    ))
-                })?;
+            if let Some(lease) = lease {
+                lease
+                    .try_resize(ResourceClass::BackendStateBytes, *retained_bytes)
+                    .map_err(|error| {
+                        ChromiumHandlePublicationError::Route(ChromiumHandleRouteError::Resources(
+                            error,
+                        ))
+                    })?;
+            }
         }
         let mut state = self.routes.state.lock().map_err(|_| {
             ChromiumHandlePublicationError::Route(ChromiumHandleRouteError::StatePoisoned)
@@ -1000,8 +1039,10 @@ impl ChromiumHandleRouteBatchReservation {
                     owner_page: spec.owner_page,
                     disposer: spec.disposer,
                     payload: spec.payload,
+                    #[cfg(feature = "native-release")]
+                    identity: Arc::new(()),
                     retained_bytes,
-                    _resource: route_resource(lease),
+                    _resource: lease.map(route_resource),
                 },
             );
         }

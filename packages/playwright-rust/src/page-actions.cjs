@@ -71,6 +71,15 @@ module.exports = function pageActions({ mapError, validateOptions, UnsupportedOp
     return pointerAction(frame, selector, 'dblclick', options, api);
   }
 
+  function hover(frame, selector, options = {}, api = 'page.hover') {
+    validateOptions(options, ['timeout', 'strict', 'force', 'modifiers', 'position', 'trial'], api);
+    if (options.strict !== undefined && typeof options.strict !== 'boolean')
+      throw new TypeError(`${api}: strict must be a boolean`);
+    const { strict, ...locatorOptions } = options;
+    const locator = frame.locator(selector);
+    return locatorAction(strict ? locator : locator.first(), 'hover', locatorOptions, undefined, api);
+  }
+
   function tap(frame, selector, options = {}, api = 'page.tap') {
     return locatorAction(frame.locator(selector), 'tap', options, undefined, api);
   }
@@ -108,5 +117,5 @@ module.exports = function pageActions({ mapError, validateOptions, UnsupportedOp
     return (strict ? locator : locator.first()).dispatchEvent(type, eventInit, locatorOptions);
   }
 
-  return { setContent, press, type, fill, focus, click, dblclick, tap, check, uncheck, setChecked, dispatchEvent };
+  return { setContent, press, type, fill, focus, click, dblclick, hover, tap, check, uncheck, setChecked, dispatchEvent };
 };

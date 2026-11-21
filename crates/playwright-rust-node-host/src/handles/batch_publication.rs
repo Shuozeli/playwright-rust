@@ -1,6 +1,6 @@
 //! Atomic native batch publication followed by per-object revocable ownership.
 use super::{
-    MAX_CALLS, NamedPendingHandle,
+    NamedPendingHandle,
     creation::{failure, map_leaf_error},
     pending::{Admission, BatchAdmission, Owners, Ticket},
     release::Releases,
@@ -47,7 +47,7 @@ enum RejectionDelivery {
 }
 struct Inbox {
     closed: bool,
-    ready: [Option<Entry>; MAX_CALLS],
+    ready: Vec<Entry>,
 }
 pub(super) struct BatchPublications {
     inbox: Mutex<Inbox>,
@@ -83,7 +83,7 @@ impl BatchPublications {
         Ok(Arc::new(Self {
             inbox: Mutex::new(Inbox {
                 closed: false,
-                ready: std::array::from_fn(|_| None),
+                ready: Vec::new(),
             }),
             changed: Arc::new(Notify::new()),
             owners,
@@ -149,16 +149,12 @@ impl BatchPublications {
             if inbox.closed {
                 return Err(failure(HostError::TargetClosed));
             }
-            let slot = inbox
-                .ready
-                .iter_mut()
-                .find(|slot| slot.is_none())
-                .ok_or_else(|| {
-                    failure(HostError::ResourceExhausted(
-                        "admitted Handle batch publication inbox overflow".into(),
-                    ))
-                })?;
-            *slot = Some(entry);
+            inbox.ready.try_reserve(1).map_err(|error| {
+                failure(HostError::ResourceExhausted(format!(
+                    "Handle batch publication allocation failed: {error}"
+                )))
+            })?;
+            inbox.ready.push(entry);
         }
         if notify {
             self.changed.notify_one();
@@ -168,10 +164,10 @@ impl BatchPublications {
     pub fn finish_ready(&self) -> Result<(), HostError> {
         let ready = {
             let mut inbox = self.inbox.lock().map_err(HostError::backend)?;
-            std::mem::replace(&mut inbox.ready, std::array::from_fn(|_| None))
+            std::mem::take(&mut inbox.ready)
         };
         let mut failure = None;
-        for mut entry in ready.into_iter().flatten() {
+        for mut entry in ready {
             if entry.reply.as_ref().is_none_or(oneshot::Sender::is_closed) {
                 continue;
             }
@@ -275,7 +271,7 @@ impl BatchPublications {
         let ready = {
             let mut inbox = self.inbox.lock().unwrap_or_else(|error| error.into_inner());
             inbox.closed = true;
-            std::mem::replace(&mut inbox.ready, std::array::from_fn(|_| None))
+            std::mem::take(&mut inbox.ready)
         };
         drop(ready);
         self.changed.notify_one();

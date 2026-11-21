@@ -6,7 +6,7 @@ module.exports = function pageBindings({ mapError, UnsupportedOperationError, cr
 
   async function dispatch(page, frame, call) {
     const session = page._context._browser._session;
-    const binding = page._bindings.get(call.name);
+    const binding = page._bindings.get(call.name) ?? page._context._bindings?.get(call.name);
     let published = false;
     const acknowledge = async () => {
       if (published) return;
@@ -83,5 +83,20 @@ module.exports = function pageBindings({ mapError, UnsupportedOperationError, cr
     }
   }
 
-  return { dispatch, expose, watch };
+  async function exposeContext(context, name, callback, api = 'browserContext.exposeBinding', needsHandle = false) {
+    const session = context._browser._session;
+    if (typeof session.contextExposeBinding !== 'function')
+      throw new UnsupportedOperationError(`${api} (select context-bindings native profile)`);
+    if (context._bindings.has(name))
+      throw new Error(`${api}: Function "${name}" has been already registered`);
+    context._bindings.set(name, { callback, needsHandle });
+    try {
+      await session.contextExposeBinding(context._id, name, needsHandle);
+    } catch (error) {
+      context._bindings.delete(name);
+      throw mapError(error, api);
+    }
+  }
+
+  return { dispatch, expose, exposeContext, watch };
 };

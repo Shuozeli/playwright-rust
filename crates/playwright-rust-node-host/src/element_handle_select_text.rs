@@ -125,23 +125,6 @@ impl HostSession {
         }
         let (_, _, _operation) =
             self.admit_operation(&target.initializer().object_id.get().to_string())?;
-        let handles = {
-            let state = self.state.lock().map_err(HostError::backend)?;
-            state
-                .as_ref()
-                .ok_or(HostError::TargetClosed)?
-                .handles
-                .clone()
-        };
-        // Four whole-action slots leave four of the eight ordinary Handle
-        // calls available to these actions' nested exact-handle evaluations.
-        let _action = handles
-            .element_action_slots
-            .clone()
-            .try_acquire_owned()
-            .map_err(|_| {
-                HostError::ResourceExhausted("ElementHandle select_text capacity exceeded".into())
-            })?;
         let deadline = (timeout_ms != 0)
             .then(|| tokio::time::Instant::now() + Duration::from_millis(u64::from(timeout_ms)));
         loop {

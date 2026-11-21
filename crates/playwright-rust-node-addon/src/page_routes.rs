@@ -17,6 +17,8 @@ use napi::{
     bindgen_prelude::{JsObjectValue, Object},
 };
 use napi_derive::napi;
+#[cfg(feature = "har-replay")]
+use playwright_rust_node_host::HarNotFoundAction;
 #[cfg(feature = "large-route-post-data")]
 use playwright_rust_node_host::ffi_budget::FfiReservation;
 use playwright_rust_node_host::{
@@ -36,7 +38,8 @@ const MAX_ROUTE_PUBLICATION_POST_DATA_BYTES: usize = 3 * 1024 * 1024;
 const ROUTE_FULFILL_ALLOWANCE: u64 =
     playwright_rust_node_host::MAX_ROUTE_FULFILL_BODY_BYTES as u64 + 128 * 1024;
 #[cfg(feature = "route-header-url-overrides")]
-const ROUTE_OVERRIDE_ALLOWANCE: u64 = 96 * 1024;
+const ROUTE_OVERRIDE_ALLOWANCE: u64 =
+    playwright_rust_node_host::MAX_ROUTE_CONTINUE_INPUT_BYTES as u64;
 
 #[cfg(feature = "large-route-post-data")]
 fn route_publication_additional_bytes(post_data_bytes: Option<usize>) -> Result<u64, HostError> {
@@ -92,7 +95,8 @@ pub struct NativeRouteCall {
     pub call_id: String,
     pub registration_id: String,
     pub context_id: String,
-    pub page_id: String,
+    pub page_id: Option<String>,
+    pub service_worker_id: Option<String>,
     pub frame_id: Option<String>,
     pub url: String,
     pub method: String,
@@ -111,7 +115,8 @@ pub struct NativeRouteCall {
     pub call_id: String,
     pub registration_id: String,
     pub context_id: String,
-    pub page_id: String,
+    pub page_id: Option<String>,
+    pub service_worker_id: Option<String>,
     pub frame_id: Option<String>,
     pub url: String,
     pub method: String,
@@ -136,7 +141,8 @@ impl From<RouteCall> for NativeRouteCall {
             call_id: value.id.to_string(),
             registration_id: value.registration_id.to_string(),
             context_id: value.context.get().to_string(),
-            page_id: value.page.get().to_string(),
+            page_id: value.page.map(|page| page.get().to_string()),
+            service_worker_id: value.service_worker_id,
             frame_id: value.frame.map(|frame| frame.get().to_string()),
             url: value.url,
             method: value.method,
@@ -223,6 +229,33 @@ fn parse_call_id(value: JsString<'_>) -> napi::Result<u64> {
         .ok_or_else(|| binding_error(HostError::InvalidArgument("invalid route call ID".into())))
 }
 
+#[cfg(feature = "har-replay")]
+fn har_input_allowance(path: &JsString<'_>, pattern: Option<&JsString<'_>>) -> napi::Result<u64> {
+    [
+        path.utf8_len()?,
+        pattern.map(JsString::utf8_len).transpose()?.unwrap_or(0),
+    ]
+    .into_iter()
+    .try_fold(boundary::SMALL_ALLOWANCE, |total, bytes| {
+        let bytes = u64::try_from(bytes).map_err(|_| {
+            binding_error(HostError::ResourceExhausted(
+                "HAR FFI input byte length overflow".into(),
+            ))
+        })?;
+        total.checked_add(bytes).ok_or_else(|| {
+            binding_error(HostError::ResourceExhausted(
+                "HAR FFI input byte allowance overflow".into(),
+            ))
+        })
+    })
+}
+
+#[cfg(feature = "har-replay")]
+fn parse_har_not_found(value: JsString<'_>) -> napi::Result<HarNotFoundAction> {
+    let value = value.into_utf8()?.into_owned()?;
+    HarNotFoundAction::parse(Some(&value)).map_err(binding_error)
+}
+
 #[cfg(feature = "page-unroute")]
 fn bounded_registration_ids(value: Unknown<'_>) -> napi::Result<Vec<u64>> {
     if !value.is_array()? {
@@ -233,12 +266,17 @@ fn bounded_registration_ids(value: Unknown<'_>) -> napi::Result<Vec<u64>> {
     // SAFETY: is_array checked above; the callback scope retains this handle.
     let entries = unsafe { value.cast::<Object<'_>>()? };
     let count = entries.get_array_length()?;
-    if count == 0 || count > 256 {
+    if count == 0 {
         return Err(binding_error(HostError::InvalidArgument(
-            "route registration ID count must be in [1, 256]".into(),
+            "route registration IDs must not be empty".into(),
         )));
     }
-    let mut ids = Vec::with_capacity(count as usize);
+    let mut ids = Vec::new();
+    ids.try_reserve_exact(count as usize).map_err(|error| {
+        binding_error(HostError::ResourceExhausted(format!(
+            "route registration ID allocation failed: {error}"
+        )))
+    })?;
     for index in 0..count {
         let raw: JsString<'_> = entries.get_element(index)?;
         let id = boundary::bounded_string(raw, 20, "route registration ID")?
@@ -323,6 +361,168 @@ impl NativeSession {
         let host = Arc::clone(&self.host);
         boundary::spawn_published(env, execution, self.publications.clone(), async move {
             host.page_route(&page_id, pattern, times.map(u64::from))
+                .await
+                .map(|registration| registration.to_string())
+        })
+    }
+
+    #[napi]
+    pub fn context_route<'env>(
+        &self,
+        env: &'env Env,
+        context_id: JsString<'env>,
+        pattern: JsString<'env>,
+        times: Option<u32>,
+    ) -> napi::Result<PromiseRaw<'env, Unknown<'env>>> {
+        let execution = self
+            .ffi
+            .admit(FfiLane::Command, boundary::SMALL_ALLOWANCE)
+            .map_err(binding_error)?;
+        let context_id = boundary::bounded_string(context_id, 20, "context ID")?;
+        let pattern = boundary::bounded_string(pattern, 4 * 1024, "route pattern")?;
+        let host = Arc::clone(&self.host);
+        boundary::spawn_published(env, execution, self.publications.clone(), async move {
+            host.context_route(&context_id, pattern, times.map(u64::from))
+                .await
+                .map(|registration| registration.to_string())
+        })
+    }
+}
+
+#[cfg(feature = "har-replay")]
+#[napi]
+impl NativeSession {
+    #[napi]
+    pub fn page_route_from_har<'env>(
+        &self,
+        env: &'env Env,
+        page_id: JsString<'env>,
+        path: JsString<'env>,
+        pattern: Option<JsString<'env>>,
+        not_found: JsString<'env>,
+    ) -> napi::Result<PromiseRaw<'env, Unknown<'env>>> {
+        let allowance = har_input_allowance(&path, pattern.as_ref())?;
+        let execution = self
+            .ffi
+            .admit(FfiLane::Command, allowance)
+            .map_err(binding_error)?;
+        let page_id = boundary::bounded_string(page_id, 20, "page ID")?;
+        let path = path.into_utf8()?.into_owned()?;
+        let pattern = pattern
+            .map(|value| value.into_utf8()?.into_owned())
+            .transpose()?;
+        let not_found = parse_har_not_found(not_found)?;
+        let host = Arc::clone(&self.host);
+        boundary::spawn_published(env, execution, self.publications.clone(), async move {
+            host.page_route_from_har(&page_id, &path, pattern, not_found)
+                .await
+                .map(|registration| registration.to_string())
+        })
+    }
+
+    #[napi]
+    pub fn context_route_from_har<'env>(
+        &self,
+        env: &'env Env,
+        context_id: JsString<'env>,
+        path: JsString<'env>,
+        pattern: Option<JsString<'env>>,
+        not_found: JsString<'env>,
+    ) -> napi::Result<PromiseRaw<'env, Unknown<'env>>> {
+        let allowance = har_input_allowance(&path, pattern.as_ref())?;
+        let execution = self
+            .ffi
+            .admit(FfiLane::Command, allowance)
+            .map_err(binding_error)?;
+        let context_id = boundary::bounded_string(context_id, 20, "context ID")?;
+        let path = path.into_utf8()?.into_owned()?;
+        let pattern = pattern
+            .map(|value| value.into_utf8()?.into_owned())
+            .transpose()?;
+        let not_found = parse_har_not_found(not_found)?;
+        let host = Arc::clone(&self.host);
+        boundary::spawn_published(env, execution, self.publications.clone(), async move {
+            host.context_route_from_har(&context_id, &path, pattern, not_found)
+                .await
+                .map(|registration| registration.to_string())
+        })
+    }
+}
+
+#[cfg(all(feature = "har-replay", feature = "route-regexp"))]
+#[napi]
+impl NativeSession {
+    #[napi(js_name = "pageRouteFromHarRegExp")]
+    pub fn page_route_from_har_reg_exp<'env>(
+        &self,
+        env: &'env Env,
+        page_id: JsString<'env>,
+        path: JsString<'env>,
+        source: JsString<'env>,
+        flags: JsString<'env>,
+        not_found: JsString<'env>,
+    ) -> napi::Result<PromiseRaw<'env, Unknown<'env>>> {
+        let allowance = har_input_allowance(&path, Some(&source))?
+            .checked_add(u64::try_from(flags.utf8_len()?).map_err(|_| {
+                binding_error(HostError::ResourceExhausted(
+                    "HAR RegExp flags byte length overflow".into(),
+                ))
+            })?)
+            .ok_or_else(|| {
+                binding_error(HostError::ResourceExhausted(
+                    "HAR RegExp FFI input byte allowance overflow".into(),
+                ))
+            })?;
+        let execution = self
+            .ffi
+            .admit(FfiLane::Command, allowance)
+            .map_err(binding_error)?;
+        let page_id = boundary::bounded_string(page_id, 20, "page ID")?;
+        let path = path.into_utf8()?.into_owned()?;
+        let source = source.into_utf8()?.into_owned()?;
+        let flags = flags.into_utf8()?.into_owned()?;
+        let not_found = parse_har_not_found(not_found)?;
+        let host = Arc::clone(&self.host);
+        boundary::spawn_published(env, execution, self.publications.clone(), async move {
+            host.page_route_from_har_regexp(&page_id, &path, source, flags, not_found)
+                .await
+                .map(|registration| registration.to_string())
+        })
+    }
+
+    #[napi(js_name = "contextRouteFromHarRegExp")]
+    pub fn context_route_from_har_reg_exp<'env>(
+        &self,
+        env: &'env Env,
+        context_id: JsString<'env>,
+        path: JsString<'env>,
+        source: JsString<'env>,
+        flags: JsString<'env>,
+        not_found: JsString<'env>,
+    ) -> napi::Result<PromiseRaw<'env, Unknown<'env>>> {
+        let allowance = har_input_allowance(&path, Some(&source))?
+            .checked_add(u64::try_from(flags.utf8_len()?).map_err(|_| {
+                binding_error(HostError::ResourceExhausted(
+                    "HAR RegExp flags byte length overflow".into(),
+                ))
+            })?)
+            .ok_or_else(|| {
+                binding_error(HostError::ResourceExhausted(
+                    "HAR RegExp FFI input byte allowance overflow".into(),
+                ))
+            })?;
+        let execution = self
+            .ffi
+            .admit(FfiLane::Command, allowance)
+            .map_err(binding_error)?;
+        let context_id = boundary::bounded_string(context_id, 20, "context ID")?;
+        let path = path.into_utf8()?.into_owned()?;
+        let source = source.into_utf8()?.into_owned()?;
+        let flags = flags.into_utf8()?.into_owned()?;
+        let not_found = parse_har_not_found(not_found)?;
+        let host = Arc::clone(&self.host);
+        boundary::spawn_published(env, execution, self.publications.clone(), async move {
+            host.context_route_from_har_regexp(&context_id, &path, source, flags, not_found)
                 .await
                 .map(|registration| registration.to_string())
         })
@@ -606,6 +806,30 @@ impl NativeSession {
                 .map(|registration| registration.to_string())
         })
     }
+
+    #[napi(js_name = "contextRouteRegExp")]
+    pub fn context_route_reg_exp<'env>(
+        &self,
+        env: &'env Env,
+        context_id: JsString<'env>,
+        source: JsString<'env>,
+        flags: JsString<'env>,
+        times: Option<u32>,
+    ) -> napi::Result<PromiseRaw<'env, Unknown<'env>>> {
+        let execution = self
+            .ffi
+            .admit(FfiLane::Command, boundary::SMALL_ALLOWANCE)
+            .map_err(binding_error)?;
+        let context_id = boundary::bounded_string(context_id, 20, "context ID")?;
+        let source = boundary::bounded_string(source, 4 * 1024, "route RegExp source")?;
+        let flags = boundary::bounded_string(flags, 4, "route RegExp flags")?;
+        let host = Arc::clone(&self.host);
+        boundary::spawn_published(env, execution, self.publications.clone(), async move {
+            host.context_route_regexp(&context_id, source, flags, times.map(u64::from))
+                .await
+                .map(|registration| registration.to_string())
+        })
+    }
 }
 
 #[cfg(feature = "page-unroute")]
@@ -627,6 +851,61 @@ impl NativeSession {
         let host = Arc::clone(&self.host);
         boundary::spawn_published(env, execution, self.publications.clone(), async move {
             host.page_unroute(&page_id, &registration_ids).await
+        })
+    }
+
+    #[napi]
+    pub fn context_unroute<'env>(
+        &self,
+        env: &'env Env,
+        context_id: JsString<'env>,
+        registration_ids: Unknown<'env>,
+    ) -> napi::Result<PromiseRaw<'env, Unknown<'env>>> {
+        let execution = self
+            .ffi
+            .admit(FfiLane::Command, boundary::SMALL_ALLOWANCE)
+            .map_err(binding_error)?;
+        let context_id = boundary::bounded_string(context_id, 20, "context ID")?;
+        let registration_ids = bounded_registration_ids(registration_ids)?;
+        let host = Arc::clone(&self.host);
+        boundary::spawn_published(env, execution, self.publications.clone(), async move {
+            host.context_unroute(&context_id, &registration_ids).await
+        })
+    }
+
+    #[napi]
+    pub fn page_unroute_all<'env>(
+        &self,
+        env: &'env Env,
+        page_id: JsString<'env>,
+        wait: bool,
+    ) -> napi::Result<PromiseRaw<'env, Unknown<'env>>> {
+        let execution = self
+            .ffi
+            .admit(FfiLane::Command, boundary::SMALL_ALLOWANCE)
+            .map_err(binding_error)?;
+        let page_id = boundary::bounded_string(page_id, 20, "page ID")?;
+        let host = Arc::clone(&self.host);
+        boundary::spawn_published(env, execution, self.publications.clone(), async move {
+            host.page_unroute_all(&page_id, wait).await
+        })
+    }
+
+    #[napi]
+    pub fn context_unroute_all<'env>(
+        &self,
+        env: &'env Env,
+        context_id: JsString<'env>,
+        wait: bool,
+    ) -> napi::Result<PromiseRaw<'env, Unknown<'env>>> {
+        let execution = self
+            .ffi
+            .admit(FfiLane::Command, boundary::SMALL_ALLOWANCE)
+            .map_err(binding_error)?;
+        let context_id = boundary::bounded_string(context_id, 20, "context ID")?;
+        let host = Arc::clone(&self.host);
+        boundary::spawn_published(env, execution, self.publications.clone(), async move {
+            host.context_unroute_all(&context_id, wait).await
         })
     }
 }
@@ -787,6 +1066,37 @@ impl NativeSession {
         let call_id = parse_call_id(call_id)?;
         let url = boundary::bounded_string(url, 64 * 1024, "route fallback URL")?;
         let options = RouteContinue::new(Some(url), None, None, None).map_err(binding_error)?;
+        let host = Arc::clone(&self.host);
+        boundary::spawn_published(env, execution, self.publications.clone(), async move {
+            host.page_route_fallback(call_id, options).await
+        })
+    }
+
+    #[napi]
+    #[allow(clippy::too_many_arguments)]
+    pub fn page_route_fallback_with_overrides<'env>(
+        &self,
+        env: &'env Env,
+        call_id: JsString<'env>,
+        url: Option<JsString<'env>>,
+        method: Option<JsString<'env>>,
+        headers: Option<Unknown<'env>>,
+        post_data: Option<Buffer>,
+    ) -> napi::Result<PromiseRaw<'env, Unknown<'env>>> {
+        let execution = self
+            .ffi
+            .admit(FfiLane::Command, ROUTE_OVERRIDE_ALLOWANCE)
+            .map_err(binding_error)?;
+        let call_id = parse_call_id(call_id)?;
+        let url = url
+            .map(|value| boundary::bounded_string(value, 64 * 1024, "route fallback URL"))
+            .transpose()?;
+        let method = method
+            .map(|value| boundary::bounded_string(value, 64, "route fallback method"))
+            .transpose()?;
+        let headers = headers.map(bounded_route_headers).transpose()?;
+        let post_data = post_data.map(|value| value.to_vec());
+        let options = RouteContinue::new(url, method, headers, post_data).map_err(binding_error)?;
         let host = Arc::clone(&self.host);
         boundary::spawn_published(env, execution, self.publications.clone(), async move {
             host.page_route_fallback(call_id, options).await

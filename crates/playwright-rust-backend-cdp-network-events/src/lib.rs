@@ -35,6 +35,38 @@ pub enum CdpNetworkEventEffect {
     RequestFailed(Event<NetworkRequestFailed>),
 }
 
+#[cfg(feature = "response-connection-details")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CdpResponseConnectionDetails {
+    http_version: Box<str>,
+    server_ip_address: Option<Box<str>>,
+    server_port: Option<u16>,
+}
+
+#[cfg(feature = "response-connection-details")]
+impl CdpResponseConnectionDetails {
+    pub fn http_version(&self) -> &str {
+        &self.http_version
+    }
+
+    pub fn server_ip_address(&self) -> Option<&str> {
+        self.server_ip_address.as_deref()
+    }
+
+    pub const fn server_port(&self) -> Option<u16> {
+        self.server_port
+    }
+
+    pub fn retained_bytes(&self) -> usize {
+        std::mem::size_of::<Self>()
+            + self.http_version.len()
+            + self
+                .server_ip_address
+                .as_ref()
+                .map_or(0, |value| value.len())
+    }
+}
+
 #[cfg(feature = "request-frame")]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CdpRequestFrame {
@@ -69,8 +101,14 @@ impl CdpResponseSecurityDetails {
     pub fn valid_from_seconds(&self) -> f64 {
         self.valid_from_micros as f64 / 1_000_000.0
     }
+    pub const fn valid_from_micros(&self) -> i64 {
+        self.valid_from_micros
+    }
     pub fn valid_to_seconds(&self) -> f64 {
         self.valid_to_micros as f64 / 1_000_000.0
+    }
+    pub const fn valid_to_micros(&self) -> i64 {
+        self.valid_to_micros
     }
     pub fn retained_bytes(&self) -> usize {
         std::mem::size_of::<Self>()
@@ -105,15 +143,34 @@ impl CdpNetworkEventEffect {
 #[derive(Default)]
 pub struct CdpNetworkEventBatch {
     page: Option<ObjectId>,
+    service_worker: Option<CdpServiceWorkerNetworkSource>,
     session_id: Option<Box<str>>,
     native_request_id: Option<Box<str>>,
     lifecycle: Vec<ControlMessage>,
     events: Vec<CdpNetworkEventEffect>,
     #[cfg(feature = "request-frame")]
     request_frames: Vec<(ObjectId, CdpRequestFrame)>,
+    #[cfg(feature = "response-connection-details")]
+    response_connections: Vec<(ObjectId, CdpResponseConnectionDetails)>,
     #[cfg(feature = "response-security-details")]
     response_security: Vec<(ObjectId, CdpResponseSecurityDetails)>,
     retirement: Vec<ControlMessage>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CdpServiceWorkerNetworkSource {
+    context: ObjectId,
+    worker_id: Box<str>,
+}
+
+impl CdpServiceWorkerNetworkSource {
+    pub const fn context(&self) -> ObjectId {
+        self.context
+    }
+
+    pub fn worker_id(&self) -> &str {
+        &self.worker_id
+    }
 }
 
 const ACTIVE_REQUEST_BOOKKEEPING_BYTES: usize = std::mem::size_of::<String>()
@@ -129,6 +186,14 @@ const SUPPRESSED_DATA_REQUEST_BOOKKEEPING_BYTES: usize = std::mem::size_of::<(St
 const LARGE_POST_DATA_REQUEST_BOOKKEEPING_BYTES: usize =
     std::mem::size_of::<(String, String)>() + (3 * std::mem::size_of::<usize>());
 const ADAPTER_BOOKKEEPING_BYTES: usize = 128 + std::mem::size_of::<BTreeSet<(String, String)>>();
+#[cfg(feature = "response-connection-details")]
+const MAX_CONNECTION_FIELD_BYTES: usize = 4096;
+#[cfg(feature = "response-connection-details")]
+const MAX_CONNECTION_DETAILS_BYTES: usize =
+    std::mem::size_of::<CdpResponseConnectionDetails>() + 2 * MAX_CONNECTION_FIELD_BYTES;
+#[cfg(feature = "response-connection-details")]
+const CONNECTION_ENTRY_BOOKKEEPING_BYTES: usize =
+    std::mem::size_of::<ObjectId>() + 3 * std::mem::size_of::<usize>();
 #[cfg(feature = "response-security-details")]
 const MAX_SECURITY_FIELD_BYTES: usize = 4096;
 #[cfg(feature = "response-security-details")]
@@ -328,6 +393,18 @@ impl CdpNetworkEventProductionProfile {
             .ok_or(CdpNetworkEventError::SizeOverflow {
                 field: "request frame state bytes",
             })?;
+        #[cfg(feature = "response-connection-details")]
+        let maximum_retained_bytes = maximum_retained_bytes
+            .checked_add(
+                (MAX_CONNECTION_DETAILS_BYTES + CONNECTION_ENTRY_BOOKKEEPING_BYTES)
+                    .checked_mul(limits.active_requests)
+                    .ok_or(CdpNetworkEventError::SizeOverflow {
+                        field: "response connection state bytes",
+                    })?,
+            )
+            .ok_or(CdpNetworkEventError::SizeOverflow {
+                field: "response connection state bytes",
+            })?;
         #[cfg(feature = "response-security-details")]
         let maximum_retained_bytes = maximum_retained_bytes
             .checked_add(
@@ -502,6 +579,14 @@ impl CdpNetworkEventBatch {
             .find_map(|(candidate, frame)| (*candidate == request).then_some(frame))
     }
 
+    #[cfg(feature = "response-connection-details")]
+    pub fn response_connection(&self, response: ObjectId) -> Option<&CdpResponseConnectionDetails> {
+        self.response_connections
+            .iter()
+            .rev()
+            .find_map(|(candidate, details)| (*candidate == response).then_some(details))
+    }
+
     #[cfg(feature = "response-security-details")]
     pub fn response_security(&self, response: ObjectId) -> Option<&CdpResponseSecurityDetails> {
         self.response_security
@@ -525,12 +610,47 @@ impl CdpNetworkEventBatch {
         self.page
     }
 
+    pub fn service_worker(&self) -> Option<&CdpServiceWorkerNetworkSource> {
+        self.service_worker.as_ref()
+    }
+
+    pub fn owner(&self) -> Option<ObjectId> {
+        self.page.or_else(|| {
+            self.service_worker
+                .as_ref()
+                .map(CdpServiceWorkerNetworkSource::context)
+        })
+    }
+
+    pub fn mark_service_worker(&mut self, context: ObjectId, worker_id: &str) {
+        self.page = None;
+        self.service_worker = Some(CdpServiceWorkerNetworkSource {
+            context,
+            worker_id: worker_id.into(),
+        });
+    }
+
     /// Constructs a cleanup-only batch for one retired related native
     /// session. It publishes no semantic event, but preserves the owning Page
     /// so the composition driver can keep its publication barrier exact.
     pub fn from_retirement(page: ObjectId, retirement: Vec<ControlMessage>) -> Self {
         Self {
             page: (!retirement.is_empty()).then_some(page),
+            retirement,
+            ..Self::default()
+        }
+    }
+
+    pub fn from_service_worker_retirement(
+        context: ObjectId,
+        worker_id: &str,
+        retirement: Vec<ControlMessage>,
+    ) -> Self {
+        Self {
+            service_worker: (!retirement.is_empty()).then(|| CdpServiceWorkerNetworkSource {
+                context,
+                worker_id: worker_id.into(),
+            }),
             retirement,
             ..Self::default()
         }
@@ -574,6 +694,8 @@ pub struct CdpNetworkEventAdapter {
     observed_frames: BTreeSet<String>,
     #[cfg(feature = "request-frame")]
     request_frames: BTreeMap<ObjectId, CdpRequestFrame>,
+    #[cfg(feature = "response-connection-details")]
+    response_connections: BTreeMap<ObjectId, CdpResponseConnectionDetails>,
     #[cfg(feature = "response-security-details")]
     response_security: BTreeMap<ObjectId, CdpResponseSecurityDetails>,
     _resource: Option<ResourceLease>,
@@ -614,6 +736,8 @@ impl CdpNetworkEventAdapter {
             observed_frames: BTreeSet::new(),
             #[cfg(feature = "request-frame")]
             request_frames: BTreeMap::new(),
+            #[cfg(feature = "response-connection-details")]
+            response_connections: BTreeMap::new(),
             #[cfg(feature = "response-security-details")]
             response_security: BTreeMap::new(),
             _resource: None,
@@ -643,6 +767,25 @@ impl CdpNetworkEventAdapter {
         adapter.ordinary_post_data_bytes = profile.ordinary_post_data_bytes();
         adapter.large_post_data_limit = profile.large_post_data_requests();
         adapter._resource = Some(resource);
+        Ok(adapter)
+    }
+
+    /// Builds a production-configured adapter whose retained collections use
+    /// allocator failure as their aggregate boundary.
+    ///
+    /// Individual protocol fields remain bounded by `profile.limits()`. This
+    /// only removes a fabricated aggregate adapter-count budget from callers
+    /// that intentionally select allocator-backed dynamic registries.
+    pub fn new_allocator_backed(
+        page: ObjectId,
+        session_id: String,
+        object_ids: Arc<dyn ObjectIdSource>,
+        profile: CdpNetworkEventProductionProfile,
+    ) -> Result<Self, CdpNetworkEventProductionError> {
+        let mut adapter = Self::new(page, session_id, object_ids, profile.limits())
+            .map_err(CdpNetworkEventProductionError::Configuration)?;
+        adapter.ordinary_post_data_bytes = profile.ordinary_post_data_bytes();
+        adapter.large_post_data_limit = profile.large_post_data_requests();
         Ok(adapter)
     }
 
@@ -803,10 +946,44 @@ impl CdpNetworkEventAdapter {
             }
             _ => None,
         };
+        #[cfg(feature = "response-connection-details")]
+        let event_connection = match event.method.as_str() {
+            "Network.responseReceived" => {
+                let request_id =
+                    required_string(event, "requestId", self.tracker.limits().native_id_bytes)?;
+                if self.tracker.has_active_request_in_scope(scope, &request_id) {
+                    event
+                        .params
+                        .get("response")
+                        .map(parse_response_connection)
+                        .transpose()?
+                } else {
+                    None
+                }
+            }
+            "Network.requestWillBeSent" => {
+                let request_id =
+                    required_string(event, "requestId", self.tracker.limits().native_id_bytes)?;
+                if self.tracker.has_active_request_in_scope(scope, &request_id) {
+                    event
+                        .params
+                        .get("redirectResponse")
+                        .map(parse_response_connection)
+                        .transpose()?
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        };
         let effects = match event.method.as_str() {
             "Network.requestWillBeSent" => self.request_will_be_sent(event, scope)?,
             "Network.requestWillBeSentExtraInfo" => {
                 self.request_will_be_sent_extra_info(event, scope)?;
+                Vec::new()
+            }
+            "Network.responseReceivedExtraInfo" => {
+                self.response_received_extra_info(event, scope)?;
                 Vec::new()
             }
             #[cfg(feature = "request-timing")]
@@ -836,6 +1013,8 @@ impl CdpNetworkEventAdapter {
             effects,
             #[cfg(feature = "request-frame")]
             new_request_frame,
+            #[cfg(feature = "response-connection-details")]
+            event_connection,
             #[cfg(feature = "response-security-details")]
             event_security,
         );
@@ -924,6 +1103,9 @@ impl CdpNetworkEventAdapter {
                 self.tracker
                     .discard_pending_request_headers_in_scope(scope, &request_id)
                     .map_err(CdpNetworkEventError::Lifecycle)?;
+                self.tracker
+                    .discard_pending_response_headers_in_scope(scope, &request_id)
+                    .map_err(CdpNetworkEventError::Lifecycle)?;
                 self.suppressed_data_requests.insert(
                     (scope.to_owned(), request_id),
                     SuppressedDataRequestState::Active,
@@ -931,6 +1113,7 @@ impl CdpNetworkEventAdapter {
                 Ok(true)
             }
             "Network.requestWillBeSentExtraInfo"
+            | "Network.responseReceivedExtraInfo"
             | "Network.responseReceived"
             | "Network.loadingFinished"
             | "Network.loadingFailed"
@@ -951,6 +1134,9 @@ impl CdpNetworkEventAdapter {
                 ) {
                     self.tracker
                         .discard_pending_request_headers_in_scope(scope, request_id)
+                        .map_err(CdpNetworkEventError::Lifecycle)?;
+                    self.tracker
+                        .discard_pending_response_headers_in_scope(scope, request_id)
                         .map_err(CdpNetworkEventError::Lifecycle)?;
                     if let Some((_, state)) = self.suppressed_data_requests.iter_mut().find(
                         |((candidate_scope, candidate_id), _)| {
@@ -1041,6 +1227,8 @@ impl CdpNetworkEventAdapter {
         self.large_post_data_requests.clear();
         #[cfg(feature = "request-frame")]
         self.request_frames.clear();
+        #[cfg(feature = "response-connection-details")]
+        self.response_connections.clear();
         #[cfg(feature = "response-security-details")]
         self.response_security.clear();
         cleanup
@@ -1055,6 +1243,10 @@ impl CdpNetworkEventAdapter {
         #[cfg(feature = "request-frame")]
         for (request, _) in &drained {
             self.request_frames.remove(request);
+        }
+        #[cfg(feature = "response-connection-details")]
+        for (request, _) in &drained {
+            self.response_connections.remove(request);
         }
         #[cfg(feature = "response-security-details")]
         for (request, _) in &drained {
@@ -1095,7 +1287,12 @@ impl CdpNetworkEventAdapter {
         )?;
         let resource_type = optional_string(event, "type", limits.resource_type_bytes)?
             .unwrap_or_else(|| "Other".to_owned());
-        let headers = parse_headers(request.get("headers"), "Network.requestWillBeSent", limits)?;
+        let headers = parse_headers(
+            request.get("headers"),
+            "Network.requestWillBeSent",
+            limits,
+            false,
+        )?;
         let post_data = parse_post_data(request, limits.post_data_bytes)?;
         let large_post_data = post_data
             .as_ref()
@@ -1166,9 +1363,28 @@ impl CdpNetworkEventAdapter {
             event.params.get("headers"),
             "Network.requestWillBeSentExtraInfo",
             limits,
+            true,
         )?;
         self.tracker
             .request_will_be_sent_extra_info_in_scope(scope, &request_id, headers)
+            .map_err(CdpNetworkEventError::Lifecycle)
+    }
+
+    fn response_received_extra_info(
+        &mut self,
+        event: &CdpEvent,
+        scope: &str,
+    ) -> Result<(), CdpNetworkEventError> {
+        let limits = self.tracker.limits();
+        let request_id = required_string(event, "requestId", limits.native_id_bytes)?;
+        let headers = parse_headers(
+            event.params.get("headers"),
+            "Network.responseReceivedExtraInfo",
+            limits,
+            true,
+        )?;
+        self.tracker
+            .response_received_extra_info_in_scope(scope, &request_id, headers)
             .map_err(CdpNetworkEventError::Lifecycle)
     }
 
@@ -1294,6 +1510,9 @@ impl CdpNetworkEventAdapter {
         &mut self,
         effects: Vec<NetworkLifecycleEffect>,
         #[cfg(feature = "request-frame")] new_request_frame: Option<CdpRequestFrame>,
+        #[cfg(feature = "response-connection-details")] event_connection: Option<
+            CdpResponseConnectionDetails,
+        >,
         #[cfg(feature = "response-security-details")] event_security: Option<
             CdpResponseSecurityDetails,
         >,
@@ -1302,6 +1521,8 @@ impl CdpNetworkEventAdapter {
         let mut events = Vec::with_capacity(effects.len());
         #[cfg(feature = "request-frame")]
         let mut request_frames = Vec::with_capacity(effects.len());
+        #[cfg(feature = "response-connection-details")]
+        let mut response_connections = Vec::with_capacity(effects.len());
         #[cfg(feature = "response-security-details")]
         let mut response_security = Vec::with_capacity(effects.len());
         let mut retirement = Vec::with_capacity(effects.len());
@@ -1341,6 +1562,12 @@ impl CdpNetworkEventAdapter {
                     )));
                 }
                 NetworkLifecycleEffect::Response(payload) => {
+                    #[cfg(feature = "response-connection-details")]
+                    if let Some(details) = event_connection.as_ref() {
+                        self.response_connections
+                            .insert(payload.request, details.clone());
+                        response_connections.push((payload.response, details.clone()));
+                    }
                     #[cfg(feature = "response-security-details")]
                     if let Some(details) = event_security.as_ref() {
                         self.response_security
@@ -1357,6 +1584,13 @@ impl CdpNetworkEventAdapter {
                     )));
                 }
                 NetworkLifecycleEffect::RequestFinished(payload) => {
+                    #[cfg(feature = "response-connection-details")]
+                    if let (Some(response), Some(details)) = (
+                        payload.response.as_ref(),
+                        self.response_connections.remove(&payload.request.request),
+                    ) {
+                        response_connections.push((response.response, details));
+                    }
                     #[cfg(feature = "response-security-details")]
                     if let (Some(response), Some(details)) = (
                         payload.response.as_ref(),
@@ -1374,6 +1608,13 @@ impl CdpNetworkEventAdapter {
                     )));
                 }
                 NetworkLifecycleEffect::RequestFailed(payload) => {
+                    #[cfg(feature = "response-connection-details")]
+                    if let (Some(response), Some(details)) = (
+                        payload.response.as_ref(),
+                        self.response_connections.remove(&payload.request.request),
+                    ) {
+                        response_connections.push((response.response, details));
+                    }
                     #[cfg(feature = "response-security-details")]
                     if let (Some(response), Some(details)) = (
                         payload.response.as_ref(),
@@ -1394,12 +1635,15 @@ impl CdpNetworkEventAdapter {
         }
         CdpNetworkEventBatch {
             page: Some(self.page),
+            service_worker: None,
             session_id: None,
             native_request_id: None,
             lifecycle,
             events,
             #[cfg(feature = "request-frame")]
             request_frames,
+            #[cfg(feature = "response-connection-details")]
+            response_connections,
             #[cfg(feature = "response-security-details")]
             response_security,
             retirement,
@@ -1611,6 +1855,7 @@ fn parse_headers(
     value: Option<&serde_json::Value>,
     method: &'static str,
     limits: NetworkLifecycleLimits,
+    split_newlines: bool,
 ) -> Result<Vec<HttpHeader>, CdpNetworkEventError> {
     let Some(value) = value else {
         return Ok(Vec::new());
@@ -1621,13 +1866,7 @@ fn parse_headers(
             method,
             field: "headers",
         })?;
-    if object.len() > limits.header_count {
-        return Err(CdpNetworkEventError::FieldLimitExceeded {
-            field: "header count",
-            actual: object.len(),
-            limit: limits.header_count,
-        });
-    }
+    let mut headers = Vec::new();
     let mut bytes = 0_usize;
     for (name, value) in object {
         if name.is_empty() {
@@ -1640,32 +1879,44 @@ fn parse_headers(
             method,
             field: "header value",
         })?;
-        bytes = bytes
-            .checked_add(name.len())
-            .and_then(|total| total.checked_add(value.len()))
-            .ok_or(CdpNetworkEventError::SizeOverflow {
-                field: "header bytes",
-            })?;
-        if bytes > limits.header_bytes {
-            return Err(CdpNetworkEventError::FieldLimitExceeded {
-                field: "header bytes",
-                actual: bytes,
-                limit: limits.header_bytes,
-            });
+        let mut append = |part: &str| -> Result<(), CdpNetworkEventError> {
+            let count = headers
+                .len()
+                .checked_add(1)
+                .ok_or(CdpNetworkEventError::SizeOverflow {
+                    field: "header count",
+                })?;
+            if count > limits.header_count {
+                return Err(CdpNetworkEventError::FieldLimitExceeded {
+                    field: "header count",
+                    actual: count,
+                    limit: limits.header_count,
+                });
+            }
+            bytes = bytes
+                .checked_add(name.len())
+                .and_then(|total| total.checked_add(part.len()))
+                .ok_or(CdpNetworkEventError::SizeOverflow {
+                    field: "header bytes",
+                })?;
+            if bytes > limits.header_bytes {
+                return Err(CdpNetworkEventError::FieldLimitExceeded {
+                    field: "header bytes",
+                    actual: bytes,
+                    limit: limits.header_bytes,
+                });
+            }
+            headers.push(HttpHeader::new(name, part));
+            Ok(())
+        };
+        if split_newlines {
+            for part in value.split('\n') {
+                append(part.trim())?;
+            }
+        } else {
+            append(value)?;
         }
     }
-    let mut headers = object
-        .iter()
-        .map(|(name, value)| {
-            HttpHeader::new(
-                name.clone(),
-                value
-                    .as_str()
-                    .expect("header values were validated")
-                    .to_owned(),
-            )
-        })
-        .collect::<Vec<_>>();
     headers.sort_by(|left, right| left.name.cmp(&right.name));
     headers.shrink_to_fit();
     Ok(headers)
@@ -1716,7 +1967,7 @@ fn parse_response_value(
         "Network response",
         limits.status_text_bytes,
     )?;
-    let headers = parse_headers(object.get("headers"), "Network response", limits)?;
+    let headers = parse_headers(object.get("headers"), "Network response", limits, false)?;
     let from_service_worker = object
         .get("fromServiceWorker")
         .map(|value| {
@@ -1736,6 +1987,72 @@ fn parse_response_value(
         None => response,
     };
     Ok(response)
+}
+
+#[cfg(feature = "response-connection-details")]
+fn parse_response_connection(
+    value: &serde_json::Value,
+) -> Result<CdpResponseConnectionDetails, CdpNetworkEventError> {
+    let response = value
+        .as_object()
+        .ok_or(CdpNetworkEventError::InvalidEvent {
+            method: "Network response",
+            field: "response",
+        })?;
+    let raw_protocol = response
+        .get("protocol")
+        .map(|value| {
+            value
+                .as_str()
+                .ok_or(CdpNetworkEventError::InvalidEvent {
+                    method: "Network response",
+                    field: "protocol",
+                })
+                .and_then(|value| bounded_string("protocol", value, MAX_CONNECTION_FIELD_BYTES))
+        })
+        .transpose()?;
+    let http_version = match raw_protocol.as_deref() {
+        Some("http/1.1") | None => "HTTP/1.1".to_owned(),
+        Some("h2") => "HTTP/2.0".to_owned(),
+        Some(value) => value.to_owned(),
+    };
+    let server_ip_address = response
+        .get("remoteIPAddress")
+        .map(|value| {
+            value
+                .as_str()
+                .ok_or(CdpNetworkEventError::InvalidEvent {
+                    method: "Network response",
+                    field: "remoteIPAddress",
+                })
+                .and_then(|value| {
+                    bounded_string("remoteIPAddress", value, MAX_CONNECTION_FIELD_BYTES)
+                })
+        })
+        .transpose()?;
+    let server_port = response
+        .get("remotePort")
+        .map(|value| {
+            value
+                .as_u64()
+                .and_then(|value| u16::try_from(value).ok())
+                .ok_or(CdpNetworkEventError::InvalidEvent {
+                    method: "Network response",
+                    field: "remotePort",
+                })
+        })
+        .transpose()?;
+    let (server_ip_address, server_port) = match (server_ip_address, server_port) {
+        (Some(address), Some(port)) if !address.is_empty() => {
+            (Some(address.into_boxed_str()), Some(port))
+        }
+        _ => (None, None),
+    };
+    Ok(CdpResponseConnectionDetails {
+        http_version: http_version.into_boxed_str(),
+        server_ip_address,
+        server_port,
+    })
 }
 
 #[cfg(feature = "response-security-details")]
@@ -1969,6 +2286,7 @@ fn event_method(event: &CdpEvent) -> &'static str {
     match event.method.as_str() {
         "Network.requestWillBeSent" => "Network.requestWillBeSent",
         "Network.requestWillBeSentExtraInfo" => "Network.requestWillBeSentExtraInfo",
+        "Network.responseReceivedExtraInfo" => "Network.responseReceivedExtraInfo",
         "Network.requestServedFromCache" => "Network.requestServedFromCache",
         "Network.responseReceived" => "Network.responseReceived",
         "Network.loadingFinished" => "Network.loadingFinished",
@@ -2955,6 +3273,66 @@ mod tests {
     }
 
     #[test]
+    fn response_extra_info_replaces_terminal_headers_and_splits_repeated_values() {
+        // Arrange
+        let mut adapter = adapter(1);
+        adapter
+            .map_event(&request_event("native-1", "https://example.test/data"))
+            .expect("request should start");
+        adapter
+            .map_event(&event(
+                "Network.responseReceived",
+                json!({
+                    "requestId": "native-1",
+                    "response": {
+                        "url": "https://example.test/data",
+                        "status": 200,
+                        "statusText": "OK",
+                        "headers": {"set-cookie": "provisional=1"}
+                    }
+                }),
+            ))
+            .expect("response should map");
+        let extra_info = event(
+            "Network.responseReceivedExtraInfo",
+            json!({
+                "requestId": "native-1",
+                "headers": {"set-cookie": "first=1\nsecond=2", "x-test": "raw"}
+            }),
+        );
+
+        // Act
+        let extra_batch = adapter
+            .map_event(&extra_info)
+            .expect("response extra info should map");
+        let finished = adapter
+            .map_event(&event(
+                "Network.loadingFinished",
+                json!({"requestId": "native-1", "encodedDataLength": 42}),
+            ))
+            .expect("request should finish");
+
+        // Assert
+        assert!(extra_batch.is_empty());
+        let CdpNetworkEventEffect::RequestFinished(finished) = &finished.events()[0] else {
+            panic!("terminal event should be request-finished");
+        };
+        let headers = &finished
+            .payload()
+            .response
+            .as_ref()
+            .expect("terminal response should exist")
+            .headers;
+        assert_eq!(headers.len(), 3);
+        assert_eq!(headers[0].name, "set-cookie");
+        assert_eq!(headers[0].value, "first=1");
+        assert_eq!(headers[1].name, "set-cookie");
+        assert_eq!(headers[1].value, "second=2");
+        assert_eq!(headers[2].name, "x-test");
+        assert_eq!(headers[2].value, "raw");
+    }
+
+    #[test]
     fn request_extra_info_before_request_is_correlated_to_initial_snapshot() {
         // Arrange
         let mut adapter = adapter(1);
@@ -3360,6 +3738,56 @@ mod tests {
         assert_eq!(next.payload().request, ObjectId::new(12));
         assert_eq!(next.payload().redirected_from, Some(ObjectId::new(10)));
         assert_eq!(adapter.active_request_count(), 1);
+    }
+
+    #[cfg(feature = "response-connection-details")]
+    #[test]
+    fn response_connection_details_normalize_http_version_and_survive_terminal_event() {
+        // Arrange
+        let mut adapter = adapter(1);
+        adapter
+            .map_event(&request_event("connection", "https://example.test/"))
+            .expect("request should start");
+        let response = event(
+            "Network.responseReceived",
+            json!({
+                "requestId": "connection",
+                "response": {
+                    "url": "https://example.test/",
+                    "status": 200,
+                    "statusText": "OK",
+                    "headers": {},
+                    "protocol": "h2",
+                    "remoteIPAddress": "203.0.113.9",
+                    "remotePort": 443
+                }
+            }),
+        );
+        let finished = event(
+            "Network.loadingFinished",
+            json!({"requestId": "connection", "encodedDataLength": 12}),
+        );
+
+        // Act
+        let response_batch = adapter.map_event(&response).expect("response should map");
+        let terminal_batch = adapter.map_event(&finished).expect("terminal should map");
+        let CdpNetworkEventEffect::Response(response) = &response_batch.events()[0] else {
+            panic!("response event should be typed");
+        };
+        let response_id = response.payload().response;
+        let details = response_batch
+            .response_connection(response_id)
+            .expect("connection details should exist");
+
+        // Assert
+        assert_eq!(details.http_version(), "HTTP/2.0");
+        assert_eq!(details.server_ip_address(), Some("203.0.113.9"));
+        assert_eq!(details.server_port(), Some(443));
+        assert_eq!(
+            terminal_batch.response_connection(response_id),
+            Some(details)
+        );
+        assert!(adapter.response_connections.is_empty());
     }
 
     #[cfg(feature = "response-security-details")]

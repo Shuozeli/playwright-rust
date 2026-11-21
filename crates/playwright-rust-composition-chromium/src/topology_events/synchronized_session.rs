@@ -64,7 +64,7 @@ impl ChromiumTopologyEventDriver {
                     true,
                     self.page_discovery.is_some(),
                     true,
-                    self.auto_attach_target_types(),
+                    self.nested_auto_attach_target_types(),
                 )
                 .await?;
         }

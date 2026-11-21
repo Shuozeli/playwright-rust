@@ -178,6 +178,11 @@ runtime-tokio = ["runtime", "dep:playwright-rust-runtime-tokio"]
 transport = ["core", "dep:playwright-rust-transport"]
 transport-tokio = ["transport", "dep:playwright-rust-transport-tokio"]
 tokio = ["runtime-tokio", "transport-tokio"]
+remote-cdp = ["dep:playwright-rust-remote-cdp"]
+cdp-handshake-headers = [
+    "remote-cdp",
+    "playwright-rust-remote-cdp/cdp-handshake-headers",
+]
 
 [dependencies]
 playwright-rust-core = { path = "../playwright-rust-core", version = "0.1.0", optional = true }
@@ -231,3 +236,4 @@ playwright-rust-runtime = { path = "../playwright-rust-runtime", version = "0.1.
 playwright-rust-runtime-tokio = { path = "../playwright-rust-runtime-tokio", version = "0.1.0", optional = true }
 playwright-rust-transport = { path = "../playwright-rust-transport", version = "0.1.0", optional = true }
 playwright-rust-transport-tokio = { path = "../playwright-rust-transport-tokio", version = "0.1.0", optional = true }
+playwright-rust-remote-cdp = { path = "../playwright-rust-remote-cdp", version = "0.1.0", optional = true }

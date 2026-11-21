@@ -84,6 +84,12 @@ impl Setup {
         Self::with_capacity(2)
     }
     fn with_capacity(capacity: usize) -> Self {
+        Self::with_profile(Some(capacity))
+    }
+    fn allocator_backed() -> Self {
+        Self::with_profile(None)
+    }
+    fn with_profile(capacity: Option<usize>) -> Self {
         let profile = DragDataProfile::new(
             ResourceScope::extension(14, 61),
             DragDataLimits {
@@ -99,7 +105,10 @@ impl Setup {
             .combine_concurrent(DragListenerFactory::requirements(1).unwrap())
             .combine_concurrent(DragCaptureFactory::requirements())
             .combine_concurrent(DragMove::requirements(1).unwrap())
-            .combine_concurrent(DragPage::requirements(capacity).unwrap());
+            .combine_concurrent(match capacity {
+                Some(capacity) => DragPage::requirements(capacity).unwrap(),
+                None => DragPage::allocator_backed_requirements(),
+            });
         let bytes = req.class(ResourceClass::BackendStateBytes);
         let resources = ProductionResourceLedger::new(
             ResourceLimits::deny_all(req.scopes, req.leases).with_class(
@@ -122,13 +131,21 @@ impl Setup {
         let listeners =
             DragListenerFactory::new("page", ResourceScope::extension(14, 60), 1, &resources)
                 .unwrap();
-        let page = DragPage::new(
-            session.clone(),
-            captures.clone(),
-            ResourceScope::extension(14, 64),
-            capacity,
-            &resources,
-        )
+        let page = match capacity {
+            Some(capacity) => DragPage::new(
+                session.clone(),
+                captures.clone(),
+                ResourceScope::extension(14, 64),
+                capacity,
+                &resources,
+            ),
+            None => DragPage::new_allocator_backed(
+                session.clone(),
+                captures.clone(),
+                ResourceScope::extension(14, 64),
+                &resources,
+            ),
+        }
         .unwrap();
         Self {
             resources,
@@ -418,6 +435,26 @@ fn expanded_page_capacity_is_admitted_before_unpolled_owners_and_fully_released(
     assert_eq!(setup.resources.metrics().unwrap().active_leases, baseline);
     assert!(DragPage::requirements(0).is_err());
     assert!(DragPage::requirements(1025).is_err());
+}
+
+#[test]
+fn allocator_backed_page_has_no_playwright_visible_command_count_limit() {
+    // Arrange
+    let setup = Setup::allocator_backed();
+    let baseline = setup.resources.metrics().unwrap().active_leases;
+    let mut operations = Vec::new();
+    operations.try_reserve(1025).unwrap();
+
+    // Act
+    for _ in 0..1025 {
+        operations.push(setup.page.cancel().unwrap());
+    }
+
+    // Assert
+    assert_eq!(setup.page.active_operations(), 1025);
+    assert_eq!(setup.resources.metrics().unwrap().active_leases, baseline);
+    drop(operations);
+    assert_eq!(setup.page.active_operations(), 0);
 }
 
 #[tokio::test]

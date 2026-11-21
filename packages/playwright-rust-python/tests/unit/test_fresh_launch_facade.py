@@ -99,10 +99,10 @@ async def test_chromium_launch_returns_browser_with_no_default_context(
 
 
 @pytest.mark.asyncio
-async def test_launch_rejects_page_argument_before_engine_selection() -> None:
+async def test_launch_rejects_page_argument_before_native_selection() -> None:
     # Arrange
     environment = _Environment()
-    browser_type = AsyncBrowserType(cast(Any, _PlaywrightOwner(environment)), "webkit")
+    browser_type = AsyncBrowserType(cast(Any, _PlaywrightOwner(environment)))
 
     # Act
     with pytest.raises(Error, match="can not specify page"):
@@ -113,10 +113,10 @@ async def test_launch_rejects_page_argument_before_engine_selection() -> None:
 
 
 @pytest.mark.asyncio
-async def test_launch_rejects_nonexistent_executable_before_engine_selection() -> None:
+async def test_launch_rejects_nonexistent_executable_before_native_selection() -> None:
     # Arrange
     environment = _Environment()
-    browser_type = AsyncBrowserType(cast(Any, _PlaywrightOwner(environment)), "firefox")
+    browser_type = AsyncBrowserType(cast(Any, _PlaywrightOwner(environment)))
 
     # Act
     with pytest.raises(Error, match="executable doesn't exist"):
@@ -127,11 +127,10 @@ async def test_launch_rejects_nonexistent_executable_before_engine_selection() -
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("engine", ["chromium", "firefox", "webkit"])
-async def test_launch_rejects_non_string_proxy_server_before_native(engine: str) -> None:
+async def test_launch_rejects_non_string_proxy_server_before_native() -> None:
     # Arrange
     environment = _Environment()
-    browser_type = AsyncBrowserType(cast(Any, _PlaywrightOwner(environment)), engine)
+    browser_type = AsyncBrowserType(cast(Any, _PlaywrightOwner(environment)))
 
     # Act
     with pytest.raises(Error, match="proxy.server: expected string, got number"):
@@ -141,13 +140,12 @@ async def test_launch_rejects_non_string_proxy_server_before_native(engine: str)
     assert environment.calls == []
 
 
-@pytest.mark.parametrize("engine", ["chromium", "firefox", "webkit"])
-def test_sync_launch_rejects_non_string_proxy_server_before_native(engine: str) -> None:
+def test_sync_launch_rejects_non_string_proxy_server_before_native() -> None:
     # Arrange
     environment = _Environment()
     bridge = _LoopThread()
     browser_type = SyncBrowserType(
-        bridge, AsyncBrowserType(cast(Any, _PlaywrightOwner(environment)), engine)
+        bridge, AsyncBrowserType(cast(Any, _PlaywrightOwner(environment)))
     )
 
     # Act
@@ -162,26 +160,18 @@ def test_sync_launch_rejects_non_string_proxy_server_before_native(engine: str) 
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("engine", "message"),
-    [
-        ("chromium", "options are not installed: proxy"),
-        ("firefox", "only available for Chromium"),
-        ("webkit", "only available for Chromium"),
-    ],
-)
 async def test_launch_valid_proxy_keeps_existing_unsupported_boundary(
-    monkeypatch: pytest.MonkeyPatch, engine: str, message: str
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Arrange
     monkeypatch.setattr(
         "playwright_rust.async_api._native.selected_features", lambda: ["fresh-launch"]
     )
     environment = _Environment()
-    browser_type = AsyncBrowserType(cast(Any, _PlaywrightOwner(environment)), engine)
+    browser_type = AsyncBrowserType(cast(Any, _PlaywrightOwner(environment)))
 
     # Act
-    with pytest.raises(UnsupportedError, match=message):
+    with pytest.raises(UnsupportedError, match="options are not installed: proxy"):
         await browser_type.launch(proxy={"server": "http://proxy.example:8080"})
 
     # Assert
@@ -189,16 +179,8 @@ async def test_launch_valid_proxy_keeps_existing_unsupported_boundary(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("engine", "message"),
-    [
-        ("chromium", "fresh-launch profile"),
-        ("firefox", "only available for Chromium"),
-        ("webkit", "only available for Chromium"),
-    ],
-)
 async def test_launch_non_proxy_option_keeps_provider_gate_ordering(
-    monkeypatch: pytest.MonkeyPatch, engine: str, message: str
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Arrange
     def no_features() -> list[str]:
@@ -206,10 +188,10 @@ async def test_launch_non_proxy_option_keeps_provider_gate_ordering(
 
     monkeypatch.setattr("playwright_rust.async_api._native.selected_features", no_features)
     environment = _Environment()
-    browser_type = AsyncBrowserType(cast(Any, _PlaywrightOwner(environment)), engine)
+    browser_type = AsyncBrowserType(cast(Any, _PlaywrightOwner(environment)))
 
     # Act
-    with pytest.raises(UnsupportedError, match=message):
+    with pytest.raises(UnsupportedError, match="fresh-launch profile"):
         await browser_type.launch(slow_mo=5)
 
     # Assert

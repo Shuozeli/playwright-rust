@@ -36,6 +36,28 @@ fn fixture_with_writers(
         ledger,
     )
 }
+
+fn allocator_backed_fixture() -> (HeaderSettings, ProductionResourceLedger) {
+    let values =
+        HeaderProfile::new_allocator_backed(ResourceScope::extension(130, 8), 4, 128).unwrap();
+    let settings =
+        HeaderSettingsProfile::new_allocator_backed(ResourceScope::extension(130, 9)).unwrap();
+    let req = values
+        .requirements()
+        .unwrap()
+        .combine_concurrent(settings.requirements());
+    let mut limits = ResourceLimits::deny_all(req.scopes, req.leases);
+    for class in ResourceClass::ALL {
+        let bound = req.class(class);
+        limits = limits.with_class(class, bound.global, bound.per_scope);
+    }
+    let ledger = ProductionResourceLedger::new(limits, req).unwrap();
+    let pool = HeaderPool::new(values, &ledger).unwrap();
+    (
+        HeaderSettings::new(settings, pool, &ledger).unwrap(),
+        ledger,
+    )
+}
 fn h(value: &str) -> [HeaderRef<'_>; 1] {
     [HeaderRef { name: "X-A", value }]
 }
@@ -47,6 +69,26 @@ fn values(headers: &EffectiveHeaders) -> Vec<(&str, &str)> {
 }
 const CONTEXT: ObjectId = ObjectId::new(1);
 const PAGE: ObjectId = ObjectId::new(2);
+
+#[test]
+fn context_owned_target_resolves_context_headers_without_page_overrides() {
+    // Arrange
+    let (book, _) = fixture(1, 1, 8);
+    book.begin_context(CONTEXT, &h("context"))
+        .unwrap()
+        .commit()
+        .unwrap();
+    book.begin_page(CONTEXT, PAGE, &h("page"))
+        .unwrap()
+        .commit()
+        .unwrap();
+
+    // Act
+    let headers = book.effective_context(CONTEXT).unwrap();
+
+    // Assert
+    assert_eq!(values(&headers), vec![("X-A", "context")]);
+}
 
 #[test]
 fn concurrent_writer_profile_rejects_zero_overflow_and_charges_pending_storage() {
@@ -67,6 +109,58 @@ fn concurrent_writer_profile_rejects_zero_overflow_and_charges_pending_storage()
         profile.with_concurrent_writers(usize::MAX),
         Err(SettingsError::InvalidLimits)
     ));
+}
+
+#[test]
+fn allocator_backed_settings_grow_past_legacy_context_and_page_counts() {
+    // Arrange
+    let (book, ledger) = allocator_backed_fixture();
+
+    // Act
+    for id in 1..=129 {
+        let context = ObjectId::new(id);
+        let page = ObjectId::new(1_000 + id);
+        book.begin_context(context, &h("context"))
+            .unwrap()
+            .commit()
+            .unwrap();
+        book.begin_page(context, page, &h("page"))
+            .unwrap()
+            .commit()
+            .unwrap();
+    }
+    let pending: Vec<_> = (0..129)
+        .map(|offset| {
+            book.begin_page(
+                ObjectId::new(5_000),
+                ObjectId::new(6_000 + offset),
+                &h("pending"),
+            )
+            .unwrap()
+        })
+        .collect();
+    for update in pending {
+        update.commit().unwrap();
+    }
+
+    // Assert
+    assert!(
+        HeaderSettingsProfile::new_allocator_backed(ResourceScope::extension(130, 10))
+            .unwrap()
+            .allocator_backed()
+    );
+    assert_eq!(
+        values(
+            &book
+                .effective(ObjectId::new(129), ObjectId::new(1_129))
+                .unwrap()
+        ),
+        [("X-A", "page")]
+    );
+    drop(book);
+    for class in ResourceClass::ALL {
+        assert_eq!(ledger.metrics().unwrap().class(class).current, 0);
+    }
 }
 
 #[test]

@@ -230,3 +230,35 @@ fn target_closed_without_native_retirement_evidence_remains_a_failure() {
     assert!(fixture.routes.contains(ObjectId::new(10)).unwrap());
     assert_eq!(fixture.runtime.is_object_live(ObjectId::new(10)), Ok(true));
 }
+
+#[test]
+fn transport_closed_without_native_retirement_evidence_remains_a_failure() {
+    // Arrange
+    let fixture = fixture_with_failure(1, Some(FailureKind::TransportClosed));
+    let mut call = Box::pin(fixture.releases.release(ObjectId::new(10), None));
+
+    // Act
+    let result = poll_once(call.as_mut());
+
+    // Assert
+    assert!(matches!(result, Poll::Ready(Err(_))));
+    assert_eq!(fixture.releases.capacity.pending(), 0);
+    assert!(fixture.routes.contains(ObjectId::new(10)).unwrap());
+    assert_eq!(fixture.runtime.is_object_live(ObjectId::new(10)), Ok(true));
+}
+
+#[test]
+fn only_parent_or_transport_closure_can_wait_for_retirement_evidence() {
+    // Arrange
+    let ordinary = FailureKind::Backend;
+
+    // Act
+    let target_closed = retirement_evidence_can_supersede(FailureKind::TargetClosed);
+    let transport_closed = retirement_evidence_can_supersede(FailureKind::TransportClosed);
+    let backend = retirement_evidence_can_supersede(ordinary);
+
+    // Assert
+    assert!(target_closed);
+    assert!(transport_closed);
+    assert!(!backend);
+}

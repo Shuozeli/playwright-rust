@@ -2032,6 +2032,38 @@ impl CdpTopologyProductionProfile {
         })
     }
 
+    /// Uses allocator failure as the retained-object boundary while preserving
+    /// the browser-protocol native-identity byte limit.
+    pub fn new_allocator_backed(
+        native_id_bytes: usize,
+        resource_scope: ResourceScope,
+    ) -> Result<Self, CdpTopologyProductionError> {
+        if !matches!(resource_scope, ResourceScope::Extension { .. }) {
+            return Err(CdpTopologyProductionError::InvalidResourceScope { resource_scope });
+        }
+        Ok(Self {
+            limits: CdpTopologyLimits::new(
+                usize::MAX,
+                usize::MAX,
+                usize::MAX,
+                usize::MAX,
+                usize::MAX,
+                native_id_bytes,
+            ),
+            resource_scope,
+            maximum_retained_native_bytes: 0,
+            requirements: ResourceRequirements::none(),
+        })
+    }
+
+    const fn allocator_backed(self) -> bool {
+        self.limits.objects == usize::MAX
+            && self.limits.contexts == usize::MAX
+            && self.limits.pages == usize::MAX
+            && self.limits.frames == usize::MAX
+            && self.limits.worlds == usize::MAX
+    }
+
     pub const fn limits(self) -> CdpTopologyLimits {
         self.limits
     }
@@ -4595,7 +4627,7 @@ impl ProductionCdpTopology {
         let output = apply(&mut next)?;
         let actual = u64::try_from(next.retained_native_bytes())
             .map_err(|_| CdpTopologyProductionError::CapacityOverflow)?;
-        if actual > maximum {
+        if !self.profile.allocator_backed() && actual > maximum {
             return Err(CdpTopologyProductionError::RetainedBytesInvariant { actual, maximum });
         }
         if let Some(lease) = &mut next_lease {
@@ -4634,7 +4666,7 @@ impl ProductionCdpTopology {
         let output = apply(&mut next)?;
         let actual = u64::try_from(next.retained_native_bytes())
             .map_err(|_| CdpTopologyProductionError::CapacityOverflow)?;
-        if actual > maximum {
+        if !self.profile.allocator_backed() && actual > maximum {
             return Err(CdpTopologyProductionError::RetainedBytesInvariant { actual, maximum });
         }
         let transaction_id = self.next_transaction_id;

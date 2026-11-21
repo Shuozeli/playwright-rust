@@ -163,6 +163,42 @@ impl<E: ReservedCleanupExecutor> FileInputPreflightOperationService<E> {
         self.state.active.load(Ordering::Acquire)
     }
 
+    fn admit_owner(&self) -> Result<Owner, PrevalidationError> {
+        if !self.is_cleanup_healthy() {
+            return Err(UploadError::Unhealthy.into());
+        }
+        self.state
+            .active
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |count| {
+                count
+                    .checked_add(1)
+                    .filter(|next| self.profile.allocator_backed || *next <= self.profile.capacity)
+            })
+            .map_err(|_| UploadError::Capacity)?;
+        let mut owner = Owner {
+            state: self.state.clone(),
+            lease: None,
+            armed: false,
+        };
+        if !self.profile.allocator_backed {
+            owner.lease = Some(
+                self.ledger
+                    .reserve_many(
+                        self.profile.scope,
+                        &[
+                            ResourceRequest::new(ResourceClass::LiveObject, 1),
+                            ResourceRequest::new(
+                                ResourceClass::BackendStateBytes,
+                                self.profile.owner_bytes as u64,
+                            ),
+                        ],
+                    )
+                    .map_err(UploadError::Resource)?,
+            );
+        }
+        Ok(owner)
+    }
+
     pub fn prepare<R: CleanupReservation>(
         &self,
         element: OwnedElement<R>,
@@ -195,34 +231,7 @@ impl<E: ReservedCleanupExecutor> FileInputPreflightOperationService<E> {
         if !element.element().uses_settlement_release() {
             return Err(PrevalidationError::OrdinaryGroup);
         }
-        if !self.is_cleanup_healthy() {
-            return Err(UploadError::Unhealthy.into());
-        }
-        self.state
-            .active
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |count| {
-                (count < self.profile.capacity).then(|| count + 1)
-            })
-            .map_err(|_| UploadError::Capacity)?;
-        let mut owner = Owner {
-            state: self.state.clone(),
-            lease: None,
-            armed: false,
-        };
-        owner.lease = Some(
-            self.ledger
-                .reserve_many(
-                    self.profile.scope,
-                    &[
-                        ResourceRequest::new(ResourceClass::LiveObject, 1),
-                        ResourceRequest::new(
-                            ResourceClass::BackendStateBytes,
-                            self.profile.owner_bytes as u64,
-                        ),
-                    ],
-                )
-                .map_err(UploadError::Resource)?,
-        );
+        let owner = self.admit_owner()?;
         let admission = self.backend.admit()?;
         // Independent of OwnedElement's cleanup slot: this continuation must
         // retain the extra admission around element.release().await as well.

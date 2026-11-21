@@ -124,8 +124,73 @@ fn fixture(requests: usize) -> (CdpFrameLifecycle, Routes, ProductionResourceLed
     }
     (observer, routes, resources)
 }
+
+fn allocator_backed_fixture() -> (CdpFrameLifecycle, Routes) {
+    let lifecycle = FrameLifecycleProfile::new_allocator_backed(ResourceScope::extension(91, 1));
+    let profile = CdpFrameLifecycleProfile::new_allocator_backed(
+        lifecycle,
+        ResourceScope::extension(91, 2),
+        64,
+    )
+    .unwrap();
+    let resources =
+        ProductionResourceLedger::new(ResourceLimits::deny_all(0, 0), ResourceRequirements::none())
+            .unwrap();
+    (
+        CdpFrameLifecycle::new(profile, 1, &resources).unwrap(),
+        Routes {
+            left_session: "main",
+        },
+    )
+}
 fn state(observer: &CdpFrameLifecycle, frame: u64) -> LifecycleSnapshot {
     observer.snapshot(ObjectId::new(frame)).unwrap().unwrap()
+}
+
+#[test]
+fn allocator_backed_native_owner_grows_frames_requests_and_exact_ids() {
+    // Arrange
+    let (mut observer, routes) = allocator_backed_fixture();
+
+    // Act
+    observer
+        .attach(Duration::ZERO, ObjectId::new(1), None)
+        .unwrap();
+    for frame in 2..=130 {
+        observer
+            .attach(Duration::ZERO, ObjectId::new(frame), Some(ObjectId::new(1)))
+            .unwrap();
+    }
+    for request_id in 1..=257 {
+        apply(
+            &mut observer,
+            &routes,
+            0,
+            "main",
+            "Network.requestWillBeSent",
+            request(
+                Some("root"),
+                &format!("request-{request_id}"),
+                "loader",
+                "XHR",
+                &format!("https://fixture.test/{request_id}"),
+            ),
+        );
+    }
+
+    // Assert
+    assert_eq!(observer.frames.iter().flatten().count(), 130);
+    assert_eq!(observer.requests.iter().flatten().count(), 257);
+    assert_eq!(observer.lifecycle.frames.iter().flatten().count(), 130);
+    assert_eq!(observer.lifecycle.requests.iter().flatten().count(), 257);
+    assert_eq!(
+        observer.request_native_id(256, observer.requests[256].as_ref().unwrap()),
+        "request-257"
+    );
+    assert_eq!(
+        observer.request_session(256, observer.requests[256].as_ref().unwrap()),
+        "main"
+    );
 }
 
 #[test]

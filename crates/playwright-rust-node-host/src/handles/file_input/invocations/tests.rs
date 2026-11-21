@@ -23,7 +23,7 @@ fn registry() -> (Invocations, ProductionResourceLedger) {
 fn budget() -> FfiBudget {
     FfiBudget::new(FfiLimits {
         connects: 1,
-        commands: 9,
+        commands: 130,
         closes: 1,
         watches: 1,
         reserved_bytes: 4096,
@@ -50,7 +50,7 @@ fn poll_now<F: Future + ?Sized>(future: Pin<&mut F>) -> Poll<F::Output> {
 }
 
 #[test]
-fn requirements_cover_fixed_index_and_no_native_or_task_capacity() {
+fn requirements_cover_fixed_state_and_no_native_or_task_capacity() {
     // Arrange
     let requirements = Invocations::requirements();
 
@@ -90,24 +90,24 @@ fn omitted_resource_plan_rejects_before_index_allocation() {
 }
 
 #[test]
-fn eight_hooks_are_admitted_and_ninth_refusal_does_not_promote_or_revoke() {
+fn allocator_backed_hooks_admit_129_pending_invocations() {
     // Arrange
     let (registry, resources) = registry();
     let budget = budget();
-    let preparations: [_; 9] =
-        std::array::from_fn(|_| budget.prepare::<()>(FfiLane::Command, 16).unwrap());
-    let registrations: [_; CAPACITY] =
-        std::array::from_fn(|index| registry.register(preparations[index].revoker()).unwrap());
-    let before = budget.metrics().unwrap();
+    let preparations = (0..129)
+        .map(|_| budget.prepare::<()>(FfiLane::Command, 16).unwrap())
+        .collect::<Vec<_>>();
 
     // Act
-    let refused = registry.register(preparations[8].revoker());
+    let registrations = preparations
+        .iter()
+        .map(|preparation| registry.register(preparation.revoker()).unwrap())
+        .collect::<Vec<_>>();
 
     // Assert
-    assert!(matches!(refused, Err(HostError::ResourceExhausted(_))));
-    assert_eq!(budget.metrics().unwrap(), before);
-    assert_eq!(before.running, 0);
-    assert_eq!(before.pending, 9);
+    assert_eq!(registrations.len(), 129);
+    assert_eq!(budget.metrics().unwrap().running, 0);
+    assert_eq!(budget.metrics().unwrap().pending, 129);
     for receipt in &registrations {
         registry.check(receipt).unwrap();
     }
@@ -120,13 +120,12 @@ fn eight_hooks_are_admitted_and_ninth_refusal_does_not_promote_or_revoke() {
 }
 
 #[test]
-fn receipt_drop_reuses_one_slot_without_cancelling_its_ffi_entry() {
+fn receipt_drop_removes_only_its_generation_without_cancelling_ffi() {
     // Arrange
     let (registry, resources) = registry();
     let budget = budget();
     let preparation = budget.prepare::<()>(FfiLane::Command, 16).unwrap();
     let original = registry.register(preparation.revoker()).unwrap();
-    let slot = original.slot;
     let generation = original.generation;
 
     // Act
@@ -134,7 +133,6 @@ fn receipt_drop_reuses_one_slot_without_cancelling_its_ffi_entry() {
     let replacement = registry.register(preparation.revoker()).unwrap();
 
     // Assert
-    assert_eq!(replacement.slot, slot);
     assert!(replacement.generation > generation);
     registry.check(&replacement).unwrap();
     assert_eq!(budget.metrics().unwrap().pending, 1);
@@ -144,7 +142,7 @@ fn receipt_drop_reuses_one_slot_without_cancelling_its_ffi_entry() {
 }
 
 #[test]
-fn stale_generation_cannot_check_or_remove_a_reused_slot() {
+fn stale_generation_cannot_check_or_remove_a_later_entry() {
     // Arrange: duplicate only through private test access; public receipts are move-only.
     let (registry, resources) = registry();
     let budget = budget();
@@ -152,7 +150,6 @@ fn stale_generation_cannot_check_or_remove_a_reused_slot() {
     let original = registry.register(preparation.revoker()).unwrap();
     let stale = Registration {
         origin: original.origin.clone(),
-        slot: original.slot,
         generation: original.generation,
     };
     drop(original);
@@ -170,7 +167,7 @@ fn stale_generation_cannot_check_or_remove_a_reused_slot() {
 }
 
 #[test]
-fn equal_slot_and_generation_from_a_foreign_registry_are_rejected() {
+fn equal_generation_from_a_foreign_registry_is_rejected() {
     // Arrange
     let (registry, resources) = registry();
     let (foreign, foreign_resources) = self::registry();
@@ -178,10 +175,7 @@ fn equal_slot_and_generation_from_a_foreign_registry_are_rejected() {
     let preparation = budget.prepare::<()>(FfiLane::Command, 16).unwrap();
     let local = registry.register(preparation.revoker()).unwrap();
     let other = foreign.register(preparation.revoker()).unwrap();
-    assert_eq!(
-        (local.slot, local.generation),
-        (other.slot, other.generation)
-    );
+    assert_eq!(local.generation, other.generation);
 
     // Act
     let rejected = registry.check(&other);
@@ -211,7 +205,7 @@ fn generation_exhaustion_rejects_without_wrap_or_partial_insertion() {
     assert!(matches!(result, Err(HostError::ResourceExhausted(_))));
     let state = registry.0.state.lock().unwrap();
     assert_eq!(state.next_generation, u64::MAX);
-    assert!(state.entries.iter().all(Option::is_none));
+    assert!(state.entries.is_empty());
     drop(state);
     assert_eq!(budget.metrics().unwrap(), before);
     drop((preparation, registry));
@@ -465,7 +459,7 @@ fn poisoned_admission_fails_closed_but_cleanup_recovers_and_revokes() {
 }
 
 #[test]
-fn registration_drop_recovers_poison_and_removes_only_its_slot() {
+fn registration_drop_recovers_poison_and_removes_only_its_generation() {
     // Arrange
     let (registry, resources) = registry();
     let budget = budget();
@@ -490,8 +484,7 @@ fn registration_drop_recovers_poison_and_removes_only_its_slot() {
             .lock()
             .unwrap_or_else(|error| error.into_inner())
             .entries
-            .iter()
-            .all(Option::is_none)
+            .is_empty()
     );
     assert_eq!(budget.metrics().unwrap().pending, 1);
     drop((preparation, registry));

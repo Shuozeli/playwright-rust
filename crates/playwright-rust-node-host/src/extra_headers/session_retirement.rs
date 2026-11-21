@@ -1,11 +1,11 @@
 //! Request-scoped native close watches, fed by the existing ordered cursor.
 //! No session history, second subscriber, task, or default-on network domain.
-use super::{ID_BYTES, Installation, MAX_REQUESTS, MAX_ROUTES};
+use super::Installation;
 use crate::HostError;
 use futures_util::task::AtomicWaker;
 use playwright_rust_backend_cdp_topology::CdpTopology;
 use playwright_rust_cdp::{
-    CdpEvent,
+    CdpEvent, ServiceWorkerInitializationCommand,
     generated::{page, target},
 };
 use playwright_rust_core::ObjectId;
@@ -22,8 +22,6 @@ use std::{
     },
     task::{Context, Poll},
 };
-
-const MAX_WATCHES: usize = MAX_REQUESTS * MAX_ROUTES;
 
 pub(super) struct Watch {
     pub(super) session: String,
@@ -83,7 +81,7 @@ impl Drop for Closed<'_> {
 pub(super) struct Watches(Mutex<Vec<Weak<Watch>>>);
 impl Watches {
     pub(super) fn new() -> Self {
-        Self(Mutex::new(Vec::with_capacity(MAX_WATCHES)))
+        Self(Mutex::new(Vec::new()))
     }
     pub(super) fn insert(
         &self,
@@ -93,13 +91,9 @@ impl Watches {
     ) -> Result<Arc<Watch>, HostError> {
         let mut watches = self.0.lock().map_err(HostError::backend)?;
         watches.retain(|watch| watch.strong_count() != 0);
-        if watches.len() == MAX_WATCHES
-            || [session, main, target].iter().any(|id| id.len() > ID_BYTES)
-        {
-            return Err(HostError::ResourceExhausted(
-                "header session watch capacity exceeded".into(),
-            ));
-        }
+        watches
+            .try_reserve(1)
+            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
         let watch = Watch::new(session, main, target);
         watches.push(Arc::downgrade(&watch));
         Ok(watch)
@@ -117,12 +111,6 @@ impl Watches {
         });
         Ok(())
     }
-}
-pub(super) fn registry_bytes() -> usize {
-    MAX_WATCHES * std::mem::size_of::<Weak<Watch>>()
-}
-pub(super) fn route_bytes() -> usize {
-    std::mem::size_of::<Watch>() + 3 * ID_BYTES + 32
 }
 
 pub(crate) struct Observer {
@@ -151,6 +139,12 @@ impl ChromiumFrameEventObserver for Observer {
             .as_ref()
             .is_some_and(|frames| frames.retains_worker_targets())
     }
+
+    fn retains_service_worker_targets(&self) -> bool {
+        self.frames
+            .as_ref()
+            .is_some_and(|frames| frames.retains_service_worker_targets())
+    }
     fn retains_worker_session(&self, session: &str) -> bool {
         self.frames
             .as_ref()
@@ -161,6 +155,68 @@ impl ChromiumFrameEventObserver for Observer {
         self.frames
             .as_ref()
             .is_some_and(|frames| frames.enables_worker_network())
+    }
+    fn enables_service_worker_network(&self) -> bool {
+        self.frames.as_ref().is_some_and(|frames| {
+            frames.enables_service_worker_network() || frames.retains_service_worker_targets()
+        })
+    }
+    fn prepare_service_worker(
+        &self,
+        topology: &CdpTopology,
+        event: &CdpEvent,
+    ) -> FrameObservationResult {
+        if let Some(frames) = &self.frames {
+            frames.prepare_service_worker(topology, event)?;
+        }
+        Ok(())
+    }
+    fn service_worker_initialization_commands(
+        &self,
+        topology: &CdpTopology,
+        event: &CdpEvent,
+        commands: &mut Vec<ServiceWorkerInitializationCommand>,
+    ) -> FrameObservationResult {
+        if let Some(frames) = &self.frames {
+            frames.service_worker_initialization_commands(topology, event, commands)?;
+        }
+        let params: target::AttachedToTargetEvent = serde_json::from_value(event.params.clone())?;
+        if params.target_info.r#type != "service_worker" {
+            return Ok(());
+        }
+        let native_context = params
+            .target_info
+            .browser_context_id
+            .as_deref()
+            .unwrap_or("");
+        let context = if native_context.is_empty() {
+            topology
+                .default_context_route()
+                .map(|route| route.object_id())
+        } else {
+            topology.context_object_id(native_context).or_else(|| {
+                topology
+                    .default_context_route()
+                    .map(|route| route.object_id())
+            })
+        };
+        let Some(context) = context else {
+            return Ok(());
+        };
+        let Some(route) = topology.browser_context_route(context) else {
+            return Ok(());
+        };
+        if let Some(command) = self
+            .installation
+            .service_worker_initialization_command(context, route.ownership())
+            .map_err(|error| Box::new(error) as Box<dyn std::error::Error + Send + Sync>)?
+        {
+            commands
+                .try_reserve(1)
+                .map_err(|error| Box::new(error) as Box<dyn std::error::Error + Send + Sync>)?;
+            commands.push(command);
+        }
+        Ok(())
     }
     fn prepare_page(&self, topology: &CdpTopology, page: ObjectId) -> FrameObservationResult {
         if let Some(frames) = &self.frames {
@@ -332,18 +388,17 @@ mod tests {
     }
 
     #[test]
-    fn completed_requests_release_watch_capacity_without_retaining_session_history() {
+    fn watch_registry_grows_past_legacy_route_count_and_prunes_dead_history() {
         // Arrange
         let watches = Watches::new();
-        let held: Vec<_> = (0..MAX_WATCHES)
+        let held: Vec<_> = (0..129)
             .map(|_| watches.insert("session", "main", "target").unwrap())
             .collect();
-        assert!(matches!(
-            watches.insert("excess", "main", "target"),
-            Err(HostError::ResourceExhausted(_))
-        ));
+        let additional = watches.insert("additional", "main", "target").unwrap();
+        assert_eq!(watches.0.lock().unwrap().len(), 130);
         // Act
         drop(held);
+        drop(additional);
         let next = watches.insert("next", "main", "target").unwrap();
         // Assert
         assert_eq!(watches.0.lock().unwrap().len(), 1);
@@ -351,14 +406,14 @@ mod tests {
     }
 
     #[test]
-    fn route_id_limit_rejects_before_adding_a_watch() {
+    fn route_id_storage_is_allocator_backed() {
         // Arrange
         let watches = Watches::new();
-        let long = "x".repeat(ID_BYTES + 1);
+        let long = "x".repeat(4_096);
         // Act
-        let result = watches.insert("session", "main", &long);
+        let watch = watches.insert(&long, &long, &long).unwrap();
         // Assert
-        assert!(matches!(result, Err(HostError::ResourceExhausted(_))));
-        assert!(watches.0.lock().unwrap().is_empty());
+        assert_eq!(watch.session.len(), 4_096);
+        assert_eq!(watches.0.lock().unwrap().len(), 1);
     }
 }

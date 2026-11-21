@@ -31,18 +31,43 @@ pub trait DragMoveSource: Send + Sync {
     fn start(&self, movement: DragToggleFuture) -> Result<DragMove>;
 }
 const MAX_OPERATIONS: usize = 1024;
-/// Fixed storage, charged with the registry/driver; no per-round allocation.
 #[derive(Default)]
-struct SlotMask([u64; MAX_OPERATIONS / 64]);
+struct SlotMask(Vec<u64>);
 impl SlotMask {
+    fn words(slots: usize) -> usize {
+        slots.div_ceil(u64::BITS as usize)
+    }
+    fn reserve_slots(&mut self, slots: usize) -> Result<()> {
+        let words = Self::words(slots);
+        if words > self.0.len() {
+            self.0
+                .try_reserve_exact(words - self.0.len())
+                .map_err(|_| error("Mouse drag slot-mask allocation failed"))?;
+        }
+        Ok(())
+    }
+    fn extend_slots(&mut self, slots: usize) {
+        self.0.resize(Self::words(slots), 0);
+    }
+    fn with_slots(slots: usize) -> Result<Self> {
+        let mut mask = Self::default();
+        mask.reserve_slots(slots)?;
+        mask.extend_slots(slots);
+        Ok(mask)
+    }
+    fn clear(&mut self) {
+        self.0.fill(0);
+    }
     fn contains(&self, slot: usize) -> bool {
-        self.0[slot / 64] & (1_u64 << (slot % 64)) != 0
+        self.0
+            .get(slot / u64::BITS as usize)
+            .is_some_and(|word| word & (1_u64 << (slot % u64::BITS as usize)) != 0)
     }
     fn insert(&mut self, slot: usize) {
-        self.0[slot / 64] |= 1_u64 << (slot % 64);
+        self.0[slot / u64::BITS as usize] |= 1_u64 << (slot % u64::BITS as usize);
     }
     fn remove(&mut self, slot: usize) {
-        self.0[slot / 64] &= !(1_u64 << (slot % 64));
+        self.0[slot / u64::BITS as usize] &= !(1_u64 << (slot % u64::BITS as usize));
     }
     fn is_empty(&self) -> bool {
         self.0.iter().all(|word| *word == 0)
@@ -61,8 +86,10 @@ struct Shared {
     client: Arc<dyn CdpClient>,
     page: DragPage,
     source: Arc<dyn DragMoveSource>,
+    drag_gate: Arc<tokio::sync::Mutex<()>>,
     ledger: ResourceLedger,
     scope: ResourceScope,
+    capacity: Option<usize>,
     registry: Mutex<Registry>,
     _storage: ResourceLease,
 }
@@ -90,13 +117,27 @@ async fn actual_pointer(
     }
     client.input_dispatch_pointer_event(request.event).await
 }
+async fn wait_drag_admission(
+    gate: Option<Arc<tokio::sync::Mutex<()>>>,
+) -> tokio::sync::OwnedMutexGuard<()> {
+    gate.expect("bound drag scheduling gate").lock_owned().await
+}
 fn operation_bytes() -> usize {
-    std::mem::size_of::<Operation>() + std::mem::size_of_val(&actual_pointer(None, None)) + 32
+    std::mem::size_of::<Operation>()
+        + std::mem::size_of_val(&actual_pointer(None, None))
+        + std::mem::size_of_val(&wait_drag_admission(None))
+        + 32
+}
+fn slot_mask_bytes(capacity: usize) -> usize {
+    SlotMask::words(capacity) * std::mem::size_of::<u64>()
 }
 fn state_bytes(capacity: usize) -> usize {
     std::mem::size_of::<Shared>()
         + 2 * std::mem::size_of::<usize>()
+        + std::mem::size_of::<tokio::sync::Mutex<()>>()
+        + 2 * std::mem::size_of::<usize>()
         + capacity * std::mem::size_of::<Option<Work>>()
+        + 3 * slot_mask_bytes(capacity)
         + std::mem::size_of::<MouseDragRetirementDriver>()
 }
 impl MouseDragDispatcher {
@@ -112,6 +153,17 @@ impl MouseDragDispatcher {
             .with_class(ResourceClass::BackendStateBytes, bytes, bytes)
             .with_metadata(1, capacity + 1))
     }
+    /// Fixed dispatcher and retirement-driver state only. Operation slots and
+    /// owners grow through fallible allocator-backed vectors.
+    pub fn allocator_backed_requirements() -> ResourceRequirements {
+        ResourceRequirements::none()
+            .with_class(
+                ResourceClass::BackendStateBytes,
+                state_bytes(0) as u64,
+                state_bytes(0) as u64,
+            )
+            .with_metadata(1, 1)
+    }
     pub fn new(
         client: Arc<dyn CdpClient>,
         page: DragPage,
@@ -120,30 +172,62 @@ impl MouseDragDispatcher {
         capacity: usize,
         resources: &ProductionResourceLedger,
     ) -> Result<(Self, MouseDragRetirementDriver)> {
+        Self::new_inner(client, page, source, scope, Some(capacity), resources)
+    }
+    pub fn new_allocator_backed(
+        client: Arc<dyn CdpClient>,
+        page: DragPage,
+        source: Arc<dyn DragMoveSource>,
+        scope: ResourceScope,
+        resources: &ProductionResourceLedger,
+    ) -> Result<(Self, MouseDragRetirementDriver)> {
+        Self::new_inner(client, page, source, scope, None, resources)
+    }
+    fn new_inner(
+        client: Arc<dyn CdpClient>,
+        page: DragPage,
+        source: Arc<dyn DragMoveSource>,
+        scope: ResourceScope,
+        capacity: Option<usize>,
+        resources: &ProductionResourceLedger,
+    ) -> Result<(Self, MouseDragRetirementDriver)> {
         if !page.matches_dispatch(&client, source.captures()) {
             return Err(error("Mouse drag source/Page/native bindings differ"));
         }
+        let requirements = match capacity {
+            Some(capacity) => Self::requirements(capacity)?,
+            None => Self::allocator_backed_requirements(),
+        };
         let ledger = resources
-            .claim(Self::requirements(capacity)?)
+            .claim(requirements)
             .map_err(|_| error("Mouse drag resource claim failed"))?;
         let storage = ledger
             .reserve(
                 scope,
                 ResourceClass::BackendStateBytes,
-                state_bytes(capacity) as u64,
+                state_bytes(capacity.unwrap_or(0)) as u64,
             )
             .map_err(|_| error("Mouse drag state admission failed"))?;
-        let mut slots = Vec::with_capacity(capacity);
-        slots.resize_with(capacity, || None);
+        let slots_count = capacity.unwrap_or(0);
+        let mut slots = Vec::new();
+        slots
+            .try_reserve_exact(slots_count)
+            .map_err(|_| error("Mouse drag slot allocation failed"))?;
+        slots.resize_with(slots_count, || None);
+        let occupied = SlotMask::with_slots(slots_count)?;
+        let quarantine_mask = SlotMask::with_slots(slots_count)?;
+        let done = SlotMask::with_slots(slots_count)?;
         let shared = Arc::new(Shared {
             client,
             page,
             source,
+            drag_gate: Arc::new(tokio::sync::Mutex::new(())),
             scope,
             ledger,
+            capacity,
             registry: Mutex::new(Registry {
-                occupied: SlotMask::default(),
-                quarantine_mask: SlotMask::default(),
+                occupied,
+                quarantine_mask,
                 quarantined: slots,
                 stopped: false,
             }),
@@ -154,7 +238,7 @@ impl MouseDragDispatcher {
             MouseDragRetirementDriver {
                 shared,
                 round: false,
-                done: SlotMask::default(),
+                done,
                 failure: None,
             },
         ))
@@ -285,18 +369,36 @@ impl MouseDragDispatcher {
         if registry.stopped || !registry.quarantine_mask.is_empty() {
             return Err(());
         }
-        let Some(slot) =
-            (0..registry.quarantined.len()).find(|slot| !registry.occupied.contains(*slot))
-        else {
-            return Err(());
-        };
-        let Ok(storage) = self.0.ledger.reserve(
-            self.0.scope,
-            ResourceClass::BackendStateBytes,
-            operation_bytes() as u64,
-        ) else {
-            return Err(());
-        };
+        let slot =
+            match (0..registry.quarantined.len()).find(|slot| !registry.occupied.contains(*slot)) {
+                Some(slot) => slot,
+                None if self.0.capacity.is_some() => return Err(()),
+                None => {
+                    let slot = registry.quarantined.len();
+                    registry.quarantined.try_reserve(1).map_err(|_| ())?;
+                    registry.occupied.reserve_slots(slot + 1).map_err(|_| ())?;
+                    registry
+                        .quarantine_mask
+                        .reserve_slots(slot + 1)
+                        .map_err(|_| ())?;
+                    registry.occupied.extend_slots(slot + 1);
+                    registry.quarantine_mask.extend_slots(slot + 1);
+                    registry.quarantined.push(None);
+                    slot
+                }
+            };
+        let storage = self
+            .0
+            .capacity
+            .map(|_| {
+                self.0.ledger.reserve(
+                    self.0.scope,
+                    ResourceClass::BackendStateBytes,
+                    operation_bytes() as u64,
+                )
+            })
+            .transpose()
+            .map_err(|_| ())?;
         registry.occupied.insert(slot);
         drop(registry);
         Ok(Operation {
@@ -305,6 +407,9 @@ impl MouseDragDispatcher {
             observed: false,
             work: Some(Work {
                 request,
+                drag_request: None,
+                drag_admission: None,
+                drag_guard: None,
                 cancel_pending: cancel,
                 cancelled: false,
                 direct: None,
@@ -322,6 +427,9 @@ impl MouseDragDispatcher {
 }
 struct Work {
     request: Option<MouseDispatchRequest>,
+    drag_request: Option<MouseDispatchRequest>,
+    drag_admission: Option<Pin<Box<dyn Future<Output = tokio::sync::OwnedMutexGuard<()>> + Send>>>,
+    drag_guard: Option<tokio::sync::OwnedMutexGuard<()>>,
     cancel_pending: bool,
     cancelled: bool,
     direct: Option<DragToggleFuture>,
@@ -332,7 +440,7 @@ struct Work {
     position: DragPosition,
     live: Option<MouseStateReader>,
     started: bool,
-    _storage: ResourceLease,
+    _storage: Option<ResourceLease>,
 }
 impl Work {
     fn begin(&mut self, shared: &Shared) -> Result<()> {
@@ -361,11 +469,10 @@ impl Work {
                         Some(request),
                     )));
                 } else {
-                    self.live = Some(request.live_state.clone());
-                    self.movement = Some(shared.source.start(Box::pin(actual_pointer(
-                        Some(shared.client.clone()),
-                        Some(request),
-                    )))?);
+                    self.drag_admission = Some(Box::pin(wait_drag_admission(Some(
+                        shared.drag_gate.clone(),
+                    ))));
+                    self.drag_request = Some(request);
                 }
             }
             MouseDispatchKind::Down => {
@@ -393,9 +500,46 @@ impl Work {
         }
         Ok(())
     }
+    fn poll_drag_admission(&mut self, shared: &Shared, cx: &mut Context<'_>) -> Poll<Result<()>> {
+        let Some(admission) = &mut self.drag_admission else {
+            return Poll::Ready(Ok(()));
+        };
+        let Poll::Ready(guard) = admission.as_mut().poll(cx) else {
+            return Poll::Pending;
+        };
+        self.drag_admission = None;
+        self.drag_guard = Some(guard);
+        let request = self
+            .drag_request
+            .take()
+            .expect("queued drag request owns its admission");
+        self.live = Some(request.live_state.clone());
+        if shared.page.is_dragging() {
+            let modifiers = request.live_state.snapshot().modifiers;
+            self.command = Some(shared.page.over(self.position, i64::from(modifiers))?);
+            self.drag_guard = None;
+            return Poll::Ready(Ok(()));
+        }
+        match shared.source.start(Box::pin(actual_pointer(
+            Some(shared.client.clone()),
+            Some(request),
+        ))) {
+            Ok(movement) => {
+                self.movement = Some(movement);
+                Poll::Ready(Ok(()))
+            }
+            Err(error) => {
+                self.drag_guard = None;
+                Poll::Ready(Err(error))
+            }
+        }
+    }
     fn is_retired(&self) -> bool {
-        !self.cancel_pending
-            && self.request.is_none()
+        self.request.is_none()
+            && self.drag_request.is_none()
+            && self.drag_admission.is_none()
+            && self.drag_guard.is_none()
+            && !self.cancel_pending
             && self.direct.is_none()
             && self.movement.as_ref().is_none_or(DragMove::is_retired)
             && self
@@ -411,6 +555,13 @@ impl Work {
         }
         if self.request.is_some() {
             self.begin(shared)?;
+        }
+        if self.drag_admission.is_some() {
+            match self.poll_drag_admission(shared, cx) {
+                Poll::Pending => return Poll::Pending,
+                Poll::Ready(Ok(())) => {}
+                Poll::Ready(Err(error)) => return Poll::Ready(Err(error)),
+            }
         }
         loop {
             if let Some(direct) = &mut self.direct {
@@ -431,6 +582,7 @@ impl Work {
                 // completed capture interval. No false idle window is created.
                 if self.movement_finished {
                     self.movement = None;
+                    self.drag_guard = None;
                 }
                 return result;
             }
@@ -440,6 +592,7 @@ impl Work {
                     Poll::Ready(Err(error)) => return Poll::Ready(Err(error)),
                     Poll::Ready(Ok(None)) => {
                         self.movement = None;
+                        self.drag_guard = None;
                         return Poll::Ready(Ok(()));
                     }
                     Poll::Ready(Ok(Some(data))) => {
@@ -465,6 +618,8 @@ impl Work {
     }
     fn poll_retire(&mut self, cx: &mut Context<'_>) -> Poll<Result<()>> {
         self.request = None;
+        self.drag_request = None;
+        self.drag_admission = None;
         self.cancel_pending = false;
         if !self.direct_started {
             self.direct = None;
@@ -489,9 +644,11 @@ impl Work {
             let result = movement.poll_retire(cx);
             if result.is_ready() && movement.is_retired() {
                 self.movement = None;
+                self.drag_guard = None;
             }
             return result;
         }
+        self.drag_guard = None;
         Poll::Ready(Ok(()))
     }
 }
@@ -587,8 +744,19 @@ impl MouseDragRetirementDriver {
     }
     pub fn poll_quarantined(&mut self, cx: &mut Context<'_>) -> Poll<Result<()>> {
         if !self.round {
+            let capacity = self
+                .shared
+                .registry
+                .lock()
+                .expect("Mouse drag registry poisoned")
+                .quarantined
+                .len();
+            if let Err(error) = self.done.reserve_slots(capacity) {
+                return Poll::Ready(Err(error));
+            }
+            self.done.extend_slots(capacity);
+            self.done.clear();
             self.round = true;
-            self.done = SlotMask::default();
             self.failure = None;
         }
         let capacity = self

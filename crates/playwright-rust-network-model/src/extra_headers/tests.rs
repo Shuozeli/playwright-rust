@@ -320,6 +320,38 @@ fn local_owner_limit_cannot_borrow_shared_plan_spare_capacity() {
 }
 
 #[test]
+fn allocator_backed_pool_grows_past_legacy_owner_count_and_reclaims_exactly() {
+    // Arrange
+    let profile =
+        HeaderProfile::new_allocator_backed(ResourceScope::extension(128, 9), 4, 128).unwrap();
+    let ledger = resources(profile, false);
+    let pool = HeaderPool::new(profile, &ledger).unwrap();
+
+    // Act
+    let owners: Vec<_> = (0..129)
+        .map(|index| pool.page(&[header("X-Owner", &index.to_string())]).unwrap())
+        .collect();
+
+    // Assert
+    assert!(profile.allocator_backed());
+    assert_eq!(pool.active_owners(), 129);
+    assert_eq!(
+        profile
+            .requirements()
+            .unwrap()
+            .class(ResourceClass::LiveObject)
+            .global,
+        0
+    );
+    drop(owners);
+    assert_eq!(pool.active_owners(), 0);
+    drop(pool);
+    for class in ResourceClass::ALL {
+        assert_eq!(ledger.metrics().unwrap().class(class).current, 0);
+    }
+}
+
+#[test]
 fn failed_shared_ledger_reservation_rolls_back_local_owner_count() {
     // Arrange
     let profile = profile(1, 1, 16);

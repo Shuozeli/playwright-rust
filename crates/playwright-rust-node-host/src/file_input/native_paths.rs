@@ -18,15 +18,13 @@ use playwright_rust_runtime::ReservedCleanupExecutor;
 use playwright_rust_runtime_tokio::{TokioCleanupExecutor, TokioCleanupReservation};
 use std::{fs::File, sync::Arc};
 
-const CALLS: usize = 1;
-
 fn backend_profile() -> Result<RetainedPreflightProfile, HostError> {
-    RetainedPreflightProfile::new(ResourceScope::extension(148, 7), CALLS)
+    RetainedPreflightProfile::new_allocator_backed(ResourceScope::extension(148, 7))
         .map_err(HostError::backend)
 }
 
 fn owner_profile() -> Result<UploadProfile, HostError> {
-    UploadProfile::new(ResourceScope::extension(148, 8), CALLS, 16 * 1024)
+    UploadProfile::new_allocator_backed(ResourceScope::extension(148, 8), 16 * 1024)
         .map_err(HostError::backend)
 }
 
@@ -44,7 +42,7 @@ pub(crate) struct Service {
 
 impl Service {
     pub(super) fn new(resources: &ProductionResourceLedger) -> Result<Self, HostError> {
-        let preflight_cleanup = TokioCleanupExecutor::new(CALLS);
+        let preflight_cleanup = TokioCleanupExecutor::new_allocator_backed();
         let preflight = FileInputPreflightOperationService::new(
             owner_profile()?,
             resources,
@@ -58,7 +56,7 @@ impl Service {
         Ok(Self {
             preflight,
             preflight_cleanup,
-            operation_cleanup: TokioCleanupExecutor::new(CALLS),
+            operation_cleanup: TokioCleanupExecutor::new_allocator_backed(),
         })
     }
 
@@ -149,6 +147,7 @@ fn preflight_flags(plan: UploadPlan) -> FileInputPreflightFlags {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use playwright_rust_core::ResourceClass;
     use playwright_rust_file_input_model::{
         BrowserLocation, FileInputLimits, PathKind, ResolvedPathMetadata,
     };
@@ -169,5 +168,23 @@ mod tests {
         // Assert
         assert!(!flags.multiple);
         assert!(flags.directory_upload);
+    }
+
+    #[test]
+    fn native_path_compatibility_profiles_have_no_aggregate_call_count() {
+        // Arrange
+        let backend = backend_profile().unwrap();
+        let owner = owner_profile().unwrap();
+
+        // Act
+        let requirements = requirements().unwrap();
+
+        // Assert
+        assert_eq!(backend.capacity(), usize::MAX);
+        assert!(backend.allocator_backed());
+        assert_eq!(owner.capacity(), usize::MAX);
+        assert!(owner.allocator_backed());
+        assert_eq!(requirements.class(ResourceClass::RemoteHandle).global, 0);
+        assert_eq!(requirements.class(ResourceClass::LiveObject).global, 0);
     }
 }

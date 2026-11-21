@@ -42,6 +42,34 @@ fn prepare(
 }
 
 #[test]
+fn allocator_backed_batches_are_limited_by_allocations_not_a_static_batch_count() {
+    // Arrange
+    let byte = [7_u8];
+    let mut batches = Vec::new();
+
+    // Act
+    for index in 0..129 {
+        let name = format!("batch-{index}.bin");
+        let mut sources = [PayloadSource {
+            name: &name,
+            mime_type: "application/octet-stream",
+            last_modified_ms: None,
+            content: Content::Bytes(&byte),
+        }];
+        batches
+            .push(PreparedPayloads::materialize_allocator_backed(limits(), &mut sources).unwrap());
+    }
+
+    // Assert
+    assert_eq!(batches.len(), 129);
+    assert!(
+        batches
+            .iter()
+            .all(|batch| batch.entries()[0].bytes() == byte)
+    );
+}
+
+#[test]
 fn payload_preserves_binary_metadata_and_holds_all_leases_until_drop() {
     // Arrange
     let resources = ledger(8, 1);

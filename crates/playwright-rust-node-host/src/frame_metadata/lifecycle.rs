@@ -3,7 +3,7 @@
 use super::{
     CollectionMember, CollectionRevision, CollectionView, FrameChange, FrameChangeValue,
     FrameMetadata, FramePublicationDrain, FramePublications, HostError, MetadataState,
-    PublicationDrainError, ResourceClass, ResourceLease, SCOPE,
+    PublicationDrainError, ResourceLease,
 };
 #[cfg(any(feature = "frame-detach-events", feature = "frame-events"))]
 use crate::frame_tree::FrameNode;
@@ -615,7 +615,7 @@ impl LifecycleGroup {
 /// Dropping an unused admission releases both budgets. No side queue is created.
 pub struct LifecycleReservation {
     book: Weak<FrameMetadata>,
-    event: ResourceLease,
+    event: Option<ResourceLease>,
     group: Box<LifecycleGroup>,
 }
 
@@ -953,11 +953,7 @@ impl FramePublications {
                 "lifecycle groups require a pre-admitted publication queue",
             ));
         }
-        let event = self
-            .0
-            .resources
-            .reserve(SCOPE, ResourceClass::EventItem, 1)
-            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
+        let event = self.0.reserve_event()?;
         let storage = factory.reserve_collection_storage(
             STORAGE_BYTES
                 .checked_add(payload_bytes)

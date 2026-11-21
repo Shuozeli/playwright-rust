@@ -197,12 +197,10 @@ impl ChromiumMousePage {
         dispatcher: Option<Arc<dyn CdpMouseDispatcher>>,
     ) -> Result<(Arc<Self>, MouseRetirementDriver), ChromiumMouseInstallError> {
         let requirements = Self::route_requirements(capacity)?;
-        resources.claim(
-            factory
-                .profile()
-                .requirements()
-                .combine_concurrent(requirements),
-        )?;
+        // The factory already owns and claims its backend budget from the
+        // ledger selected at factory construction. A Page route may use an
+        // independent ledger and therefore claims only its own storage here.
+        resources.claim(requirements)?;
         let ledger = resources.claim(requirements)?;
         let route = ledger.reserve(
             ResourceScope::Object(page_id),

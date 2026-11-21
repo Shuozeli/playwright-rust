@@ -1,4 +1,4 @@
-//! Bounded, session-revocable ownership of not-yet-delivered Handle results.
+//! Allocator-backed, session-revocable ownership of not-yet-delivered Handle results.
 //! The returned descriptor never holds a native service. Closing the owner
 //! submits all accepted cleanup, even while callers retain descriptors.
 
@@ -10,45 +10,34 @@ use std::sync::{
 use playwright_rust_cap_handle_evaluation::HandleInitializer;
 use playwright_rust_composition_chromium_handle_evaluation::ChromiumHandleEvaluationRouteIdentity;
 use playwright_rust_core::{
-    ObjectId, ProductionResourceLedger, ResourceClass, ResourceLease, ResourceLedger,
-    ResourceRequirements, ResourceScope,
+    ObjectId, ProductionResourceLedger, ResourceClass, ResourceLease, ResourceRequirements,
+    ResourceScope,
 };
 use playwright_rust_runtime::{CleanupFailure, CleanupJob, CleanupReservation};
 use playwright_rust_runtime_tokio::TokioCleanupReservation;
 
-use super::{MAX_CALLS, MAX_HANDLES, MAX_NATIVE_ID_BYTES};
-use crate::{HostError, evaluation};
+#[cfg(test)]
+use super::MAX_HANDLES;
+use super::MAX_PROPERTY_HANDLES;
+use crate::HostError;
 
 const SCOPE: ResourceScope = ResourceScope::extension(154, 1);
 const STATE_BYTES: u64 = 16 * 1024;
-// Descriptor, accepted cleanup, watch backing, the <=1024-byte immutable source
-// world ID, and the independently retained bounded completion diagnostic must
-// all remain covered through disposal. Source identity owns no native service.
-const OWNER_BYTES: u64 = 16 * 1024;
-const CALL_BYTES: u64 = evaluation::FFI_ALLOWANCE;
-// A malformed acquisition can carry distinct result and exception receivers.
-// Both remain owned until the hardened acquisition compensates them.
-const READ_NATIVE_HANDLES: u64 = 2;
-
+#[cfg(test)]
+const OWNER_BYTES: u64 = 0;
 pub(crate) fn requirements() -> ResourceRequirements {
-    let bytes = STATE_BYTES + OWNER_BYTES * MAX_HANDLES as u64 + CALL_BYTES * MAX_CALLS as u64;
     ResourceRequirements::none()
-        .with_class(ResourceClass::BackendStateBytes, bytes, bytes)
-        .with_class(
-            ResourceClass::RemoteHandle,
-            MAX_CALLS as u64 * READ_NATIVE_HANDLES,
-            MAX_CALLS as u64 * READ_NATIVE_HANDLES,
-        )
-        .with_metadata(1, 1 + MAX_HANDLES + 2 * MAX_CALLS)
+        .with_class(ResourceClass::BackendStateBytes, STATE_BYTES, STATE_BYTES)
+        .with_metadata(1, 1)
 }
 
 struct Capacity {
     owners: AtomicUsize,
     calls: AtomicUsize,
-    ledger: ResourceLedger,
     _state: ResourceLease,
 }
 
+#[derive(Clone, Copy)]
 enum Kind {
     Owner,
     Call,
@@ -56,7 +45,6 @@ enum Kind {
 pub(crate) struct Allowance {
     capacity: Arc<Capacity>,
     kind: Kind,
-    _lease: ResourceLease,
 }
 impl Drop for Allowance {
     fn drop(&mut self) {
@@ -70,31 +58,21 @@ impl Drop for Allowance {
 
 impl Capacity {
     fn admit(self: &Arc<Self>, kind: Kind) -> Result<Allowance, HostError> {
-        let (counter, maximum, bytes) = match kind {
-            Kind::Owner => (&self.owners, MAX_HANDLES, OWNER_BYTES),
-            Kind::Call => (&self.calls, MAX_CALLS, CALL_BYTES),
+        let counter = match kind {
+            Kind::Owner => &self.owners,
+            Kind::Call => &self.calls,
         };
         counter
             .fetch_update(Ordering::AcqRel, Ordering::Acquire, |count| {
-                (count < maximum).then(|| count + 1)
+                count.checked_add(1)
             })
             .map_err(|_| {
-                HostError::ResourceExhausted("Handle result ownership capacity exceeded".into())
+                HostError::ResourceExhausted("Handle ownership counter overflowed".into())
             })?;
-        match self
-            .ledger
-            .reserve(SCOPE, ResourceClass::BackendStateBytes, bytes)
-        {
-            Ok(lease) => Ok(Allowance {
-                capacity: self.clone(),
-                kind,
-                _lease: lease,
-            }),
-            Err(error) => {
-                counter.fetch_sub(1, Ordering::AcqRel);
-                Err(HostError::backend(error))
-            }
-        }
+        Ok(Allowance {
+            capacity: self.clone(),
+            kind,
+        })
     }
 }
 
@@ -119,7 +97,10 @@ pub(crate) struct BatchAdmission {
 pub(crate) struct ReadAdmission {
     pub call: Arc<Allowance>,
     pub work: tokio_util::task::task_tracker::TaskTrackerToken,
-    pub native: ResourceLease,
+    // Temporary browser objects are allocator-backed in the compatibility
+    // profile. This marker remains so continuations retain the exact lifetime
+    // boundary without inventing a public object-count admission limit.
+    pub native: Option<ResourceLease>,
 }
 
 /// Caller/continuation storage and shutdown tracking for a retained upload.
@@ -148,7 +129,7 @@ struct OwnedTicket {
 
 struct State {
     closed: bool,
-    tickets: [Option<OwnedTicket>; MAX_HANDLES],
+    tickets: Vec<OwnedTicket>,
 }
 pub(crate) struct Owners {
     state: Mutex<State>,
@@ -216,12 +197,6 @@ impl Owners {
     pub fn new(resources: &ProductionResourceLedger) -> Result<Arc<Self>, HostError> {
         if std::mem::size_of::<Self>() + std::mem::size_of::<Capacity>() + 128
             > STATE_BYTES as usize
-            || std::mem::size_of::<PendingHandle>()
-                + std::mem::size_of::<Ticket>()
-                + MAX_NATIVE_ID_BYTES
-                + 8192
-                + 512
-                > OWNER_BYTES as usize
         {
             return Err(HostError::ResourceExhausted(
                 "Handle owner storage exceeds its budget".into(),
@@ -237,22 +212,22 @@ impl Owners {
             work: tokio_util::task::TaskTracker::new(),
             state: Mutex::new(State {
                 closed: false,
-                tickets: std::array::from_fn(|_| None),
+                tickets: Vec::new(),
             }),
             capacity: Arc::new(Capacity {
                 owners: AtomicUsize::new(0),
                 calls: AtomicUsize::new(0),
-                ledger,
                 _state: state,
             }),
         }))
     }
 
     pub fn admit(self: &Arc<Self>) -> Result<Admission, HostError> {
-        let state = self.state.lock().map_err(HostError::backend)?;
+        let mut state = self.state.lock().map_err(HostError::backend)?;
         if state.closed {
             return Err(HostError::TargetClosed);
         }
+        self.reserve_owner_capacity(&mut state, 1)?;
         let owner = Arc::new(self.capacity.admit(Kind::Owner)?);
         let call = Arc::new(self.capacity.admit(Kind::Call)?);
         Ok(Admission {
@@ -281,11 +256,7 @@ impl Owners {
         Ok(ReadAdmission {
             call: Arc::new(self.capacity.admit(Kind::Call)?),
             work: self.work.token(),
-            native: self
-                .capacity
-                .ledger
-                .reserve(SCOPE, ResourceClass::RemoteHandle, READ_NATIVE_HANDLES)
-                .map_err(HostError::backend)?,
+            native: None,
         })
     }
 
@@ -308,23 +279,20 @@ impl Owners {
     }
 
     pub fn admit_batch(self: &Arc<Self>) -> Result<BatchAdmission, HostError> {
-        let available = MAX_HANDLES - self.capacity.owners.load(Ordering::Acquire);
-        self.admit_batch_exact(available)
+        self.admit_batch_exact(MAX_PROPERTY_HANDLES)
     }
 
     pub fn admit_batch_exact(self: &Arc<Self>, count: usize) -> Result<BatchAdmission, HostError> {
-        let state = self.state.lock().map_err(HostError::backend)?;
+        let mut state = self.state.lock().map_err(HostError::backend)?;
         if state.closed {
             return Err(HostError::TargetClosed);
         }
-        let available = MAX_HANDLES - self.capacity.owners.load(Ordering::Acquire);
-        if count > available {
-            return Err(HostError::ResourceExhausted(
-                "Handle result ownership capacity exceeded".into(),
-            ));
-        }
+        self.reserve_owner_capacity(&mut state, count)?;
         let call = Arc::new(self.capacity.admit(Kind::Call)?);
-        let mut entries = Vec::with_capacity(count);
+        let mut entries = Vec::new();
+        entries.try_reserve_exact(count).map_err(|_| {
+            HostError::ResourceExhausted("Handle result admission allocation failed".into())
+        })?;
         for _ in 0..count {
             entries.push(Admission {
                 owner: Arc::new(self.capacity.admit(Kind::Owner)?),
@@ -337,6 +305,22 @@ impl Owners {
             call,
             work: self.work.token(),
         })
+    }
+
+    fn reserve_owner_capacity(&self, state: &mut State, count: usize) -> Result<(), HostError> {
+        let admitted = self.capacity.owners.load(Ordering::Acquire);
+        let required = admitted.checked_add(count).ok_or_else(|| {
+            HostError::ResourceExhausted("Handle result ownership capacity overflow".into())
+        })?;
+        if state.tickets.capacity() < required {
+            state
+                .tickets
+                .try_reserve_exact(required - state.tickets.len())
+                .map_err(|_| {
+                    HostError::ResourceExhausted("Handle result ownership allocation failed".into())
+                })?;
+        }
+        Ok(())
     }
 
     pub fn admit_call(self: &Arc<Self>) -> Result<Allowance, HostError> {
@@ -411,7 +395,6 @@ impl Owners {
         if !state
             .tickets
             .iter()
-            .flatten()
             .any(|ticket| ticket.object == source.target)
         {
             return Err(HostError::TargetClosed);
@@ -432,7 +415,6 @@ impl Owners {
         if !state
             .tickets
             .iter()
-            .flatten()
             .any(|ticket| ticket.object == handle.initializer.object_id)
         {
             return Err(HostError::InvalidArgument("JSHandle is disposed".into()));
@@ -461,13 +443,6 @@ impl Owners {
             ticket.submit();
             return Err(HostError::TargetClosed);
         }
-        let Some(slot) = state.tickets.iter_mut().find(|slot| slot.is_none()) else {
-            drop(state);
-            ticket.submit();
-            return Err(HostError::ResourceExhausted(
-                "Handle result ticket capacity exceeded".into(),
-            ));
-        };
         // The completion belongs to the accepted cleanup job, not to a caller
         // waiting for disposal. Cancelling that caller cannot cancel release.
         let (completion, released) = tokio::sync::watch::channel(None);
@@ -477,7 +452,7 @@ impl Owners {
             completion.send_replace(Some(result.clone()));
             result
         });
-        *slot = Some(OwnedTicket { object, ticket });
+        state.tickets.push(OwnedTicket { object, ticket });
         Ok(PendingHandle {
             initializer,
             source_world: None,
@@ -490,14 +465,17 @@ impl Owners {
     fn abandon(&self, object: ObjectId) {
         // Poison recovery is cleanup-only. Taking a ticket is exclusive and
         // submit runs outside the lock; shutdown and drop cannot submit twice.
-        let ticket = self
-            .state
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .tickets
-            .iter_mut()
-            .find(|slot| slot.as_ref().is_some_and(|ticket| ticket.object == object))
-            .and_then(Option::take);
+        let ticket = {
+            let mut state = self
+                .state
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            state
+                .tickets
+                .iter()
+                .position(|ticket| ticket.object == object)
+                .map(|index| state.tickets.swap_remove(index))
+        };
         if let Some(ticket) = ticket {
             ticket.ticket.submit();
         }
@@ -510,13 +488,13 @@ impl Owners {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             state.closed = true;
-            std::mem::replace(&mut state.tickets, std::array::from_fn(|_| None))
+            std::mem::take(&mut state.tickets)
         };
         // The state flag already prevents new tokens. Tracker closure can
         // synchronously wake a waiter that reenters owner admission, so it
         // must happen after releasing the owner lock, before draining tickets.
         self.work.close();
-        for ticket in tickets.into_iter().flatten() {
+        for ticket in tickets {
             ticket.ticket.submit();
         }
     }

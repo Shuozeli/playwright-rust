@@ -65,6 +65,7 @@ impl std::error::Error for WorkError {}
 #[derive(Clone, Copy, Debug)]
 pub struct WorkProfile {
     capacity: usize,
+    allocator_backed: bool,
     limits: FileInputLimits,
     scope: ResourceScope,
     job_bytes: u64,
@@ -107,6 +108,7 @@ impl WorkProfile {
             .ok_or(WorkError::InvalidProfile)?;
         let result = Self {
             capacity,
+            allocator_backed: false,
             limits,
             scope,
             job_bytes: bytes,
@@ -114,7 +116,22 @@ impl WorkProfile {
         result.requirements()?;
         Ok(result)
     }
+    pub fn new_allocator_backed(
+        limits: FileInputLimits,
+        scope: ResourceScope,
+        runtime_overhead_bytes: u64,
+    ) -> Result<Self, WorkError> {
+        let mut profile = Self::new(1, limits, scope, runtime_overhead_bytes)?;
+        profile.capacity = usize::MAX;
+        profile.allocator_backed = true;
+        Ok(profile)
+    }
     pub fn requirements(self) -> Result<ResourceRequirements, WorkError> {
+        if self.allocator_backed {
+            return Ok(ResourceRequirements::none()
+                .with_class(ResourceClass::BackendStateBytes, pool_bytes(), pool_bytes())
+                .with_metadata(1, 1));
+        }
         let count = u64::try_from(self.capacity).map_err(|_| WorkError::InvalidProfile)?;
         let bytes = self
             .job_bytes
@@ -131,13 +148,19 @@ impl WorkProfile {
                     .ok_or(WorkError::InvalidProfile)?,
             ))
     }
+    pub const fn capacity(self) -> usize {
+        self.capacity
+    }
+    pub const fn allocator_backed(self) -> bool {
+        self.allocator_backed
+    }
 }
 struct Pool {
     profile: WorkProfile,
     admission: AtomicUsize,
     drained: Notify,
     queue_ledger: ResourceLedger,
-    source_ledger: ResourceLedger,
+    source_ledger: Option<ResourceLedger>,
     runtime: Handle,
     _lease: ResourceLease,
 }
@@ -198,6 +221,37 @@ where
         filesystem: Arc<F>,
         mime: Arc<M>,
     ) -> Result<Self, WorkError> {
+        Self::new_inner(
+            profile,
+            queue_plan,
+            Some(source_ledger),
+            runtime,
+            filesystem,
+            mime,
+        )
+    }
+
+    pub fn new_allocator_backed(
+        profile: WorkProfile,
+        queue_plan: &ProductionResourceLedger,
+        runtime: Handle,
+        filesystem: Arc<F>,
+        mime: Arc<M>,
+    ) -> Result<Self, WorkError> {
+        if !profile.allocator_backed {
+            return Err(WorkError::InvalidProfile);
+        }
+        Self::new_inner(profile, queue_plan, None, runtime, filesystem, mime)
+    }
+
+    fn new_inner(
+        profile: WorkProfile,
+        queue_plan: &ProductionResourceLedger,
+        source_ledger: Option<ResourceLedger>,
+        runtime: Handle,
+        filesystem: Arc<F>,
+        mime: Arc<M>,
+    ) -> Result<Self, WorkError> {
         let ledger = queue_plan
             .claim(profile.requirements()?)
             .map_err(WorkError::Plan)?;
@@ -248,7 +302,13 @@ where
         self.pool
             .admission
             .fetch_update(Ordering::AcqRel, Ordering::Acquire, |state| {
-                (state & CLOSED == 0 && state < profile.capacity).then(|| state + 1)
+                (state & CLOSED == 0)
+                    .then(|| state.checked_add(1))
+                    .flatten()
+                    .filter(|next| {
+                        *next & CLOSED == 0
+                            && (profile.allocator_backed || *next <= profile.capacity)
+                    })
             })
             .map_err(|state| {
                 if state & CLOSED != 0 {
@@ -261,18 +321,23 @@ where
             pool: self.pool.clone(),
             lease: None,
         };
-        slot.lease = Some(
-            self.pool
-                .queue_ledger
-                .reserve_many(
-                    profile.scope,
-                    &[
-                        ResourceRequest::new(ResourceClass::ActiveCommand, 1),
-                        ResourceRequest::new(ResourceClass::BackendStateBytes, profile.job_bytes),
-                    ],
-                )
-                .map_err(|e| WorkError::Source(SourceError::Budget(e)))?,
-        );
+        if !profile.allocator_backed {
+            slot.lease = Some(
+                self.pool
+                    .queue_ledger
+                    .reserve_many(
+                        profile.scope,
+                        &[
+                            ResourceRequest::new(ResourceClass::ActiveCommand, 1),
+                            ResourceRequest::new(
+                                ResourceClass::BackendStateBytes,
+                                profile.job_bytes,
+                            ),
+                        ],
+                    )
+                    .map_err(|e| WorkError::Source(SourceError::Budget(e)))?,
+            );
+        }
         Ok(Arc::new(JobState {
             cancelled: AtomicBool::new(false),
             slot,
@@ -364,19 +429,31 @@ fn execute<F: FileSystem, M: MimeLookup>(
         .try_reserve_exact(request.paths.len())
         .map_err(|e| WorkError::Source(SourceError::Allocation(e)))?;
     paths.extend(request.paths.iter().map(String::as_str));
-    let result = PreparedPaths::prepare(
-        &pool.source_ledger,
-        pool.profile.scope,
-        pool.profile.limits,
-        &paths,
-        request.location,
-        PathServices {
-            base: &request.base,
-            filesystem: &checked,
-            mime: mime.as_ref(),
-        },
-    )
-    .and_then(|prepared| prepared.materialize(&checked));
+    let services = PathServices {
+        base: &request.base,
+        filesystem: &checked,
+        mime: mime.as_ref(),
+    };
+    let prepared = if pool.profile.allocator_backed {
+        PreparedPaths::prepare_allocator_backed(
+            pool.profile.limits,
+            &paths,
+            request.location,
+            services,
+        )
+    } else {
+        PreparedPaths::prepare(
+            pool.source_ledger
+                .as_ref()
+                .expect("bounded worker has a source ledger"),
+            pool.profile.scope,
+            pool.profile.limits,
+            &paths,
+            request.location,
+            services,
+        )
+    };
+    let result = prepared.and_then(|prepared| prepared.materialize(&checked));
     if state.cancelled() {
         return Err(WorkError::Cancelled);
     }

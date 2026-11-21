@@ -143,6 +143,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "constant_time_eq"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9eb6feb175df65d0a3ccd3e73484e940d0ac664e8034f0519fd49a93db3071d9"
+dependencies = [
+ "rustversion",
+]
+
+[[package]]
 name = "convert_case"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -299,6 +308,7 @@ checksum = "6e634e2e0ebac1ee034020da1ca582e17ffe4e0f5e985823721e168928136dcb"
 dependencies = [
  "crc32fast",
  "miniz_oxide",
+ "zlib-rs",
 ]
 
 [[package]]
@@ -907,6 +917,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "nix"
+version = "0.32.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "77730ed34f01f4990cb2ea67fec715ecebc6fab9a6396cf83c5529b13f581bdc"
+dependencies = [
+ "bitflags",
+ "cfg-if",
+ "cfg_aliases",
+ "libc",
+]
+
+[[package]]
 name = "nohash-hasher"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1079,6 +1101,7 @@ dependencies = [
  "playwright-rust-composition-chromium-page-lifecycle",
  "playwright-rust-core",
  "playwright-rust-plugin-ordered-handle-delivery",
+ "playwright-rust-remote-cdp",
  "playwright-rust-runtime",
  "playwright-rust-runtime-tokio",
  "playwright-rust-transport",
@@ -1211,6 +1234,20 @@ dependencies = [
  "thiserror",
  "tokio-util",
  "url",
+]
+
+[[package]]
+name = "playwright-rust-api-request-tracing"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "sha1",
+ "tempfile",
+ "thiserror",
+ "time",
+ "url",
+ "zip",
 ]
 
 [[package]]
@@ -3077,6 +3114,18 @@ name = "playwright-rust-core"
 version = "0.1.0"
 
 [[package]]
+name = "playwright-rust-ecmascript-regexp"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "flate2",
+ "regress",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "playwright-rust-endpoint-tokio"
 version = "0.1.0"
 dependencies = [
@@ -3139,6 +3188,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "playwright-rust-har-recording"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "httpdate",
+ "serde",
+ "serde_json",
+ "sha1",
+ "thiserror",
+ "url",
+]
+
+[[package]]
 name = "playwright-rust-har-replay"
 version = "0.1.0"
 dependencies = [
@@ -3186,6 +3248,7 @@ dependencies = [
  "playwright-rust-api-request-connector-socks5",
  "playwright-rust-api-request-cookie",
  "playwright-rust-api-request-decompress",
+ "playwright-rust-api-request-tracing",
  "playwright-rust-api-request-transport",
  "playwright-rust-browser-registry",
  "playwright-rust-cap-navigation",
@@ -3201,6 +3264,7 @@ dependencies = [
  "playwright-rust-playwright-server-session",
  "playwright-rust-trace-playwright-v8",
  "playwright-rust-transport-ws",
+ "serde",
  "serde_json",
  "tempfile",
  "tokio",
@@ -3276,11 +3340,13 @@ dependencies = [
  "playwright-rust-composition-chromium-mouse",
  "playwright-rust-composition-chromium-touchscreen",
  "playwright-rust-core",
+ "playwright-rust-ecmascript-regexp",
  "playwright-rust-fake",
  "playwright-rust-file-input-fs",
  "playwright-rust-file-input-model",
  "playwright-rust-file-input-source",
  "playwright-rust-file-input-tokio",
+ "playwright-rust-har-recording",
  "playwright-rust-har-replay",
  "playwright-rust-input-model",
  "playwright-rust-network-model",
@@ -3296,10 +3362,11 @@ dependencies = [
  "playwright-rust-server-wire",
  "playwright-rust-trace-playwright-v8",
  "playwright-rust-transport",
- "regex",
  "reqwest",
  "serde",
  "serde_json",
+ "sha1",
+ "tempfile",
  "thiserror",
  "tokio",
  "tokio-tungstenite",
@@ -3308,6 +3375,7 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "zeroize",
+ "zip",
 ]
 
 [[package]]
@@ -3545,7 +3613,6 @@ dependencies = [
  "playwright-rust-browser-registry",
  "playwright-rust-cap-navigation",
  "playwright-rust-node-host",
- "playwright-rust-owned-process-startup",
  "playwright-rust-playwright-server-browser-ops",
  "playwright-rust-playwright-server-connect",
  "playwright-rust-playwright-server-endpoint-discovery",
@@ -3560,6 +3627,17 @@ dependencies = [
  "tokio-util",
  "tracing",
  "url",
+]
+
+[[package]]
+name = "playwright-rust-remote-cdp"
+version = "0.1.0"
+dependencies = [
+ "futures-util",
+ "playwright-rust-cdp",
+ "playwright-rust-node-host",
+ "tokio",
+ "tokio-tungstenite",
 ]
 
 [[package]]
@@ -4284,18 +4362,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "regex"
-version = "1.13.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f020237b6c8eed93db2e2cb53c00c60a8e1bc73da7d073199a1180401450218d"
-dependencies = [
- "aho-corasick",
- "memchr",
- "regex-automata",
- "regex-syntax",
-]
-
-[[package]]
 name = "regex-automata"
 version = "0.4.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4311,6 +4377,13 @@ name = "regex-syntax"
 version = "0.8.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
+
+[[package]]
+name = "regress"
+version = "0.12.0"
+dependencies = [
+ "memchr",
+]
 
 [[package]]
 name = "reqwest"
@@ -4719,6 +4792,7 @@ dependencies = [
  "powerfmt",
  "serde_core",
  "time-core",
+ "time-macros",
 ]
 
 [[package]]
@@ -4726,6 +4800,16 @@ name = "time-core"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9e1c906769ad99c88eaa54e728060edef082f8e358ff32030cb7c7d315e81109"
+
+[[package]]
+name = "time-macros"
+version = "0.2.32"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7e689342a48d2ea927c87ea50cabf8594854bf940e9310208848d680d668ed85"
+dependencies = [
+ "num-conv",
+ "time-core",
+]
 
 [[package]]
 name = "tinystr"
@@ -4957,6 +5041,12 @@ dependencies = [
  "thiserror",
  "utf-8",
 ]
+
+[[package]]
+name = "typed-path"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ce898823d8cd0f028662d2f349694b1af0a5cc9be83f1d213a00d3147445e1e"
 
 [[package]]
 name = "typenum"
@@ -5322,6 +5412,20 @@ name = "zeroize"
 version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e13c156562582aa81c60cb29407084cdb54c4164760106ab78e6c5b0858cf64e"
+dependencies = [
+ "zeroize_derive",
+]
+
+[[package]]
+name = "zeroize_derive"
+version = "1.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3c50655cbb0fe3fc43170059e702f1ce5e19b84cec58dc87b037a09935c2f328"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+]
 
 [[package]]
 name = "zerotrie"
@@ -5355,6 +5459,31 @@ dependencies = [
  "quote",
  "syn 3.0.5",
 ]
+
+[[package]]
+name = "zip"
+version = "9.7.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "63e50f7b2212e4635244be3c363b53273d159f2523eb7db3096c1d2861c1b603"
+dependencies = [
+ "constant_time_eq",
+ "crc32fast",
+ "flate2",
+ "getrandom 0.4.3",
+ "indexmap",
+ "libc",
+ "memchr",
+ "nix",
+ "typed-path",
+ "windows-sys 0.61.2",
+ "zeroize",
+]
+
+[[package]]
+name = "zlib-rs"
+version = "0.6.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b268e58e7c693d7c271f93ffc4ba3b380412554231c85bf61ca7af91042a4112"
 
 [[package]]
 name = "zmij"

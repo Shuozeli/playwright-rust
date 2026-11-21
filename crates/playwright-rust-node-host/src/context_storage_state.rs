@@ -27,8 +27,6 @@ use crate::evaluation::{EvaluateParams, EvaluationValue};
 use crate::{HostError, HostSession};
 
 const SCOPE: ResourceScope = ResourceScope::extension(198, 0);
-const MAX_CONTEXTS: usize = 16;
-const MAX_FRAMES: usize = 128;
 pub const MAX_STORAGE_ORIGINS: usize = 128;
 pub const MAX_STORAGE_ITEMS: usize = 4096;
 pub const MAX_STORAGE_STATE_BYTES: usize = 8 * 1024 * 1024;
@@ -221,18 +219,13 @@ pub(crate) struct Installation {
     state: Mutex<State>,
     operation: tokio::sync::Mutex<()>,
     identity: Arc<()>,
-    _storage: ResourceLease,
+    storage: Mutex<Option<ResourceLease>>,
 }
 
 impl Installation {
     pub(crate) fn new(resources: &ProductionResourceLedger) -> Result<Arc<Self>, HostError> {
         let bytes = (std::mem::size_of::<Self>()
             + std::mem::size_of::<State>()
-            + MAX_CONTEXTS * std::mem::size_of::<ContextEntry>()
-            + MAX_FRAMES
-                * (std::mem::size_of::<FrameEntry>() + std::mem::size_of::<(ObjectId, String)>())
-            + MAX_CONTEXTS * MAX_STORAGE_ORIGINS * std::mem::size_of::<String>()
-            + MAX_FRAMES * MAX_ORIGIN_BYTES
             + MAX_ORIGIN_BYTES_TOTAL
             + 2 * std::mem::size_of::<usize>()) as u64;
         let plan = ResourceRequirements::none()
@@ -243,29 +236,17 @@ impl Installation {
             .map_err(HostError::backend)?
             .reserve(SCOPE, ResourceClass::BackendStateBytes, bytes)
             .map_err(HostError::backend)?;
-        let mut contexts = Vec::new();
-        let mut frames = Vec::new();
-        let mut pending = Vec::new();
-        contexts
-            .try_reserve_exact(MAX_CONTEXTS)
-            .map_err(HostError::backend)?;
-        frames
-            .try_reserve_exact(MAX_FRAMES)
-            .map_err(HostError::backend)?;
-        pending
-            .try_reserve_exact(MAX_FRAMES)
-            .map_err(HostError::backend)?;
         Ok(Arc::new(Self {
             state: Mutex::new(State {
-                contexts,
-                frames,
-                pending,
+                contexts: Vec::new(),
+                frames: Vec::new(),
+                pending: Vec::new(),
                 overflowed_unknown: false,
                 closed: false,
             }),
             operation: tokio::sync::Mutex::new(()),
             identity: Arc::new(()),
-            _storage: storage,
+            storage: Mutex::new(Some(storage)),
         }))
     }
 
@@ -275,6 +256,9 @@ impl Installation {
             state.contexts.clear();
             state.frames.clear();
             state.pending.clear();
+        }
+        if let Ok(mut storage) = self.storage.lock() {
+            storage.take();
         }
     }
 
@@ -382,7 +366,15 @@ impl Installation {
             insert_origin(&mut state, context, origin);
         } else if let Some(pending) = state.pending.iter_mut().find(|pending| pending.0 == frame) {
             pending.1 = origin;
-        } else if state.pending.len() < MAX_FRAMES {
+        } else if state
+            .pending
+            .iter()
+            .map(|(_, origin)| origin.len())
+            .sum::<usize>()
+            .checked_add(origin.len())
+            .is_some_and(|bytes| bytes <= MAX_ORIGIN_BYTES_TOTAL)
+        {
+            state.pending.try_reserve(1).map_err(HostError::backend)?;
             state.pending.push((frame, origin));
         } else {
             state.overflowed_unknown = true;
@@ -414,11 +406,7 @@ impl Installation {
             .retain(|entry| context_ids.contains(&entry.id));
         for context in context_ids {
             if !state.contexts.iter().any(|entry| entry.id == context) {
-                if state.contexts.len() == MAX_CONTEXTS {
-                    return Err(HostError::ResourceExhausted(
-                        "storage-state Context capacity exceeded".into(),
-                    ));
-                }
+                state.contexts.try_reserve(1).map_err(HostError::backend)?;
                 let overflowed = state.overflowed_unknown;
                 state.contexts.push(ContextEntry {
                     id: context,
@@ -430,14 +418,9 @@ impl Installation {
         let pages = view.collection_pages().collect::<Vec<_>>();
         let mut frames = Vec::new();
         frames
-            .try_reserve_exact(MAX_FRAMES)
+            .try_reserve_exact(view.frames().count())
             .map_err(HostError::backend)?;
         for owner in view.frames() {
-            if frames.len() == MAX_FRAMES {
-                return Err(HostError::ResourceExhausted(
-                    "storage-state Frame capacity exceeded".into(),
-                ));
-            }
             let Some(context) = pages
                 .iter()
                 .find(|page| page.id == owner.page)
@@ -1175,6 +1158,34 @@ mod tests {
     };
 
     const TEST_EPOCH: ConnectionEpoch = ConnectionEpoch::new(1);
+
+    #[test]
+    fn close_releases_storage_bookkeeping_while_owner_remains_alive() {
+        // Arrange
+        let bytes = (std::mem::size_of::<Installation>()
+            + std::mem::size_of::<State>()
+            + MAX_ORIGIN_BYTES_TOTAL
+            + 2 * std::mem::size_of::<usize>()) as u64;
+        let plan = ResourceRequirements::none()
+            .with_class(ResourceClass::BackendStateBytes, bytes, bytes)
+            .with_metadata(1, 1);
+        let limits = playwright_rust_core::ResourceLimits::deny_all(1, 1).with_class(
+            ResourceClass::BackendStateBytes,
+            bytes,
+            bytes,
+        );
+        let resources = ProductionResourceLedger::new(limits, plan).unwrap();
+        let installation = Installation::new(&resources).unwrap();
+        assert_eq!(resources.metrics().unwrap().active_leases, 1);
+
+        // Act
+        installation.close();
+
+        // Assert
+        let metrics = resources.metrics().unwrap();
+        assert_eq!(metrics.active_leases, 0);
+        assert_eq!(metrics.class(ResourceClass::BackendStateBytes).current, 0);
+    }
 
     fn scratch_topology() -> CdpTopology {
         let mut topology = CdpTopology::new(

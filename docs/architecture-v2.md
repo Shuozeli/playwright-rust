@@ -1,4 +1,4 @@
-<!-- agent-updated: 2026-11-14T05:28:56Z -->
+<!-- agent-updated: 2026-11-21T03:28:53Z -->
 
 ## Node Browser-root CDP Page-creation boundary (2026-10-12)
 
@@ -84,9 +84,11 @@ while the official oracle passed all 11. The new default-off `cdp-session`
 source capability owns a separate browser-root attachment and up to eight
 child Page sessions. The topology driver ignores an auxiliary attach only
 when its parent session ID exactly matches the registered auxiliary parent;
-ordinary discovery remains unchanged. The Rust host owns bounded 64-event,
-1-MiB-per-session queues, send/drain event fences, explicit detach, Page-close
-invalidation, and browser shutdown cleanup. A host delivery acknowledgement
+ordinary discovery remains unchanged. The Rust host owns allocator-backed
+per-session unread queues, send/drain event fences, explicit detach, Page-close
+invalidation, and browser shutdown cleanup. One FFI claim moves at most 64
+events as a fairness quantum; it is not a queue capacity or aggregate-byte
+limit. A host delivery acknowledgement
 compensates an attached child if its queued result is never read. An ABI118
 PyO3 lease owns cleanup from the host result through Python wrapper registration,
 including cancellation of a queued FFI result; the facade claims it only after
@@ -672,18 +674,48 @@ their public APIs or state. `response-body` reuses Rust-correlated navigation
 request identity and authoritative Page/Frame routing for one bounded
 `Network.getResponseBody`; Python receives only copied bytes.
 
-Python ABI 76 composes geolocation value, permission and persistent Chromium
-launch arguments as three independent leaves. `context-geolocation` owns a
-fixed 16-Context registry of finite longitude, latitude and accuracy values.
-Its session initializer matches exact owned/default/external Context identity
-and sends `Emulation.setGeolocationOverride` before Page/OOPIF publication.
+Python ABI 76 introduced geolocation value, permission and persistent Chromium
+launch arguments as three independent leaves. The shared
+`context-geolocation` owner now grows through fallible allocator-backed storage
+instead of a fixed Context registry. Python and Node ordinary Context creation,
+Node runtime update/clear, and Node/Python persistent defaults all compose the
+same finite longitude, latitude and accuracy value. Its session initializer
+matches exact owned/default/external Context identity and sends
+`Emulation.setGeolocationOverride` before Page/OOPIF publication.
 
-`context-geolocation-permission` owns a separate fixed 16-Context registry and
-sends `Browser.grantPermissions {"permissions": ["geolocation"]}` on the root
-browser session. The persistent default omits `browserContextId`; an owned
-Context uses the exact native ID obtained from authoritative topology. A caller
-can therefore select coordinates, permission, both or neither without pulling
-in a second driver, transport, topology or Python state mirror.
+`context-geolocation-permission` is the historical internal feature name for
+the complete Chromium permission owner. Its Context and per-origin grant
+tables grow through fallible allocator-backed storage. It maps every supported
+Playwright permission name, merges grants per normalized origin, and sends
+`Browser.grantPermissions` or `Browser.resetPermissions` on the root browser
+session. The persistent default omits `browserContextId`; an owned Context uses
+the exact native ID obtained from authoritative topology. Node exposes it as
+the `context-permissions` and `persistent-context-permissions` profiles. A
+caller can therefore select coordinates, permissions, both or neither without
+pulling in a second driver, transport, topology or language-side state mirror.
+
+Node now exposes the existing `context-http-credentials` owner as independent
+`context-http-credentials` and `persistent-context-http-credentials` package
+profiles. Public option validation projects `username`, `password`, optional
+`origin`, and `send` into one typed N-API value; Rust validates, retains,
+installs and settles Fetch authentication challenges. Persistent ordinary and
+video launch carry the same value in `PersistentContextDefaults`. The combined
+policy profile composes credentials with locale, timezone, geolocation,
+permissions, offline, CSP, JavaScript and HTTPS settings without a JS state
+mirror or a second network-interception owner. The deprecated public runtime
+setter replaces or clears that same retained Context value, updates state
+before refreshing current Page/OOPIF and Service Worker sessions, and uses one
+async gate to serialize Page/OOPIF initialization against mutation. With Page
+routing selected, refresh goes through its shared Fetch owner; the credentials-
+only profile retains its narrower direct Fetch path.
+
+Node also exposes the existing Context binding scope through the independent
+`context-bindings` profile. It composes `page-bindings` and Handles, adds one
+typed `contextExposeBinding(contextId, name, needsHandle)` port, and reuses the
+shared call stream. Rust owns registration scope, current/future Page/OOPIF
+installation, exact cross-scope conflicts, and Context teardown. Node retains
+only the executable callback and dispatches a call to the Page registry before
+falling back to the owning Context registry.
 
 `persistent-context-launch-arguments` validates one bounded switch collection
 and moves it into the existing `ChromiumLaunchRequest`. It cannot replace the
@@ -705,18 +737,18 @@ publication. Ordinary Context creation and persistent launch forward the
 boolean through the existing composable Rust policy value. The leaf introduces
 no Python/CDP state mirror, driver, transport, polling loop or browser process.
 
-Python ABI 74's optional `context-timezone` leaf is a Context-scoped Chromium
-initialization policy. Rust owns a fixed registry of at most 16 selected
-portable Context identities and their validated timezone identifiers; the
-persistent default is an independent immutable selection and attached external
-Contexts inherit neither path. Each identifier is nonempty, control-free and
-bounded to 256 UTF-8 bytes.
+Python ABI 74 introduced the optional `context-timezone` leaf as a
+Context-scoped Chromium initialization policy. Rust now owns allocator-backed
+selected Context identities and exact timezone identifiers; the persistent
+default is an independent selection and attached external Contexts inherit
+neither path. Empty input is a no-op and nonempty input has no fabricated
+length or character policy; FFI admission charges the observed UTF-8 bytes.
 
 Every selected Page or OOPIF session receives exact
 `Emulation.setTimezoneOverride {"timezoneId": ...}` initialization before
-publication. Chromium's shared-renderer "already in effect" response is the
-only idempotent duplicate; invalid timezone identifiers become stable argument
-errors and unrelated protocol failures propagate. Ordinary Context creation
+publication. Chromium remains the authority for nonempty identifier validity;
+its shared-renderer "already in effect" response is the only idempotent
+duplicate and unrelated protocol failures propagate. Ordinary Context creation
 passes one composable Rust `ContextPolicyOptions` value, so adding this leaf
 does not lengthen the host's positional policy API or introduce a Python/CDP
 state mirror, driver, transport, polling loop or browser process.
@@ -2868,9 +2900,13 @@ or process termination API. HTTP discovery is intentionally deferred to a
 separate optional provider because it introduces another protocol and security
 boundary.
 
-The raw CDP connection now has count and byte limits for pending commands,
-write and event channels, serialized commands, responses, events, protocol
-errors, and WebSocket messages. Command admission happens synchronously before
+The raw CDP connection supports independently selected count and byte policies
+for pending commands, write and event channels, serialized commands,
+responses, events, protocol errors, and WebSocket messages. The public-CDP
+compatibility profile selects allocator-backed sentinels for trusted-browser
+frame/result/error/event payload bytes and retained reclaiming-fanout entries.
+Finite profiles retain explicit event capacity and lag behavior.
+Command admission happens synchronously before
 the future is returned. A registration guard removes the pending entry when an
 unpolled or active future is dropped, while shutdown drains every entry even
 when the reader future itself is cancelled. Outgoing serialization uses a
@@ -2878,12 +2914,13 @@ bounded writer. Incoming response/event parsing moves JSON members instead of
 deep-cloning them, and `CdpEvent` clones share one immutable payload across all
 subscribers.
 
-`CdpConnectionProductionProfile` adds the production ledger boundary. It holds
-a fixed `WireBytes` reader lease for maximum raw-message/parsed-JSON overlap,
+`CdpConnectionProductionProfile` adds the production ledger boundary. Finite
+profiles hold a fixed `WireBytes` reader lease for maximum raw-message/parsed-JSON overlap,
 reserves a complete command/result peak for every pending command, and attaches
-exact `EventItem`/`EventBytes` leases to unique events. Event capacity includes
-one transient item/maximum payload because an incoming value is allocated before
-bounded admission. A queued command shares its lease with the pending entry, so
+exact `EventItem` and finite-profile `EventBytes` leases to unique events. The
+allocator-backed byte sentinel contributes zero finite event-byte accounting.
+Finite event capacity includes one transient item/maximum payload because an
+incoming value is allocated before bounded admission. A queued command shares its lease with the pending entry, so
 cancelling the caller does not make bytes still owned by the writer queue
 disappear from accounting.
 

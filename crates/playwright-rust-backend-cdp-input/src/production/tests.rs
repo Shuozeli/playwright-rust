@@ -100,6 +100,34 @@ fn zero_state_profile_is_explicitly_disabled() {
     assert_eq!(resources.metrics().unwrap().active_leases, 0);
 }
 
+#[test]
+fn allocator_backed_profile_grows_past_the_legacy_page_state_count() {
+    // Arrange
+    let profile = CdpInputProductionProfile::new_allocator_backed(
+        ResourceScope::extension(13, 4),
+        CdpInputPolicy::Interleaved,
+    );
+    let requirements = profile.requirements();
+    let resources = ProductionResourceLedger::new(
+        ResourceLimits::deny_all(requirements.scopes, requirements.leases),
+        requirements,
+    )
+    .unwrap();
+    let factory =
+        CdpInputServiceFactory::new_with_production_resources(profile, &resources).unwrap();
+
+    // Act
+    let inputs = (0..129)
+        .map(|_| factory.create().expect("allocator-backed Page input state"))
+        .collect::<Vec<_>>();
+
+    // Assert
+    assert_eq!(factory.active_states(), 129);
+    assert_eq!(resources.metrics().unwrap().active_leases, 0);
+    drop(inputs);
+    assert_eq!(factory.active_states(), 0);
+}
+
 #[tokio::test]
 async fn click_owner_retains_input_admission_after_transaction_and_coordinator_drop() {
     // Arrange

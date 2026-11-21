@@ -16,14 +16,18 @@ use std::time::Duration;
 use base64::Engine as _;
 use playwright_rust_backend_cdp_topology::CdpTopology;
 use playwright_rust_cdp::{
-    CdpConnection, CdpEvent, CdpEventReceiver, CdpEventRecvError, connection::CdpError,
-    generated::page,
+    CdpConnection, CdpEvent, CdpEventReceiver, CdpEventRecvError,
+    ServiceWorkerInitializationCommand,
+    connection::CdpError,
+    generated::{page, target},
 };
 use playwright_rust_composition_chromium::SharedChromiumTopology;
 use playwright_rust_core::{
     ObjectId, ProductionResourceLedger, ResourceClass, ResourceLease, ResourceRequirements,
     ResourceScope,
 };
+#[cfg(feature = "route-regexp")]
+use playwright_rust_ecmascript_regexp::EcmaScriptRegex;
 use playwright_rust_plugin_chromium_frame_observer::{
     ChromiumFrameEventObserver, FrameObservationResult,
 };
@@ -31,10 +35,8 @@ use playwright_rust_plugin_chromium_session_initialization::{
     ChromiumSessionInitializationFuture, ChromiumSessionInitializationTarget,
     ChromiumSessionInitializer, ChromiumSessionResumeFence,
 };
-#[cfg(feature = "route-regexp")]
-use regex::{Regex, RegexBuilder};
 use serde_json::{Map, Value, json};
-#[cfg(any(feature = "har-replay", feature = "route-fulfill-path"))]
+#[cfg(feature = "route-fulfill-path")]
 use tokio::io::AsyncReadExt as _;
 use tokio::sync::{Notify, mpsc};
 use tokio_util::sync::CancellationToken;
@@ -43,9 +45,6 @@ use url::Url;
 use crate::{HostError, HostSession};
 
 const SCOPE: ResourceScope = ResourceScope::extension(140, 1);
-const MAX_ROUTES: usize = 256;
-#[cfg(feature = "route-regexp")]
-const MAX_REGEXP_ROUTES: usize = 32;
 const MAX_PENDING_CALLS: usize = 64;
 const MAX_RETIRED_CALLS: usize = MAX_PENDING_CALLS;
 #[cfg(feature = "route-request-history")]
@@ -53,17 +52,6 @@ const ROUTE_REQUEST_HISTORY_LOOKUP_TIMEOUT_MS: u32 = 30_000;
 #[cfg(feature = "route-redirects")]
 const MAX_REDIRECT_HEADER_OVERRIDES: usize = MAX_PENDING_CALLS;
 pub const MAX_ROUTE_INITIALIZING_SESSIONS: usize = 64;
-const MAX_PATTERN_BYTES: usize = 4 * 1024;
-#[cfg(feature = "route-regexp")]
-const MAX_REGEXP_FLAGS_BYTES: usize = 4;
-#[cfg(feature = "route-regexp")]
-const REGEXP_PROGRAM_LIMIT_BYTES: usize = 64 * 1024;
-#[cfg(feature = "route-regexp")]
-const REGEXP_DFA_LIMIT_BYTES: usize = 64 * 1024;
-#[cfg(feature = "route-regexp")]
-const REGEXP_STORAGE_BYTES: usize =
-    MAX_REGEXP_ROUTES * (REGEXP_PROGRAM_LIMIT_BYTES + REGEXP_DFA_LIMIT_BYTES + MAX_PATTERN_BYTES);
-const MAX_CDP_PATTERN_BYTES: usize = 2 * MAX_PATTERN_BYTES + 1;
 const MAX_URL_BYTES: usize = 64 * 1024;
 const MAX_METHOD_BYTES: usize = 64;
 const MAX_RESOURCE_TYPE_BYTES: usize = 64;
@@ -92,25 +80,13 @@ pub const MAX_ROUTE_CONTINUE_INPUT_BYTES: usize = MAX_URL_BYTES
     + MAX_POST_DATA_BYTES
     + MAX_HEADER_COUNT * 2 * std::mem::size_of::<String>()
     + 16 * 1024;
-#[cfg(feature = "har-replay")]
-pub const MAX_HAR_REPLAY_ARCHIVE_BYTES: usize = 8 * 1024 * 1024;
-#[cfg(feature = "har-replay")]
-pub const MAX_HAR_REPLAY_RETAINED_BYTES: usize = 8 * 1024 * 1024;
-#[cfg(feature = "har-replay")]
-pub const MAX_HAR_REPLAY_ARCHIVES: usize = 8;
-#[cfg(feature = "har-replay")]
-const MAX_HAR_PATH_BYTES: usize = 4 * 1024;
-#[cfg(feature = "har-replay")]
-const HAR_REPLAY_STORAGE_BYTES: usize = MAX_HAR_REPLAY_RETAINED_BYTES;
-#[cfg(not(feature = "har-replay"))]
-const HAR_REPLAY_STORAGE_BYTES: usize = 0;
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RouteCall {
     pub id: u64,
     pub registration_id: u64,
     pub context: ObjectId,
-    pub page: ObjectId,
+    pub page: Option<ObjectId>,
+    pub service_worker_id: Option<String>,
     pub frame: Option<ObjectId>,
     pub url: String,
     pub method: String,
@@ -135,7 +111,15 @@ where
     let Some(native_request_id) = &call.native_request_id else {
         return Ok(None);
     };
-    let page_id = call.page.get().to_string();
+    let page_id = call
+        .page
+        .ok_or_else(|| {
+            HostError::InvalidArgument(
+                "Service Worker route history lookup is not installed".into(),
+            )
+        })?
+        .get()
+        .to_string();
     let lookup = lookup(page_id, native_request_id.clone());
     tokio::time::timeout(
         Duration::from_millis(u64::from(ROUTE_REQUEST_HISTORY_LOOKUP_TIMEOUT_MS)),
@@ -159,7 +143,10 @@ struct Registration {
 enum RoutePattern {
     Glob(Box<str>),
     #[cfg(feature = "route-regexp")]
-    RegExp(Arc<Regex>),
+    RegExp {
+        server: Arc<EcmaScriptRegex>,
+        client: Arc<EcmaScriptRegex>,
+    },
 }
 
 impl From<String> for RoutePattern {
@@ -175,74 +162,34 @@ impl From<&str> for RoutePattern {
 }
 
 impl RoutePattern {
-    fn matches_url(&self, url: &str) -> Result<bool, HostError> {
+    fn matches_server_url(&self, url: &str) -> Result<bool, HostError> {
         match self {
             Self::Glob(pattern) => route_matches(pattern, url),
             #[cfg(feature = "route-regexp")]
-            Self::RegExp(pattern) => Ok(pattern.is_match(url)),
+            Self::RegExp { server, .. } => Ok(server.test(url)),
         }
     }
 
-    fn source_len(&self) -> usize {
+    fn matches_client_url(&self, url: &str) -> Result<bool, HostError> {
         match self {
-            Self::Glob(pattern) => pattern.len(),
+            Self::Glob(pattern) => route_matches(pattern, url),
             #[cfg(feature = "route-regexp")]
-            Self::RegExp(pattern) => pattern.as_str().len(),
+            Self::RegExp { client, .. } => Ok(client.test(url)),
         }
     }
 
     #[cfg(feature = "route-regexp")]
     fn regexp(source: String, flags: String) -> Result<Self, HostError> {
-        if source.len() > MAX_PATTERN_BYTES {
-            return Err(HostError::InvalidArgument(format!(
-                "route RegExp source exceeds {MAX_PATTERN_BYTES} UTF-8 bytes"
-            )));
-        }
-        if flags.len() > MAX_REGEXP_FLAGS_BYTES {
-            return Err(HostError::InvalidArgument(format!(
-                "route RegExp flags exceed {MAX_REGEXP_FLAGS_BYTES} UTF-8 bytes"
-            )));
-        }
-        let mut builder = RegexBuilder::new(&source);
-        let mut seen = 0_u8;
-        for flag in flags.bytes() {
-            let bit = match flag {
-                b'i' => {
-                    builder.case_insensitive(true);
-                    1
-                }
-                b'm' => {
-                    builder.multi_line(true);
-                    2
-                }
-                b's' => {
-                    builder.dot_matches_new_line(true);
-                    4
-                }
-                b'u' => 8,
-                _ => {
-                    return Err(HostError::InvalidArgument(
-                        "unsupported route RegExp flag; only i, m, s and u are supported".into(),
-                    ));
-                }
-            };
-            if seen & bit != 0 {
-                return Err(HostError::InvalidArgument(
-                    "duplicate route RegExp flag".into(),
-                ));
-            }
-            seen |= bit;
-        }
-        builder
-            .size_limit(REGEXP_PROGRAM_LIMIT_BYTES)
-            .dfa_size_limit(REGEXP_DFA_LIMIT_BYTES)
-            .build()
-            .map(|pattern| Self::RegExp(Arc::new(pattern)))
-            .map_err(|error| {
-                HostError::InvalidArgument(format!(
-                    "unsupported or invalid route RegExp syntax: {error}"
-                ))
-            })
+        let server = EcmaScriptRegex::compile(source.clone(), flags.clone()).map_err(|error| {
+            HostError::InvalidArgument(format!("invalid route RegExp: {error}"))
+        })?;
+        let client = EcmaScriptRegex::compile(source, flags).map_err(|error| {
+            HostError::InvalidArgument(format!("invalid route RegExp: {error}"))
+        })?;
+        Ok(Self::RegExp {
+            server: Arc::new(server),
+            client: Arc::new(client),
+        })
     }
 }
 
@@ -253,9 +200,9 @@ enum RegistrationScope {
 }
 
 impl RegistrationScope {
-    fn applies_to(self, page: ObjectId, context: ObjectId) -> bool {
+    fn applies_to(self, page: Option<ObjectId>, context: ObjectId) -> bool {
         match self {
-            Self::Page(expected) => expected == page,
+            Self::Page(expected) => Some(expected) == page,
             Self::Context(expected) => expected == context,
         }
     }
@@ -317,7 +264,7 @@ impl RouteRefresh {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct RouteSettlement {
-    page: ObjectId,
+    page: Option<ObjectId>,
     context: ObjectId,
     refresh: RouteRefresh,
 }
@@ -351,7 +298,7 @@ enum NativeRouteCall {
 struct PendingCall {
     id: u64,
     context: ObjectId,
-    page: ObjectId,
+    page: Option<ObjectId>,
     frame: Option<ObjectId>,
     registration_scope: RegistrationScope,
     fallback_cursor: FallbackCursor,
@@ -375,13 +322,13 @@ struct PendingCall {
 #[derive(Clone, Copy)]
 struct SettlingCall {
     id: u64,
-    page: ObjectId,
+    page: Option<ObjectId>,
     registration_scope: RegistrationScope,
 }
 
 #[derive(Clone, Copy)]
 struct SessionScope {
-    page: ObjectId,
+    page: Option<ObjectId>,
     context: ObjectId,
     ownership: playwright_rust_backend_cdp_topology::CdpContextOwnership,
 }
@@ -391,9 +338,14 @@ struct InitializingSession {
     scope: SessionScope,
 }
 
+struct ServiceWorkerSession {
+    session_id: Box<str>,
+    scope: SessionScope,
+}
+
 #[cfg(feature = "route-redirects")]
 struct RedirectHeaderOverride {
-    page: ObjectId,
+    page: Option<ObjectId>,
     session_id: Box<str>,
     fetch_request_id: Box<str>,
     network_request_id: Option<Box<str>>,
@@ -402,10 +354,18 @@ struct RedirectHeaderOverride {
 
 #[cfg(feature = "network-events")]
 struct FulfilledBody {
-    page: ObjectId,
+    page: Option<ObjectId>,
     session_id: Box<str>,
     network_request_id: Box<str>,
     body: Arc<[u8]>,
+}
+#[cfg(feature = "har-recording")]
+struct HarRequestOverride {
+    page: Option<ObjectId>,
+    context: ObjectId,
+    session_id: Box<str>,
+    network_request_id: Box<str>,
+    options: Arc<RouteContinue>,
 }
 #[cfg(feature = "network-events")]
 type NativeRequestKey = (Box<str>, Box<str>);
@@ -418,12 +378,51 @@ struct State {
     settling: Vec<SettlingCall>,
     retired: Vec<u64>,
     initializing_sessions: Vec<InitializingSession>,
+    service_worker_sessions: Vec<ServiceWorkerSession>,
     #[cfg(feature = "route-redirects")]
     redirect_header_overrides: Vec<RedirectHeaderOverride>,
-    #[cfg(feature = "har-replay")]
-    har_bytes: usize,
     #[cfg(feature = "network-events")]
     fulfilled: Vec<FulfilledBody>,
+    #[cfg(feature = "har-recording")]
+    har_request_overrides: Vec<HarRequestOverride>,
+}
+
+#[cfg(feature = "har-recording")]
+fn retain_har_request_override_in_state(
+    state: &mut State,
+    pending: &PendingCall,
+    options: &RouteContinue,
+) -> Result<Option<NativeRequestKey>, HostError> {
+    if !options.has_overrides() {
+        return Ok(None);
+    }
+    let Some(network_request_id) = &pending.network_request_id else {
+        return Ok(None);
+    };
+    if let Some(entry) = state.har_request_overrides.iter_mut().find(|entry| {
+        entry.session_id.as_ref() == pending.session_id.as_ref()
+            && entry.network_request_id.as_ref() == network_request_id.as_ref()
+    }) {
+        entry.page = pending.page;
+        entry.context = pending.context;
+        entry.options = Arc::new(options.clone());
+    } else {
+        state
+            .har_request_overrides
+            .try_reserve(1)
+            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
+        state.har_request_overrides.push(HarRequestOverride {
+            page: pending.page,
+            context: pending.context,
+            session_id: pending.session_id.clone(),
+            network_request_id: network_request_id.clone(),
+            options: Arc::new(options.clone()),
+        });
+    }
+    Ok(Some((
+        pending.session_id.clone(),
+        network_request_id.clone(),
+    )))
 }
 
 fn take_pending_action(state: &mut State, id: u64) -> Result<Option<PendingCall>, HostError> {
@@ -642,7 +641,10 @@ fn captured_post_data(source: CapturedPostData<'_>) -> Result<Option<Vec<u8>>, H
 fn reconcile_pending(state: &mut State, active: &[ObjectId]) {
     let mut index = 0;
     while index < state.pending.len() {
-        if active.contains(&state.pending[index].page) {
+        if state.pending[index]
+            .page
+            .is_none_or(|page| active.contains(&page))
+        {
             index += 1;
             continue;
         }
@@ -765,7 +767,6 @@ pub(crate) const fn requirements() -> ResourceRequirements {
     let large_post_data_storage_bytes = 0;
     let bytes = (std::mem::size_of::<Installation>()
         + std::mem::size_of::<State>()
-        + MAX_ROUTES * (std::mem::size_of::<Registration>() + MAX_PATTERN_BYTES)
         + MAX_PENDING_CALLS
             * (std::mem::size_of::<PendingCall>()
                 + std::mem::size_of::<QueuedRouteCall>()
@@ -783,19 +784,8 @@ pub(crate) const fn requirements() -> ResourceRequirements {
         + MAX_RETIRED_CALLS * std::mem::size_of::<u64>()
         + MAX_ROUTE_INITIALIZING_SESSIONS
             * (std::mem::size_of::<InitializingSession>() + MAX_NATIVE_ID_BYTES)
-        + {
-            #[cfg(feature = "route-regexp")]
-            {
-                REGEXP_STORAGE_BYTES
-            }
-            #[cfg(not(feature = "route-regexp"))]
-            {
-                0
-            }
-        }
         + REDIRECT_HEADER_OVERRIDE_STORAGE_BYTES
         + FULFILLED_STORAGE_BYTES
-        + HAR_REPLAY_STORAGE_BYTES
         + large_post_data_storage_bytes
         + {
             #[cfg(feature = "large-route-post-data")]
@@ -815,32 +805,86 @@ pub(crate) const fn requirements() -> ResourceRequirements {
 
 fn take_matching_registration(
     state: &mut State,
-    page: ObjectId,
+    page: Option<ObjectId>,
     context: ObjectId,
     url: &str,
     _auth_enabled: bool,
 ) -> Result<Option<RegistrationMatch>, HostError> {
     let ceiling = state.next_registration;
-    take_matching_registration_after(
-        state,
-        page,
-        context,
-        url,
-        FallbackCursor::Page {
-            before_page: ceiling,
-            before_context: ceiling,
-        },
-    )
+    let Some(cursor) = route_dispatch_cursor(state, page, context, url, ceiling)? else {
+        return Ok(None);
+    };
+    take_matching_registration_after(state, page, context, url, cursor)
 }
 
 fn has_matching_registration(
     state: &State,
-    page: ObjectId,
+    page: Option<ObjectId>,
     context: ObjectId,
     url: &str,
 ) -> Result<bool, HostError> {
+    let ceiling = state.next_registration;
+    let Some(cursor) = route_dispatch_cursor(state, page, context, url, ceiling)? else {
+        return Ok(false);
+    };
+    match cursor {
+        FallbackCursor::Page {
+            before_page,
+            before_context,
+        } => Ok(page
+            .map(|page| {
+                matching_registration_index(state, RegistrationScope::Page(page), before_page, url)
+            })
+            .transpose()?
+            .flatten()
+            .is_some()
+            || matching_registration_index(
+                state,
+                RegistrationScope::Context(context),
+                before_context,
+                url,
+            )?
+            .is_some()),
+        FallbackCursor::Context { before_context } => Ok(matching_registration_index(
+            state,
+            RegistrationScope::Context(context),
+            before_context,
+            url,
+        )?
+        .is_some()),
+    }
+}
+
+fn route_dispatch_cursor(
+    state: &State,
+    page: Option<ObjectId>,
+    context: ObjectId,
+    url: &str,
+    ceiling: u64,
+) -> Result<Option<FallbackCursor>, HostError> {
+    if let Some(page) = page
+        && server_scope_matches(state, RegistrationScope::Page(page), url)?
+    {
+        return Ok(Some(FallbackCursor::Page {
+            before_page: ceiling,
+            before_context: ceiling,
+        }));
+    }
+    if server_scope_matches(state, RegistrationScope::Context(context), url)? {
+        return Ok(Some(FallbackCursor::Context {
+            before_context: ceiling,
+        }));
+    }
+    Ok(None)
+}
+
+fn server_scope_matches(
+    state: &State,
+    scope: RegistrationScope,
+    url: &str,
+) -> Result<bool, HostError> {
     for registration in state.registrations.iter().rev() {
-        if registration.scope.applies_to(page, context) && registration.pattern.matches_url(url)? {
+        if registration.scope == scope && registration.pattern.matches_server_url(url)? {
             return Ok(true);
         }
     }
@@ -849,7 +893,7 @@ fn has_matching_registration(
 
 fn take_matching_registration_after(
     state: &mut State,
-    page: ObjectId,
+    page: Option<ObjectId>,
     context: ObjectId,
     url: &str,
     cursor: FallbackCursor,
@@ -860,8 +904,17 @@ fn take_matching_registration_after(
             before_page,
             before_context,
         } => {
-            if let Some(index) =
-                matching_registration_index(state, RegistrationScope::Page(page), before_page, url)?
+            if let Some(index) = page
+                .map(|page| {
+                    matching_registration_index(
+                        state,
+                        RegistrationScope::Page(page),
+                        before_page,
+                        url,
+                    )
+                })
+                .transpose()?
+                .flatten()
             {
                 let id = state.registrations[index].id;
                 selected = Some((
@@ -927,7 +980,7 @@ fn matching_registration_index(
     for (index, registration) in state.registrations.iter().enumerate().rev() {
         if registration.id < before
             && registration.scope == scope
-            && registration.pattern.matches_url(url)?
+            && registration.pattern.matches_client_url(url)?
         {
             return Ok(Some(index));
         }
@@ -936,28 +989,12 @@ fn matching_registration_index(
 }
 
 fn ensure_registration_capacity(
-    registrations: &[Registration],
-    pattern: &RoutePattern,
+    registrations: &mut Vec<Registration>,
+    _pattern: &RoutePattern,
 ) -> Result<(), HostError> {
-    if registrations.len() == MAX_ROUTES {
-        return Err(HostError::ResourceExhausted(format!(
-            "Page route capacity exceeded ({MAX_ROUTES})"
-        )));
-    }
-    #[cfg(feature = "route-regexp")]
-    if matches!(pattern, RoutePattern::RegExp(_))
-        && registrations
-            .iter()
-            .filter(|registration| matches!(&registration.pattern, RoutePattern::RegExp(_)))
-            .count()
-            == MAX_REGEXP_ROUTES
-    {
-        return Err(HostError::ResourceExhausted(format!(
-            "Page route RegExp capacity exceeded ({MAX_REGEXP_ROUTES})"
-        )));
-    }
-    #[cfg(not(feature = "route-regexp"))]
-    let _ = pattern;
+    registrations.try_reserve(1).map_err(|error| {
+        HostError::ResourceExhausted(format!("Page route allocation failed: {error}"))
+    })?;
     Ok(())
 }
 
@@ -978,10 +1015,6 @@ impl Installation {
                 plan.class(ResourceClass::BackendStateBytes).global,
             )
             .map_err(HostError::backend)?;
-        let mut registrations = Vec::new();
-        registrations
-            .try_reserve_exact(MAX_ROUTES)
-            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
         let mut pending = Vec::new();
         pending
             .try_reserve_exact(MAX_PENDING_CALLS)
@@ -1018,17 +1051,18 @@ impl Installation {
             state: Mutex::new(State {
                 next_registration: 1,
                 next_call: 1,
-                registrations,
+                registrations: Vec::new(),
                 pending,
                 settling,
                 retired,
                 initializing_sessions,
+                service_worker_sessions: Vec::new(),
                 #[cfg(feature = "route-redirects")]
                 redirect_header_overrides,
-                #[cfg(feature = "har-replay")]
-                har_bytes: 0,
                 #[cfg(feature = "network-events")]
                 fulfilled,
+                #[cfg(feature = "har-recording")]
+                har_request_overrides: Vec::new(),
             }),
             sender,
             receiver: tokio::sync::Mutex::new(receiver),
@@ -1046,54 +1080,8 @@ impl Installation {
         handler: RegistrationHandler,
         times: Option<u64>,
     ) -> Result<u64, HostError> {
-        if pattern.source_len() > MAX_PATTERN_BYTES
-            || matches!(&pattern, RoutePattern::Glob(glob) if glob.is_empty())
-        {
-            return Err(HostError::InvalidArgument(format!(
-                "route pattern must contain 1..={MAX_PATTERN_BYTES} UTF-8 bytes"
-            )));
-        }
         let mut state = self.state.lock().map_err(HostError::backend)?;
-        ensure_registration_capacity(&state.registrations, &pattern)?;
-        #[cfg(feature = "har-replay")]
-        if let RegistrationHandler::Har { archive, .. } = &handler {
-            let archive_count = state
-                .registrations
-                .iter()
-                .filter(|registration| {
-                    matches!(registration.handler, RegistrationHandler::Har { .. })
-                })
-                .count();
-            if archive_count == MAX_HAR_REPLAY_ARCHIVES {
-                return Err(HostError::ResourceExhausted(format!(
-                    "HAR replay archive capacity exceeded ({MAX_HAR_REPLAY_ARCHIVES})"
-                )));
-            }
-            let next = state
-                .har_bytes
-                .checked_add(archive.retained_bytes())
-                .ok_or_else(|| {
-                    HostError::ResourceExhausted("HAR replay retained-byte count overflow".into())
-                })?;
-            if next > MAX_HAR_REPLAY_RETAINED_BYTES {
-                return Err(HostError::ResourceExhausted(format!(
-                    "HAR replay retained bytes exceed {MAX_HAR_REPLAY_RETAINED_BYTES}"
-                )));
-            }
-            state.har_bytes = next;
-        }
-        let id = state.next_registration;
-        state.next_registration = id
-            .checked_add(1)
-            .ok_or_else(|| HostError::ResourceExhausted("route ID space exhausted".into()))?;
-        state.registrations.push(Registration {
-            id,
-            scope,
-            pattern,
-            handler,
-            remaining: times.filter(|times| *times != 0),
-        });
-        Ok(id)
+        add_registration_to_state(&mut state, scope, pattern, handler, times)
     }
 
     fn remove_registration(&self, id: u64) -> Result<(), HostError> {
@@ -1101,10 +1089,6 @@ impl Installation {
         state
             .registrations
             .retain(|registration| registration.id != id);
-        #[cfg(feature = "har-replay")]
-        {
-            state.har_bytes = retained_har_bytes(&state.registrations)?;
-        }
         Ok(())
     }
 
@@ -1113,10 +1097,6 @@ impl Installation {
         state
             .registrations
             .retain(|registration| registration.scope != scope);
-        #[cfg(feature = "har-replay")]
-        {
-            state.har_bytes = retained_har_bytes(&state.registrations)?;
-        }
         Ok(())
     }
 
@@ -1126,12 +1106,34 @@ impl Installation {
     }
 }
 
+fn add_registration_to_state(
+    state: &mut State,
+    scope: RegistrationScope,
+    pattern: RoutePattern,
+    handler: RegistrationHandler,
+    times: Option<u64>,
+) -> Result<u64, HostError> {
+    ensure_registration_capacity(&mut state.registrations, &pattern)?;
+    let id = state.next_registration;
+    state.next_registration = id
+        .checked_add(1)
+        .ok_or_else(|| HostError::ResourceExhausted("route ID space exhausted".into()))?;
+    state.registrations.push(Registration {
+        id,
+        scope,
+        pattern,
+        handler,
+        remaining: times.filter(|times| *times != 0),
+    });
+    Ok(id)
+}
+
 fn remove_registrations_from_state(
     state: &mut State,
     scope: RegistrationScope,
     ids: &[u64],
 ) -> Result<(), HostError> {
-    if ids.len() > MAX_ROUTES || ids.contains(&0) {
+    if ids.contains(&0) {
         return Err(HostError::InvalidArgument(
             "route registration IDs are invalid".into(),
         ));
@@ -1148,16 +1150,12 @@ fn remove_registrations_from_state(
     state
         .registrations
         .retain(|registration| !ids.contains(&registration.id));
-    #[cfg(feature = "har-replay")]
-    {
-        state.har_bytes = retained_har_bytes(&state.registrations)?;
-    }
     Ok(())
 }
 
 fn cdp_patterns(
     registrations: &[Registration],
-    page: ObjectId,
+    page: Option<ObjectId>,
     context: ObjectId,
 ) -> Result<Vec<String>, HostError> {
     let applicable = registrations
@@ -1166,7 +1164,7 @@ fn cdp_patterns(
     #[cfg(feature = "route-regexp")]
     if applicable
         .clone()
-        .any(|registration| matches!(&registration.pattern, RoutePattern::RegExp(_)))
+        .any(|registration| matches!(&registration.pattern, RoutePattern::RegExp { .. }))
     {
         return Ok(vec!["*".into()]);
     }
@@ -1178,7 +1176,7 @@ fn cdp_patterns(
         match &registration.pattern {
             RoutePattern::Glob(pattern) => patterns.push(cdp_pattern(pattern)?),
             #[cfg(feature = "route-regexp")]
-            RoutePattern::RegExp(_) => return Ok(vec!["*".into()]),
+            RoutePattern::RegExp { .. } => return Ok(vec!["*".into()]),
         }
     }
     Ok(patterns)
@@ -1209,12 +1207,16 @@ impl Installation {
         }
     }
 
-    fn patterns(&self, page: ObjectId, context: ObjectId) -> Result<Vec<String>, HostError> {
+    fn patterns(
+        &self,
+        page: Option<ObjectId>,
+        context: ObjectId,
+    ) -> Result<Vec<String>, HostError> {
         let state = self.state.lock().map_err(HostError::backend)?;
         cdp_patterns(&state.registrations, page, context)
     }
 
-    fn has_routes(&self, page: ObjectId, context: ObjectId) -> Result<bool, HostError> {
+    fn has_routes(&self, page: Option<ObjectId>, context: ObjectId) -> Result<bool, HostError> {
         Ok(self
             .state
             .lock()
@@ -1222,20 +1224,6 @@ impl Installation {
             .registrations
             .iter()
             .any(|registration| registration.scope.applies_to(page, context)))
-    }
-
-    #[cfg(feature = "route-regexp")]
-    fn has_regexp_route(&self, page: ObjectId, context: ObjectId) -> Result<bool, HostError> {
-        Ok(self
-            .state
-            .lock()
-            .map_err(HostError::backend)?
-            .registrations
-            .iter()
-            .any(|registration| {
-                registration.scope.applies_to(page, context)
-                    && matches!(&registration.pattern, RoutePattern::RegExp(_))
-            }))
     }
 
     fn remember_initializing_session(
@@ -1270,20 +1258,115 @@ impl Installation {
     }
 
     fn initializing_session(&self, session_id: &str) -> Result<Option<SessionScope>, HostError> {
-        Ok(self
-            .state
-            .lock()
-            .map_err(HostError::backend)?
+        let state = self.state.lock().map_err(HostError::backend)?;
+        Ok(state
             .initializing_sessions
             .iter()
             .find(|entry| entry.session_id.as_ref() == session_id)
-            .map(|entry| entry.scope))
+            .map(|entry| entry.scope)
+            .or_else(|| {
+                state
+                    .service_worker_sessions
+                    .iter()
+                    .find(|entry| entry.session_id.as_ref() == session_id)
+                    .map(|entry| entry.scope)
+            }))
     }
 
-    fn retire_initializing_session(&self, session_id: &str) -> Result<(), HostError> {
+    fn remember_service_worker_session(
+        &self,
+        session_id: &str,
+        context: ObjectId,
+        ownership: playwright_rust_backend_cdp_topology::CdpContextOwnership,
+    ) -> Result<(), HostError> {
+        let mut state = self.state.lock().map_err(HostError::backend)?;
+        remember_service_worker_session_in_state(&mut state, session_id, context, ownership)
+    }
+}
+
+fn remember_service_worker_session_in_state(
+    state: &mut State,
+    session_id: &str,
+    context: ObjectId,
+    ownership: playwright_rust_backend_cdp_topology::CdpContextOwnership,
+) -> Result<(), HostError> {
+    if session_id.is_empty() || session_id.len() > MAX_NATIVE_ID_BYTES {
+        return Err(HostError::InvalidArgument(format!(
+            "sessionId must contain 1..={MAX_NATIVE_ID_BYTES} UTF-8 bytes"
+        )));
+    }
+    let scope = SessionScope {
+        page: None,
+        context,
+        ownership,
+    };
+    if let Some(entry) = state
+        .service_worker_sessions
+        .iter_mut()
+        .find(|entry| entry.session_id.as_ref() == session_id)
+    {
+        entry.scope = scope;
+        return Ok(());
+    }
+    state
+        .service_worker_sessions
+        .try_reserve(1)
+        .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
+    state.service_worker_sessions.push(ServiceWorkerSession {
+        session_id: session_id.to_owned().into_boxed_str(),
+        scope,
+    });
+    Ok(())
+}
+
+impl Installation {
+    fn service_worker_sessions(
+        &self,
+        context: ObjectId,
+    ) -> Result<
+        Vec<(
+            String,
+            playwright_rust_backend_cdp_topology::CdpContextOwnership,
+        )>,
+        HostError,
+    > {
+        let state = self.state.lock().map_err(HostError::backend)?;
+        let mut sessions = Vec::new();
+        sessions
+            .try_reserve_exact(state.service_worker_sessions.len())
+            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
+        sessions.extend(
+            state
+                .service_worker_sessions
+                .iter()
+                .filter(|entry| entry.scope.context == context)
+                .map(|entry| (entry.session_id.to_string(), entry.scope.ownership)),
+        );
+        Ok(sessions)
+    }
+
+    fn service_worker_initialization_commands(
+        &self,
+        session_id: &str,
+        context: ObjectId,
+        ownership: playwright_rust_backend_cdp_topology::CdpContextOwnership,
+    ) -> Result<Vec<ServiceWorkerInitializationCommand>, HostError> {
+        self.remember_service_worker_session(session_id, context, ownership)?;
+        let patterns = self.patterns(None, context)?;
+        #[cfg(feature = "context-http-credentials")]
+        let auth_enabled = self.http_credentials.enabled(context, ownership)?;
+        #[cfg(not(feature = "context-http-credentials"))]
+        let auth_enabled = false;
+        service_worker_interception_commands(patterns, auth_enabled)
+    }
+
+    fn retire_route_session(&self, session_id: &str) -> Result<(), HostError> {
         let mut state = self.state.lock().map_err(HostError::backend)?;
         state
             .initializing_sessions
+            .retain(|entry| entry.session_id.as_ref() != session_id);
+        state
+            .service_worker_sessions
             .retain(|entry| entry.session_id.as_ref() != session_id);
         #[cfg(feature = "route-redirects")]
         state
@@ -1356,7 +1439,7 @@ impl Installation {
 
     fn take_matching_registration(
         &self,
-        page: ObjectId,
+        page: Option<ObjectId>,
         context: ObjectId,
         url: &str,
         auth_enabled: bool,
@@ -1367,7 +1450,7 @@ impl Installation {
 
     fn has_matching_registration(
         &self,
-        page: ObjectId,
+        page: Option<ObjectId>,
         context: ObjectId,
         url: &str,
     ) -> Result<bool, HostError> {
@@ -1382,14 +1465,64 @@ impl Installation {
         context: ObjectId,
         auth_enabled: bool,
     ) -> Result<(), HostError> {
-        self.update_session_with_resume_fence(session_id, page, context, auth_enabled, None)
-            .await
+        self.update_scoped_session_with_resume_fence(
+            session_id,
+            Some(page),
+            context,
+            auth_enabled,
+            None,
+        )
+        .await
     }
 
     async fn update_session_with_resume_fence(
         &self,
         session_id: &str,
         page: ObjectId,
+        context: ObjectId,
+        auth_enabled: bool,
+        resume_fence: Option<&ChromiumSessionResumeFence>,
+    ) -> Result<(), HostError> {
+        self.update_scoped_session_with_resume_fence(
+            session_id,
+            Some(page),
+            context,
+            auth_enabled,
+            resume_fence,
+        )
+        .await
+    }
+
+    async fn update_service_worker_session(
+        &self,
+        session_id: &str,
+        context: ObjectId,
+    ) -> Result<(), HostError> {
+        #[cfg(feature = "context-http-credentials")]
+        let auth_enabled = {
+            let ownership = self
+                .state
+                .lock()
+                .map_err(HostError::backend)?
+                .service_worker_sessions
+                .iter()
+                .find(|entry| {
+                    entry.session_id.as_ref() == session_id && entry.scope.context == context
+                })
+                .map(|entry| entry.scope.ownership)
+                .ok_or(HostError::TargetClosed)?;
+            self.http_credentials.enabled(context, ownership)?
+        };
+        #[cfg(not(feature = "context-http-credentials"))]
+        let auth_enabled = false;
+        self.update_scoped_session_with_resume_fence(session_id, None, context, auth_enabled, None)
+            .await
+    }
+
+    async fn update_scoped_session_with_resume_fence(
+        &self,
+        session_id: &str,
+        page: Option<ObjectId>,
         context: ObjectId,
         auth_enabled: bool,
         resume_fence: Option<&ChromiumSessionResumeFence>,
@@ -1460,7 +1593,7 @@ impl Installation {
                 .and_then(|params| params.get("sessionId"))
                 .and_then(Value::as_str)
             {
-                self.retire_initializing_session(session_id)?;
+                self.retire_route_session(session_id)?;
             }
             return Ok(None);
         }
@@ -1496,7 +1629,7 @@ impl Installation {
                 .map(|route| route.ownership())
                 .ok_or_else(|| invalid("BrowserContext ownership"))?;
             SessionScope {
-                page,
+                page: Some(page),
                 context,
                 ownership,
             }
@@ -1594,22 +1727,6 @@ impl Installation {
             .scheme()
             .to_owned()
             .into_boxed_str();
-        #[cfg(feature = "route-regexp")]
-        if self.has_regexp_route(page, context)?
-            && !self.has_matching_registration(page, context, &url)?
-        {
-            #[cfg(feature = "context-http-credentials")]
-            if self.http_credentials.enabled(context, _ownership)? {
-                self.http_credentials
-                    .continue_request(session_id, &request_id, auth_network_id)?;
-                return Ok(None);
-            }
-            return Ok(Some(NativeRouteCall::Continue {
-                session_id: session_id.to_owned().into_boxed_str(),
-                request_id: request_id.into_boxed_str(),
-                options: RouteContinue::default(),
-            }));
-        }
         if is_favicon_url(&url) {
             return Ok(Some(NativeRouteCall::Abort {
                 session_id: session_id.to_owned().into_boxed_str(),
@@ -1621,7 +1738,9 @@ impl Installation {
         #[cfg(feature = "extra-headers")]
         let mut headers = headers;
         #[cfg(feature = "extra-headers")]
-        extra_headers.augment_route_request_headers(context, page, &mut headers)?;
+        if let Some(page) = page {
+            extra_headers.augment_route_request_headers(context, page, &mut headers)?;
+        }
         if let Some(response) = cors_preflight_fulfill(&method, &headers)?
             && self.has_matching_registration(page, context, &url)?
         {
@@ -1719,6 +1838,7 @@ impl Installation {
             registration_id,
             context,
             page,
+            service_worker_id: page.is_none().then(|| session_id.to_owned()),
             frame,
             url,
             method,
@@ -1823,16 +1943,30 @@ impl Installation {
 
     #[cfg(feature = "har-replay")]
     async fn replay(&self, replay: ReplayCall) -> Result<Option<RouteSettlement>, HostError> {
-        let action = replay
-            .archive
-            .lookup(
-                &replay.call.url,
-                &replay.call.method,
-                &replay.call.headers,
-                replay.call.post_data.as_deref(),
-                replay.call.is_navigation_request,
+        let ReplayCall {
+            call,
+            archive,
+            not_found,
+        } = replay;
+        let call_id = call.id;
+        let action = tokio::task::spawn_blocking(move || {
+            archive.lookup(
+                &call.url,
+                &call.method,
+                &call.headers,
+                call.post_data.as_deref(),
+                call.is_navigation_request,
             )
-            .map_err(HostError::backend)?;
+        })
+        .await
+        .map_err(|error| HostError::Backend(format!("HAR replay task failed: {error}")))?;
+        let action = match action {
+            Ok(action) => action,
+            Err(error) => {
+                tracing::warn!(%error, "HAR replay lookup failed; applying not-found policy");
+                playwright_rust_har_replay::ReplayAction::NoEntry
+            }
+        };
         let action = match action {
             playwright_rust_har_replay::ReplayAction::Fulfill(response) => {
                 let headers = response
@@ -1846,18 +1980,15 @@ impl Installation {
                     response.body(),
                 )?)
             }
-            playwright_rust_har_replay::ReplayAction::Redirect(url) => RouteAction::Continue(
-                RouteContinue::new(Some(url.into_string()), None, None, None)?,
-            ),
             playwright_rust_har_replay::ReplayAction::Stall => return Ok(None),
-            playwright_rust_har_replay::ReplayAction::NoEntry => match replay.not_found {
+            playwright_rust_har_replay::ReplayAction::NoEntry => match not_found {
                 HarNotFoundAction::Abort => RouteAction::Abort(RouteAbortReason::Failed),
                 HarNotFoundAction::Fallback => {
-                    return Box::pin(self.fallback(replay.call.id, RouteContinue::default())).await;
+                    return Box::pin(self.fallback(call_id, RouteContinue::default())).await;
                 }
             },
         };
-        self.act(replay.call.id, action).await
+        self.act(call_id, action).await
     }
 
     async fn next_call(&self, stopped: &CancellationToken) -> Option<RouteCall> {
@@ -1963,6 +2094,47 @@ impl Installation {
         Ok(Some(state.fulfilled.swap_remove(index).body))
     }
 
+    #[cfg(feature = "har-recording")]
+    fn retain_har_request_override(
+        &self,
+        pending: &PendingCall,
+        options: &RouteContinue,
+    ) -> Result<Option<NativeRequestKey>, HostError> {
+        let mut state = self.state.lock().map_err(HostError::backend)?;
+        retain_har_request_override_in_state(&mut state, pending, options)
+    }
+
+    #[cfg(feature = "har-recording")]
+    pub(crate) fn har_request_override(
+        &self,
+        session_id: &str,
+        network_request_id: &str,
+    ) -> Result<Option<Arc<RouteContinue>>, HostError> {
+        let state = self.state.lock().map_err(HostError::backend)?;
+        Ok(state
+            .har_request_overrides
+            .iter()
+            .find(|entry| {
+                entry.session_id.as_ref() == session_id
+                    && entry.network_request_id.as_ref() == network_request_id
+            })
+            .map(|entry| Arc::clone(&entry.options)))
+    }
+
+    #[cfg(feature = "har-recording")]
+    pub(crate) fn retire_har_request_override(
+        &self,
+        session_id: &str,
+        network_request_id: &str,
+    ) -> Result<(), HostError> {
+        let mut state = self.state.lock().map_err(HostError::backend)?;
+        state.har_request_overrides.retain(|entry| {
+            entry.session_id.as_ref() != session_id
+                || entry.network_request_id.as_ref() != network_request_id
+        });
+        Ok(())
+    }
+
     fn reconcile(
         &self,
         active_pages: &[ObjectId],
@@ -1973,27 +2145,37 @@ impl Installation {
         state
             .registrations
             .retain(|registration| registration.scope.is_active(active_pages, active_contexts));
-        #[cfg(feature = "har-replay")]
-        {
-            state.har_bytes = retained_har_bytes(&state.registrations)?;
-        }
         reconcile_pending(&mut state, active_pages);
-        state
-            .settling
-            .retain(|settling| active_pages.contains(&settling.page));
+        state.settling.retain(|settling| {
+            settling
+                .page
+                .is_none_or(|page| active_pages.contains(&page))
+        });
         state.initializing_sessions.retain(|entry| {
             !active_sessions
                 .iter()
                 .any(|session| session == entry.session_id.as_ref())
         });
-        #[cfg(feature = "network-events")]
         state
-            .fulfilled
-            .retain(|fulfilled| active_pages.contains(&fulfilled.page));
+            .service_worker_sessions
+            .retain(|entry| active_contexts.contains(&entry.scope.context));
+        #[cfg(feature = "network-events")]
+        state.fulfilled.retain(|fulfilled| {
+            fulfilled
+                .page
+                .is_none_or(|page| active_pages.contains(&page))
+        });
+        #[cfg(feature = "har-recording")]
+        state.har_request_overrides.retain(|entry| {
+            entry.page.map_or_else(
+                || active_contexts.contains(&entry.context),
+                |page| active_pages.contains(&page),
+            )
+        });
         #[cfg(feature = "route-redirects")]
         state
             .redirect_header_overrides
-            .retain(|entry| active_pages.contains(&entry.page));
+            .retain(|entry| entry.page.is_none_or(|page| active_pages.contains(&page)));
         drop(state);
         self.changed.notify_waiters();
         Ok(())
@@ -2091,6 +2273,10 @@ impl Installation {
                 registration_id: registration.id,
                 context: pending.context,
                 page: pending.page,
+                service_worker_id: pending
+                    .page
+                    .is_none()
+                    .then(|| pending.session_id.to_string()),
                 frame: pending.frame,
                 url: effective_url,
                 method: combined.effective_method(&pending.method).to_owned(),
@@ -2188,6 +2374,19 @@ impl Installation {
             }
             action => action,
         };
+        #[cfg(feature = "har-recording")]
+        let retained_har_override = if let RouteAction::Continue(options) = &action {
+            match self.retain_har_request_override(&pending, options) {
+                Ok(value) => value,
+                Err(error) => {
+                    self.restore_pending(pending)?;
+                    settling.disarm();
+                    return Err(error);
+                }
+            }
+        } else {
+            None
+        };
         #[cfg(feature = "route-redirects")]
         let retained_redirect_headers = if let RouteAction::Continue(options) = &action {
             if let Some(headers) = options.headers.as_deref() {
@@ -2240,6 +2439,10 @@ impl Installation {
         {
             Ok(_) => Ok(()),
             Err(error) if terminal_route_error(&error) => {
+                #[cfg(feature = "har-recording")]
+                if let Some((session_id, network_request_id)) = &retained_har_override {
+                    let _ = self.retire_har_request_override(session_id, network_request_id);
+                }
                 #[cfg(feature = "route-redirects")]
                 if retained_redirect_headers {
                     let _ = self.remove_redirect_header_override(
@@ -2254,6 +2457,10 @@ impl Installation {
                 Ok(())
             }
             Err(error) => {
+                #[cfg(feature = "har-recording")]
+                if let Some((session_id, network_request_id)) = &retained_har_override {
+                    let _ = self.retire_har_request_override(session_id, network_request_id);
+                }
                 #[cfg(feature = "route-redirects")]
                 if retained_redirect_headers {
                     let _ = self.remove_redirect_header_override(
@@ -2304,23 +2511,6 @@ impl Drop for SettlingGuard<'_> {
             self.installation.finish_settling(self.id);
         }
     }
-}
-
-#[cfg(feature = "har-replay")]
-fn retained_har_bytes(registrations: &[Registration]) -> Result<usize, HostError> {
-    registrations
-        .iter()
-        .filter_map(|registration| match &registration.handler {
-            RegistrationHandler::Har { archive, .. } => Some(archive.retained_bytes()),
-            RegistrationHandler::Binding => None,
-            #[cfg(feature = "context-storage-state")]
-            RegistrationHandler::StorageState => None,
-        })
-        .try_fold(0usize, |total, bytes| {
-            total.checked_add(bytes).ok_or_else(|| {
-                HostError::ResourceExhausted("HAR replay retained-byte count overflow".into())
-            })
-        })
 }
 
 fn bounded_field(
@@ -2388,11 +2578,6 @@ fn cdp_pattern(pattern: &str) -> Result<String, HostError> {
             consecutive_backslashes = 0;
         }
     }
-    if converted_bytes > MAX_CDP_PATTERN_BYTES {
-        return Err(HostError::ResourceExhausted(
-            "compiled CDP route pattern exceeds byte limit".into(),
-        ));
-    }
     let mut converted = String::new();
     converted
         .try_reserve_exact(converted_bytes)
@@ -2421,7 +2606,7 @@ fn cdp_pattern(pattern: &str) -> Result<String, HostError> {
     Ok(converted)
 }
 
-fn route_matches(pattern: &str, url: &str) -> Result<bool, HostError> {
+pub(crate) fn route_matches(pattern: &str, url: &str) -> Result<bool, HostError> {
     let candidate = if pattern.starts_with('/') {
         if let Ok(parsed) = Url::parse(url) {
             let query_bytes = parsed.query().map_or(0, |query| 1 + query.len());
@@ -2866,6 +3051,13 @@ impl RouteContinue {
         }
     }
 
+    fn has_overrides(&self) -> bool {
+        self.url.is_some()
+            || self.method.is_some()
+            || self.headers.is_some()
+            || self.post_data.is_some()
+    }
+
     #[cfg(feature = "route-redirects")]
     fn with_original_cookie_header(
         mut self,
@@ -2887,19 +3079,25 @@ impl RouteContinue {
         Ok(self)
     }
 
-    fn effective_url<'a>(&'a self, original: &'a str) -> &'a str {
+    pub(crate) fn effective_url<'a>(&'a self, original: &'a str) -> &'a str {
         self.url.as_deref().unwrap_or(original)
     }
 
-    fn effective_method<'a>(&'a self, original: &'a str) -> &'a str {
+    pub(crate) fn effective_method<'a>(&'a self, original: &'a str) -> &'a str {
         self.method.as_deref().unwrap_or(original)
     }
 
-    fn effective_headers<'a>(&'a self, original: &'a [(String, String)]) -> &'a [(String, String)] {
+    pub(crate) fn effective_headers<'a>(
+        &'a self,
+        original: &'a [(String, String)],
+    ) -> &'a [(String, String)] {
         self.headers.as_deref().unwrap_or(original)
     }
 
-    fn effective_post_data<'a>(&'a self, original: Option<&'a [u8]>) -> Option<&'a [u8]> {
+    pub(crate) fn effective_post_data<'a>(
+        &'a self,
+        original: Option<&'a [u8]>,
+    ) -> Option<&'a [u8]> {
         self.post_data.as_deref().or(original)
     }
 
@@ -3089,7 +3287,12 @@ where
         target: ChromiumSessionInitializationTarget<'a>,
     ) -> ChromiumSessionInitializationFuture<'a> {
         Box::pin(async move {
-            let routing_enabled = self.installation.has_routes(target.page, target.context)?;
+            #[cfg(feature = "context-http-credentials")]
+            let _credential_update_gate =
+                self.installation.http_credentials.update_gate.lock().await;
+            let routing_enabled = self
+                .installation
+                .has_routes(Some(target.page), target.context)?;
             #[cfg(feature = "context-http-credentials")]
             let auth_enabled = self
                 .installation
@@ -3101,7 +3304,7 @@ where
                 self.installation.remember_initializing_session(
                     target.session_id,
                     SessionScope {
-                        page: target.page,
+                        page: Some(target.page),
                         context: target.context,
                         ownership: target.ownership,
                     },
@@ -3114,7 +3317,7 @@ where
                     .remember_initializing_session(
                         target.session_id,
                         crate::context_http_credentials::SessionScope {
-                            page: target.page,
+                            page: Some(target.page),
                             context: target.context,
                             ownership: target.ownership,
                         },
@@ -3135,8 +3338,7 @@ where
             };
             let result = tokio::try_join!(downstream, update).map(|_| ());
             if result.is_err() {
-                self.installation
-                    .retire_initializing_session(target.session_id)?;
+                self.installation.retire_route_session(target.session_id)?;
             }
             result
         })
@@ -3251,6 +3453,44 @@ impl ChromiumFrameEventObserver for Observer {
         self.downstream.initialize_frame(topology, session, frame)
     }
 
+    fn enables_service_worker_network(&self) -> bool {
+        true
+    }
+
+    fn prepare_service_worker(
+        &self,
+        topology: &CdpTopology,
+        event: &CdpEvent,
+    ) -> FrameObservationResult {
+        self.downstream.prepare_service_worker(topology, event)?;
+        if let Some((session, context, ownership)) = service_worker_scope(topology, event)? {
+            self.installation
+                .remember_service_worker_session(&session, context, ownership)?;
+        }
+        Ok(())
+    }
+
+    fn service_worker_initialization_commands(
+        &self,
+        topology: &CdpTopology,
+        event: &CdpEvent,
+        commands: &mut Vec<ServiceWorkerInitializationCommand>,
+    ) -> FrameObservationResult {
+        self.downstream
+            .service_worker_initialization_commands(topology, event, commands)?;
+        let Some((session, context, ownership)) = service_worker_scope(topology, event)? else {
+            return Ok(());
+        };
+        let mut installation_commands = self
+            .installation
+            .service_worker_initialization_commands(&session, context, ownership)?;
+        commands
+            .try_reserve(installation_commands.len())
+            .map_err(|error| Box::new(error) as Box<dyn Error + Send + Sync>)?;
+        commands.append(&mut installation_commands);
+        Ok(())
+    }
+
     fn reconcile(&self, topology: &CdpTopology) -> FrameObservationResult {
         self.downstream.reconcile(topology)?;
         let active_pages = topology
@@ -3281,6 +3521,85 @@ impl ChromiumFrameEventObserver for Observer {
 
 fn invalid(field: &str) -> HostError {
     HostError::Backend(format!("Fetch request event is missing {field}"))
+}
+
+fn service_worker_scope(
+    topology: &CdpTopology,
+    event: &CdpEvent,
+) -> Result<
+    Option<(
+        String,
+        ObjectId,
+        playwright_rust_backend_cdp_topology::CdpContextOwnership,
+    )>,
+    HostError,
+> {
+    let params: target::AttachedToTargetEvent =
+        serde_json::from_value(event.params.clone()).map_err(HostError::backend)?;
+    if params.target_info.r#type != "service_worker" {
+        return Ok(None);
+    }
+    if params.session_id.is_empty() || params.session_id.len() > MAX_NATIVE_ID_BYTES {
+        return Err(HostError::ResourceExhausted(
+            "Service Worker route session ID exceeds byte limit".into(),
+        ));
+    }
+    let native_context = params
+        .target_info
+        .browser_context_id
+        .as_deref()
+        .unwrap_or("");
+    let context = if native_context.is_empty() {
+        topology
+            .default_context_route()
+            .map(|route| route.object_id())
+    } else {
+        topology.context_object_id(native_context).or_else(|| {
+            topology
+                .default_context_route()
+                .map(|route| route.object_id())
+        })
+    };
+    let Some(context) = context else {
+        return Ok(None);
+    };
+    let Some(route) = topology.browser_context_route(context) else {
+        return Ok(None);
+    };
+    Ok(Some((params.session_id, context, route.ownership())))
+}
+
+fn service_worker_interception_commands(
+    route_patterns: Vec<String>,
+    auth_enabled: bool,
+) -> Result<Vec<ServiceWorkerInitializationCommand>, HostError> {
+    if route_patterns.is_empty() && !auth_enabled {
+        return Ok(Vec::new());
+    }
+    let patterns = if auth_enabled {
+        vec![json!({ "urlPattern": "*", "requestStage": "Request" })]
+    } else {
+        route_patterns
+            .into_iter()
+            .map(|url_pattern| json!({ "urlPattern": url_pattern, "requestStage": "Request" }))
+            .collect::<Vec<_>>()
+    };
+    let mut commands = Vec::new();
+    commands
+        .try_reserve_exact(2)
+        .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
+    commands.push(ServiceWorkerInitializationCommand::new(
+        "Network.setCacheDisabled",
+        json!({ "cacheDisabled": true }),
+    ));
+    commands.push(ServiceWorkerInitializationCommand::new(
+        "Fetch.enable",
+        json!({
+            "patterns": patterns,
+            "handleAuthRequests": auth_enabled
+        }),
+    ));
+    Ok(commands)
 }
 
 fn is_favicon_url(url: &str) -> bool {
@@ -3335,6 +3654,24 @@ impl HostSession {
             .await
     }
 
+    #[cfg(feature = "route-regexp")]
+    pub async fn context_route_regexp(
+        &self,
+        context_id: &str,
+        source: String,
+        flags: String,
+        times: Option<u64>,
+    ) -> Result<u64, HostError> {
+        let pattern = RoutePattern::regexp(source, flags)?;
+        self.install_context_route_matching(
+            context_id,
+            pattern,
+            RegistrationHandler::Binding,
+            times,
+        )
+        .await
+    }
+
     #[cfg(feature = "har-replay")]
     pub async fn page_route_from_har(
         &self,
@@ -3343,12 +3680,7 @@ impl HostSession {
         pattern: Option<String>,
         not_found: HarNotFoundAction,
     ) -> Result<u64, HostError> {
-        let bytes = read_har_file(path).await?;
-        let archive = playwright_rust_har_replay::ReplayArchive::from_json(
-            &bytes,
-            playwright_rust_har_replay::ReplayLimits::default(),
-        )
-        .map_err(HostError::backend)?;
+        let archive = crate::har_archive::load(path).await?;
         self.install_page_route(
             page_id,
             pattern.unwrap_or_else(|| "**/*".into()),
@@ -3369,15 +3701,56 @@ impl HostSession {
         pattern: Option<String>,
         not_found: HarNotFoundAction,
     ) -> Result<u64, HostError> {
-        let bytes = read_har_file(path).await?;
-        let archive = playwright_rust_har_replay::ReplayArchive::from_json(
-            &bytes,
-            playwright_rust_har_replay::ReplayLimits::default(),
-        )
-        .map_err(HostError::backend)?;
+        let archive = crate::har_archive::load(path).await?;
         self.install_context_route(
             context_id,
             pattern.unwrap_or_else(|| "**/*".into()),
+            RegistrationHandler::Har {
+                archive: Arc::new(archive),
+                not_found,
+            },
+            None,
+        )
+        .await
+    }
+
+    #[cfg(all(feature = "har-replay", feature = "route-regexp"))]
+    pub async fn page_route_from_har_regexp(
+        &self,
+        page_id: &str,
+        path: &str,
+        source: String,
+        flags: String,
+        not_found: HarNotFoundAction,
+    ) -> Result<u64, HostError> {
+        let archive = crate::har_archive::load(path).await?;
+        let pattern = RoutePattern::regexp(source, flags)?;
+        self.install_page_route_matching(
+            page_id,
+            pattern,
+            RegistrationHandler::Har {
+                archive: Arc::new(archive),
+                not_found,
+            },
+            None,
+        )
+        .await
+    }
+
+    #[cfg(all(feature = "har-replay", feature = "route-regexp"))]
+    pub async fn context_route_from_har_regexp(
+        &self,
+        context_id: &str,
+        path: &str,
+        source: String,
+        flags: String,
+        not_found: HarNotFoundAction,
+    ) -> Result<u64, HostError> {
+        let archive = crate::har_archive::load(path).await?;
+        let pattern = RoutePattern::regexp(source, flags)?;
+        self.install_context_route_matching(
+            context_id,
+            pattern,
             RegistrationHandler::Har {
                 archive: Arc::new(archive),
                 not_found,
@@ -3478,6 +3851,17 @@ impl HostSession {
         {
             pattern = self.context_snapshot(context_id)?.resolve_url(&pattern)?;
         }
+        self.install_context_route_matching(context_id, pattern.into(), handler, times)
+            .await
+    }
+
+    async fn install_context_route_matching(
+        &self,
+        context_id: &str,
+        pattern: RoutePattern,
+        handler: RegistrationHandler,
+        times: Option<u64>,
+    ) -> Result<u64, HostError> {
         let context = context_id
             .parse::<u64>()
             .ok()
@@ -3520,13 +3904,23 @@ impl HostSession {
         };
         let registration = installation.add_registration_with_handler(
             RegistrationScope::Context(context),
-            pattern.into(),
+            pattern,
             handler,
             times,
         )?;
+        let service_worker_sessions = installation.service_worker_sessions(context)?;
         for (page, session) in sessions {
             if let Err(error) = installation
                 .update_session(&session, page, context, auth_enabled)
+                .await
+            {
+                installation.remove_registration(registration)?;
+                return Err(error);
+            }
+        }
+        for (session, _) in service_worker_sessions {
+            if let Err(error) = installation
+                .update_service_worker_session(&session, context)
                 .await
             {
                 installation.remove_registration(registration)?;
@@ -3678,6 +4072,11 @@ impl HostSession {
                 .update_session(&session, page, context, auth_enabled)
                 .await?;
         }
+        for (session, _) in installation.service_worker_sessions(context)? {
+            installation
+                .update_service_worker_session(&session, context)
+                .await?;
+        }
         if wait {
             installation.wait_scope_idle(scope, &self.stop).await?;
         }
@@ -3732,6 +4131,10 @@ impl HostSession {
         installation: &Installation,
         scope: RegistrationScope,
     ) -> Result<(), HostError> {
+        let service_worker_context = match scope {
+            RegistrationScope::Context(context) => Some(context),
+            RegistrationScope::Page(_) => None,
+        };
         let targets = {
             let state = self.state.lock().map_err(HostError::backend)?;
             let live = state.as_ref().ok_or(HostError::TargetClosed)?;
@@ -3806,7 +4209,31 @@ impl HostSession {
                 .update_session(&session, page, context, auth_enabled)
                 .await?;
         }
+        if let Some(context) = service_worker_context {
+            for (session, _) in installation.service_worker_sessions(context)? {
+                installation
+                    .update_service_worker_session(&session, context)
+                    .await?;
+            }
+        }
         Ok(())
+    }
+
+    #[cfg(feature = "context-http-credentials")]
+    pub(crate) async fn refresh_context_fetch_interception(
+        &self,
+        context: ObjectId,
+    ) -> Result<(), HostError> {
+        let installation = {
+            let state = self.state.lock().map_err(HostError::backend)?;
+            state
+                .as_ref()
+                .ok_or(HostError::TargetClosed)?
+                .page_routes
+                .clone()
+        };
+        self.refresh_page_route_scope(&installation, RegistrationScope::Context(context))
+            .await
     }
 
     async fn refresh_page_route_settlement(
@@ -3826,7 +4253,10 @@ impl HostSession {
                 .await;
         }
         if settlement.refresh.page {
-            self.refresh_page_route_scope(installation, RegistrationScope::Page(settlement.page))
+            let page = settlement.page.ok_or_else(|| {
+                HostError::Backend("Service Worker route requested Page-scope refresh".into())
+            })?;
+            self.refresh_page_route_scope(installation, RegistrationScope::Page(page))
                 .await?;
         }
         Ok(())
@@ -3869,36 +4299,12 @@ impl HostSession {
     }
 }
 
-#[cfg(feature = "har-replay")]
-async fn read_har_file(path: &str) -> Result<Vec<u8>, HostError> {
-    if path.is_empty() || path.len() > MAX_HAR_PATH_BYTES {
-        return Err(HostError::InvalidArgument(format!(
-            "HAR path must contain 1..={MAX_HAR_PATH_BYTES} UTF-8 bytes"
-        )));
-    }
-    let file = tokio::fs::File::open(path)
-        .await
-        .map_err(|error| HostError::InvalidArgument(format!("cannot open HAR file: {error}")))?;
-    let mut bytes = Vec::new();
-    bytes
-        .try_reserve_exact(MAX_HAR_REPLAY_ARCHIVE_BYTES.min(64 * 1024))
-        .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
-    file.take((MAX_HAR_REPLAY_ARCHIVE_BYTES as u64) + 1)
-        .read_to_end(&mut bytes)
-        .await
-        .map_err(HostError::backend)?;
-    if bytes.len() > MAX_HAR_REPLAY_ARCHIVE_BYTES {
-        return Err(HostError::ResourceExhausted(format!(
-            "HAR file exceeds {MAX_HAR_REPLAY_ARCHIVE_BYTES} bytes"
-        )));
-    }
-    Ok(bytes)
-}
-
 #[cfg(test)]
 mod tests {
+    #[cfg(any(feature = "har-replay", feature = "route-request-history"))]
+    use std::sync::Arc;
     #[cfg(feature = "route-request-history")]
-    use std::sync::{Arc, Mutex};
+    use std::sync::Mutex;
 
     use base64::Engine as _;
     use playwright_rust_cdp::connection::CdpError;
@@ -3909,15 +4315,20 @@ mod tests {
 
     #[cfg(any(feature = "route-redirects", feature = "route-request-history"))]
     use super::HostError;
+    use super::MAX_ROUTE_INITIALIZING_SESSIONS;
     use super::remove_registrations_from_state;
+    #[cfg(feature = "har-recording")]
+    use super::retain_har_request_override_in_state;
     use super::{
         FallbackCursor, MAX_CAPTURED_POST_DATA_BYTES, MAX_METHOD_BYTES, MAX_POST_DATA_BYTES,
         MAX_ROUTE_FULFILL_BODY_BYTES, MAX_URL_BYTES, ObjectId, PendingCall, Registration,
         RegistrationHandler, RegistrationScope, RouteAbortReason, RouteContinue, RouteFulfill,
         State, bounded_headers, captured_post_data, captured_post_data_source, cdp_pattern,
-        cors_preflight_fulfill, has_matching_registration, is_favicon_url, reconcile_pending,
-        route_matches, scope_is_idle, take_matching_registration, take_matching_registration_after,
-        take_pending_action, terminal_route_error, wildcard_matches,
+        cdp_patterns, cors_preflight_fulfill, has_matching_registration, is_favicon_url,
+        reconcile_pending, remember_service_worker_session_in_state, route_matches, scope_is_idle,
+        service_worker_interception_commands, take_matching_registration,
+        take_matching_registration_after, take_pending_action, terminal_route_error,
+        wildcard_matches,
     };
     #[cfg(feature = "large-route-post-data")]
     use super::{LargePostDataBudget, MAX_LARGE_POST_DATA_CALLS};
@@ -3928,13 +4339,10 @@ mod tests {
         MAX_HEADER_COUNT, MAX_REDIRECT_HEADER_OVERRIDES, advance_redirect_header_override,
         retain_redirect_header_override,
     };
-    #[cfg(feature = "route-regexp")]
-    use super::{
-        MAX_PATTERN_BYTES, MAX_REGEXP_ROUTES, RoutePattern, cdp_patterns,
-        ensure_registration_capacity,
-    };
     #[cfg(feature = "route-request-history")]
     use super::{RouteCall, capture_route_history_owner};
+    #[cfg(feature = "route-regexp")]
+    use super::{RoutePattern, ensure_registration_capacity};
 
     async fn poll_once<T>(
         mut future: std::pin::Pin<&mut impl std::future::Future<Output = T>>,
@@ -3982,7 +4390,8 @@ mod tests {
             id: 7,
             registration_id: 3,
             context: ObjectId::new(9),
-            page: ObjectId::new(2),
+            page: Some(ObjectId::new(2)),
+            service_worker_id: None,
             frame: Some(ObjectId::new(10)),
             url: "https://example.test/first".into(),
             method: "GET".into(),
@@ -4056,7 +4465,7 @@ mod tests {
         PendingCall {
             id,
             context: ObjectId::new(9),
-            page,
+            page: Some(page),
             frame: Some(ObjectId::new(10)),
             registration_scope: RegistrationScope::Page(page),
             fallback_cursor: super::FallbackCursor::Page {
@@ -4090,12 +4499,13 @@ mod tests {
             settling: Vec::new(),
             retired,
             initializing_sessions: Vec::new(),
+            service_worker_sessions: Vec::new(),
             #[cfg(feature = "route-redirects")]
             redirect_header_overrides: Vec::new(),
-            #[cfg(feature = "har-replay")]
-            har_bytes: 0,
             #[cfg(feature = "network-events")]
             fulfilled: Vec::new(),
+            #[cfg(feature = "har-recording")]
+            har_request_overrides: Vec::new(),
         }
     }
 
@@ -4107,6 +4517,38 @@ mod tests {
             handler: RegistrationHandler::Binding,
             remaining,
         }
+    }
+
+    #[cfg(feature = "har-replay")]
+    #[test]
+    fn har_registrations_grow_past_legacy_eight_archive_cap() {
+        // Arrange
+        let mut state = state_with_pending(Vec::new(), Vec::new());
+        let archive = Arc::new(
+            playwright_rust_har_replay::ReplayArchive::from_json(
+                br#"{"log":{"entries":[]}}"#,
+                playwright_rust_har_replay::ReplayLimits::default(),
+            )
+            .unwrap(),
+        );
+
+        // Act
+        for _ in 0..9 {
+            super::add_registration_to_state(
+                &mut state,
+                RegistrationScope::Context(ObjectId::new(4)),
+                "**/*".into(),
+                RegistrationHandler::Har {
+                    archive: Arc::clone(&archive),
+                    not_found: super::HarNotFoundAction::Fallback,
+                },
+                None,
+            )
+            .unwrap();
+        }
+
+        // Assert
+        assert_eq!(state.registrations.len(), 9);
     }
 
     #[cfg(feature = "context-storage-state")]
@@ -4133,10 +4575,15 @@ mod tests {
         });
 
         // Act
-        let selected =
-            take_matching_registration(&mut state, page, context, "https://example.com", false)
-                .unwrap()
-                .unwrap();
+        let selected = take_matching_registration(
+            &mut state,
+            Some(page),
+            context,
+            "https://example.com",
+            false,
+        )
+        .unwrap()
+        .unwrap();
 
         // Assert
         assert!(matches!(
@@ -4222,10 +4669,10 @@ mod tests {
 
         // Act
         let literal_match = literal
-            .matches_url("https://example.test/empty.html")
+            .matches_client_url("https://example.test/empty.html")
             .unwrap();
         let anchored_match = anchored
-            .matches_url("https://other.test/empty.html")
+            .matches_client_url("https://other.test/empty.html")
             .unwrap();
 
         // Assert
@@ -4235,33 +4682,24 @@ mod tests {
 
     #[cfg(feature = "route-regexp")]
     #[test]
-    fn regexp_route_rejects_unsupported_flags_syntax_and_source_over_limit() {
+    fn regexp_route_supports_ecmascript_syntax_flags_and_large_sources() {
         // Arrange
-        let over_limit = "a".repeat(MAX_PATTERN_BYTES + 1);
+        let large_source = "a".repeat(4 * 1024 + 1);
 
         // Act
-        let unsupported_flag = RoutePattern::regexp("a".into(), "g".into());
+        let global = RoutePattern::regexp("a".into(), "dg".into());
         let duplicate_flag = RoutePattern::regexp("a".into(), "ii".into());
-        let unsupported_lookbehind = RoutePattern::regexp("(?<=a)b".into(), String::new());
-        let oversized = RoutePattern::regexp(over_limit, String::new());
+        let lookbehind = RoutePattern::regexp("(?<=a)b".into(), String::new());
+        let large = RoutePattern::regexp(large_source, String::new());
 
         // Assert
-        assert!(matches!(
-            unsupported_flag,
-            Err(super::HostError::InvalidArgument(_))
-        ));
+        assert!(global.is_ok());
         assert!(matches!(
             duplicate_flag,
             Err(super::HostError::InvalidArgument(_))
         ));
-        assert!(matches!(
-            unsupported_lookbehind,
-            Err(super::HostError::InvalidArgument(_))
-        ));
-        assert!(matches!(
-            oversized,
-            Err(super::HostError::InvalidArgument(_))
-        ));
+        assert!(lookbehind.is_ok());
+        assert!(large.is_ok());
     }
 
     #[cfg(feature = "route-regexp")]
@@ -4272,11 +4710,46 @@ mod tests {
 
         // Act
         let matched = pattern
-            .matches_url("https://example.test/start\nempty.html\nfinish")
+            .matches_client_url("https://example.test/start\nempty.html\nfinish")
             .unwrap();
 
         // Assert
         assert!(matched);
+    }
+
+    #[cfg(feature = "route-regexp")]
+    #[test]
+    fn global_regexp_route_preserves_separate_server_and_client_last_index_state() {
+        // Arrange
+        let page = ObjectId::new(3);
+        let context = ObjectId::new(4);
+        let mut state = state_with_pending(Vec::new(), Vec::new());
+        state.registrations = vec![Registration {
+            id: 1,
+            scope: RegistrationScope::Page(page),
+            pattern: RoutePattern::regexp("api".into(), "g".into()).unwrap(),
+            handler: RegistrationHandler::Binding,
+            remaining: None,
+        }];
+        state.next_registration = 2;
+
+        // Act
+        let handled = (0..5)
+            .map(|_| {
+                take_matching_registration(
+                    &mut state,
+                    Some(page),
+                    context,
+                    "https://example.test/api/data",
+                    false,
+                )
+                .unwrap()
+                .is_some()
+            })
+            .collect::<Vec<_>>();
+
+        // Assert
+        assert_eq!(handled, [true, false, false, false, true]);
     }
 
     #[cfg(feature = "route-regexp")]
@@ -4291,17 +4764,17 @@ mod tests {
             registration(1, RegistrationScope::Page(page), "**/*.css", None),
             regexp_registration(2, RegistrationScope::Page(page), "\\.html$", None),
         ];
-        let broad = cdp_patterns(&state.registrations, page, context).unwrap();
+        let broad = cdp_patterns(&state.registrations, Some(page), context).unwrap();
 
         // Act
         remove_registrations_from_state(&mut state, RegistrationScope::Page(page), &[2]).unwrap();
 
         // Assert
         assert_eq!(broad, vec!["*"]);
-        let restored = cdp_patterns(&state.registrations, page, context).unwrap();
+        let restored = cdp_patterns(&state.registrations, Some(page), context).unwrap();
         assert_eq!(restored, vec!["**/*.css"]);
         assert!(
-            cdp_patterns(&state.registrations, other_page, context)
+            cdp_patterns(&state.registrations, Some(other_page), context)
                 .unwrap()
                 .is_empty()
         );
@@ -4324,7 +4797,7 @@ mod tests {
         // Act
         let first = take_matching_registration(
             &mut state,
-            page,
+            Some(page),
             context,
             "https://example.test/empty.html",
             false,
@@ -4333,7 +4806,7 @@ mod tests {
         .unwrap();
         let second = take_matching_registration_after(
             &mut state,
-            page,
+            Some(page),
             context,
             "https://example.test/empty.html",
             first.next_cursor,
@@ -4342,7 +4815,7 @@ mod tests {
         .unwrap();
         let third = take_matching_registration_after(
             &mut state,
-            page,
+            Some(page),
             context,
             "https://example.test/empty.html",
             second.next_cursor,
@@ -4363,25 +4836,43 @@ mod tests {
 
     #[cfg(feature = "route-regexp")]
     #[test]
-    fn regexp_route_cap_leaves_room_for_glob_registrations() {
+    fn regexp_route_registry_grows_past_the_legacy_count_cap() {
         // Arrange
         let page = ObjectId::new(3);
-        let registrations = (1..=MAX_REGEXP_ROUTES)
-            .map(|id| regexp_registration(id as u64, RegistrationScope::Page(page), "x", None))
-            .collect::<Vec<_>>();
-        let regexp = RoutePattern::regexp("y".into(), String::new()).unwrap();
-        let glob = RoutePattern::from("**/*");
+        let mut registrations = Vec::new();
 
         // Act
-        let regexp_result = ensure_registration_capacity(&registrations, &regexp);
-        let glob_result = ensure_registration_capacity(&registrations, &glob);
+        for id in 1..=64 {
+            let registration = regexp_registration(id, RegistrationScope::Page(page), "x", None);
+            ensure_registration_capacity(&mut registrations, &registration.pattern)
+                .expect("RegExp route count should not be API-limited");
+            registrations.push(registration);
+        }
 
         // Assert
-        assert!(matches!(
-            regexp_result,
-            Err(super::HostError::ResourceExhausted(_))
-        ));
-        assert!(glob_result.is_ok());
+        assert_eq!(registrations.len(), 64);
+    }
+
+    #[cfg(feature = "route-regexp")]
+    #[test]
+    fn route_registry_grows_past_the_legacy_route_count() {
+        // Arrange
+        let page = ObjectId::new(3);
+        let pattern = RoutePattern::from("**/*");
+        let mut registrations = Vec::new();
+
+        // Act
+        for id in 1..=257 {
+            ensure_registration_capacity(&mut registrations, &pattern)
+                .expect("route count should not be API-limited");
+            registrations.push(binding_registration(
+                RegistrationScope::Page(page),
+                Some(id),
+            ));
+        }
+
+        // Assert
+        assert_eq!(registrations.len(), 257);
     }
 
     #[test]
@@ -4445,7 +4936,7 @@ mod tests {
         // Act
         let selected = take_matching_registration(
             &mut state,
-            page,
+            Some(page),
             context,
             "https://example.test/empty.html",
             false,
@@ -4473,7 +4964,7 @@ mod tests {
         // Act
         let selected = take_matching_registration(
             &mut state,
-            page,
+            Some(page),
             context,
             "https://example.test/empty.html",
             false,
@@ -4501,7 +4992,7 @@ mod tests {
         // Act
         let selected = take_matching_registration(
             &mut state,
-            page,
+            Some(page),
             context,
             "https://example.test/other.html",
             false,
@@ -4530,7 +5021,7 @@ mod tests {
         // Act
         let first = take_matching_registration(
             &mut state,
-            page,
+            Some(page),
             context,
             "https://example.test/empty.html",
             false,
@@ -4539,7 +5030,7 @@ mod tests {
         .unwrap();
         let second = take_matching_registration_after(
             &mut state,
-            page,
+            Some(page),
             context,
             "https://example.test/empty.html",
             first.next_cursor,
@@ -4548,7 +5039,7 @@ mod tests {
         .unwrap();
         let third = take_matching_registration_after(
             &mut state,
-            page,
+            Some(page),
             context,
             "https://example.test/empty.html",
             second.next_cursor,
@@ -4557,7 +5048,7 @@ mod tests {
         .unwrap();
         let fourth = take_matching_registration_after(
             &mut state,
-            page,
+            Some(page),
             context,
             "https://example.test/empty.html",
             third.next_cursor,
@@ -4566,7 +5057,7 @@ mod tests {
         .unwrap();
         let exhausted = take_matching_registration_after(
             &mut state,
-            page,
+            Some(page),
             context,
             "https://example.test/empty.html",
             fourth.next_cursor,
@@ -4591,7 +5082,7 @@ mod tests {
         ];
         let first = take_matching_registration(
             &mut state,
-            page,
+            Some(page),
             context,
             "https://example.test/foo",
             false,
@@ -4602,7 +5093,7 @@ mod tests {
         // Act
         let second = take_matching_registration_after(
             &mut state,
-            page,
+            Some(page),
             context,
             "https://example.test/bar",
             first.next_cursor,
@@ -4905,11 +5396,16 @@ mod tests {
         state
             .registrations
             .push(binding_registration(RegistrationScope::Page(page), Some(1)));
+        state.next_registration = 8;
 
         // Act
-        let matched =
-            has_matching_registration(&state, page, context, "https://example.test/empty.html")
-                .unwrap();
+        let matched = has_matching_registration(
+            &state,
+            Some(page),
+            context,
+            "https://example.test/empty.html",
+        )
+        .unwrap();
 
         // Assert
         assert!(matched);
@@ -4955,6 +5451,20 @@ mod tests {
             cdp_pattern(r"**/index\\?hello").unwrap(),
             r"**/index\\\?hello"
         );
+    }
+
+    #[test]
+    fn cdp_route_patterns_do_not_impose_a_non_playwright_size_cap() {
+        // Arrange
+        let pattern = "x".repeat(4 * 1024 + 1);
+
+        // Act
+        let converted = cdp_pattern(&pattern).unwrap();
+        let empty = cdp_pattern("").unwrap();
+
+        // Assert
+        assert_eq!(converted, pattern);
+        assert!(empty.is_empty());
     }
 
     #[test]
@@ -5168,8 +5678,9 @@ mod tests {
         let scope = RegistrationScope::Context(context);
 
         // Act / Assert
-        assert!(scope.applies_to(first_page, context));
-        assert!(scope.applies_to(second_page, context));
+        assert!(scope.applies_to(Some(first_page), context));
+        assert!(scope.applies_to(Some(second_page), context));
+        assert!(scope.applies_to(None, context));
         assert!(scope.is_active(&[], &[context]));
         assert!(!scope.is_active(&[first_page, second_page], &[]));
     }
@@ -5182,10 +5693,126 @@ mod tests {
         let scope = RegistrationScope::Page(page);
 
         // Act / Assert
-        assert!(scope.applies_to(page, context));
-        assert!(!scope.applies_to(ObjectId::new(8), context));
+        assert!(scope.applies_to(Some(page), context));
+        assert!(!scope.applies_to(Some(ObjectId::new(8)), context));
+        assert!(!scope.applies_to(None, context));
         assert!(scope.is_active(&[page], &[context]));
         assert!(!scope.is_active(&[], &[context]));
+    }
+
+    #[test]
+    fn service_worker_fetch_enable_uses_only_context_route_patterns() {
+        // Arrange
+        let context = ObjectId::new(3);
+        let page = ObjectId::new(7);
+        let registrations = vec![
+            registration(1, RegistrationScope::Page(page), "**/page-only.css", None),
+            registration(
+                2,
+                RegistrationScope::Context(context),
+                "**/context.css",
+                None,
+            ),
+        ];
+
+        // Act
+        let patterns = cdp_patterns(&registrations, None, context).unwrap();
+
+        // Assert
+        assert_eq!(patterns, vec!["**/context.css"]);
+    }
+
+    #[test]
+    fn service_worker_auth_composes_one_wildcard_fetch_enable_before_resume() {
+        // Arrange
+        let route_patterns = vec!["**/context.css".to_owned()];
+
+        // Act
+        let commands = service_worker_interception_commands(route_patterns, true)
+            .expect("compose Service Worker interception commands");
+
+        // Assert
+        assert_eq!(commands.len(), 2);
+        assert_eq!(commands[0].method(), "Network.setCacheDisabled");
+        assert_eq!(commands[0].params(), &json!({ "cacheDisabled": true }));
+        assert_eq!(commands[1].method(), "Fetch.enable");
+        assert_eq!(
+            commands[1].params(),
+            &json!({
+                "patterns": [{ "urlPattern": "*", "requestStage": "Request" }],
+                "handleAuthRequests": true
+            })
+        );
+    }
+
+    #[test]
+    fn inactive_service_worker_interception_emits_no_command() {
+        // Arrange
+        let route_patterns = Vec::new();
+
+        // Act
+        let commands = service_worker_interception_commands(route_patterns, false)
+            .expect("compose inactive Service Worker interception commands");
+
+        // Assert
+        assert!(commands.is_empty());
+    }
+
+    #[test]
+    fn service_worker_request_selects_context_route_without_page_fallback() {
+        // Arrange
+        let context = ObjectId::new(3);
+        let page = ObjectId::new(7);
+        let mut state = state_with_pending(Vec::new(), Vec::new());
+        state.next_registration = 3;
+        state.registrations = vec![
+            registration(1, RegistrationScope::Page(page), "**/asset.txt", None),
+            registration(2, RegistrationScope::Context(context), "**/asset.txt", None),
+        ];
+
+        // Act
+        let selected = take_matching_registration(
+            &mut state,
+            None,
+            context,
+            "https://example.test/asset.txt",
+            false,
+        )
+        .unwrap()
+        .unwrap();
+
+        // Assert
+        assert_eq!(selected.id, 2);
+        assert_eq!(selected.scope, RegistrationScope::Context(context));
+        assert_eq!(
+            selected.next_cursor,
+            FallbackCursor::Context { before_context: 2 }
+        );
+    }
+
+    #[test]
+    fn service_worker_route_registry_grows_past_page_initialization_capacity() {
+        // Arrange
+        let context = ObjectId::new(3);
+        let ownership = playwright_rust_backend_cdp_topology::CdpContextOwnership::Default;
+        let mut state = state_with_pending(Vec::new(), Vec::new());
+
+        // Act
+        for index in 0..=MAX_ROUTE_INITIALIZING_SESSIONS {
+            remember_service_worker_session_in_state(
+                &mut state,
+                &format!("service-worker-{index}"),
+                context,
+                ownership,
+            )
+            .unwrap();
+        }
+
+        // Assert
+        assert_eq!(
+            state.service_worker_sessions.len(),
+            MAX_ROUTE_INITIALIZING_SESSIONS + 1
+        );
     }
 
     #[test]
@@ -5409,6 +6036,37 @@ mod tests {
             Some([("x-second".into(), "yes".into())].as_slice())
         );
         assert_eq!(combined.post_data.as_deref(), Some(b"first".as_slice()));
+    }
+
+    #[cfg(feature = "har-recording")]
+    #[test]
+    fn har_request_overrides_grow_past_the_retired_route_capacity() {
+        // Arrange
+        let mut state = state_with_pending(Vec::new(), Vec::new());
+        let options = RouteContinue::new(
+            Some("https://example.test/echo".into()),
+            Some("POST".into()),
+            Some(vec![("content-type".into(), "application/json".into())]),
+            Some(b"11".to_vec()),
+        )
+        .unwrap();
+
+        // Act
+        for index in 0..=super::MAX_RETIRED_CALLS {
+            let mut pending = pending_call(index as u64 + 1, ObjectId::new(8));
+            pending.network_request_id = Some(format!("network-{index}").into_boxed_str());
+            retain_har_request_override_in_state(&mut state, &pending, &options).unwrap();
+        }
+
+        // Assert
+        assert_eq!(
+            state.har_request_overrides.len(),
+            super::MAX_RETIRED_CALLS + 1
+        );
+        assert_eq!(
+            state.har_request_overrides.last().unwrap().options.as_ref(),
+            &options
+        );
     }
 
     #[cfg(feature = "route-redirects")]

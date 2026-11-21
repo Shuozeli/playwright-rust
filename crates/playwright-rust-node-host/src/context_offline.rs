@@ -1,6 +1,6 @@
 //! Optional Context-scoped Chromium offline policy.
 //!
-//! Rust retains a fixed Context registry and applies Playwright's Chromium
+//! Rust retains an allocator-backed Context registry and applies Playwright's Chromium
 //! network-emulation payload to every newly initialized Page or out-of-process
 //! Frame session before it is resumed or published.
 
@@ -9,8 +9,10 @@ use std::future::Future;
 use std::sync::{Arc, Mutex};
 
 use playwright_rust_backend_cdp_topology::CdpContextOwnership;
+#[cfg(any(feature = "service-worker-events", test))]
+use playwright_rust_cdp::ServiceWorkerInitializationCommand;
 use playwright_rust_cdp::connection::CdpError;
-use playwright_rust_cdp::{CdpConnection, CdpSession};
+use playwright_rust_cdp::{CdpClient, CdpConnection, CdpSession};
 use playwright_rust_core::{
     ObjectId, ProductionResourceLedger, ResourceClass, ResourceLease, ResourceRequirements,
     ResourceScope,
@@ -22,8 +24,6 @@ use playwright_rust_plugin_chromium_session_initialization::{
 
 use crate::{HostError, HostSession};
 
-pub(crate) const MAX_CONTEXTS: usize = 16;
-const MAX_SESSIONS: usize = 80; // 16 Pages and at most 64 Frame sessions.
 const SCOPE: ResourceScope = ResourceScope::extension(193, 0);
 
 struct State {
@@ -44,12 +44,11 @@ struct NativeSession {
     session_id: String,
     target_id: String,
     is_page: bool,
+    client: Option<Arc<dyn CdpClient>>,
 }
 
 pub(crate) const fn requirements() -> ResourceRequirements {
-    let storage_bytes = (std::mem::size_of::<Installation>()
-        + std::mem::size_of::<State>()
-        + 2 * MAX_CONTEXTS * std::mem::size_of::<ObjectId>()) as u64;
+    let storage_bytes = (std::mem::size_of::<Installation>() + std::mem::size_of::<State>()) as u64;
     ResourceRequirements::none()
         .with_class(
             ResourceClass::BackendStateBytes,
@@ -80,20 +79,12 @@ impl Installation {
                 plan.class(ResourceClass::BackendStateBytes).global,
             )
             .map_err(HostError::backend)?;
-        let mut contexts = Vec::new();
-        contexts
-            .try_reserve_exact(MAX_CONTEXTS)
-            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
-        let mut dirty_contexts = Vec::new();
-        dirty_contexts
-            .try_reserve_exact(MAX_CONTEXTS)
-            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
         Ok(Arc::new(Self {
             state: Mutex::new(State {
                 default_offline,
                 default_dirty: false,
-                contexts,
-                dirty_contexts,
+                contexts: Vec::new(),
+                dirty_contexts: Vec::new(),
                 closed: false,
             }),
             gate: tokio::sync::Mutex::new(()),
@@ -111,11 +102,10 @@ impl Installation {
                 "offline policy is already installed for this Context".into(),
             ));
         }
-        if state.contexts.len() + usize::from(state.default_offline) == MAX_CONTEXTS {
-            return Err(HostError::ResourceExhausted(format!(
-                "offline policy exceeds {MAX_CONTEXTS} live Contexts"
-            )));
-        }
+        state
+            .contexts
+            .try_reserve(1)
+            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
         state.contexts.push(context);
         Ok(())
     }
@@ -138,30 +128,15 @@ impl Installation {
         state: &State,
         context: ObjectId,
         ownership: CdpContextOwnership,
-        offline: bool,
+        _offline: bool,
     ) -> Result<bool, HostError> {
         if state.closed {
             return Err(HostError::TargetClosed);
         }
         match ownership {
-            CdpContextOwnership::Default => {
-                if offline && !state.default_offline && state.contexts.len() == MAX_CONTEXTS {
-                    return Err(HostError::ResourceExhausted(format!(
-                        "offline policy exceeds {MAX_CONTEXTS} live Contexts"
-                    )));
-                }
-                Ok(state.default_offline)
-            }
+            CdpContextOwnership::Default => Ok(state.default_offline),
             CdpContextOwnership::Owned => {
                 let previous = state.contexts.contains(&context);
-                if offline
-                    && !previous
-                    && state.contexts.len() + usize::from(state.default_offline) == MAX_CONTEXTS
-                {
-                    return Err(HostError::ResourceExhausted(format!(
-                        "offline policy exceeds {MAX_CONTEXTS} live Contexts"
-                    )));
-                }
                 Ok(previous)
             }
             CdpContextOwnership::External => Err(HostError::UnsupportedOperation(
@@ -196,19 +171,13 @@ impl Installation {
         Self::previous_for_change(&state, context, ownership, offline)?;
         match ownership {
             CdpContextOwnership::Default if !state.default_dirty => {
-                if state.dirty_contexts.len() == MAX_CONTEXTS {
-                    return Err(HostError::ResourceExhausted(format!(
-                        "offline reconciliation exceeds {MAX_CONTEXTS} live Contexts"
-                    )));
-                }
                 state.default_dirty = true;
             }
             CdpContextOwnership::Owned if !state.dirty_contexts.contains(&context) => {
-                if state.dirty_contexts.len() + usize::from(state.default_dirty) == MAX_CONTEXTS {
-                    return Err(HostError::ResourceExhausted(format!(
-                        "offline reconciliation exceeds {MAX_CONTEXTS} live Contexts"
-                    )));
-                }
+                state
+                    .dirty_contexts
+                    .try_reserve(1)
+                    .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
                 state.dirty_contexts.push(context);
             }
             CdpContextOwnership::Default | CdpContextOwnership::Owned => {}
@@ -233,6 +202,10 @@ impl Installation {
             CdpContextOwnership::Owned => {
                 if offline {
                     if !state.contexts.contains(&context) {
+                        state
+                            .contexts
+                            .try_reserve(1)
+                            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
                         state.contexts.push(context);
                     }
                 } else {
@@ -260,6 +233,22 @@ impl Installation {
             CdpContextOwnership::Default => state.default_offline,
             CdpContextOwnership::Owned => state.contexts.contains(&context),
             CdpContextOwnership::External => false,
+        })
+    }
+
+    #[cfg(any(feature = "service-worker-events", test))]
+    pub(crate) fn service_worker_initialization_commands(
+        &self,
+        context: ObjectId,
+        ownership: CdpContextOwnership,
+    ) -> Result<Option<[ServiceWorkerInitializationCommand; 1]>, HostError> {
+        self.offline(context, ownership).map(|offline| {
+            offline.then(|| {
+                [ServiceWorkerInitializationCommand::new(
+                    "Network.emulateNetworkConditions",
+                    offline_payload(true),
+                )]
+            })
         })
     }
 
@@ -506,22 +495,30 @@ impl HostSession {
                 .map(|page| page.target_id())
                 .collect::<Vec<_>>();
             let mut sessions = Vec::new();
-            sessions
-                .try_reserve_exact(MAX_SESSIONS)
-                .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
             for target in topology.target_session_routes() {
                 if !page_targets.contains(&target.page_target_id()) {
                     continue;
                 }
-                if sessions.len() == MAX_SESSIONS {
-                    return Err(HostError::ResourceExhausted(
-                        "offline native session capacity exceeded".into(),
-                    ));
-                }
+                sessions
+                    .try_reserve(1)
+                    .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
                 sessions.push(NativeSession {
                     session_id: target.session_id().to_owned(),
                     target_id: target.target_id().to_owned(),
                     is_page: target.target_id() == target.page_target_id(),
+                    client: None,
+                });
+            }
+            #[cfg(all(feature = "worker-events", feature = "service-worker-events"))]
+            for worker in live.worker_events.service_worker_snapshot(context)? {
+                sessions
+                    .try_reserve(1)
+                    .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
+                sessions.push(NativeSession {
+                    session_id: worker.id().to_owned(),
+                    target_id: worker.id().to_owned(),
+                    is_page: false,
+                    client: Some(worker.client()),
                 });
             }
             (
@@ -537,16 +534,22 @@ impl HostSession {
             offline,
             &sessions,
             |index, value| {
+                let client = sessions[index].client.clone();
                 let session = CdpSession::new(
                     connection.clone(),
                     sessions[index].session_id.clone(),
                     sessions[index].target_id.clone(),
                 );
                 async move {
-                    session
-                        .send("Network.emulateNetworkConditions", offline_payload(value))
-                        .await
-                        .map(|_| ())
+                    if let Some(client) = client {
+                        client
+                            .network_emulate_network_conditions(offline_payload(value))
+                            .await
+                    } else {
+                        session
+                            .network_emulate_network_conditions(offline_payload(value))
+                            .await
+                    }
                 }
             },
         )
@@ -566,6 +569,7 @@ mod tests {
                 session_id: format!("session-{index}"),
                 target_id: format!("page-{index}"),
                 is_page: true,
+                client: None,
             })
             .collect()
     }
@@ -604,20 +608,18 @@ mod tests {
     }
 
     #[test]
-    fn policy_rejects_more_than_the_fixed_context_capacity() {
+    fn policy_grows_past_the_legacy_context_capacity() {
         // Arrange
         let installation = Installation::new_with_default(&resources(), false).unwrap();
-        for value in 1..=MAX_CONTEXTS {
+        for value in 1..=129 {
             installation.install(ObjectId::new(value as u64)).unwrap();
         }
 
         // Act
-        let error = installation
-            .install(ObjectId::new((MAX_CONTEXTS + 1) as u64))
-            .unwrap_err();
+        let result = installation.install(ObjectId::new(130));
 
         // Assert
-        assert!(matches!(error, HostError::ResourceExhausted(_)));
+        assert!(result.is_ok());
     }
 
     #[test]
@@ -644,20 +646,18 @@ mod tests {
     }
 
     #[test]
-    fn default_policy_consumes_one_fixed_context_slot() {
+    fn default_policy_does_not_reduce_dynamic_context_capacity() {
         // Arrange
         let installation = Installation::new_with_default(&resources(), true).unwrap();
-        for value in 1..MAX_CONTEXTS {
+        for value in 1..=129 {
             installation.install(ObjectId::new(value as u64)).unwrap();
         }
 
         // Act
-        let error = installation
-            .install(ObjectId::new(MAX_CONTEXTS as u64))
-            .unwrap_err();
+        let result = installation.install(ObjectId::new(130));
 
         // Assert
-        assert!(matches!(error, HostError::ResourceExhausted(_)));
+        assert!(result.is_ok());
     }
 
     #[test]
@@ -675,6 +675,27 @@ mod tests {
 
         // Assert
         assert_eq!(payload, expected);
+    }
+
+    #[test]
+    fn offline_service_worker_receives_the_exact_pre_resume_command() {
+        // Arrange
+        let installation = Installation::new_with_default(&resources(), true).unwrap();
+        let context = ObjectId::new(7);
+
+        // Act
+        let commands = installation
+            .service_worker_initialization_commands(context, CdpContextOwnership::Default)
+            .unwrap()
+            .expect("offline Context should initialize its Service Worker offline");
+        let online = installation
+            .service_worker_initialization_commands(context, CdpContextOwnership::Owned)
+            .unwrap();
+
+        // Assert
+        assert_eq!(commands[0].method(), "Network.emulateNetworkConditions");
+        assert_eq!(commands[0].params(), &offline_payload(true));
+        assert!(online.is_none());
     }
 
     #[test]
@@ -997,13 +1018,13 @@ mod tests {
     }
 
     #[test]
-    fn dirty_registry_is_bounded_and_context_close_reclaims_a_slot() {
+    fn dirty_registry_grows_and_context_close_reclaims_an_entry() {
         // Arrange
         let installation = Installation::new_with_default(&resources(), false).unwrap();
         installation
             .mark_dirty(ObjectId::new(1), CdpContextOwnership::Default, false)
             .unwrap();
-        for value in 2..=MAX_CONTEXTS {
+        for value in 2..=129 {
             installation
                 .mark_dirty(
                     ObjectId::new(value as u64),
@@ -1014,28 +1035,14 @@ mod tests {
         }
 
         // Act
-        let overflow = installation.mark_dirty(
-            ObjectId::new((MAX_CONTEXTS + 1) as u64),
-            CdpContextOwnership::Owned,
-            false,
-        );
+        let added = installation.mark_dirty(ObjectId::new(130), CdpContextOwnership::Owned, false);
         installation.remove(ObjectId::new(2)).unwrap();
-        let after_close = installation.mark_dirty(
-            ObjectId::new((MAX_CONTEXTS + 1) as u64),
-            CdpContextOwnership::Owned,
-            false,
-        );
 
         // Assert
-        assert!(matches!(overflow, Err(HostError::ResourceExhausted(_))));
-        assert!(after_close.is_ok());
+        assert!(added.is_ok());
         assert!(
             installation
-                .prepare_change(
-                    ObjectId::new((MAX_CONTEXTS + 1) as u64),
-                    CdpContextOwnership::Owned,
-                    false,
-                )
+                .prepare_change(ObjectId::new(130), CdpContextOwnership::Owned, false,)
                 .unwrap()
                 .dirty
         );

@@ -1,24 +1,18 @@
 //! Host-selected, finite per-Page serialization. No task or timer is spawned.
 use crate::HostError;
 use playwright_rust_core::{
-    ObjectId, ProductionResourceLedger, ResourceClass, ResourceLease, ResourceLedger,
-    ResourceRequirements, ResourceScope,
+    ObjectId, ProductionResourceLedger, ResourceClass, ResourceLease, ResourceRequirements,
+    ResourceScope,
 };
 use std::sync::{Arc, Mutex};
 
-const CAPACITY: usize = 8;
 const STATE_BYTES: u64 = 4096;
-const WAITER_BYTES: u64 = 4096;
 const STATE_SCOPE: ResourceScope = ResourceScope::extension(120, 16);
 
 pub(crate) fn requirements() -> ResourceRequirements {
     ResourceRequirements::none()
-        .with_class(
-            ResourceClass::BackendStateBytes,
-            STATE_BYTES + WAITER_BYTES * CAPACITY as u64,
-            WAITER_BYTES * CAPACITY as u64,
-        )
-        .with_metadata(CAPACITY + 1, CAPACITY + 1)
+        .with_class(ResourceClass::BackendStateBytes, STATE_BYTES, STATE_BYTES)
+        .with_metadata(1, 1)
 }
 
 struct Slot {
@@ -30,7 +24,6 @@ struct Slot {
 pub(crate) struct Queue {
     slots: Mutex<Vec<Slot>>,
     captures: tokio::sync::Semaphore,
-    ledger: ResourceLedger,
     _state: ResourceLease,
 }
 
@@ -67,32 +60,21 @@ impl Queue {
             .reserve(STATE_SCOPE, ResourceClass::BackendStateBytes, STATE_BYTES)
             .map_err(HostError::backend)?;
         Ok(Self {
-            slots: Mutex::new(Vec::with_capacity(CAPACITY)),
+            slots: Mutex::new(Vec::new()),
             captures: tokio::sync::Semaphore::new(2),
-            ledger,
             _state: state,
         })
     }
 
     pub(super) fn reserve(&self, page: ObjectId) -> Result<Entry<'_>, HostError> {
         let mut slots = self.slots.lock().map_err(HostError::backend)?;
-        if slots.iter().map(|slot| slot.users).sum::<usize>() >= CAPACITY {
-            return Err(HostError::ResourceExhausted(
-                "screenshot queue capacity exceeded".into(),
-            ));
-        }
-        let lease = self
-            .ledger
-            .reserve(
-                ResourceScope::Object(page),
-                ResourceClass::BackendStateBytes,
-                WAITER_BYTES,
-            )
-            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
         let gate = if let Some(slot) = slots.iter_mut().find(|slot| slot.page == page) {
             slot.users += 1;
             slot.gate.clone()
         } else {
+            slots.try_reserve(1).map_err(|_| {
+                HostError::ResourceExhausted("screenshot queue allocation failed".into())
+            })?;
             let gate = Arc::new(tokio::sync::Mutex::new(()));
             slots.push(Slot {
                 page,
@@ -105,7 +87,6 @@ impl Queue {
             queue: self,
             page,
             gate,
-            _lease: lease,
         })
     }
 }
@@ -114,7 +95,6 @@ pub(super) struct Entry<'a> {
     queue: &'a Queue,
     page: ObjectId,
     pub(super) gate: Arc<tokio::sync::Mutex<()>>,
-    _lease: ResourceLease,
 }
 
 impl Drop for Entry<'_> {
@@ -153,19 +133,18 @@ mod tests {
     }
 
     #[test]
-    fn queue_rejects_ninth_entry_and_reclaims_cancelled_admission() {
+    fn queue_accepts_more_than_the_legacy_waiter_count_and_reclaims_admission() {
         // Arrange
         let resources = resources();
         let queue = Queue::new(&resources).unwrap();
-        let mut entries: Vec<_> = (0..8)
+        let entries: Vec<_> = (0..129)
             .map(|_| queue.reserve(ObjectId::new(1)).unwrap())
             .collect();
         // Act
-        let rejected = queue.reserve(ObjectId::new(1));
+        let additional = queue.reserve(ObjectId::new(1));
         // Assert
-        assert!(matches!(rejected, Err(HostError::ResourceExhausted(_))));
-        entries.pop();
-        assert!(queue.reserve(ObjectId::new(1)).is_ok());
+        assert!(additional.is_ok());
+        drop(additional);
         drop(entries);
         assert!(queue.slots.lock().unwrap().is_empty());
     }
@@ -218,11 +197,7 @@ mod tests {
     #[test]
     fn queue_storage_is_covered_by_its_reserved_metadata_bytes() {
         // Arrange
-        let bytes = std::mem::size_of::<Queue>()
-            + CAPACITY
-                * (std::mem::size_of::<Slot>()
-                    + std::mem::size_of::<tokio::sync::Mutex<()>>()
-                    + 64);
+        let bytes = std::mem::size_of::<Queue>() + 256;
         // Act
         let covered = bytes <= STATE_BYTES as usize;
         // Assert

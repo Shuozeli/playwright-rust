@@ -11,7 +11,9 @@ use std::sync::Arc;
 use std::collections::VecDeque;
 
 use playwright_rust_backend_cdp_topology::CdpTopology;
-use playwright_rust_cdp::{CdpConnection, CdpEvent, generated::page};
+use playwright_rust_cdp::{
+    CdpConnection, CdpEvent, ServiceWorkerInitializationCommand, generated::page,
+};
 use playwright_rust_core::ObjectId;
 #[cfg(feature = "console-history")]
 use playwright_rust_core::{
@@ -39,14 +41,11 @@ use serde_json::Value;
 use crate::frame_trees::FrameTrees;
 use crate::{ConsoleMessage, HostError};
 
+#[cfg(not(any(feature = "handles", feature = "worker-handle-evaluation")))]
 pub(crate) const MAX_LOG_RELEASE_JOBS: usize = 512;
 const MAX_LOG_ARGUMENTS: usize = 16;
 const MAX_LOG_OBJECT_ID_BYTES: usize = 4096;
 
-#[cfg(feature = "console-events")]
-const MAX_SUBSCRIBED_PAGES: usize = 16;
-#[cfg(feature = "console-events")]
-const MAX_SUBSCRIBED_CONTEXTS: usize = 16;
 #[cfg(feature = "console-events")]
 const MAX_CONSOLE_WAITERS_PER_TARGET: usize = 32;
 
@@ -80,27 +79,18 @@ impl Subscriptions {
     pub(crate) fn new() -> Self {
         Self {
             state: std::sync::Mutex::new(SubscriptionState {
-                pages: Vec::with_capacity(MAX_SUBSCRIBED_PAGES),
-                contexts: Vec::with_capacity(MAX_SUBSCRIBED_CONTEXTS),
+                pages: Vec::new(),
+                contexts: Vec::new(),
                 next_waiter_token: 1,
             }),
         }
     }
 
-    fn entry_index(
-        entries: &mut Vec<SubscriptionEntry>,
-        id: ObjectId,
-        limit: usize,
-        label: &str,
-    ) -> Result<usize, HostError> {
+    fn entry_index(entries: &mut Vec<SubscriptionEntry>, id: ObjectId) -> Result<usize, HostError> {
         if let Some(index) = entries.iter().position(|entry| entry.id == id) {
             return Ok(index);
         }
-        if entries.len() == limit {
-            return Err(HostError::ResourceExhausted(format!(
-                "console {label} subscriptions exceed {limit}"
-            )));
-        }
+        entries.try_reserve(1).map_err(HostError::backend)?;
         entries.push(SubscriptionEntry {
             id,
             listeners: 0,
@@ -113,7 +103,6 @@ impl Subscriptions {
         entries: &mut Vec<SubscriptionEntry>,
         id: ObjectId,
         enabled: bool,
-        limit: usize,
         label: &str,
     ) -> Result<(), HostError> {
         if !enabled {
@@ -126,7 +115,7 @@ impl Subscriptions {
             }
             return Ok(());
         }
-        let index = Self::entry_index(entries, id, limit, label)?;
+        let index = Self::entry_index(entries, id)?;
         entries[index].listeners = entries[index].listeners.checked_add(1).ok_or_else(|| {
             HostError::ResourceExhausted(format!("{label} listener count exhausted"))
         })?;
@@ -137,10 +126,9 @@ impl Subscriptions {
         entries: &mut Vec<SubscriptionEntry>,
         id: ObjectId,
         token: u64,
-        limit: usize,
         label: &str,
     ) -> Result<(), HostError> {
-        let index = Self::entry_index(entries, id, limit, label)?;
+        let index = Self::entry_index(entries, id)?;
         if entries[index].waiters.len() == MAX_CONSOLE_WAITERS_PER_TARGET {
             return Err(HostError::ResourceExhausted(format!(
                 "console {label} waiters exceed {MAX_CONSOLE_WAITERS_PER_TARGET}"
@@ -171,13 +159,7 @@ impl Subscriptions {
         enabled: bool,
     ) -> Result<(), HostError> {
         let mut state = self.state.lock().map_err(HostError::backend)?;
-        Self::update_listener(
-            &mut state.pages,
-            page,
-            enabled,
-            MAX_SUBSCRIBED_PAGES,
-            "Page",
-        )
+        Self::update_listener(&mut state.pages, page, enabled, "Page")
     }
 
     pub(crate) fn update_context_listener(
@@ -186,32 +168,20 @@ impl Subscriptions {
         enabled: bool,
     ) -> Result<(), HostError> {
         let mut state = self.state.lock().map_err(HostError::backend)?;
-        Self::update_listener(
-            &mut state.contexts,
-            context,
-            enabled,
-            MAX_SUBSCRIBED_CONTEXTS,
-            "BrowserContext",
-        )
+        Self::update_listener(&mut state.contexts, context, enabled, "BrowserContext")
     }
 
     pub(crate) fn subscribe_page_waiter(&self, page: ObjectId) -> Result<u64, HostError> {
         let mut state = self.state.lock().map_err(HostError::backend)?;
         let token = Self::next_waiter_token(&mut state)?;
-        Self::subscribe_waiter(&mut state.pages, page, token, MAX_SUBSCRIBED_PAGES, "Page")?;
+        Self::subscribe_waiter(&mut state.pages, page, token, "Page")?;
         Ok(token)
     }
 
     pub(crate) fn subscribe_context_waiter(&self, context: ObjectId) -> Result<u64, HostError> {
         let mut state = self.state.lock().map_err(HostError::backend)?;
         let token = Self::next_waiter_token(&mut state)?;
-        Self::subscribe_waiter(
-            &mut state.contexts,
-            context,
-            token,
-            MAX_SUBSCRIBED_CONTEXTS,
-            "BrowserContext",
-        )?;
+        Self::subscribe_waiter(&mut state.contexts, context, token, "BrowserContext")?;
         Ok(token)
     }
 
@@ -302,6 +272,24 @@ impl Subscriptions {
             }))
     }
 
+    #[cfg(feature = "worker-console-events")]
+    pub(crate) fn publishes_worker_context(
+        &self,
+        topology: &CdpTopology,
+        context: ObjectId,
+    ) -> Result<bool, HostError> {
+        let state = self.state.lock().map_err(HostError::backend)?;
+        if Self::contains(&state.contexts, context) {
+            return Ok(true);
+        }
+        Ok(state.pages.iter().any(|entry| {
+            (entry.listeners != 0 || entry.waiters.iter().any(|waiter| waiter.active))
+                && topology.page_session_routes().any(|route| {
+                    route.object_id() == entry.id && route.browser_context_object_id() == context
+                })
+        }))
+    }
+
     fn retain(&self, topology: &CdpTopology) -> Result<(), HostError> {
         let mut state = self.state.lock().map_err(HostError::backend)?;
         state.pages.retain(|entry| {
@@ -327,11 +315,9 @@ impl Subscriptions {
 }
 
 #[cfg(feature = "console-history")]
-const MAX_HISTORY_PAGES: usize = 16;
-#[cfg(feature = "console-history")]
 pub(crate) const MAX_CONSOLE_MESSAGES_PER_PAGE: usize = 200;
 #[cfg(feature = "console-history")]
-const MAX_CONSOLE_HISTORY_ITEMS: u64 = (MAX_HISTORY_PAGES * MAX_CONSOLE_MESSAGES_PER_PAGE) as u64;
+const MAX_CONSOLE_HISTORY_ITEMS: u64 = 16 * MAX_CONSOLE_MESSAGES_PER_PAGE as u64;
 #[cfg(feature = "console-history")]
 const MAX_CONSOLE_HISTORY_BYTES: u64 = 16 * 1024 * 1024;
 #[cfg(feature = "console-history")]
@@ -380,15 +366,13 @@ struct HistoryState {
 pub(crate) const fn requirements() -> ResourceRequirements {
     let storage_bytes = (std::mem::size_of::<Installation>()
         + std::mem::size_of::<HistoryState>()
-        + MAX_HISTORY_PAGES
-            * (std::mem::size_of::<PageHistory>()
-                + MAX_CONSOLE_MESSAGES_PER_PAGE * std::mem::size_of::<StoredMessage>()))
+        + MAX_CONSOLE_MESSAGES_PER_PAGE * std::mem::size_of::<StoredMessage>())
         as u64;
     ResourceRequirements::none()
         .with_class(
             ResourceClass::EventItem,
             MAX_CONSOLE_HISTORY_ITEMS,
-            MAX_CONSOLE_MESSAGES_PER_PAGE as u64,
+            MAX_CONSOLE_HISTORY_ITEMS,
         )
         .with_class(
             ResourceClass::EventBytes,
@@ -400,10 +384,7 @@ pub(crate) const fn requirements() -> ResourceRequirements {
             storage_bytes,
             storage_bytes,
         )
-        .with_metadata(
-            MAX_HISTORY_PAGES + 1,
-            MAX_CONSOLE_HISTORY_ITEMS as usize + 1,
-        )
+        .with_metadata(1, MAX_CONSOLE_HISTORY_ITEMS as usize + 1)
 }
 
 #[cfg(feature = "console-history")]
@@ -425,18 +406,11 @@ impl Installation {
                 plan.class(ResourceClass::BackendStateBytes).global,
             )
             .map_err(HostError::backend)?;
-        let mut pages = Vec::new();
-        pages
-            .try_reserve_exact(MAX_HISTORY_PAGES)
-            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
-        for _ in 0..MAX_HISTORY_PAGES {
-            pages.push(PageHistory::new()?);
-        }
         Ok(Arc::new(Self {
             resources: ledger,
             state: std::sync::Mutex::new(HistoryState {
                 next_sequence: 1,
-                pages,
+                pages: Vec::new(),
                 closed: false,
             }),
             _storage: storage,
@@ -491,18 +465,20 @@ impl Installation {
                     .pages
                     .iter()
                     .position(|history| history.page.is_none())
-            })
-            .ok_or_else(|| {
-                HostError::ResourceExhausted(format!(
-                    "console history exceeds {MAX_HISTORY_PAGES} live Pages"
-                ))
-            })?;
+            });
+        let page_index = if let Some(index) = page_index {
+            index
+        } else {
+            state.pages.try_reserve(1).map_err(HostError::backend)?;
+            state.pages.push(PageHistory::new()?);
+            state.pages.len() - 1
+        };
         let next_sequence = state
             .next_sequence
             .checked_add(1)
             .ok_or_else(|| HostError::ResourceExhausted("console sequence exhausted".into()))?;
         let sequence = std::mem::replace(&mut state.next_sequence, next_sequence);
-        let scope = ResourceScope::Object(page);
+        let scope = HISTORY_SCOPE;
 
         if state.pages[page_index].messages.len() == MAX_CONSOLE_MESSAGES_PER_PAGE {
             let mut oldest = state.pages[page_index]
@@ -585,15 +561,17 @@ impl Installation {
 
     fn retain(&self, topology: &CdpTopology) -> Result<(), HostError> {
         let mut state = self.state.lock().map_err(HostError::backend)?;
-        for history in &mut state.pages {
-            if history.page.is_some_and(|page| {
-                !topology
+        state.pages.retain_mut(|history| {
+            let live = history.page.is_none_or(|page| {
+                topology
                     .page_session_routes()
                     .any(|route| route.object_id() == page)
-            }) {
+            });
+            if !live {
                 history.clear();
             }
-        }
+            live
+        });
         Ok(())
     }
 
@@ -602,9 +580,7 @@ impl Installation {
             return;
         };
         state.closed = true;
-        for history in &mut state.pages {
-            history.clear();
-        }
+        state.pages.clear();
     }
 }
 
@@ -672,6 +648,8 @@ pub(crate) struct Observer {
     subscriptions: Arc<Subscriptions>,
     #[cfg(feature = "console-history")]
     history: Arc<Installation>,
+    #[cfg(feature = "context-tracing-console")]
+    tracing: Arc<crate::context_tracing::Installation>,
     downstream: Arc<dyn ChromiumFrameEventObserver>,
     connection: Arc<CdpConnection>,
     cleanup: TokioCleanupExecutor,
@@ -692,30 +670,42 @@ struct PendingConsoleMessage {
     handles: Option<crate::handles::PendingEventHandles>,
 }
 
+pub(crate) struct ObserverBindings {
+    #[cfg(feature = "console-events")]
+    pub(crate) trees: Arc<FrameTrees>,
+    #[cfg(feature = "console-events")]
+    pub(crate) subscriptions: Arc<Subscriptions>,
+    #[cfg(feature = "console-history")]
+    pub(crate) history: Arc<Installation>,
+    #[cfg(feature = "context-tracing-console")]
+    pub(crate) tracing: Arc<crate::context_tracing::Installation>,
+    #[cfg(feature = "console-argument-handles")]
+    pub(crate) handles: Arc<crate::handles::Installation>,
+}
+
 impl Observer {
     pub(crate) fn new(
-        #[cfg(feature = "console-events")] trees: Arc<FrameTrees>,
-        #[cfg(feature = "console-events")] subscriptions: Arc<Subscriptions>,
-        #[cfg(feature = "console-history")] history: Arc<Installation>,
+        bindings: ObserverBindings,
         downstream: Arc<dyn ChromiumFrameEventObserver>,
         connection: Arc<CdpConnection>,
         cleanup: TokioCleanupExecutor,
-        #[cfg(feature = "console-argument-handles")] handles: Arc<crate::handles::Installation>,
     ) -> Self {
         Self {
             #[cfg(feature = "console-events")]
-            trees,
+            trees: bindings.trees,
             #[cfg(feature = "console-events")]
-            subscriptions,
+            subscriptions: bindings.subscriptions,
             #[cfg(feature = "console-history")]
-            history,
+            history: bindings.history,
+            #[cfg(feature = "context-tracing-console")]
+            tracing: bindings.tracing,
             downstream,
             connection,
             cleanup,
             #[cfg(feature = "console-argument-handles")]
-            handles,
+            handles: bindings.handles,
             #[cfg(feature = "console-argument-handles")]
-            pending: std::sync::Mutex::new(VecDeque::with_capacity(crate::handles::MAX_CALLS)),
+            pending: std::sync::Mutex::new(VecDeque::new()),
         }
     }
 }
@@ -1487,6 +1477,44 @@ impl ChromiumFrameEventObserver for Observer {
         self.downstream.observes_page(page)
     }
 
+    fn retains_worker_targets(&self) -> bool {
+        self.downstream.retains_worker_targets()
+    }
+
+    fn retains_service_worker_targets(&self) -> bool {
+        self.downstream.retains_service_worker_targets()
+    }
+
+    fn retains_worker_session(&self, session: &str) -> bool {
+        self.downstream.retains_worker_session(session)
+    }
+
+    fn enables_worker_network(&self) -> bool {
+        self.downstream.enables_worker_network()
+    }
+
+    fn enables_service_worker_network(&self) -> bool {
+        self.downstream.enables_service_worker_network()
+    }
+
+    fn prepare_service_worker(
+        &self,
+        topology: &CdpTopology,
+        event: &CdpEvent,
+    ) -> FrameObservationResult {
+        self.downstream.prepare_service_worker(topology, event)
+    }
+
+    fn service_worker_initialization_commands(
+        &self,
+        topology: &CdpTopology,
+        event: &CdpEvent,
+        commands: &mut Vec<ServiceWorkerInitializationCommand>,
+    ) -> FrameObservationResult {
+        self.downstream
+            .service_worker_initialization_commands(topology, event, commands)
+    }
+
     fn prepare_page(&self, topology: &CdpTopology, page: ObjectId) -> FrameObservationResult {
         self.downstream.prepare_page(topology, page)
     }
@@ -1588,21 +1616,6 @@ impl ChromiumFrameEventObserver for Observer {
                     .and_then(Value::as_array)
                     .ok_or_else(|| invalid("args"))?;
                 #[cfg(feature = "console-argument-handles")]
-                if publish
-                    && self
-                        .pending
-                        .lock()
-                        .map_err(|error| {
-                            Box::new(HostError::backend(error)) as Box<dyn Error + Send + Sync>
-                        })?
-                        .len()
-                        >= crate::handles::MAX_CALLS
-                {
-                    return Err(Box::new(HostError::ResourceExhausted(
-                        "pending console Handle publication capacity exceeded".into(),
-                    )));
-                }
-                #[cfg(feature = "console-argument-handles")]
                 let recovery = RemoteObjectRecovery::new(self, session_id, args)
                     .map_err(|error| Box::new(error) as Box<dyn Error + Send + Sync>)?;
                 let plan = ConsoleMessagePlan::new(message_type, args, &event.params)
@@ -1611,6 +1624,16 @@ impl ChromiumFrameEventObserver for Observer {
                 let message = plan
                     .build()
                     .map_err(|error| Box::new(error) as Box<dyn Error + Send + Sync>)?;
+                #[cfg(feature = "context-tracing-console")]
+                if let Some(context) = topology
+                    .page_session_routes()
+                    .find(|route| route.object_id() == page)
+                    .map(|route| route.browser_context_object_id())
+                {
+                    self.tracing
+                        .record_console(context, page, &message)
+                        .map_err(|error| Box::new(error) as Box<dyn Error + Send + Sync>)?;
+                }
                 #[cfg(feature = "console-argument-handles")]
                 {
                     if !publish {
@@ -1638,25 +1661,29 @@ impl ChromiumFrameEventObserver for Observer {
                                 "console event storage overflow".into(),
                             )) as Box<dyn Error + Send + Sync>
                         })?;
+                    let mut pending = self.pending.lock().map_err(|error| {
+                        Box::new(HostError::backend(error)) as Box<dyn Error + Send + Sync>
+                    })?;
+                    pending.try_reserve(1).map_err(|error| {
+                        Box::new(HostError::ResourceExhausted(format!(
+                            "console Handle publication allocation failed: {error}"
+                        ))) as Box<dyn Error + Send + Sync>
+                    })?;
                     let handles = self
                         .handles
                         .stage_event_handles(frame.object_id(), args)
                         .map_err(|error| Box::new(error) as Box<dyn Error + Send + Sync>)?;
                     recovery.disarm();
-                    self.pending
-                        .lock()
-                        .map_err(|error| {
-                            Box::new(HostError::backend(error)) as Box<dyn Error + Send + Sync>
-                        })?
-                        .push_back(PendingConsoleMessage {
-                            page,
-                            publish,
-                            #[cfg(feature = "console-history")]
-                            history_storage_bytes: storage_bytes,
-                            event_storage_bytes,
-                            message,
-                            handles: Some(handles),
-                        });
+                    pending.push_back(PendingConsoleMessage {
+                        page,
+                        publish,
+                        #[cfg(feature = "console-history")]
+                        history_storage_bytes: storage_bytes,
+                        event_storage_bytes,
+                        message,
+                        handles: Some(handles),
+                    });
+                    drop(pending);
                     // This callback is the topology driver's ordered event
                     // boundary. Publish native-free local Handle ownership and
                     // the console lifecycle group before the driver's ensuing
@@ -1715,6 +1742,16 @@ impl ChromiumFrameEventObserver for Observer {
                 let message = plan
                     .build()
                     .map_err(|error| Box::new(error) as Box<dyn Error + Send + Sync>)?;
+                #[cfg(feature = "context-tracing-console")]
+                if let Some(context) = topology
+                    .page_session_routes()
+                    .find(|route| route.object_id() == page)
+                    .map(|route| route.browser_context_object_id())
+                {
+                    self.tracing
+                        .record_console(context, page, &message)
+                        .map_err(|error| Box::new(error) as Box<dyn Error + Send + Sync>)?;
+                }
                 #[cfg(feature = "console-argument-handles")]
                 {
                     if !publish {
@@ -1727,11 +1764,11 @@ impl ChromiumFrameEventObserver for Observer {
                     let mut pending = self.pending.lock().map_err(|error| {
                         Box::new(HostError::backend(error)) as Box<dyn Error + Send + Sync>
                     })?;
-                    if pending.len() >= crate::handles::MAX_CALLS {
-                        return Err(Box::new(HostError::ResourceExhausted(
-                            "pending console publication capacity exceeded".into(),
-                        )));
-                    }
+                    pending.try_reserve(1).map_err(|error| {
+                        Box::new(HostError::ResourceExhausted(format!(
+                            "console publication allocation failed: {error}"
+                        ))) as Box<dyn Error + Send + Sync>
+                    })?;
                     pending.push_back(PendingConsoleMessage {
                         page,
                         publish,

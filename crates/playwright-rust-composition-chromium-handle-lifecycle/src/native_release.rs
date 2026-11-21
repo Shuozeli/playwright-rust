@@ -21,13 +21,13 @@ pub struct NativeHandleRelease {
 
 /// Constructible only after the injected native disposer acknowledges success
 /// (or for a primitive route that has no native object). Retains the exact
-/// route lease allocation so address reuse cannot match a replacement route.
+/// route incarnation identity so address reuse cannot match a replacement route.
 #[must_use = "commit or retain acknowledged native release for local retirement"]
 pub struct NativeHandleReleaseReceipt {
     runtime: ControlledLifecycleHandle,
     routes: ChromiumHandleRoutes,
     object_id: ObjectId,
-    identity: Arc<ResourceLease>,
+    identity: Arc<()>,
     capacity: ReservedDisposalCapacity,
 }
 
@@ -71,7 +71,7 @@ impl ChromiumHandleDisposeCommandService {
                 runtime: self.runtime.clone(),
                 routes: self.routes.clone(),
                 object_id,
-                identity: route._resource.clone(),
+                identity: route.identity.clone(),
                 capacity,
             },
             disposer: route.disposer.clone(),
@@ -112,7 +112,7 @@ impl NativeHandleReleaseReceipt {
         if state
             .routes
             .get(&self.object_id)
-            .is_none_or(|route| !Arc::ptr_eq(&route._resource, &self.identity))
+            .is_none_or(|route| !Arc::ptr_eq(&route.identity, &self.identity))
         {
             return Ok(NativeHandleReleaseCommit::Superseded);
         }

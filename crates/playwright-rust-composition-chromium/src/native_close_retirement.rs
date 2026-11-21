@@ -56,11 +56,10 @@ impl AttachedChromiumComposition {
     /// The runtime and its Page services must be the ones installed on this
     /// attachment; runtime reservations additionally enforce exact owner identity.
     ///
-    /// `scratch` is caller-admitted stable ObjectId storage, normally an inline
-    /// fixed array in the scheduler payload. It must fit the latest runtime
-    /// subtree. No scratch vector or second Handle-ID list is allocated here.
-    /// Existing topology/runtime preparation storage and diagnostic strings keep
-    /// their respective admission contracts; this is not an allocator/RSS bound.
+    /// The latest runtime subtree and close-route scratch are allocator-backed;
+    /// close does not reject a valid object graph at an artificial count. The
+    /// runtime reservation still bounds concurrent close intents, and allocation
+    /// failure is reported before topology or runtime mutation.
     ///
     /// A selected network registry requires its exact driver registration port.
     /// Lock order is network driver, topology, Handles, routes/subscriptions,
@@ -76,7 +75,6 @@ impl AttachedChromiumComposition {
         evidence: &NativeCloseEvidence,
         capacity: ChromiumCloseCapacityBundle,
         runtime: &'a ControlledDispatcher<CdpPageServices, CdpPageServices, Deadlines, Cleanup>,
-        scratch: &'a mut [ObjectId],
         network: Option<&ChromiumNetworkPageRegistrationHandle>,
     ) -> CloseResult<CommittedNativeClose<'a>>
     where
@@ -84,6 +82,7 @@ impl AttachedChromiumComposition {
         Cleanup: CleanupExecutor,
     {
         let services = runtime.service();
+        let mut scratch = Vec::new();
         retire_network(services, network, capacity.target(), || {
             self.with_native_close_topology(evidence, |target, topology| {
                 retire_local(
@@ -92,7 +91,7 @@ impl AttachedChromiumComposition {
                     capacity,
                     runtime.lifecycle_handle(),
                     services,
-                    scratch,
+                    &mut scratch,
                 )
             })?
         })
@@ -129,7 +128,7 @@ pub(crate) fn retire_local<'a>(
     capacity: ChromiumCloseCapacityBundle,
     runtime: ControlledLifecycleHandle,
     services: &'a CdpPageServices,
-    scratch: &'a mut [ObjectId],
+    scratch: &mut Vec<ObjectId>,
 ) -> CloseResult<CommittedNativeClose<'a>> {
     let parts = capacity.into_parts();
     let (target, object) = match native {
@@ -150,10 +149,16 @@ pub(crate) fn retire_local<'a>(
         .map_err(reservation_failure)?;
     let count = runtime.disposal_order().len();
     if count > scratch.len() {
-        return Err(error(
-            FailureKind::ResourceExhausted,
-            "native close disposal exceeds admitted scratch",
-        ));
+        scratch
+            .try_reserve(count - scratch.len())
+            .map_err(|cause| {
+                OperationError::new(
+                    FailureKind::ResourceExhausted,
+                    format!("native close scratch allocation failed: {cause}"),
+                    None,
+                )
+            })?;
+        scratch.resize(count, ObjectId::new(0));
     }
     let ids = &mut scratch[..count];
     ids.copy_from_slice(runtime.disposal_order());

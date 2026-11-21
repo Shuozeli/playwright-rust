@@ -4,10 +4,6 @@ use super::*;
 use crate::context_metadata::{ContextMetadata, ContextSnapshot};
 use crate::{CollectionReservation, CollectionRevision};
 
-// At most 16 Contexts and 16 Pages can retire without an intervening creation.
-// Creation replenishes these admitted revisions before native activation.
-const RETIREMENTS: usize = 32;
-
 #[cfg(test)]
 mod tests;
 
@@ -32,6 +28,7 @@ pub(crate) struct CollectionCreation<'a> {
     prior: usize,
     prior_external: usize,
     prior_ready: usize,
+    prior_terminal: usize,
     committed: bool,
 }
 
@@ -68,6 +65,9 @@ impl Drop for CollectionCreation<'_> {
             if let Some(ready) = collection.ready.as_mut() {
                 ready.truncate(self.prior_ready);
             }
+            if let Some(terminal) = collection.terminal.as_mut() {
+                terminal.truncate(self.prior_terminal);
+            }
         }
     }
 }
@@ -85,10 +85,10 @@ fn settings(
 
 impl FrameTrees {
     pub fn with_collections(self, contexts: ContextMetadata) -> Result<Self, HostError> {
-        let storage = self.factory.reserve_collection_storage(
-            RETIREMENTS * std::mem::size_of::<CollectionReservation>(),
-        )?;
-        let mut collection = CollectionState {
+        let storage = self
+            .factory
+            .reserve_collection_storage(std::mem::size_of::<CollectionState>())?;
+        let collection = CollectionState {
             contexts,
             native: None,
             planned: None,
@@ -96,11 +96,10 @@ impl FrameTrees {
             external: None,
             ready: None,
             creation: None,
-            retirements: Vec::with_capacity(RETIREMENTS),
+            retirements: Vec::new(),
             terminal: None,
             _storage: storage,
         };
-        self.replenish_retirements(&mut collection)?;
         self.state.lock().map_err(HostError::backend)?.collections = Some(collection);
         Ok(self)
     }
@@ -148,10 +147,19 @@ impl FrameTrees {
         Some((terminal, view))
     }
 
-    fn replenish_retirements(&self, state: &mut CollectionState) -> Result<(), HostError> {
+    fn replenish_retirements(
+        &self,
+        state: &mut CollectionState,
+        target: usize,
+    ) -> Result<(), HostError> {
         let before = state.retirements.len();
         let external_before = state.external.as_ref().map_or(0, |value| value.len());
-        while state.retirements.len() < RETIREMENTS {
+        let ready_before = state.ready.as_ref().map_or(0, |value| value.len());
+        state
+            .retirements
+            .try_reserve(target.saturating_sub(before))
+            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
+        while state.retirements.len() < target {
             match self.urls.publications().reserve_collection(&self.factory) {
                 Ok(reserved) => state.retirements.push(reserved),
                 Err(error) => {
@@ -161,17 +169,29 @@ impl FrameTrees {
             }
         }
         if let Some(external) = state.external.as_mut()
-            && let Err(error) = external.replenish(&self.urls.publications(), &self.factory)
+            && let Err(error) = external.replenish(target, &self.urls.publications(), &self.factory)
         {
             state.retirements.truncate(before);
             return Err(error);
         }
         if let Some(ready) = state.ready.as_mut()
-            && let Err(error) = ready.replenish(&self.urls.publications(), &self.factory)
+            && let Err(error) = ready.replenish(target, &self.urls.publications(), &self.factory)
         {
             state.retirements.truncate(before);
             if let Some(external) = state.external.as_mut() {
                 external.truncate(external_before);
+            }
+            return Err(error);
+        }
+        if let Some(terminal) = state.terminal.as_mut()
+            && let Err(error) = terminal.replenish(target, &self.urls.publications(), &self.factory)
+        {
+            state.retirements.truncate(before);
+            if let Some(external) = state.external.as_mut() {
+                external.truncate(external_before);
+            }
+            if let Some(ready) = state.ready.as_mut() {
+                ready.truncate(ready_before);
             }
             return Err(error);
         }
@@ -190,6 +210,7 @@ impl FrameTrees {
                 prior: 0,
                 prior_external: 0,
                 prior_ready: 0,
+                prior_terminal: 0,
                 committed: false,
             });
         };
@@ -202,13 +223,19 @@ impl FrameTrees {
         let prior = collection.retirements.len();
         let prior_external = collection.external.as_ref().map_or(0, |value| value.len());
         let prior_ready = collection.ready.as_ref().map_or(0, |value| value.len());
-        self.replenish_retirements(collection)?;
+        let prior_terminal = collection.terminal.as_ref().map_or(0, |value| value.len());
+        let native_members = collection
+            .native
+            .as_ref()
+            .map_or(0, |value| value.contexts().len() + value.pages().len());
+        self.replenish_retirements(collection, native_members.saturating_add(1))?;
         Ok(CollectionCreation {
             owner: self,
             reserved: Some(reserved),
             prior,
             prior_external,
             prior_ready,
+            prior_terminal,
             committed: false,
         })
     }
@@ -306,14 +333,11 @@ impl FrameTrees {
                 .collections
                 .as_mut()
                 .expect("selected collection owner");
+            self.replenish_retirements(collection, context_count + page_count)?;
             if let Some(reserved) = collection.creation.take() {
                 reserved
             } else if additions || context_count + page_count >= prior_count {
-                let reserved = self.urls.publications().reserve_collection(&self.factory)?;
-                if additions {
-                    self.replenish_retirements(collection)?;
-                }
-                reserved
+                self.urls.publications().reserve_collection(&self.factory)?
             } else {
                 collection.retirements.pop().ok_or_else(|| {
                     HostError::Backend(

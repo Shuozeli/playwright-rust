@@ -304,7 +304,7 @@ async fn run_network_workload(
                             .page()
                             .expect("a non-empty drained batch should identify its Page");
                         publisher
-                            .publish_after_creation_fence(batch, runtime.as_ref(), &control)
+                            .publish_after_creation_fence(*batch, runtime.as_ref(), &control)
                             .await
                             .expect("drained network lifecycle should publish");
                         network_driver

@@ -1,4 +1,17 @@
-<!-- agent-updated: 2026-11-14T05:28:56Z -->
+<!-- agent-updated: 2026-11-19T10:12:59Z -->
+
+> Scope correction (2026-11-15): Playwright Rust targets Chromium over CDP.
+> Historical Firefox/WebKit "provider gap" tasks below are retained as receipt
+> history only; they are out-of-scope non-applicable rows, not pending work.
+
+RegExp conformance checkpoint (2026-11-19): the optional Rust matcher now pins
+`regress` commit `95c04041` with Unicode 16.0 tables matching Node 24.12. An
+isolated source-pinned Test262 generator records 5,135 static patterns and
+97,198 `test()`/`lastIndex` steps; the byte-reproducible compressed corpus
+(SHA-256 `90b348d0c0bc63cca448976a3bfd95299c2a56b158b68b5181c82a40ac85c3f6`)
+passes in release mode.
+Dynamic Test262 programs and the blocked Playwright 1.58/Chrome 157 route oracle
+remain open and prevent an all-version parity claim.
 
 Current full-corpus execution coverage checkpoint (2026-10-21):
 
@@ -5080,6 +5093,10 @@ BrowserContext cookies.
 - [x] Enforce 1,024 cookies, 16 KiB ordinary fields, 4 MiB cookie batches and
   results, 256 URLs, 64 KiB per URL, 1 MiB URL batches, 16 KiB regex sources
   and a 10 MiB FFI allowance.
+- [x] Later compatibility correction: retain the cookie payload/snapshot bounds
+  above but remove the filter-only 16 KiB RegExp-source and exact-filter field
+  caps. Pinned Playwright has no such rejection; filtered clear now composes the
+  shared allocator-backed ECMAScript matcher.
 - [x] Pass 130 CDP tests, 962 all-feature host tests with 26 explicit ignores,
   2 addon tests, 146 installed-wheel units, strict release Clippy, Ruff,
   Pyright and the unchanged 108-package dependency proof.
@@ -6012,11 +6029,12 @@ post-data behavior.
   `Request.post_data_json`, `Request.response()` and navigation-request
   facades. Rust owns the bounded waiter queue and the exact shared request-
   history owner; Python only forwards the opaque records.
-- [x] Match Playwright's popup-first-request ordering in the optional
+- [x] Historical ABI 53 proof: match Playwright's popup-first-request ordering in the optional
   `request-frame` leaf. The network adapter observes `Page.frame*` and
   `Network.*` on the same CDP cursor, retains at most 64 Frame IDs and one
   boolean per at-most-64 active request, and accounts both maps in the
-  production resource profile. A later topology snapshot can no longer turn
+  production resource profile. ABI133 subsequently removed the 64-request
+  count while preserving the event-time Frame annotation. A later topology snapshot can no longer turn
   the popup's unavailable Frame into an available one.
 - [x] Final installed candidate and independent oracle pass both Chromium
   rows; report SHA-256 values are

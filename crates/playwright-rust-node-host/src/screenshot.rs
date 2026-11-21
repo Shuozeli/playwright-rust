@@ -1,4 +1,4 @@
-//! Bounded Page capture through the existing optional Rust content command.
+//! Page capture through the existing optional Rust content command.
 pub(crate) mod queue;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -10,15 +10,11 @@ pub(crate) use queue::requirements;
 
 use crate::{HostError, HostSession, locator::HostLocator};
 
-// The transport already bounds a response to 4 MiB. A 2 MiB binary image's
-// base64 representation fits that budget without increasing transport limits.
-pub const MAX_BYTES: usize = 2 * 1024 * 1024;
-pub const MAX_CONCURRENT_CAPTURES: usize = 2;
 pub const MAX_MASK_LOCATORS: usize = 64;
 pub const MAX_MASK_ELEMENTS_PER_LOCATOR: usize = 256;
 // Native result and Node-owned copy coexist during settlement. Admission is
 // held through conversion; user-owned Buffers outlive the ticket independently.
-pub const FFI_ALLOWANCE: u64 = 2 * MAX_BYTES as u64 + 4096;
+pub const FFI_ALLOWANCE: u64 = 4096;
 
 static NEXT_MASK_TRANSACTION: AtomicU64 = AtomicU64::new(1);
 
@@ -97,8 +93,13 @@ impl ScreenshotOutput {
         &self.0
     }
 
-    pub(crate) fn from_capture(data: ScreenshotData) -> Self {
-        Self(data.as_bytes().to_vec())
+    pub(crate) fn from_capture(data: ScreenshotData) -> Result<Self, HostError> {
+        let mut bytes = Vec::new();
+        bytes.try_reserve_exact(data.len()).map_err(|_| {
+            HostError::ResourceExhausted("screenshot result allocation failed".into())
+        })?;
+        bytes.extend_from_slice(data.as_bytes());
+        Ok(Self(bytes))
     }
 }
 
@@ -139,7 +140,7 @@ impl HostSession {
                 let capture = self
                     .invoke::<PageScreenshot>(page, options, 0)
                     .await
-                    .map(ScreenshotOutput::from_capture);
+                    .and_then(ScreenshotOutput::from_capture);
                 finish_masks(&masks, token.as_deref(), capture).await
             })
             .await
@@ -364,7 +365,7 @@ mod tests {
             ScreenshotFormat::Png,
         );
         // Act
-        let output = ScreenshotOutput::from_capture(data);
+        let output = ScreenshotOutput::from_capture(data).unwrap();
         // Assert
         assert_eq!(output.as_bytes(), b"image");
         assert_eq!(

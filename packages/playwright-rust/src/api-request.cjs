@@ -5,7 +5,12 @@ const util = require('node:util');
 const fs = require('node:fs/promises');
 const { readFileSync } = require('node:fs');
 
-module.exports = function apiRequestApi({ nativeAddon, validateOptions, UnsupportedOperationError }) {
+module.exports = function apiRequestApi({
+  nativeAddon,
+  validateOptions,
+  UnsupportedOperationError,
+  runTracingAction = (_owner, _action, _detail, operation) => operation(),
+}) {
   const contexts = new Set();
 
   function rejectUnsupportedRecognized(options, supported, recognized, api) {
@@ -336,35 +341,71 @@ module.exports = function apiRequestApi({ nativeAddon, validateOptions, Unsuppor
   }
 
   class APIRequestContext {
-    constructor(native, baseURL) { this._native = native; this._baseURL = baseURL; this._disposed = false; }
+    constructor(native, baseURL, tracingEnabled, traceOwner) {
+      this._native = native;
+      this._baseURL = baseURL;
+      this._traceOwner = traceOwner;
+      this._disposed = false;
+      if (tracingEnabled) {
+        this._tracing = {
+          start: async (options = {}) => {
+            options = { ...options };
+            validateOptions(options, ['name', 'screenshots', 'snapshots', 'sources', 'title'], 'apiRequestContext._tracing.start');
+            for (const field of ['screenshots', 'snapshots', 'sources']) {
+              if (options[field] !== undefined && typeof options[field] !== 'boolean')
+                throw new TypeError(`apiRequestContext._tracing.start: ${field} must be a boolean`);
+            }
+            if (options.name !== undefined && typeof options.name !== 'string')
+              throw new TypeError('apiRequestContext._tracing.start: name must be a string');
+            if (options.title !== undefined && typeof options.title !== 'string')
+              throw new TypeError('apiRequestContext._tracing.start: title must be a string');
+            this._native.traceStart(options.snapshots ?? false);
+          },
+          stop: async (options = {}) => {
+            options = { ...options };
+            validateOptions(options, ['path'], 'apiRequestContext._tracing.stop');
+            if (typeof options.path !== 'string')
+              throw new TypeError('apiRequestContext._tracing.stop: path must be a string');
+            await this._native.traceStop(options.path);
+          },
+        };
+      }
+    }
     async _send(apiName, method, url, options) {
       if (typeof url !== 'string') throw new TypeError(`${apiName}: url must be a string`);
       if (this._disposed)
         throw new Error(`${apiName}: Target page, context or browser has been closed`);
-      try {
-        const nativeOptions = requestOptions(options, apiName);
-        const lookup = options?.__testHookLookup;
-        if (lookup !== undefined) {
-          if (typeof lookup !== 'function')
-            throw new TypeError(`${apiName}: __testHookLookup must be a function`);
-          const target = this._baseURL === undefined ? new URL(url) : new URL(url, this._baseURL);
-          const addresses = await lookup(target.hostname);
-          if (!Array.isArray(addresses))
-            throw new TypeError(`${apiName}: __testHookLookup must return an array`);
-          nativeOptions.lookupAddresses = addresses.map(value => {
-            if (!value || typeof value !== 'object' || typeof value.address !== 'string')
-              throw new TypeError(`${apiName}: resolver entries must contain an address string`);
-            if (value.family !== undefined && value.family !== 4 && value.family !== 6)
-              throw new TypeError(`${apiName}: resolver family must be 4 or 6`);
-            return value.address;
-          });
+      const operation = async () => {
+        try {
+          const nativeOptions = requestOptions(options, apiName);
+          const lookup = options?.__testHookLookup;
+          if (lookup !== undefined) {
+            if (typeof lookup !== 'function')
+              throw new TypeError(`${apiName}: __testHookLookup must be a function`);
+            const target = this._baseURL === undefined ? new URL(url) : new URL(url, this._baseURL);
+            const addresses = await lookup(target.hostname);
+            if (!Array.isArray(addresses))
+              throw new TypeError(`${apiName}: __testHookLookup must return an array`);
+            nativeOptions.lookupAddresses = addresses.map(value => {
+              if (!value || typeof value !== 'object' || typeof value.address !== 'string')
+                throw new TypeError(`${apiName}: resolver entries must contain an address string`);
+              if (value.family !== undefined && value.family !== 4 && value.family !== 6)
+                throw new TypeError(`${apiName}: resolver family must be 4 or 6`);
+              return value.address;
+            });
+          }
+          return new APIResponse(await this._native.execute(method, url, nativeOptions));
+        } catch (error) {
+          if (this._disposed && error?.message?.startsWith('API request context is disposed'))
+            throw new Error(`${apiName}: Request context disposed.`);
+          throw mapRequestError(error, apiName);
         }
-        return new APIResponse(await this._native.execute(method, url, nativeOptions));
-      } catch (error) {
-        if (this._disposed && error?.message?.startsWith('API request context is disposed'))
-          throw new Error(`${apiName}: Request context disposed.`);
-        throw mapRequestError(error, apiName);
-      }
+      };
+      if (!this._traceOwner) return operation();
+      let traceUrl = url;
+      try { traceUrl = new URL(url, this._baseURL).toString(); }
+      catch {}
+      return runTracingAction(this._traceOwner, 'api-request', `${method}\n${traceUrl}`, operation);
     }
     fetch(url, options = {}) {
       const method = options?.method ?? 'GET';
@@ -418,7 +459,12 @@ module.exports = function apiRequestApi({ nativeAddon, validateOptions, Unsuppor
   return Object.freeze({
     _contexts: contexts,
     _validateProxy: validateProxy,
-    _fromNative(native, baseURL) { return new APIRequestContext(native, baseURL); },
+    _fromNative(native, baseURL, traceOwner) {
+      const addon = nativeAddon();
+      const tracingEnabled = typeof addon.apiRequestTracingEnabled === 'function'
+        && addon.apiRequestTracingEnabled();
+      return new APIRequestContext(native, baseURL, tracingEnabled, traceOwner);
+    },
     async newContext(options = {}) {
       options = { ...options };
       validateClientCertificates(options.clientCertificates, 'request.newContext');
@@ -466,7 +512,9 @@ module.exports = function apiRequestApi({ nativeAddon, validateOptions, Unsuppor
         if (state.cookies.length) await native.addCookies(state.cookies);
       }
       catch (error) { throw mapRequestError(error, 'request.newContext'); }
-      const context = new APIRequestContext(native, options.baseURL);
+      const tracingEnabled = typeof addon.apiRequestTracingEnabled === 'function'
+        && addon.apiRequestTracingEnabled();
+      const context = new APIRequestContext(native, options.baseURL, tracingEnabled);
       contexts.add(context);
       return context;
     },

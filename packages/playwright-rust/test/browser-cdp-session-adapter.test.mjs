@@ -189,6 +189,28 @@ test('Browser and Page CDP sessions share one idle watch', async () => {
   assert.equal(native.watchCount, 1);
 });
 
+test('browser-root CDP session ownership grows past the retired eight-session limit', async () => {
+  // Arrange
+  const { api, native } = fixture();
+  let nextToken = 101n;
+  native.cdpBrowserSessionCreate = async () => {
+    const token = nextToken++;
+    return { token: () => token, claim: () => token, abort: () => {} };
+  };
+  const browser = await api.chromium.connectOverCDP('http://example.invalid:9222');
+  const sessions = [];
+
+  // Act
+  for (let index = 0; index < 129; index += 1)
+    sessions.push(await browser.newBrowserCDPSession());
+
+  // Assert
+  assert.equal(sessions.length, 129);
+  assert.equal(browser._browserCdpSessions.size, 129);
+  await Promise.all(sessions.map(session => session.detach()));
+  assert.equal(browser._browserCdpSessions.size, 0);
+});
+
 test('invalid browser-root delivery lease is aborted before watch registration', async () => {
   // Arrange
   const { api, native, calls } = fixture();

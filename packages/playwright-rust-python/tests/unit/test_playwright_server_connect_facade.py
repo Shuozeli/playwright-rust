@@ -151,24 +151,21 @@ class _Bridge:
         return asyncio.run(await_operation())
 
 
-def _browser_type(
-    environment: _Environment, engine: str = "chromium"
-) -> tuple[AsyncBrowserType, _Owner]:
+def _browser_type(environment: _Environment) -> tuple[AsyncBrowserType, _Owner]:
     owner = _Owner(environment)
-    return AsyncBrowserType(cast(AsyncPlaywright, owner), engine), owner
+    return AsyncBrowserType(cast(AsyncPlaywright, owner)), owner
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("engine", ("chromium", "firefox", "webkit"))
-async def test_connect_default_off_rejects_all_engines(
-    monkeypatch: pytest.MonkeyPatch, engine: str
+async def test_connect_default_off_rejects_chromium(
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Arrange
     monkeypatch.setattr(
         "playwright_rust.async_api._native.selected_features", lambda: cast(list[str], [])
     )
     environment = _Environment()
-    browser_type, owner = _browser_type(environment, engine)
+    browser_type, owner = _browser_type(environment)
 
     # Act
     with pytest.raises(UnsupportedError, match="playwright-server-initialize profile"):
@@ -180,9 +177,8 @@ async def test_connect_default_off_rejects_all_engines(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("engine", ("chromium", "firefox", "webkit"))
 async def test_connect_observes_close_reason_without_creating_browser(
-    monkeypatch: pytest.MonkeyPatch, engine: str
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Arrange
     monkeypatch.setattr(
@@ -190,7 +186,7 @@ async def test_connect_observes_close_reason_without_creating_browser(
         lambda: ["playwright-server-initialize"],
     )
     environment = _Environment(Error("Oh my!"))
-    browser_type, owner = _browser_type(environment, engine)
+    browser_type, owner = _browser_type(environment)
 
     # Act
     with pytest.raises(Error, match="Oh my!"):
@@ -369,7 +365,7 @@ def test_sync_connect_forwards_playwright_server_and_propagates_close_reason(
         lambda: ["playwright-server-initialize"],
     )
     environment = _Environment(Error("Oh my!"))
-    async_type, owner = _browser_type(environment, "webkit")
+    async_type, owner = _browser_type(environment)
     browser_type = SyncBrowserType(cast(_LoopThread, _Bridge()), async_type)
 
     # Act
@@ -403,9 +399,8 @@ def test_sync_connect_never_returns_fake_browser_after_native_returns(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("engine", ("chromium", "firefox", "webkit"))
 async def test_remote_connect_returns_real_browser_lifecycle(
-    monkeypatch: pytest.MonkeyPatch, engine: str
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Arrange
     monkeypatch.setattr(
@@ -413,7 +408,7 @@ async def test_remote_connect_returns_real_browser_lifecycle(
         lambda: ["playwright-server-connect-session"],
     )
     environment = _RemoteEnvironment()
-    browser_type, owner = _browser_type(environment, engine)
+    browser_type, owner = _browser_type(environment)
     events: list[object] = []
 
     # Act
@@ -436,7 +431,7 @@ async def test_remote_connect_returns_real_browser_lifecycle(
     await browser.close()
 
     # Assert
-    assert environment.remote_calls == [("https://server.test/json", engine, 2500)]
+    assert environment.remote_calls == [("https://server.test/json", "chromium", 2500)]
     assert environment.calls == []
     assert not browser.is_connected()
     assert browser.contexts == []
@@ -445,6 +440,40 @@ async def test_remote_connect_returns_real_browser_lifecycle(
     assert environment.remote_native is not None
     assert environment.remote_native.close_count == 1
     assert owner._browsers == []
+
+
+@pytest.mark.asyncio
+async def test_remote_lifecycle_handlers_grow_past_legacy_listener_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Arrange
+    monkeypatch.setattr(
+        "playwright_rust.async_api._native.selected_features",
+        lambda: ["playwright-server-connect-session"],
+    )
+    environment = _RemoteEnvironment()
+    browser_type, _owner = _browser_type(environment)
+    browser = await browser_type.connect("wss://server.test/ws")
+    context = await browser.new_context()
+    page = await context.new_page()
+    page_events: list[int] = []
+    context_events: list[int] = []
+    browser_events: list[int] = []
+    for index in range(129):
+        page.on("close", lambda _value, current=index: page_events.append(current))
+        context.on("close", lambda _value, current=index: context_events.append(current))
+        browser.on(
+            "disconnected",
+            lambda _value, current=index: browser_events.append(current),
+        )
+
+    # Act
+    await browser.close()
+
+    # Assert
+    assert page_events == list(range(129))
+    assert context_events == list(range(129))
+    assert browser_events == list(range(129))
 
 
 @pytest.mark.asyncio
@@ -809,7 +838,7 @@ def test_sync_remote_connect_close_and_disconnected_event(
         lambda: ["playwright-server-connect-session"],
     )
     environment = _RemoteEnvironment()
-    async_type, owner = _browser_type(environment, "firefox")
+    async_type, owner = _browser_type(environment)
     bridge = _LoopThread()
     browser_type = SyncBrowserType(bridge, async_type)
     event = threading.Event()
@@ -834,7 +863,7 @@ def test_sync_remote_connect_close_and_disconnected_event(
         # Assert
         assert event.wait(timeout=1)
         assert notices == [browser]
-        assert environment.remote_calls == [("http://server.test/json", "firefox", 30_000)]
+        assert environment.remote_calls == [("http://server.test/json", "chromium", 30_000)]
         assert owner._browsers == []
         assert page.is_closed()
         assert environment.remote_native is not None

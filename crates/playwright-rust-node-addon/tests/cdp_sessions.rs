@@ -84,21 +84,18 @@ fn attach_result_cannot_be_claimed_twice() {
 }
 
 #[test]
-fn cdp_params_require_a_bounded_json_object() {
+fn cdp_params_require_a_json_object_and_accept_large_input() {
     // Arrange
     let valid = r#"{"expression":"1 + 1"}"#;
     let scalar = "null";
     let malformed = "{";
-    let oversized = format!(
-        "{{\"value\":\"{}\"}}",
-        "x".repeat(validation::MAX_CDP_PARAMS_JSON_BYTES)
-    );
+    let large = format!("{{\"value\":\"{}\"}}", "x".repeat(2 * 1024 * 1024));
 
     // Act
     let accepted = validation::parse_params_json(valid);
     let scalar_error = validation::parse_params_json(scalar);
     let malformed_error = validation::parse_params_json(malformed);
-    let oversized_error = validation::parse_params_json(&oversized);
+    let large_result = validation::parse_params_json(&large);
 
     // Assert
     assert_eq!(accepted.expect("object"), json!({"expression": "1 + 1"}));
@@ -107,29 +104,31 @@ fn cdp_params_require_a_bounded_json_object() {
         malformed_error,
         Err(HostError::InvalidArgument(_))
     ));
-    assert!(matches!(
-        oversized_error,
-        Err(HostError::InvalidArgument(_))
-    ));
+    assert_eq!(
+        large_result.expect("large object")["value"]
+            .as_str()
+            .unwrap()
+            .len(),
+        2 * 1024 * 1024
+    );
 }
 
 #[test]
-fn cdp_result_has_a_measured_object_conversion_cap() {
+fn cdp_result_is_measured_without_a_private_conversion_cap() {
     // Arrange
     let result = json!({"result": 7});
     let scalar = json!(7);
-    let oversized = json!({"value": "x".repeat(validation::MAX_CDP_RESULT_JSON_BYTES)});
+    let large = json!({"value": "x".repeat(5 * 1024 * 1024)});
 
     // Act
     let accepted = validation::measured_result(result);
     let scalar_error = validation::measured_result(scalar);
-    let oversized_error = validation::measured_result(oversized);
+    let large_result = validation::measured_result(large);
 
     // Assert
     assert_eq!(accepted.expect("small object").1, 12);
     assert!(matches!(scalar_error, Err(HostError::Backend(_))));
-    assert!(matches!(
-        oversized_error,
-        Err(HostError::ResourceExhausted(_))
-    ));
+    let (large, bytes) = large_result.expect("large object");
+    assert_eq!(large["value"].as_str().unwrap().len(), 5 * 1024 * 1024);
+    assert!(bytes > 5 * 1024 * 1024);
 }

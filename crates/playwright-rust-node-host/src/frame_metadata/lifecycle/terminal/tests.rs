@@ -36,7 +36,10 @@ impl Fixture {
             bytes: 1024 * 1024,
         })
         .unwrap();
-        let terminal = TerminalLifecycle::reserve(&book.publications(), &factory).unwrap();
+        let mut terminal = TerminalLifecycle::reserve(&book.publications(), &factory).unwrap();
+        terminal
+            .replenish(contexts + pages, &book.publications(), &factory)
+            .unwrap();
         let metadata = ContextMetadata::new(ContextMetadataLimits {
             active_contexts: 16,
             states: 256,
@@ -301,10 +304,13 @@ fn partial_terminal_reservation_failure_reclaims_all_admitted_storage() {
     held.pop();
     held.pop();
     let baseline = fixture.factory.metrics().unwrap();
+    let mut terminal =
+        TerminalLifecycle::reserve(&fixture.book.publications(), &fixture.factory).unwrap();
     // Act
-    let result = TerminalLifecycle::reserve(&fixture.book.publications(), &fixture.factory);
+    let result = terminal.replenish(3, &fixture.book.publications(), &fixture.factory);
     // Assert
     assert!(matches!(result, Err(HostError::ResourceExhausted(_))));
+    drop(terminal);
     assert_eq!(fixture.factory.metrics().unwrap(), baseline);
     assert!(fixture.book.publications().reserve_close().is_ok());
 }

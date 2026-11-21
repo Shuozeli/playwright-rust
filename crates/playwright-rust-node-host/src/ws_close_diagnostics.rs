@@ -48,6 +48,7 @@ fn tailscale_fixture_address() -> Option<(Ipv4Addr, String)> {
 }
 
 #[tokio::test]
+#[allow(clippy::result_large_err)] // tungstenite fixes the handshake callback error type.
 async fn cdp_attach_reports_remote_close_reason_as_browser_logs() {
     // Arrange
     let (bind_ip, client_host) = one_shot_fixture_address();

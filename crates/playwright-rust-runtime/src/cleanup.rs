@@ -57,8 +57,10 @@ impl Error for CleanupSubmitError {}
 
 /// Accepts owned cleanup jobs without prescribing how they are executed.
 ///
-/// Implementations must impose a hard bound and return an error on saturation;
-/// silently spawning or growing an unbounded queue violates this contract.
+/// Implementations must either impose an explicit hard bound or document
+/// allocator-backed admission. Finite implementations return an error on
+/// saturation; allocator-backed implementations may fail only when allocation
+/// or the runtime itself is unavailable.
 pub trait CleanupExecutor: Send + Sync + 'static {
     fn try_submit(&self, job: CleanupJob) -> Result<(), CleanupSubmitError>;
 }

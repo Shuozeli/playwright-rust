@@ -21,15 +21,26 @@ function fixture() {
   const calls = [];
   const session = {
     async pageRoute(...args) { calls.push(['route', ...args]); return '17'; },
+    async contextRoute(...args) { calls.push(['contextRoute', ...args]); return '27'; },
     async pageRouteContinue(...args) { calls.push(['continue', ...args]); },
     async pageRouteContinueWithHeaders(...args) { calls.push(['continueWithHeaders', ...args]); },
     async pageRouteFallback(...args) { calls.push(['fallback', ...args]); },
     async pageRouteFallbackWithUrl(...args) { calls.push(['fallbackWithUrl', ...args]); },
+    async pageRouteFallbackWithOverrides(...args) { calls.push(['fallbackWithOverrides', ...args]); },
     async pageRouteAbort(...args) { calls.push(['abort', ...args]); },
     async pageRouteFulfill(...args) { calls.push(['fulfill', ...args]); },
+    async contextUnroute(...args) { calls.push(['contextUnroute', ...args]); },
+    async contextUnrouteAll(...args) { calls.push(['contextUnrouteAll', ...args]); },
+    async pageUnrouteAll(...args) { calls.push(['pageUnrouteAll', ...args]); },
   };
   const browser = { _session: session, _contexts: new Map() };
-  const context = { _browser: browser, _pages: new Map() };
+  const context = {
+    _browser: browser,
+    _id: '1',
+    _pages: new Map(),
+    _routes: new Map(),
+    _serviceWorkers: new Map(),
+  };
   const page = {
     _context: context,
     _id: '2',
@@ -67,6 +78,103 @@ function enableUnroute({ calls, session }) {
   };
   session.pageUnroute = async (...args) => { calls.push(['unroute', ...args]); };
 }
+
+test('BrowserContext routeFromHAR delegates string replay and remains removable by URL', async () => {
+  // Arrange
+  const { calls, context, session } = fixture();
+  session.contextRouteFromHar = async (...args) => {
+    calls.push(['contextRouteFromHar', ...args]);
+    return '61';
+  };
+
+  // Act
+  await pageRoutes.routeFromHAR(context, '/tmp/archive.har', {
+    url: '**/*.js',
+    notFound: 'fallback',
+  });
+  await pageRoutes.unroute(context, '**/*.js');
+
+  // Assert
+  assert.deepEqual(calls, [
+    ['contextRouteFromHar', '1', '/tmp/archive.har', '**/*.js', 'fallback'],
+    ['contextUnroute', '1', ['61']],
+  ]);
+  assert.equal(context._routeRegistrations.size, 0);
+});
+
+test('Page routeFromHAR delegates RegExp replay without copying HAR matching into JavaScript', async () => {
+  // Arrange
+  const { calls, page, session } = fixture();
+  session.pageRouteFromHarRegExp = async (...args) => {
+    calls.push(['pageRouteFromHarRegExp', ...args]);
+    return '62';
+  };
+
+  // Act
+  await pageRoutes.routeFromHAR(page, '/tmp/archive.zip', {
+    url: /\.(js|css)$/iu,
+  });
+
+  // Assert
+  assert.deepEqual(calls, [[
+    'pageRouteFromHarRegExp', '2', '/tmp/archive.zip', '\\.(js|css)$', 'iu', 'abort',
+  ]]);
+  assert.deepEqual(page._routeRegistrations.get('62'), {
+    url: /\.(js|css)$/iu,
+    regexpSource: '\\.(js|css)$',
+    regexpFlags: 'iu',
+  });
+});
+
+test('Page and Context routeFromHAR update delegate recording policy to Rust', async () => {
+  // Arrange
+  const { calls, context, page, session } = fixture();
+  session.pageRecordHar = async (...args) => {
+    calls.push(['pageRecordHar', ...args]);
+    return '63';
+  };
+  session.contextRecordHarRegExp = async (...args) => {
+    calls.push(['contextRecordHarRegExp', ...args]);
+    return '64';
+  };
+
+  // Act
+  await pageRoutes.routeFromHAR(page, '/tmp/page.har', { update: true });
+  await pageRoutes.routeFromHAR(context, '/tmp/context.zip', {
+    update: true,
+    updateContent: 'embed',
+    updateMode: 'full',
+    url: /api/u,
+  });
+
+  // Assert
+  assert.deepEqual(calls, [
+    ['pageRecordHar', '2', '/tmp/page.har', undefined, 'attach', 'minimal'],
+    ['contextRecordHarRegExp', '1', '/tmp/context.zip', 'api', 'u', {
+      content: 'embed', mode: 'full',
+    }],
+  ]);
+});
+
+test('routeFromHAR validates options and fails closed for an unselected native leaf', async () => {
+  // Arrange
+  const { context } = fixture();
+
+  // Act / Assert
+  await assert.rejects(pageRoutes.routeFromHAR(context, '/tmp/archive.har'), /har-replay native profile/);
+  await assert.rejects(
+    pageRoutes.routeFromHAR(context, '/tmp/archive.har', { update: 'yes' }),
+    /update must be a boolean/,
+  );
+  await assert.rejects(
+    pageRoutes.routeFromHAR(context, '/tmp/archive.har', { notFound: 'continue' }),
+    /notFound must be "abort" or "fallback"/,
+  );
+  await assert.rejects(
+    pageRoutes.routeFromHAR(context, '/tmp/archive.har', { url: /api/ }),
+    /har-replay-regexp native profile/,
+  );
+});
 
 test('routed Request retains captured POST data when a later network notice omits it', async () => {
   // Arrange
@@ -191,6 +299,143 @@ test('Page route registration stores the handler only after Rust returns its ide
   // Assert
   assert.deepEqual(calls, [['route', '2', '**/*.css', 2]]);
   assert.equal(page._routes.get('17'), handler);
+});
+
+test('BrowserContext route registration is owned by the Context and handles Page requests', async () => {
+  // Arrange
+  const { browser, calls, context, page } = fixture();
+  const observed = [];
+  const handler = async (route, request) => {
+    observed.push([route, request, request.frame()]);
+    await route.continue();
+  };
+
+  // Act
+  await pageRoutes.route(context, '**/*.css', handler, { times: 2 });
+  await pageRoutes.dispatch(browser, routeCall({ registrationId: '27' }));
+
+  // Assert
+  assert.deepEqual(calls[0], ['contextRoute', '1', '**/*.css', 2]);
+  assert.equal(context._routes.get('27'), handler);
+  assert.equal(page._routes.has('27'), false);
+  assert.equal(observed.length, 1);
+  assert.equal(observed[0][1].url(), 'https://example.test/app.css');
+  assert.equal(observed[0][2]._id, '3');
+  assert.deepEqual(calls.at(-1), ['continue', '9']);
+});
+
+test('BrowserContext route handles Service Worker requests without exposing them to Page routes', async () => {
+  // Arrange
+  const { browser, calls, context, page } = fixture();
+  const worker = { _id: 'sw-1' };
+  context._serviceWorkers.set(worker._id, worker);
+  let pageHits = 0;
+  let contextHits = 0;
+  page._routes.set('27', async () => { pageHits += 1; });
+  context._routes.set('27', async (route, request) => {
+    contextHits += 1;
+    assert.equal(request.serviceWorker(), worker);
+    assert.throws(
+      () => request.frame(),
+      /Service Worker requests do not have an associated frame\./,
+    );
+    await route.continue();
+  });
+
+  // Act
+  await pageRoutes.dispatch(browser, routeCall({
+    registrationId: '27',
+    pageId: undefined,
+    frameId: undefined,
+    serviceWorkerId: worker._id,
+    resourceType: 'Fetch',
+  }));
+
+  // Assert
+  assert.equal(contextHits, 1);
+  assert.equal(pageHits, 0);
+  assert.deepEqual(calls, [['continue', '9']]);
+});
+
+test('BrowserContext route delegates a RegExp source and supported flags to its native owner', async () => {
+  // Arrange
+  const { calls, context, session } = fixture();
+  const handler = () => {};
+  session.contextRouteRegExp = async (...args) => {
+    calls.push(['contextRouteRegExp', ...args]);
+    return '29';
+  };
+
+  // Act
+  await pageRoutes.route(context, /assets\/.*\.css/imsu, handler, { times: 3 });
+
+  // Assert
+  assert.deepEqual(calls, [['contextRouteRegExp', '1', 'assets\\/.*\\.css', 'imsu', 3]]);
+  assert.equal(context._routes.get('29'), handler);
+});
+
+test('BrowserContext unroute removes only matching Context registrations', async () => {
+  // Arrange
+  const { calls, context } = fixture();
+  const handler = () => {};
+  await pageRoutes.route(context, '**/*.css', handler);
+
+  // Act
+  await pageRoutes.unroute(context, '**/*.css', handler);
+
+  // Assert
+  assert.deepEqual(calls.at(-1), ['contextUnroute', '1', ['27']]);
+  assert.equal(context._routes.size, 0);
+  assert.equal(context._routeRegistrations.size, 0);
+});
+
+test('BrowserContext unrouteAll wait waits for already running handlers', async () => {
+  // Arrange
+  const { browser, calls, context } = fixture();
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  await pageRoutes.route(context, '**/*', async route => {
+    await gate;
+    await route.continue();
+  });
+  const dispatch = pageRoutes.dispatch(browser, routeCall({ registrationId: '27' }));
+  await new Promise(resolve => setImmediate(resolve));
+
+  // Act
+  let settled = false;
+  const unrouted = pageRoutes.unrouteAll(context, { behavior: 'wait' })
+    .then(() => { settled = true; });
+  await new Promise(resolve => setImmediate(resolve));
+
+  // Assert
+  assert.equal(settled, false);
+  assert.equal(calls.some(call => call[0] === 'contextUnrouteAll'), false);
+  release();
+  await Promise.all([dispatch, unrouted]);
+  assert.equal(settled, true);
+  assert.deepEqual(calls.at(-1), ['contextUnrouteAll', '1', false]);
+  assert.equal(context._routes.size, 0);
+});
+
+test('BrowserContext unrouteAll ignoreErrors suppresses failures from running handlers', async () => {
+  // Arrange
+  const { browser, context } = fixture();
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  await pageRoutes.route(context, '**/*', async () => {
+    await gate;
+    throw new Error('late handler failure');
+  });
+  const dispatch = pageRoutes.dispatch(browser, routeCall({ registrationId: '27' }));
+  await new Promise(resolve => setImmediate(resolve));
+
+  // Act
+  await pageRoutes.unrouteAll(context, { behavior: 'ignoreErrors' });
+  release();
+
+  // Assert
+  await assert.doesNotReject(dispatch);
+  assert.equal(context._routes.size, 0);
 });
 
 test('Page unroute with a handler removes only its exact registration identities', async () => {
@@ -336,50 +581,57 @@ test('Page route rejects a RegExp without the opt-in native binding before regis
 });
 
 for (const flag of ['g', 'y', 'd']) {
-  test(`Page route rejects unsupported RegExp flag ${flag} before native work`, async () => {
+  test(`Page route forwards ECMAScript RegExp flag ${flag} to native work`, async () => {
     // Arrange
     const value = fixture();
-    value.session.pageRouteRegExp = async () => { throw new Error('native should not be called'); };
+    value.session.pageRouteRegExp = async (...args) => {
+      value.calls.push(['regexp', ...args]);
+      return '23';
+    };
 
     // Act
-    const registration = pageRoutes.route(value.page, new RegExp('empty', flag), () => {});
+    await pageRoutes.route(value.page, new RegExp('empty', flag), () => {});
 
     // Assert
-    await assert.rejects(registration, /route-regexp supports only i, m, s, and u/);
-    assert.deepEqual(value.calls, []);
-    assert.equal(value.page._routes.size, 0);
+    assert.deepEqual(value.calls, [['regexp', '2', 'empty', flag, undefined]]);
+    assert.equal(value.page._routes.size, 1);
   });
 }
 
 let unicodeSetsFlagAvailable = true;
 try { new RegExp('empty', 'v'); }
 catch { unicodeSetsFlagAvailable = false; }
-test('Page route rejects the unsupported RegExp v flag before native work', { skip: !unicodeSetsFlagAvailable }, async () => {
+test('Page route forwards the ECMAScript RegExp v flag to native work', { skip: !unicodeSetsFlagAvailable }, async () => {
   // Arrange
   const value = fixture();
-  value.session.pageRouteRegExp = async () => { throw new Error('native should not be called'); };
+  value.session.pageRouteRegExp = async (...args) => {
+    value.calls.push(['regexp', ...args]);
+    return '23';
+  };
 
   // Act
-  const registration = pageRoutes.route(value.page, new RegExp('empty', 'v'), () => {});
+  await pageRoutes.route(value.page, new RegExp('empty', 'v'), () => {});
 
   // Assert
-  await assert.rejects(registration, /route-regexp supports only i, m, s, and u/);
-  assert.deepEqual(value.calls, []);
-  assert.equal(value.page._routes.size, 0);
+  assert.deepEqual(value.calls, [['regexp', '2', 'empty', 'v', undefined]]);
+  assert.equal(value.page._routes.size, 1);
 });
 
-test('Page route bounds a RegExp source before native work', async () => {
+test('Page route forwards a RegExp source beyond the former arbitrary limit', async () => {
   // Arrange
   const value = fixture();
-  value.session.pageRouteRegExp = async () => { throw new Error('native should not be called'); };
+  value.session.pageRouteRegExp = async (...args) => {
+    value.calls.push(['regexp', ...args]);
+    return '23';
+  };
+  const source = 'x'.repeat(4097);
 
   // Act
-  const registration = pageRoutes.route(value.page, new RegExp('x'.repeat(4097)), () => {});
+  await pageRoutes.route(value.page, new RegExp(source), () => {});
 
   // Assert
-  await assert.rejects(registration, /RegExp source exceeds 4096 UTF-8 bytes/);
-  assert.deepEqual(value.calls, []);
-  assert.equal(value.page._routes.size, 0);
+  assert.deepEqual(value.calls, [['regexp', '2', source, '', undefined]]);
+  assert.equal(value.page._routes.size, 1);
 });
 
 test('Page unroute compares RegExp source and flags, handler identity, and matcher kind', async () => {
@@ -449,7 +701,6 @@ test('Page route leaves no RegExp registration when its native owner rejects', a
   await assert.rejects(registration, /native regex limit/);
   assert.equal(value.page._routes.size, 0);
   assert.equal(value.page._routeRegistrations, undefined);
-  assert.equal(value.page._pendingRouteMutations, 0);
 });
 
 test('Page route dispatches the native-selected RegExp registration identity', async () => {
@@ -480,17 +731,22 @@ test('Page route dispatches the native-selected RegExp registration identity', a
   assert.deepEqual([...value.page._routeRegistrations.keys()], ['20', '21']);
 });
 
-test('Page unroute bounds string matcher bytes before native work', async () => {
+test('Page unroute forwards a string matcher beyond the former arbitrary limit', async () => {
   // Arrange
   const value = fixture();
   enableUnroute(value);
+  const matcher = 'x'.repeat(4097);
+  value.page._routeRegistrations = new Map([
+    ['20', { url: matcher, handler: () => {} }],
+  ]);
+  value.page._routes.set('20', value.page._routeRegistrations.get('20').handler);
 
   // Act
-  const oversized = pageRoutes.unroute(value.page, 'x'.repeat(4097));
+  await pageRoutes.unroute(value.page, matcher);
 
   // Assert
-  await assert.rejects(oversized, /exceeds 4096 UTF-8 bytes/);
-  assert.deepEqual(value.calls, []);
+  assert.deepEqual(value.calls, [['unroute', '2', ['20']]]);
+  assert.equal(value.page._routes.size, 0);
 });
 
 test('Page unroute requires a callable handler before native work', async () => {
@@ -506,25 +762,24 @@ test('Page unroute requires a callable handler before native work', async () => 
   assert.deepEqual(value.calls, []);
 });
 
-test('Page unroute bounds pending registration mutations before native work', async () => {
+test('Page route mutations queue past the former 256-operation rejection', async () => {
   // Arrange
   const value = fixture();
   enableUnroute(value);
   let releaseRegistration;
   value.session.pageRoute = async () => new Promise(resolve => { releaseRegistration = resolve; });
   const pending = [pageRoutes.route(value.page, '**/*.css', () => {})];
-  for (let index = 0; index < 255; index++)
+  for (let index = 0; index < 256; index++)
     pending.push(pageRoutes.unroute(value.page, '**/*.js'));
   await Promise.resolve();
 
   // Act
-  const overflow = pageRoutes.unroute(value.page, '**/*.js');
+  pending.push(pageRoutes.unroute(value.page, '**/*.js'));
+  releaseRegistration('17');
 
   // Assert
-  await assert.rejects(overflow, /pending route mutations exceed 256/);
-  releaseRegistration('17');
   await Promise.all(pending);
-  assert.equal(value.page._pendingRouteMutations, 0);
+  assert.equal(value.page._routes.get('17') instanceof Function, true);
 });
 
 test('Page unroute requires its distinct opt-in native binding', async () => {
@@ -759,7 +1014,31 @@ test('Published Route fallback forwards its replacement URL to the opt-in Rust o
   await published.fallback({ url: 'https://example.test/bar' });
 
   // Assert
-  assert.deepEqual(calls, [['fallbackWithUrl', '9', 'https://example.test/bar']]);
+  assert.deepEqual(calls, [[
+    'fallbackWithOverrides', '9', 'https://example.test/bar', undefined, undefined, undefined,
+  ]]);
+});
+
+test('Published Route fallback composes method, headers, and serialized POST data in Rust', async () => {
+  // Arrange
+  const { calls, browser, page } = fixture();
+  let published;
+  page._routes.set('17', route => { published = route; });
+  await pageRoutes.dispatch(browser, routeCall());
+
+  // Act
+  await published.fallback({
+    url: 'https://example.test/bar',
+    method: 'POST',
+    headers: { 'x-test': 'yes' },
+    postData: 11,
+  });
+
+  // Assert
+  assert.deepEqual(calls, [[
+    'fallbackWithOverrides', '9', 'https://example.test/bar', 'POST',
+    [{ name: 'x-test', value: 'yes' }], Buffer.from('11'),
+  ]]);
 });
 
 test('Published Route fallback rejects a non-string URL before native conversion', async () => {
@@ -781,6 +1060,7 @@ test('Published Route fallback does not silently discard URL with an old native 
   // Arrange
   const { calls, browser, page, session } = fixture();
   delete session.pageRouteFallbackWithUrl;
+  delete session.pageRouteFallbackWithOverrides;
   let published;
   page._routes.set('17', route => { published = route; });
   await pageRoutes.dispatch(browser, routeCall());

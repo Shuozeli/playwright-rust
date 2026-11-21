@@ -20,6 +20,14 @@ fn process_subtree_profile(objects: usize, pending: usize) -> DisposalReservatio
     .unwrap()
 }
 
+fn allocator_backed_process_profile(pending: usize) -> DisposalReservationProfile {
+    DisposalReservationProfile::new_allocator_backed_in_process(
+        NonZeroUsize::new(pending).unwrap(),
+        SCOPE,
+    )
+    .unwrap()
+}
+
 fn process_fixture(
     selected: DisposalReservationProfile,
 ) -> (Dispatcher, DisposalReservations, ProductionResourceLedger) {
@@ -189,6 +197,118 @@ fn in_process_subtree_profile_rejects_a_subtree_larger_than_its_reservation() {
         ))
     ));
     assert_eq!(runtime.live_object_count(), Ok(4));
+    assert_eq!(pool.pending(), 0);
+}
+
+#[test]
+fn allocator_backed_in_process_profile_retires_past_the_legacy_object_count() {
+    // Arrange
+    let selected = allocator_backed_process_profile(1)
+        .with_deferred_commit(NonZeroUsize::new(2).unwrap())
+        .unwrap();
+    let limits = RuntimeLimits::new(usize::MAX, usize::MAX);
+    let resources = resources(
+        limits
+            .resource_requirements()
+            .combine_concurrent(selected.requirements()),
+    );
+    let runtime =
+        ControlledDispatcher::new(PendingService, Cancellation, NoDeadlineScheduler, limits)
+            .with_production_resources(&resources)
+            .unwrap();
+    let root = ObjectId::new(1);
+    runtime
+        .register_object(root, None, ObjectKindTag::new(1))
+        .unwrap();
+    for id in 2..=300 {
+        runtime
+            .register_object(ObjectId::new(id), Some(root), ObjectKindTag::new(1))
+            .unwrap();
+    }
+    let pool = selected
+        .bind(&runtime.lifecycle_handle(), &resources)
+        .unwrap();
+
+    // Act
+    let removed = pool
+        .reserve()
+        .unwrap()
+        .prepare(&runtime.lifecycle_handle(), root)
+        .unwrap()
+        .commit()
+        .unwrap();
+
+    // Assert
+    assert_eq!(removed.len(), 300);
+    assert_eq!(runtime.live_object_count(), Ok(0));
+    assert_eq!(pool.pending(), 0);
+}
+
+#[test]
+fn allocator_backed_deferred_commit_retires_calls_past_legacy_count() {
+    // Arrange
+    let selected = allocator_backed_process_profile(1)
+        .with_allocator_backed_deferred_commit()
+        .unwrap();
+    let limits = RuntimeLimits::new(usize::MAX, usize::MAX).with_active_commands(8);
+    let resources = resources(
+        limits
+            .resource_requirements()
+            .combine_concurrent(selected.requirements()),
+    );
+    let runtime =
+        ControlledDispatcher::new(PendingService, Cancellation, NoDeadlineScheduler, limits)
+            .with_production_resources(&resources)
+            .unwrap();
+    let root = ObjectId::new(1);
+    runtime
+        .register_object(root, None, ObjectKindTag::new(1))
+        .unwrap();
+    let pool = selected
+        .bind(&runtime.lifecycle_handle(), &resources)
+        .unwrap();
+    let mut calls = (1..=129)
+        .map(|id| {
+            Box::pin(runtime.call(Command::<TestCommand>::new(
+                CallId::new(id),
+                root,
+                CallMetadata::default(),
+                0,
+            )))
+        })
+        .collect::<Vec<_>>();
+    for call in &mut calls {
+        if let Poll::Ready(result) = poll_once(call.as_mut()) {
+            let result = match result {
+                Ok(result) => result,
+                Err(never) => match never {},
+            };
+            let message = result
+                .into_outcome()
+                .map(|_| "success".to_owned())
+                .unwrap_or_else(|error| error.to_string());
+            panic!("allocator-backed call settled before disposal: {message}");
+        }
+    }
+    let prepared = pool
+        .reserve()
+        .unwrap()
+        .prepare(&runtime.lifecycle_handle(), root)
+        .unwrap();
+
+    // Act
+    let mut committed = prepared.commit_deferred().unwrap();
+    committed.notify();
+
+    // Assert
+    assert_eq!(runtime.live_object_count(), Ok(0));
+    assert_eq!(calls.len(), 129);
+    assert!(
+        calls
+            .iter_mut()
+            .all(|call| poll_once(call.as_mut()).is_ready())
+    );
+    drop(committed);
     assert_eq!(pool.pending(), 0);
 }
 

@@ -1765,7 +1765,7 @@ impl HostLocator {
                 timeout_ms,
             )
             .await
-            .map(crate::screenshot::ScreenshotOutput::from_capture);
+            .and_then(crate::screenshot::ScreenshotOutput::from_capture);
         crate::screenshot::finish_masks(&masks, token.as_deref(), capture).await
     }
 

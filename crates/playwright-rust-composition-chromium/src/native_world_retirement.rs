@@ -91,12 +91,16 @@ impl ChromiumNativeWorldLifetime {
 pub(crate) struct Registry {
     entries: Mutex<Vec<Weak<Receipt>>>,
     capacity: usize,
+    allocator_backed: bool,
     sealed: AtomicBool,
     // The route table may retain this registry after its accessor is dropped.
     // Share its installed-state lease rather than freeing that budget early.
     _lease: Arc<ResourceLease>,
 }
 impl Registry {
+    pub(crate) fn allocator_backed_storage_bytes() -> u64 {
+        (std::mem::size_of::<Self>() + 256) as u64
+    }
     pub(crate) fn storage_bytes(capacity: usize) -> Option<u64> {
         capacity
             // Expired Weak entries retain their Arc allocation until the next
@@ -106,10 +110,15 @@ impl Registry {
             .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Self>() + 256))
             .and_then(|bytes| u64::try_from(bytes).ok())
     }
-    pub(crate) fn new(capacity: usize, lease: Arc<ResourceLease>) -> Self {
+    pub(crate) fn new(capacity: usize, allocator_backed: bool, lease: Arc<ResourceLease>) -> Self {
         Self {
-            entries: Mutex::new(Vec::with_capacity(capacity)),
+            entries: Mutex::new(if allocator_backed {
+                Vec::new()
+            } else {
+                Vec::with_capacity(capacity)
+            }),
             capacity,
+            allocator_backed,
             sealed: AtomicBool::new(false),
             _lease: lease,
         }
@@ -127,7 +136,7 @@ impl Registry {
             return Err(CdpPageRouteError::NativeRetirementSealed);
         }
         entries.retain(|entry| entry.strong_count() > 0);
-        if entries.len() >= self.capacity {
+        if !self.allocator_backed && entries.len() >= self.capacity {
             return Err(CdpPageRouteError::CapacityExceeded {
                 actual: entries.len() + 1,
                 limit: self.capacity,
@@ -171,9 +180,14 @@ impl Registry {
             }
         }
         let mut failed = false;
-        // The sealed, pre-budgeted weak inventory cannot grow. Retain only one
-        // snapshot permit across I/O; no extra session list or task is allocated.
-        for index in 0..self.capacity {
+        // Sealing freezes the weak inventory before I/O. Retain only one
+        // snapshot permit at a time; no extra session list or task is allocated.
+        let entry_count = self
+            .entries
+            .lock()
+            .map_err(|_| CdpPageRouteError::StatePoisoned)?
+            .len();
+        for index in 0..entry_count {
             let lifetime = {
                 let entries = self
                     .entries
@@ -253,7 +267,12 @@ impl Registry {
         succeeded: bool,
     ) -> Result<(), CdpPageRouteError> {
         // Wake outside BOTH locks: a caller waker may synchronously reenter.
-        for index in 0..self.capacity {
+        let entry_count = self
+            .entries
+            .lock()
+            .map_err(|_| CdpPageRouteError::StatePoisoned)?
+            .len();
+        for index in 0..entry_count {
             let receipt = self
                 .entries
                 .lock()

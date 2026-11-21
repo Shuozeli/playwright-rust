@@ -7,6 +7,7 @@ use std::{collections::VecDeque, num::NonZeroUsize, task::Waker};
 use tokio::sync::Notify;
 
 struct FakeSession {
+    session: String,
     events: ReclaimingEventFanout<CdpEvent>,
     calls: Mutex<Vec<bool>>,
     gates: Mutex<VecDeque<Option<Arc<Notify>>>>,
@@ -14,7 +15,11 @@ struct FakeSession {
 }
 impl FakeSession {
     fn new(capacity: usize) -> Arc<Self> {
+        Self::with_session(capacity, "s1".to_owned())
+    }
+    fn with_session(capacity: usize, session: String) -> Arc<Self> {
         Arc::new(Self {
+            session,
             events: ReclaimingEventFanout::new(capacity, 1).unwrap(),
             calls: Mutex::new(Vec::new()),
             gates: Mutex::new(VecDeque::new()),
@@ -35,7 +40,7 @@ impl FakeSession {
 }
 impl DragInterceptionClient for FakeSession {
     fn session_id(&self) -> Option<&str> {
-        Some("s1")
+        Some(&self.session)
     }
     fn subscribe(&self) -> Result<CdpEventReceiver> {
         self.events
@@ -97,6 +102,44 @@ fn pending<F: Future>(future: Pin<&mut F>) {
             .poll(&mut Context::from_waker(Waker::noop()))
             .is_pending()
     );
+}
+
+#[test]
+fn allocator_backed_session_profile_accepts_capture_beyond_legacy_id_cap() {
+    // Arrange
+    let session = format!("session/{}", "x".repeat(4096));
+    let client = FakeSession::with_session(4, session);
+    let profile = DragDataProfile::new_allocator_backed_session(
+        ResourceScope::extension(14, 61),
+        DragDataLimits {
+            items: 2,
+            files: 0,
+            text_bytes: 128,
+        },
+        NonZeroUsize::new(1).unwrap(),
+    )
+    .unwrap();
+    let requirements = profile
+        .requirements()
+        .combine_concurrent(DragCaptureFactory::requirements());
+    let bytes = requirements.class(ResourceClass::BackendStateBytes);
+    let resources = ProductionResourceLedger::new(
+        ResourceLimits::deny_all(requirements.scopes, requirements.leases).with_class(
+            ResourceClass::BackendStateBytes,
+            bytes.global,
+            bytes.per_scope,
+        ),
+        requirements,
+    )
+    .unwrap();
+    let store = DragDataStore::new(profile, &resources).unwrap();
+
+    // Act
+    let factory =
+        DragCaptureFactory::new(client, store, ResourceScope::extension(14, 62), &resources);
+
+    // Assert
+    assert!(factory.is_ok());
 }
 
 #[tokio::test]

@@ -32,7 +32,9 @@ use crate::{CommandRuntime, ContextDescriptor, HostError, HostSession};
     feature = "javascript-disabled",
     feature = "context-timezone",
     feature = "init-scripts",
-    feature = "page-bindings"
+    feature = "page-bindings",
+    feature = "video-recording",
+    feature = "context-tracing-screenshots"
 ))]
 fn portable_context_id(value: &str) -> Result<ObjectId, HostError> {
     value
@@ -41,6 +43,11 @@ fn portable_context_id(value: &str) -> Result<ObjectId, HostError> {
         .filter(|value| *value != 0)
         .map(ObjectId::new)
         .ok_or_else(|| HostError::InvalidArgument("invalid portable Context ID".into()))
+}
+
+#[cfg(feature = "video-recording")]
+fn finish_video_before_context_close(ownership: Option<CdpContextOwnership>) -> bool {
+    ownership.is_some()
 }
 
 pub(crate) struct ContextLifecycleServices {
@@ -60,7 +67,7 @@ struct ContextCreationOptions<'a> {
     #[cfg(feature = "context-geolocation")]
     geolocation: Option<crate::ContextGeolocation>,
     #[cfg(feature = "context-geolocation-permission")]
-    geolocation_permission: bool,
+    permissions: crate::ContextPermissions,
     #[cfg(feature = "context-http-credentials")]
     http_credentials: Option<crate::ContextHttpCredentials>,
     #[cfg(feature = "context-locale")]
@@ -92,7 +99,7 @@ impl<'a> ContextCreationOptions<'a> {
             #[cfg(feature = "context-geolocation")]
             geolocation: None,
             #[cfg(feature = "context-geolocation-permission")]
-            geolocation_permission: false,
+            permissions: crate::ContextPermissions::default(),
             #[cfg(feature = "context-http-credentials")]
             http_credentials: None,
             #[cfg(feature = "context-locale")]
@@ -121,7 +128,7 @@ pub struct ContextPolicyOptions {
     #[cfg(feature = "context-geolocation")]
     geolocation: Option<crate::ContextGeolocation>,
     #[cfg(feature = "context-geolocation-permission")]
-    geolocation_permission: bool,
+    permissions: crate::ContextPermissions,
     #[cfg(feature = "context-http-credentials")]
     http_credentials: Option<crate::ContextHttpCredentials>,
     #[cfg(feature = "context-locale")]
@@ -191,8 +198,8 @@ impl ContextPolicyOptions {
 
     #[cfg(feature = "context-geolocation-permission")]
     #[must_use]
-    pub const fn with_geolocation_permission(mut self, enabled: bool) -> Self {
-        self.geolocation_permission = enabled;
+    pub fn with_permissions(mut self, permissions: crate::ContextPermissions) -> Self {
+        self.permissions = permissions;
         self
     }
 
@@ -429,12 +436,9 @@ impl HostSession {
         base_url: Option<&str>,
         device: Option<crate::DeviceContextOptions>,
     ) -> Result<ContextDescriptor, HostError> {
-        self.new_context_with_options(ContextCreationOptions {
-            base_url,
-            device,
-            ..ContextCreationOptions::default()
-        })
-        .await
+        let mut options = ContextCreationOptions::with_base_url(base_url);
+        options.device = device;
+        self.new_context_with_options(options).await
     }
 
     #[cfg(feature = "ignore-https-errors")]
@@ -444,34 +448,13 @@ impl HostSession {
         #[cfg(feature = "device-emulation")] device: Option<crate::DeviceContextOptions>,
         ignore_https_errors: bool,
     ) -> Result<ContextDescriptor, HostError> {
-        self.new_context_with_options(ContextCreationOptions {
-            base_url,
-            #[cfg(feature = "device-emulation")]
-            device,
-            ignore_https_errors,
-            ..ContextCreationOptions::default()
-        })
-        .await
-    }
-
-    #[cfg(feature = "context-locale")]
-    pub async fn new_context_with_locale(
-        &self,
-        base_url: Option<&str>,
-        #[cfg(feature = "device-emulation")] device: Option<crate::DeviceContextOptions>,
-        locale: Option<crate::ContextLocale>,
-        #[cfg(feature = "ignore-https-errors")] ignore_https_errors: bool,
-    ) -> Result<ContextDescriptor, HostError> {
-        self.new_context_with_options(ContextCreationOptions {
-            base_url,
-            #[cfg(feature = "device-emulation")]
-            device,
-            locale,
-            #[cfg(feature = "ignore-https-errors")]
-            ignore_https_errors,
-            ..ContextCreationOptions::default()
-        })
-        .await
+        let mut options = ContextCreationOptions::with_base_url(base_url);
+        #[cfg(feature = "device-emulation")]
+        {
+            options.device = device;
+        }
+        options.ignore_https_errors = ignore_https_errors;
+        self.new_context_with_options(options).await
     }
 
     /// Selected creation port. Desired headers are published atomically with the
@@ -500,6 +483,7 @@ impl HostSession {
         #[cfg(feature = "ignore-https-errors")] ignore_https_errors: bool,
         bypass_csp: bool,
     ) -> Result<ContextDescriptor, HostError> {
+        #[allow(clippy::needless_update)] // Remaining fields vary by selected capabilities.
         self.new_context_with_options(ContextCreationOptions {
             base_url,
             #[cfg(feature = "device-emulation")]
@@ -524,6 +508,7 @@ impl HostSession {
         #[cfg(feature = "bypass-csp")] bypass_csp: bool,
         javascript_enabled: bool,
     ) -> Result<ContextDescriptor, HostError> {
+        #[allow(clippy::needless_update)] // Remaining fields vary by selected capabilities.
         self.new_context_with_options(ContextCreationOptions {
             base_url,
             #[cfg(feature = "device-emulation")]
@@ -617,7 +602,7 @@ impl HostSession {
             #[cfg(feature = "context-geolocation")]
             geolocation,
             #[cfg(feature = "context-geolocation-permission")]
-            geolocation_permission,
+            permissions,
             #[cfg(feature = "context-http-credentials")]
             http_credentials,
             #[cfg(feature = "context-locale")]
@@ -655,7 +640,7 @@ impl HostSession {
         }
         #[cfg(feature = "context-geolocation-permission")]
         {
-            options.geolocation_permission = geolocation_permission;
+            options.permissions = permissions;
         }
         #[cfg(feature = "context-http-credentials")]
         {
@@ -709,7 +694,7 @@ impl HostSession {
             #[cfg(feature = "context-geolocation")]
             geolocation,
             #[cfg(feature = "context-geolocation-permission")]
-            geolocation_permission,
+            permissions,
             #[cfg(feature = "context-http-credentials")]
             http_credentials,
             #[cfg(feature = "context-locale")]
@@ -825,7 +810,7 @@ impl HostSession {
             }
         }
         #[cfg(feature = "context-geolocation-permission")]
-        if geolocation_permission {
+        if !permissions.is_empty() {
             let context_id = portable_context_id(&context.id)?;
             let (installation, native_id) = {
                 let state = self.state.lock().map_err(HostError::backend)?;
@@ -842,10 +827,13 @@ impl HostSession {
                     route.browser_context_id().to_owned(),
                 )
             };
-            if let Err(primary) = installation.install(context_id, &native_id).await {
+            if let Err(primary) = installation
+                .install(context_id, &native_id, permissions)
+                .await
+            {
                 if let Err(cleanup) = self.close_owned_context(&context.id).await {
                     return Err(HostError::Backend(format!(
-                        "geolocation permission installation failed: {primary}; Context cleanup failed: {cleanup}"
+                        "permission installation failed: {primary}; Context cleanup failed: {cleanup}"
                     )));
                 }
                 return Err(primary);
@@ -1038,13 +1026,36 @@ impl HostSession {
             }
             return Err(primary);
         }
+        if let Err(primary) = self.session_owned.record_context(&context.id) {
+            return Err(match self.close_owned_context(&context.id).await {
+                Ok(()) => primary,
+                Err(cleanup) => HostError::Backend(format!(
+                    "Context ownership recording failed: {primary}; Context cleanup failed: {cleanup}"
+                )),
+            });
+        }
         Ok(context)
     }
 
     pub async fn close_context(&self, context_id: &str) -> Result<(), HostError> {
         // Playwright's CDP default Context closes the attachment, not Chrome.
         // Do not keep an operation token while awaiting the host's own drain.
-        let result = match self.context_ownership(context_id)? {
+        let ownership = self.context_ownership(context_id)?;
+        #[cfg(feature = "har-recording")]
+        let export_before_close = matches!(ownership, Some(CdpContextOwnership::Default));
+        #[cfg(feature = "har-recording")]
+        if export_before_close {
+            self.finish_context_har(context_id).await?;
+        }
+        #[cfg(feature = "video-recording")]
+        let finish_video_before_close = finish_video_before_context_close(ownership);
+        #[cfg(feature = "video-recording")]
+        if finish_video_before_close {
+            self.video_recording
+                .finish_context(portable_context_id(context_id)?)
+                .await?;
+        }
+        let result = match ownership {
             Some(CdpContextOwnership::Default) => self.close().await,
             None => Ok(()),
             Some(CdpContextOwnership::Owned | CdpContextOwnership::External) => {
@@ -1053,9 +1064,22 @@ impl HostSession {
             }
         };
         if result.is_ok() {
+            #[cfg(feature = "context-tracing-screenshots")]
+            self.cancel_context_tracing(portable_context_id(context_id)?);
             self.browser_pages.remove_context(context_id)?;
             #[cfg(feature = "page-bindings")]
             self.retire_context_binding_registrations(portable_context_id(context_id)?)?;
+            #[cfg(feature = "video-recording")]
+            if !finish_video_before_close {
+                self.video_recording
+                    .finish_context(portable_context_id(context_id)?)
+                    .await?;
+            }
+            #[cfg(feature = "har-recording")]
+            if !export_before_close {
+                self.finish_context_har(context_id).await?;
+            }
+            self.session_owned.remove_context(context_id)?;
         }
         result
     }
@@ -1274,6 +1298,31 @@ impl HostSession {
                 .ok_or(HostError::TargetClosed)?;
         }
         Ok(route.map(|context| context.ownership()))
+    }
+}
+
+#[cfg(all(test, feature = "video-recording"))]
+mod video_close_order_tests {
+    use playwright_rust_backend_cdp_topology::CdpContextOwnership;
+
+    use super::finish_video_before_context_close;
+
+    #[test]
+    fn every_live_recording_finishes_before_its_context_retires_page_sessions() {
+        // Arrange
+        let ownerships = [
+            CdpContextOwnership::Default,
+            CdpContextOwnership::Owned,
+            CdpContextOwnership::External,
+        ];
+
+        // Act
+        let decisions =
+            ownerships.map(|ownership| finish_video_before_context_close(Some(ownership)));
+
+        // Assert
+        assert_eq!(decisions, [true, true, true]);
+        assert!(!finish_video_before_context_close(None));
     }
 }
 

@@ -20,8 +20,9 @@ use playwright_rust_node_host::{
     HostError,
     ffi_budget::{FfiBudget, FfiLane},
     locator::{
-        HostLocator, LocatorExpectationState, LocatorRead, LocatorStringExpectationKind,
-        LocatorValue, LocatorWaitState, StringMatcher, TextExpectation, TextsExpectation,
+        CssExpectation, HostLocator, LocatorExpectationState, LocatorRead,
+        LocatorStringExpectationKind, LocatorValue, LocatorWaitState, StringMatcher,
+        TextExpectation, TextsExpectation,
     },
     locator_query::{QueryBudget, QueryCombination},
 };
@@ -259,7 +260,7 @@ impl NativeLocator {
         timeout_ms: u32,
         strict: bool,
     ) -> napi::Result<PromiseRaw<'env, Unknown<'env>>> {
-        let wait_permit = self.wait_admissions.admit().map_err(binding_error)?;
+        self.wait_admissions.admit().map_err(binding_error)?;
         let execution = self
             .ffi
             .admit(FfiLane::Command, READ_BYTES)
@@ -279,7 +280,7 @@ impl NativeLocator {
         let locator = self.locator.clone();
         locator.host().map_err(binding_error)?;
         let publications = self.publications.clone();
-        boundary::spawn_published_wait(env, execution, publications, wait_permit, async move {
+        boundary::spawn_published_wait(env, execution, publications, (), async move {
             locator
                 .wait_for_element(state, timeout_ms, strict)
                 .await
@@ -1209,6 +1210,45 @@ impl NativeLocator {
                         flags: flags.as_deref(),
                     },
                     is_not,
+                )
+                .await
+                .map(LocatorValueExpectationOutput)
+        })
+    }
+
+    #[napi]
+    #[allow(clippy::too_many_arguments)]
+    pub fn expect_css<'env>(
+        &self,
+        env: &'env Env,
+        timeout_ms: u32,
+        name: JsString<'env>,
+        expected: JsString<'env>,
+        flags: Option<JsString<'env>>,
+        is_not: bool,
+    ) -> napi::Result<PromiseRaw<'env, Unknown<'env>>> {
+        let execution = self
+            .ffi
+            .admit(FfiLane::Command, READ_BYTES)
+            .map_err(binding_error)?;
+        let name = boundary::bounded_string(name, SELECTOR_BYTES, "CSS property name")?;
+        let expected = boundary::bounded_string(expected, SELECTOR_BYTES, "expected CSS value")?;
+        let flags = flags
+            .map(|flags| boundary::bounded_string(flags, 64, "CSS expectation RegExp flags"))
+            .transpose()?;
+        let locator = self.locator.clone();
+        locator.host().map_err(binding_error)?;
+        let publications = self.publications.clone();
+        boundary::spawn_published(env, execution, publications, async move {
+            locator
+                .expect_css(
+                    timeout_ms,
+                    CssExpectation {
+                        name: &name,
+                        expected: &expected,
+                        flags: flags.as_deref(),
+                        is_not,
+                    },
                 )
                 .await
                 .map(LocatorValueExpectationOutput)

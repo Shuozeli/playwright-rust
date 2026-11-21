@@ -1,4 +1,347 @@
-<!-- agent-updated: 2026-11-14T05:28:56Z -->
+<!-- agent-updated: 2026-11-21T03:41:33Z -->
+
+## Persistent Chromium and allocator-backed network composition (2026-11-19)
+
+The Node BrowserType adapter now exposes two successful Rust launch ports:
+ephemeral `launch()` and non-video `launchPersistentContext()`. The persistent
+port resolves the caller's profile directory, starts the owned Chromium
+process, and requires the host to publish exactly one default Context. The
+binding transports timeout and base URL as typed arguments, a checked policy
+word for `headless` and `ignoreHTTPSErrors`, and typed defaults for locale,
+timezone, geolocation, offline, CSP and disabled JavaScript; Rust rejects
+unknown policy bits. Geolocation is a fixed coordinate triple, not a JavaScript/CDP
+state mirror. The same independently selectable Rust leaf backs ordinary
+Context creation and runtime update/clear.
+The separate permission leaf backs ordinary/persistent creation plus runtime
+`grantPermissions` and `clearPermissions`. Rust validates the complete
+Chromium mapping, normalizes origins, merges grants, and owns reset; JavaScript
+only validates public container/scalar types and delegates typed values. The
+facade also checks the exact selected leaf before using a generic composition
+port, so another selected policy cannot cause unsupported input to be dropped.
+Both standalone permission profiles and the rebuilt persistent-policy
+composition load through the native ABI verifier. The Rust owner passes 12
+focused release tests and the Node facade passes the complete 956-test suite;
+this is not a substitute for a new live-Chromium Node permission run.
+HTTP credentials now use the same composition boundary. Ordinary and
+persistent Node options project username, password, optional origin and send
+policy into `ContextHttpCredentials`; Rust remains the sole owner of retained
+values, origin matching, attempted authentication and Fetch challenge
+settlement. The deprecated Playwright-compatible
+`BrowserContext.setHTTPCredentials()` uses the same typed N-API value to replace
+or clear credentials. Rust updates retained state first, serializes Page/OOPIF
+initialization with an update gate, and refreshes current Page/OOPIF and Service
+Worker sessions through the shared Fetch owner. The independent
+ordinary/persistent profiles and rebuilt combined profile pass actual native
+loading, thirteen focused Rust tests, strict types, release Clippy and the
+complete 967-test Node suite. No live-Chromium Node authentication run was performed
+for this slice.
+BrowserContext bindings now reuse the same composition rule. The
+`context-bindings` addon feature extends `page-bindings`; its N-API method
+passes only Context identity, binding name, and handle mode to the existing
+Rust registry. Rust owns current/future Page and OOPIF installation, exact
+Page/Context conflict diagnostics, call publication, and retirement. The Node
+facade keeps one callback entry because user JavaScript must execute in the
+language runtime, and dispatch resolves Page scope before Context scope without
+copying registration or protocol state. The native verifier requires both the
+compiled marker and `contextExposeBinding`, and the standalone artifact is
+dependency-audited and live-tested against Chrome 157. Rebuilding the full
+official profile exposed a Cargo feature-unification defect in the narrow
+locale host method: host-only `ignore-https-errors` selection changed its
+cross-crate signature. The addon now routes locale through the stable typed
+policy port and the unused narrow method is gone. The complete official
+artifact native-loads, the composed locale host tests pass 7/7, the complete
+Node suite remains 973/973, and the unchanged pinned upstream
+`browsercontext-expose-function.spec.ts` passes 6/6 against Chrome 157.
+The public TypeScript contract returns `Promise<BrowserContext>` instead of the
+obsolete preflight-only `Promise<never>`.
+
+Ordinary production network composition no longer treats eight Context or
+Page adapters as public capacity. The composition and CDP adapter registries
+grow through the allocator, while each adapter still receives the independently
+selected active-request, field, payload, and unread-event policies. The
+Service Worker network composition now selects an explicit allocator-backed
+related-session profile too; a 129-Worker composition regression proves the
+former eight-adapter ceiling is gone without weakening leaf policies.
+
+The fixed Playwright 1.58.0 BrowserContext cookie manifest passes 55 runnable
+tests, preserves one upstream skip, and has zero unexpected results. This
+verifies the new persistent path and cookie behavior for those four complete
+files only. Persistent video still uses a separate launch port and must compose
+the same policy contract before Node persistent recording can be claimed.
+
+## Complete Core tracing-file baseline and composable tracing leaves (2026-11-19)
+
+The source-bound `library-tracing-chromium-v1` suite pins the complete,
+unchanged Playwright 1.58.0 `tests/library/tracing.spec.ts` file: 35 cases and
+the exact source/spec-ID hashes. The first candidate RED run was 3 passed,
+three upstream fixmes skipped, and 29 failed. Two consecutive rebuilt
+candidates now pass all 32 runnable cases, skip the three upstream fixmes, and
+fail zero. In addition to the earlier chunk, action, storage-state, console,
+and global-request leaves, the profile composes Rust-owned BrowserContext
+network recording, DOM/action snapshots, screenshot result tracing,
+expect-title execution, stack filtering, and stable owned-browser teardown.
+
+The Rust host now owns trace sessions, chunks, optional chunk names/titles,
+nested group stacks, parent IDs, automatic group closure, and chunk
+export/discard. The Node facade exposes `startChunk({ name, title })`,
+`stopChunk({ path })`, `group(name)`, and `groupEnd()` only when that additive
+profile is selected. The existing screenshot-only profile remains independently
+selectable and does not acquire those methods.
+There is no private 1 MiB total, 8 KiB record/path, or 1 KiB title ceiling in
+this public path; FFI admission follows actual input bytes and the writer keeps
+fallible allocation plus checked byte accounting.
+
+The action leaf brackets the currently supported Page `route`, `goto`,
+`setContent`, `click`, `dblclick`, `hover`, `evaluate`, `evaluateHandle`,
+`waitForEvent`, `waitForTimeout`, `reload`, and `close` calls, Mouse
+move/double-click, Keyboard insert-text, Locator input-file selection,
+`Route.continue`, public Dialog accept/dismiss,
+`BrowserContext.storageState`, and Context-owned API requests with Rust-owned
+call IDs.
+Rust selects the Playwright trace class, method, title, primitive result, and
+pending-action lifecycle, including URL path/query extraction for `Navigate
+to`. JavaScript only brackets the existing typed Rust operation; it does not
+generate trace event records or browser behavior. The independently selectable
+storage-state addon leaf serializes the existing Rust host result to the
+Playwright shape off the JavaScript thread and supports `indexedDB`; the Node
+facade rejects unsupported path persistence instead of pretending to write it.
+The console leaf observes the existing Rust CDP console stream directly and
+retains Page ownership, type, text, bounded JSON arguments, location, and
+timestamp in the active chunk. Rust serializes the pinned v8 console shape at
+export; JavaScript does not buffer or reconstruct trace events. Completed
+actions flush the named live `.trace`/`.network` files under the launch
+`tracesDir`; console-only events intentionally remain buffered until the next
+completed action or stop, matching the pinned official ordering.
+
+The request-tracing leaf is browser-independent and owns a separate recorder
+per `APIRequestContext`. It incrementally spools typed HAR-shaped
+`resource-snapshot` JSONL and SHA-1 content blobs to a temporary directory,
+then atomically packages `trace.network` and resources at stop. The injected
+clock has a production implementation and deterministic test implementation;
+the Node facade only validates options and calls native start/stop ports.
+
+The BrowserContext network leaf reuses the Rust HAR recorder under a hidden
+trace registration, snapshots network state per chunk, writes
+`resource-snapshot` JSONL and SHA-1 resources, and omits JavaScript response
+bodies. Context-owned API requests write their action and request/response/body
+metadata to that exact active registration. Trace ZIPs also contain a valid
+`trace.stacks` document: numeric call IDs reference deduplicated files and the
+first external Node callsite, while internal package frames are excluded. A final
+screenshot is optional only for narrowly classified navigation/target-close
+errors, so concurrent export can finish without converting unrelated resource
+or protocol failures into success.
+
+Source capture follows the upstream client/server split without moving archive
+ownership into JavaScript. The Node adapter captures only the external caller
+file while `sources` is enabled. Rust retains and deduplicates those paths in
+the active chunk, reads them during export, hashes the path for the official
+`resources/src@<sha1>.txt` name, and skips unreadable paths. A new chunk starts
+with an empty source set while BrowserContext network resources remain shared,
+so both source collection and previous-chunk isolation rows are green.
+
+The start lifecycle now retains `screenshots`, `snapshots`, `sources`, `name`,
+and `title` in Rust. This makes repeated-start rejection and close/dialog
+lifecycle semantics independent of JavaScript, while capture producers remain
+separate leaves. A screenshot-enabled trace can also stop after its last Page
+closed; Rust exports the accumulated actions without inventing a final frame.
+
+The formerly open rows now use Rust-owned DOM/action frame snapshots, a
+Playwright-shaped Page screenshot action/result, and Rust-owned title polling
+behind the Node `Frame._expect('to.have.title')` adapter. Dialog and title
+actions preserve upstream snapshot exclusion, stack filtering removes both
+installed Playwright internals and Node async-runtime frames, and trace
+resources translate HAR `_file` references to upstream `_sha1` fields.
+
+Owned browser close now uses a two-phase rendezvous. The serialized driver
+first seals command admission, retires native Handle sessions, and drains
+cleanup while CDP remains usable. Only then may the provider close Chromium;
+the driver closes its logical transport afterward. Dropping a cancelled close
+caller releases the checkpoint, so shutdown cannot strand the driver. The
+historically flaky `should not emit after w/o before` row passes 10/10 isolated
+runs plus both complete-file runs without treating transport loss as cleanup
+success.
+
+This closes the complete pinned Chromium library tracing file, not every
+Playwright tracing path or the complete Node/TypeScript corpus. The three
+remaining non-passing rows are unchanged upstream full-Chromium fixmes.
+
+The source-bound result is
+`core-tracing-full-current-candidate-20261119-v38-final-stable.json` with
+schema-2 provenance beside it. Result, provenance, candidate artifact,
+candidate source, and manifest SHA-256 values are respectively
+`c013069c6a0c983e30454994158dd4ac629ae890d3f6e3d90179c1ed2e33117a`,
+`1e1530f0657cfb6551a63d7566bc74eade9ccb5aaa9e5e89b3ac32d57b27f083`,
+`19cfd6a17a90dcaa2feca83a4ded79c06e579bd8728e76e94ae0f838f871138a`,
+`8acb5da00174123c48b1ea3ca616dba4765767ff86a8b0d237730af3b93646db`,
+and `ae8f82cf25ab19246c4f4925f2912d9a244c9c26ee62dcd9698b092201f99509`.
+The complete Node package passes 879/879, the focused Rust tracing suite passes
+18/18, the owned-shutdown checkpoint test passes 1/1, and the Handle release
+coordinator passes 7/7. Production-target strict host/addon Clippy, TypeScript,
+format checking, and two final complete-file official runs also pass after this
+slice.
+
+## Complete Core video-file checkpoint (2026-11-19)
+
+The source-bound `library-video-chromium-v1` suite now executes the complete
+unchanged pinned Playwright 1.58.0 `tests/library/video.spec.ts` file against
+the composed Rust candidate. The final run is 24 passed, five skipped, zero
+failed. All five skips are declared upstream: four are selected by the
+full-Chromium/Chrome classification and the internal-page row is
+unconditionally fixme. The manifest therefore pins `channel: chromium` to
+classify the registry's full Google Chrome for Testing executable correctly
+instead of pretending it is Chromium headless shell.
+
+Two narrowly composable capabilities closed the last runnable failures. The
+official-test profile exposes a real kill of the Rust-owned browser process;
+the same process lease arbitrates graceful close and test kill, so only the
+first termination request wins. Separately, `context-tracing-screenshots`
+implements `context.tracing.start({ screenshots: true })` and `stop({ path })`.
+Rust captures the JPEG, validates its dimensions, hashes the bytes, and writes
+a Playwright-v8 trace ZIP with the matching `screencast-frame` resource. The
+video recorder now also treats only exact terminal Page/session errors from a
+late `Page.screencastFrameAck` as successful teardown; unrelated protocol
+errors still fail.
+
+The same leaf matches the base stop lifecycle: `stop()` without a path removes
+and discards an active trace without capturing or writing an archive, and is a
+no-op when tracing was never started. `stop({ path })` without an active trace
+still fails with `Must start tracing before stopping`. A real dedicated-CDP
+Context E2E exercises both no-path cases through the rebuilt N-API addon.
+
+This does not establish complete Tracing parity. The screenshot leaf takes one
+screenshot at stop and deliberately rejects snapshots, sources, and names.
+Start and chunk titles are Rust-owned. The independent chunk/group leaf adds
+chunks but not complete action/API instrumentation, continuous trace
+screencasting, or `.network` output. The separate first action leaf covers only
+the explicitly documented Page/Route/Dialog calls. The browser-kill method is
+compiled only into the official-test profile.
+
+## Local Node Video facade checkpoint (2026-11-19)
+
+The independently selected `video-recording` profile now exposes ordinary
+owned `Browser.newContext({ recordVideo })` and implicit
+`Browser.newPage({ recordVideo })` recording without moving recorder state into
+JavaScript. `Page.video()` returns a thin artifact facade whose `path()`,
+`saveAs()`, and `delete()` methods address the exact portable Page in Rust.
+`saveAs()` can begin before Context close and waits on Rust encoder completion;
+delete is idempotent after a successful removal.
+
+The native E2E passes 2/2 with ffprobe-confirmed VP8 dimensions of 640x360 and
+the Playwright default 800x450. It also asserts Browser close leaves zero
+resource-ledger leases and scopes. That assertion found and fixed a connection
+lifetime bug: the recorder installation now retains only a weak CDP connection,
+while each active recorder task temporarily owns its required connection.
+The Node adapter suite passes 852/852, strict TypeScript passes, the complete
+official video profile passes release Clippy with warnings denied, and focused
+Rust recorder tests pass 4/4.
+
+The unchanged pinned Core `video.spec.ts:541` default-size row passes 1/1 with
+the Rust candidate and 1/1 with the official Oracle. The source-bound candidate
+artifact SHA-256 is
+`9e5fb82807c94cd35a035cd0fc55f172f17de209b5a9c59123efb76a62f7bfa9`.
+This proves only that exact row, not the full video file. Remote artifact
+transfer and Node persistent-context recording remain open.
+
+## Creation-time HAR checkpoint (2026-11-19)
+
+`Browser.newContext()` now accepts the pinned `recordHar` object and installs
+the existing Rust Context recorder before returning the Context. Defaults and
+precedence match Playwright 1.58.0: `full`, plain-HAR `embed`, ZIP `attach`,
+and explicit `content` over `omitContent`. String URL filters are supported.
+JavaScript RegExp filters select the separate `har-recording-regexp` native
+profile and preserve source plus flags; the lean base profile exposes no
+RegExp method. Recorder failure closes
+the unpublished Context. The lean `har-recording` profile contains only its
+Page-routes dependency, while `official-conformance-page-har-recording`
+composes the normal Page feature set for live comparison.
+
+Eight adapter tests, 845/845 default Node tests, strict TypeScript, native-load
+for both lean and composed artifacts, and strict complete-profile Clippy pass.
+The rebuilt composed HAR-profile addon is SHA-256
+`2cff1e6714a21d5a23deac1a8e9061703af107779fbbeffb512945c6c35313d7`.
+The lean build exposed and fixed a conditional `#[napi]` macro leak that had
+made the base profile depend on the absent RegExp callback symbol. A dedicated
+Chrome 157 trusted-HTTPS run captures Page title,
+DOMContentLoaded/load timing, navigation and fetch entries through only
+`recordHar`, then closes with zero retained native resources. This is focused
+Rust-backed evidence. The fixed Playwright Python v1.58.0 HAR manifest also
+passes candidate 19/19 and Oracle 19/19 through the same Rust recorder. The
+optional Rust-native ECMAScript matcher now covers lookarounds, backreferences,
+UTF-16 indexing, Unicode sets, and `d/g/i/m/s/u/v/y`, including stateful
+`lastIndex`. HAR, route, and cookie filters share the leaf, and the former
+arbitrary route count/source caps are gone. Routes compile independent
+server-dispatch and client-handler instances and reproduce the pinned
+two-instance `/g` sequence. The source-pinned Test262/Node 24.12 corpus now
+passes 5,135 static patterns and 97,198 match/`lastIndex` steps against a
+Unicode 16.0 Rust engine. Its reproducible compressed corpus is SHA-256
+`90b348d0c0bc63cca448976a3bfd95299c2a56b158b68b5181c82a40ac85c3f6`.
+Dynamic Test262 programs and a real-browser upstream
+oracle remain open, so broader regex parity is not yet claimed; direct
+Playwright 1.58 attachment to dedicated Chrome 157 currently fails in upstream
+`Browser.setDownloadBehavior` before the oracle can run.
+
+## BrowserContext routing checkpoint (2026-11-18)
+
+The Node surface now exposes `BrowserContext.route()`, `unroute()`, and
+`unrouteAll()` over the existing Rust Context registration owner. Context
+registrations are never re-labeled as Page registrations; Page callbacks win
+only for Page-owned matches, while Context callbacks receive the actual Page
+Frame for Page-originated requests. String and JavaScript RegExp matchers,
+finite `times`, handler-selective removal, and the official `default`, `wait`,
+and `ignoreErrors` teardown behaviors are supported. In particular, `wait`
+removes language-side handlers, drains active callbacks, and only then asks
+Rust to update CDP interception patterns, preserving the paused-request owner.
+
+The `page-unroute` and `route-regexp` profiles independently native-load with
+their complete Context bindings. A repository-owned Chrome 157 exercise proves
+Context RegExp fulfillment, Page-over-Context precedence, exact unroute,
+active-callback waiting, and zero-resource teardown. Service Worker routing is
+still the next separate ownership task; this checkpoint does not fabricate a
+Page for Worker-originated requests and is not an unchanged-upstream test
+claim.
+
+## Chromium-only public BrowserType checkpoint (2026-11-15)
+
+The Node package now exports only `chromium` from CommonJS, ESM, and its
+TypeScript declarations. The `BrowserType` declaration is no longer a generic
+three-engine union, `launch()` accepts only Chromium options, and the public
+adapter has no Firefox/WebKit CDP rejection or fake unsupported-launch object.
+Upstream device-descriptor `defaultBrowserType` strings remain inert metadata.
+The full browserless Node suite passes 829/829 and strict TypeScript proves
+that `firefox` and `webkit` are absent. Internal paths are Chromium-only too:
+registry/install/backend manifests, BiDi startup, persistent-context preflight,
+connect-header admission, and active remote-connect adapter tests. The
+official Playwright Server bootstrap graph still contains three BrowserType
+objects because that is pinned protocol wire shape, but only its Chromium
+object can be selected publicly.
+
+## Chromium-only Page PDF binding checkpoint (2026-11-15)
+
+The default-off `page-pdf` Node profile exposes the complete pinned 1.58.0
+Chromium `Page.pdf()` option surface without moving browser semantics into
+JavaScript. Rust owns page/session resolution, paper-format lookup, unit
+conversion, `Page.printToPDF`, streamed `IO.read`, base64 decoding, stream
+closure, output allocation, recursive output-directory creation, and optional
+file persistence. The thin Node facade performs public shape validation and
+the official number-to-`px` transport normalization, then returns a copied
+`Buffer`. Firefox and WebKit are outside product scope. The isolated release
+addon passes native-load smoke and a dedicated-Chrome CDP E2E that verifies all
+options, `%PDF-` bytes, non-empty output, exact nested-path persistence, custom
+dimensions, and the pinned upstream tagged-outline size behavior. That E2E also
+guards allocator-backed attach preflight so unbounded object ownership cannot
+become a fabricated infinite byte reservation.
+
+## Allocator-backed admission and CDP identity ABI checkpoint (2026-11-14)
+
+The current Node addon removes fabricated active-request and long-wait counts;
+resource-ledger and runtime scheduling still bound bytes and actual execution.
+The default CDP User-Agent port now accepts one bounded three-string runtime
+identity tuple and exports `cdpDefaultUserAgentAbiShape() == 2`. The package
+loader requires that shape before calling the port, so an older addon fails
+closed instead of depending on JavaScript function arity. The public
+`chromium.connectOverCDP()` signature is unchanged. The current release addon
+passes 847 browserless adapter tests, strict TypeScript, native-load smoke,
+feature-closure boundary checks, and release Clippy with warnings denied.
 
 ## Typed `*` capture selector checkpoint (2026-10-12)
 

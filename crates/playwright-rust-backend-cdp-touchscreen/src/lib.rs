@@ -72,7 +72,7 @@ impl std::error::Error for CdpTouchscreenProfileError {}
 pub struct CdpTouchscreenProductionProfile {
     scope: ResourceScope,
     operation_bytes: usize,
-    operations: NonZeroUsize,
+    operations: Option<NonZeroUsize>,
     requirements: ResourceRequirements,
 }
 
@@ -89,11 +89,22 @@ impl CdpTouchscreenProductionProfile {
         Ok(Self {
             scope,
             operation_bytes,
-            operations,
+            operations: Some(operations),
             requirements: ResourceRequirements::none()
                 .with_class(ResourceClass::BackendStateBytes, bytes, bytes)
                 .with_metadata(1, operations.get()),
         })
+    }
+
+    /// Allocator-backed operation ownership for Playwright-compatible hosts
+    /// that schedule native input separately and expose no public count limit.
+    pub const fn new_allocator_backed(operation_bytes: usize) -> Self {
+        Self {
+            scope: ResourceScope::Connection,
+            operation_bytes,
+            operations: None,
+            requirements: ResourceRequirements::none(),
+        }
     }
 
     pub const fn operation_bytes(self) -> usize {
@@ -108,7 +119,7 @@ impl CdpTouchscreenProductionProfile {
 #[derive(Clone)]
 struct Budget {
     profile: CdpTouchscreenProductionProfile,
-    ledger: ResourceLedger,
+    ledger: Option<ResourceLedger>,
     active: Arc<AtomicUsize>,
 }
 
@@ -119,7 +130,10 @@ impl Budget {
     ) -> Result<Self, ProductionResourceError> {
         Ok(Self {
             profile,
-            ledger: resources.claim(profile.requirements())?,
+            ledger: profile
+                .operations
+                .map(|_| resources.claim(profile.requirements()))
+                .transpose()?,
             active: Arc::new(AtomicUsize::new(0)),
         })
     }
@@ -128,7 +142,10 @@ impl Budget {
         if self
             .active
             .fetch_update(Ordering::AcqRel, Ordering::Acquire, |active| {
-                (active < self.profile.operations.get()).then(|| active + 1)
+                self.profile.operations.map_or_else(
+                    || active.checked_add(1),
+                    |limit| (active < limit.get()).then_some(active + 1),
+                )
             })
             .is_err()
         {
@@ -136,13 +153,16 @@ impl Budget {
                 "Touchscreen operation concurrency limit was reached",
             ));
         }
-        match self.ledger.reserve(
-            self.profile.scope,
-            ResourceClass::BackendStateBytes,
-            u64::try_from(self.profile.operation_bytes).expect("validated byte budget"),
-        ) {
+        let resource = self.ledger.as_ref().map(|ledger| {
+            ledger.reserve(
+                self.profile.scope,
+                ResourceClass::BackendStateBytes,
+                u64::try_from(self.profile.operation_bytes).expect("validated byte budget"),
+            )
+        });
+        match resource.transpose() {
             Ok(resource) => Ok(Lease {
-                resource: Some(resource),
+                resource,
                 active: self.active.clone(),
             }),
             Err(_) => {
@@ -534,5 +554,61 @@ mod tests {
         // Assert
         assert!(touch_calls(&client).is_empty());
         assert!(!operation.pending_native_work());
+    }
+
+    #[test]
+    fn allocator_backed_operations_grow_past_legacy_count_without_native_input() {
+        // Arrange
+        let client = Arc::new(FakeCdpClient::from_html(""));
+        let input = CdpInputCoordinator::with_policy(CdpInputPolicy::Interleaved);
+        let required =
+            CdpTouchscreenService::required_operation_bytes(client.clone(), input.clone());
+        let profile = CdpTouchscreenProductionProfile::new_allocator_backed(required);
+        let resources = resources(profile);
+        let factory =
+            CdpTouchscreenServiceFactory::new_with_production_resources(profile, &resources)
+                .unwrap();
+        let service = factory.bind(client.clone(), input).unwrap();
+
+        // Act
+        let operations: Vec<_> = (0..129).map(|_| service.start(params()).unwrap()).collect();
+
+        // Assert
+        assert_eq!(operations.len(), 129);
+        assert_eq!(factory.active_operations(), 129);
+        assert!(client.calls().is_empty());
+        assert_eq!(resources.metrics().unwrap().active_leases, 0);
+        drop(operations);
+        assert_eq!(factory.active_operations(), 0);
+    }
+
+    #[test]
+    fn finite_profile_remains_available_for_constrained_embedders() {
+        // Arrange
+        let client = Arc::new(FakeCdpClient::from_html(""));
+        let input = CdpInputCoordinator::with_policy(CdpInputPolicy::Interleaved);
+        let required =
+            CdpTouchscreenService::required_operation_bytes(client.clone(), input.clone());
+        let profile = profile(required);
+        let resources = resources(profile);
+        let factory =
+            CdpTouchscreenServiceFactory::new_with_production_resources(profile, &resources)
+                .unwrap();
+        let service = factory.bind(client.clone(), input).unwrap();
+        let first = service.start(params()).unwrap();
+        let second = service.start(params()).unwrap();
+
+        // Act
+        let error = match service.start(params()) {
+            Ok(_) => panic!("finite profile unexpectedly admitted a third operation"),
+            Err(error) => error,
+        };
+
+        // Assert
+        assert_eq!(error.kind(), FailureKind::ResourceExhausted);
+        assert_eq!(factory.active_operations(), 2);
+        assert!(client.calls().is_empty());
+        drop((first, second));
+        assert_eq!(factory.active_operations(), 0);
     }
 }

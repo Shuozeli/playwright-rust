@@ -29,7 +29,11 @@ process.env.PLAYWRIGHT_RUST_OFFICIAL_SERVER_IP = endpoint?.ip || 'missing-tailsc
 process.env.PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST = endpoint?.host || 'missing-tailscale-host.invalid';
 process.env.PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM = upstream;
 process.env.PLAYWRIGHT_RUST_OFFICIAL_CROSS_ORIGIN_FORWARD = '1';
-const { rewriteServerFixtures, startCrossOriginForward } = require('./playwright-core-server-runtime.cjs');
+const {
+  rewriteServerFixtures,
+  rewriteThirdPartyCookieSites,
+  startCrossOriginForward,
+} = require('./playwright-core-server-runtime.cjs');
 
 const fixtureSource = `  loopback: [undefined, { scope: 'worker', option: true }],
     const proxyServer = await TestProxy.create(proxyPort);
@@ -98,7 +102,20 @@ test('opt-in source rewrite changes the origin and keeps legacy fixtures unchang
   assert.match(optedIn, /finally \{\s*await Promise\.all\(\[\s*server\.stop\(\)/);
   assert.doesNotMatch(legacy, /startCrossOriginForward/);
   assert.match(legacy, /await run\(\{/);
+  assert.ok(legacy.includes('crossProcessURL.hostname = `${crossProcessURL.hostname}.`;'));
+  assert.ok(legacy.includes("value: crossProcessURL.toString().replace(/\\/$/, ''),"));
   assert.match(optedIn, /loopback: \[process\.env\.PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST/);
+});
+test('cookie partition source rewrites loopback sites to the Tailscale schemeful site', () => {
+  // Arrange
+  const source = "partitionKey: 'https://localhost'; expected: 'https://127.0.0.1';";
+  const site = process.env.PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST.split('.').slice(1).join('.');
+
+  // Act
+  const rewritten = rewriteThirdPartyCookieSites(source);
+
+  // Assert
+  assert.equal(rewritten, `partitionKey: 'https://${site}'; expected: 'https://${site}.';`);
 });
 
 test('checked-out upstream server fixture rewrites and transpiles cleanly', { skip: !upstreamFixtureSource }, () => {
@@ -106,17 +123,20 @@ test('checked-out upstream server fixture rewrites and transpiles cleanly', { sk
   const typescript = require(path.join(upstream, 'node_modules', 'typescript'));
 
   // Act
-  const rewritten = rewriteServerFixtures(upstreamFixtureSource, true);
-  const result = typescript.transpileModule(rewritten, {
+  const forwarded = rewriteServerFixtures(upstreamFixtureSource, true);
+  const ordinary = rewriteServerFixtures(upstreamFixtureSource, false);
+  const results = [forwarded, ordinary].map(rewritten => typescript.transpileModule(rewritten, {
     fileName: upstreamFixturePath,
     reportDiagnostics: true,
     compilerOptions: { module: typescript.ModuleKind.CommonJS },
-  });
+  }));
 
   // Assert
-  assert.match(rewritten, /startCrossOriginForward\(server\.PORT\)/);
-  assert.match(rewritten, /official cross-origin forwarder did not create a distinct origin/);
-  assert.deepEqual(result.diagnostics.filter(item => item.category === typescript.DiagnosticCategory.Error), []);
+  assert.match(forwarded, /startCrossOriginForward\(server\.PORT\)/);
+  assert.match(forwarded, /official cross-origin forwarder did not create a distinct origin/);
+  assert.match(ordinary, /crossProcessURL\.hostname/);
+  for (const result of results)
+    assert.deepEqual(result.diagnostics.filter(item => item.category === typescript.DiagnosticCategory.Error), []);
 });
 
 test('fixture startup failure still stops its upstream servers', { skip: !upstreamFixtureSource }, async () => {

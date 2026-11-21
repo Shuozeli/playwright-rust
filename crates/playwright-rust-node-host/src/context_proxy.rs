@@ -1,4 +1,4 @@
-//! Optional bounded BrowserContext proxy ownership.
+//! Optional allocator-backed BrowserContext proxy ownership.
 //!
 //! The host retains public proxy policy for exactly one owned Context. CDP
 //! receives only server/bypass creation fields; API-request composition can
@@ -17,7 +17,6 @@ use zeroize::Zeroizing;
 
 use crate::HostError;
 
-pub(crate) const MAX_CONTEXTS: usize = 16;
 pub const MAX_PROXY_SERVER_BYTES: usize = 64 * 1024;
 pub const MAX_PROXY_BYPASS_BYTES: usize = 64 * 1024;
 pub const MAX_PROXY_CREDENTIAL_BYTES: usize = 4 * 1024;
@@ -128,11 +127,7 @@ struct Entry {
 }
 
 pub(crate) const fn requirements() -> ResourceRequirements {
-    let retained_bytes =
-        MAX_PROXY_SERVER_BYTES + MAX_PROXY_BYPASS_BYTES + (2 * MAX_PROXY_CREDENTIAL_BYTES);
-    let storage_bytes = (std::mem::size_of::<Installation>()
-        + MAX_CONTEXTS * (std::mem::size_of::<Entry>() + retained_bytes))
-        as u64;
+    let storage_bytes = std::mem::size_of::<Installation>() as u64;
     ResourceRequirements::none()
         .with_class(
             ResourceClass::BackendStateBytes,
@@ -159,12 +154,8 @@ impl Installation {
                 plan.class(ResourceClass::BackendStateBytes).global,
             )
             .map_err(HostError::backend)?;
-        let mut entries = Vec::new();
-        entries
-            .try_reserve_exact(MAX_CONTEXTS)
-            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
         Ok(Arc::new(Self {
-            entries: Mutex::new(entries),
+            entries: Mutex::new(Vec::new()),
             _storage: storage,
         }))
     }
@@ -176,11 +167,9 @@ impl Installation {
                 "proxy is already installed for this Context".into(),
             ));
         }
-        if entries.len() == MAX_CONTEXTS {
-            return Err(HostError::ResourceExhausted(format!(
-                "proxy policy exceeds {MAX_CONTEXTS} live Contexts"
-            )));
-        }
+        entries.try_reserve(1).map_err(|error| {
+            HostError::ResourceExhausted(format!("proxy policy allocation failed: {error}"))
+        })?;
         entries.push(Entry { context, proxy });
         Ok(())
     }
@@ -316,6 +305,29 @@ mod tests {
                 .proxy(context, CdpContextOwnership::Owned)
                 .unwrap(),
             None
+        );
+    }
+
+    #[test]
+    fn proxy_registry_grows_past_the_legacy_context_capacity() {
+        // Arrange
+        let installation = Installation::new(&resources()).expect("installation");
+
+        // Act
+        for value in 1..=129 {
+            let proxy =
+                ContextProxy::new("proxy.example.test:3128".into(), None, None, None).unwrap();
+            installation
+                .install(ObjectId::new(value), proxy)
+                .expect("proxy registry should be allocator-backed");
+        }
+
+        // Assert
+        assert!(
+            installation
+                .proxy(ObjectId::new(129), CdpContextOwnership::Owned)
+                .unwrap()
+                .is_some()
         );
     }
 

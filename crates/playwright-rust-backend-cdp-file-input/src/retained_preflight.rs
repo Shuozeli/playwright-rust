@@ -71,6 +71,7 @@ impl std::error::Error for RetainedPreflightError {}
 pub struct RetainedPreflightProfile {
     scope: ResourceScope,
     capacity: usize,
+    allocator_backed: bool,
 }
 impl RetainedPreflightProfile {
     pub fn new(scope: ResourceScope, capacity: usize) -> Result<Self, RetainedPreflightError> {
@@ -78,10 +79,24 @@ impl RetainedPreflightProfile {
         if count == 0 || count.checked_mul(ADMISSION_BYTES).is_none() {
             return Err(RetainedPreflightError::InvalidProfile);
         }
-        Ok(Self { scope, capacity })
+        Ok(Self {
+            scope,
+            capacity,
+            allocator_backed: false,
+        })
+    }
+
+    pub fn new_allocator_backed(scope: ResourceScope) -> Result<Self, RetainedPreflightError> {
+        let mut profile = Self::new(scope, 1)?;
+        profile.capacity = usize::MAX;
+        profile.allocator_backed = true;
+        Ok(profile)
     }
 
     pub fn requirements(self) -> ResourceRequirements {
+        if self.allocator_backed {
+            return ResourceRequirements::none();
+        }
         let count = self.capacity as u64;
         ResourceRequirements::none()
             .with_class(
@@ -95,6 +110,12 @@ impl RetainedPreflightProfile {
                 count * ADMISSION_BYTES,
             )
             .with_metadata(1, self.capacity)
+    }
+    pub const fn capacity(self) -> usize {
+        self.capacity
+    }
+    pub const fn allocator_backed(self) -> bool {
+        self.allocator_backed
     }
 }
 
@@ -119,16 +140,21 @@ impl CdpFileInputPreflightService {
     /// retained until the caller's ENTIRE group has acknowledged release (or
     /// its owner reports authoritative destruction), on every outcome.
     pub fn admit(&self) -> Result<PreflightAdmission, RetainedPreflightError> {
-        let lease = self
-            .ledger
-            .reserve_many(
-                self.profile.scope,
-                &[
-                    ResourceRequest::new(ResourceClass::RemoteHandle, EXTRA_NATIVE),
-                    ResourceRequest::new(ResourceClass::BackendStateBytes, ADMISSION_BYTES),
-                ],
+        let lease = if self.profile.allocator_backed {
+            None
+        } else {
+            Some(
+                self.ledger
+                    .reserve_many(
+                        self.profile.scope,
+                        &[
+                            ResourceRequest::new(ResourceClass::RemoteHandle, EXTRA_NATIVE),
+                            ResourceRequest::new(ResourceClass::BackendStateBytes, ADMISSION_BYTES),
+                        ],
+                    )
+                    .map_err(RetainedPreflightError::Budget)?,
             )
-            .map_err(RetainedPreflightError::Budget)?;
+        };
         Ok(PreflightAdmission {
             used: false,
             object_id: None,
@@ -143,7 +169,7 @@ impl CdpFileInputPreflightService {
 pub struct PreflightAdmission {
     used: bool,
     object_id: Option<Box<str>>,
-    _lease: ResourceLease,
+    _lease: Option<ResourceLease>,
 }
 impl PreflightAdmission {
     pub fn object_id(&self) -> Option<&str> {

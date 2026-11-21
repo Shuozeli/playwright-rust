@@ -11,20 +11,17 @@ use playwright_rust_core::{
 };
 use std::sync::{Arc, Mutex, Weak};
 
-pub(super) const MAX_SESSIONS: usize = 16;
-const MEMBERS: usize = 16;
 const INDEX_BYTES: u64 = 16 * 1024;
 const SCOPE: ResourceScope = ResourceScope::extension(174, 1);
 
 pub(super) fn index_resources() -> Result<ResourceLedger, HostError> {
-    let bytes = MAX_SESSIONS as u64 * INDEX_BYTES;
     let requirements = ResourceRequirements::none()
-        .with_class(ResourceClass::BackendStateBytes, bytes, bytes)
-        .with_metadata(1, MAX_SESSIONS);
-    let limits = ResourceLimits::deny_all(1, MAX_SESSIONS).with_class(
+        .with_class(ResourceClass::BackendStateBytes, u64::MAX, u64::MAX)
+        .with_metadata(1, usize::MAX);
+    let limits = ResourceLimits::deny_all(1, usize::MAX).with_class(
         ResourceClass::BackendStateBytes,
-        bytes,
-        bytes,
+        u64::MAX,
+        u64::MAX,
     );
     ProductionResourceLedger::new(limits, requirements)
         .and_then(|ledger| ledger.claim(requirements))
@@ -47,8 +44,8 @@ struct PageEntry {
 }
 struct Index {
     closed: bool,
-    contexts: [Option<ContextEntry>; MEMBERS],
-    pages: [Option<PageEntry>; MEMBERS],
+    contexts: Vec<ContextEntry>,
+    pages: Vec<PageEntry>,
 }
 struct SessionInner {
     origin: Weak<Owners>,
@@ -67,7 +64,7 @@ const _: () = assert!(
         + std::mem::size_of::<playwright_rust_core::ResourceRequest>()
         + std::mem::size_of::<Membership>()
         + std::mem::size_of::<Index>()
-        < INDEX_BYTES as usize
+        < 16 * 1024
 );
 
 /// One canonical index per exact host origin in this environment budget.
@@ -138,17 +135,16 @@ fn invalid(message: &str) -> HostError {
 
 #[derive(Default)]
 struct Membership {
-    contexts: [Option<ObjectId>; MEMBERS],
-    pages: [Option<(ObjectId, ObjectId)>; MEMBERS],
+    contexts: Vec<ObjectId>,
+    pages: Vec<(ObjectId, ObjectId)>,
 }
 impl Membership {
     fn contains_context(&self, id: ObjectId) -> bool {
-        self.contexts.contains(&Some(id))
+        self.contexts.contains(&id)
     }
     fn page_context(&self, id: ObjectId) -> Option<ObjectId> {
         self.pages
             .iter()
-            .flatten()
             .find_map(|(page, context)| (*page == id).then_some(*context))
     }
 }
@@ -168,17 +164,24 @@ impl HostSession {
             .frame_publications()
             .published_collections()?
             .ok_or(HostError::TargetClosed)?;
-        let mut result = Membership::default();
-        for (index, context) in view.contexts().iter().enumerate() {
-            *result.contexts.get_mut(index).ok_or_else(|| {
-                HostError::ResourceExhausted("timeout Context membership exceeds 16".into())
-            })? = Some(context.id);
-        }
-        for (index, page) in view.pages().iter().enumerate() {
-            *result.pages.get_mut(index).ok_or_else(|| {
-                HostError::ResourceExhausted("timeout Page membership exceeds 16".into())
-            })? = Some((page.id, page.context));
-        }
+        let mut result = Membership {
+            contexts: Vec::new(),
+            pages: Vec::new(),
+        };
+        result
+            .contexts
+            .try_reserve_exact(view.contexts().len())
+            .map_err(HostError::backend)?;
+        result
+            .pages
+            .try_reserve_exact(view.pages().len())
+            .map_err(HostError::backend)?;
+        result
+            .contexts
+            .extend(view.contexts().iter().map(|entry| entry.id));
+        result
+            .pages
+            .extend(view.pages().iter().map(|entry| (entry.id, entry.context)));
         Ok(result)
     }
 }
@@ -198,7 +201,8 @@ impl TimeoutPolicyBudget {
         debug: bool,
     ) -> Result<TimeoutPolicySession, HostError> {
         let mut sessions = self.inner.sessions.lock().map_err(HostError::backend)?;
-        let existing = sessions.iter().flatten().find_map(|slot| {
+        sessions.retain(|slot| slot.session.strong_count() != 0);
+        let existing = sessions.iter().find_map(|slot| {
             if Weak::ptr_eq(&slot.origin, &origin) {
                 slot.session.upgrade()
             } else {
@@ -214,12 +218,7 @@ impl TimeoutPolicyBudget {
             }
             return Ok(TimeoutPolicySession(session));
         }
-        let slot = sessions
-            .iter_mut()
-            .find(|slot| slot.is_none())
-            .ok_or_else(|| {
-                HostError::ResourceExhausted("timeout policy session capacity exceeds 16".into())
-            })?;
+        sessions.try_reserve(1).map_err(HostError::backend)?;
         let storage = self
             .inner
             .indexes
@@ -230,13 +229,13 @@ impl TimeoutPolicyBudget {
             debug,
             index: Mutex::new(Index {
                 closed: false,
-                contexts: std::array::from_fn(|_| None),
-                pages: std::array::from_fn(|_| None),
+                contexts: Vec::new(),
+                pages: Vec::new(),
             }),
             _storage: storage,
             budget: self.clone(),
         });
-        *slot = Some(SessionSlot {
+        sessions.push(SessionSlot {
             origin,
             session: Arc::downgrade(&session),
         });
@@ -282,22 +281,12 @@ impl TimeoutPolicySession {
         if index.closed {
             return Err(HostError::TargetClosed);
         }
-        for entry in &mut index.pages {
-            if entry
-                .as_ref()
-                .is_some_and(|entry| membership.page_context(entry.id) != Some(entry.context))
-            {
-                *entry = None;
-            }
-        }
-        for entry in &mut index.contexts {
-            if entry
-                .as_ref()
-                .is_some_and(|entry| !membership.contains_context(entry.id))
-            {
-                *entry = None;
-            }
-        }
+        index
+            .pages
+            .retain(|entry| membership.page_context(entry.id) == Some(entry.context));
+        index
+            .contexts
+            .retain(|entry| membership.contains_context(entry.id));
         let context = if page {
             membership.page_context(id).ok_or(HostError::TargetClosed)?
         } else {
@@ -323,13 +312,12 @@ impl TimeoutPolicySession {
             _storage: storage,
             _budget: self.0.budget.clone(),
         });
-        if page && let Some(entry) = index.pages.iter().flatten().find(|entry| entry.id == id) {
+        if page && let Some(entry) = index.pages.iter().find(|entry| entry.id == id) {
             return Ok(self.scoped(entry.settings.clone(), Scope::Page(id), binding));
         }
         let existing_context = index
             .contexts
             .iter()
-            .flatten()
             .find(|entry| entry.id == context)
             .map(|entry| entry.settings.clone());
         let new_context = existing_context.is_none();
@@ -341,28 +329,16 @@ impl TimeoutPolicySession {
         // child admission must not retain an otherwise unobserved new root.
         let page_settings = if page { Some(settings.child()?) } else { None };
         if new_context {
-            let slot = index
-                .contexts
-                .iter_mut()
-                .find(|entry| entry.is_none())
-                .ok_or_else(|| {
-                    HostError::ResourceExhausted("timeout Context index exceeds 16".into())
-                })?;
-            *slot = Some(ContextEntry {
+            index.contexts.try_reserve(1).map_err(HostError::backend)?;
+            index.contexts.push(ContextEntry {
                 id: context,
                 settings: settings.clone(),
             });
         }
         match page_settings {
             Some(settings) => {
-                let slot = index
-                    .pages
-                    .iter_mut()
-                    .find(|entry| entry.is_none())
-                    .ok_or_else(|| {
-                        HostError::ResourceExhausted("timeout Page index exceeds 16".into())
-                    })?;
-                *slot = Some(PageEntry {
+                index.pages.try_reserve(1).map_err(HostError::backend)?;
+                index.pages.push(PageEntry {
                     id,
                     context,
                     settings: settings.clone(),
@@ -401,8 +377,8 @@ impl SessionInner {
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             index.closed = true;
             (
-                std::mem::replace(&mut index.pages, std::array::from_fn(|_| None)),
-                std::mem::replace(&mut index.contexts, std::array::from_fn(|_| None)),
+                std::mem::take(&mut index.pages),
+                std::mem::take(&mut index.contexts),
             )
         };
         drop(removed);
@@ -418,15 +394,7 @@ impl Drop for SessionInner {
             .sessions
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        for slot in sessions.iter_mut() {
-            if slot
-                .as_ref()
-                .is_some_and(|entry| std::ptr::eq(entry.session.as_ptr(), self))
-            {
-                *slot = None;
-                break;
-            }
-        }
+        sessions.retain(|slot| !std::ptr::eq(slot.session.as_ptr(), self));
     }
 }
 

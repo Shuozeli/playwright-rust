@@ -71,11 +71,17 @@ impl FrameLifecycleStore {
             }
             None => 0,
         };
-        let index = self
-            .frames
-            .iter()
-            .position(Option::is_none)
-            .ok_or(LifecycleError::FrameCapacity)?;
+        let index = match self.frames.iter().position(Option::is_none) {
+            Some(index) => index,
+            None if self.allocator_backed => {
+                self.frames
+                    .try_reserve(1)
+                    .map_err(|_| LifecycleError::Allocation)?;
+                self.frames.push(None);
+                self.frames.len() - 1
+            }
+            None => return Err(LifecycleError::FrameCapacity),
+        };
         let deadline = self.idle_deadline()?;
         self.frames[index] = Some(FrameState {
             id: frame,
@@ -165,11 +171,17 @@ impl FrameLifecycleStore {
                 Err(LifecycleError::ConflictingIdentity)
             };
         }
-        let slot = self
-            .requests
-            .iter()
-            .position(Option::is_none)
-            .ok_or(LifecycleError::RequestCapacity)?;
+        let slot = match self.requests.iter().position(Option::is_none) {
+            Some(slot) => slot,
+            None if self.allocator_backed => {
+                self.requests
+                    .try_reserve(1)
+                    .map_err(|_| LifecycleError::Allocation)?;
+                self.requests.push(None);
+                self.requests.len() - 1
+            }
+            None => return Err(LifecycleError::RequestCapacity),
+        };
         self.requests[slot] = Some(RequestState { id: request, frame });
         let row = self.frames[index].as_mut().unwrap();
         row.requests += 1;

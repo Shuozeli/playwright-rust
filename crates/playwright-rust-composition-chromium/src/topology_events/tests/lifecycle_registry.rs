@@ -38,6 +38,16 @@ fn registry(
     );
     (registry, ledger)
 }
+
+fn allocator_backed_registry() -> (Arc<FrameLifecycleRegistry>, ProductionResourceLedger) {
+    let profile = FrameLifecycleRegistryProfile::new_allocator_backed(96, 64).unwrap();
+    let requirements = profile.requirements();
+    let ledger = ProductionResourceLedger::new(exact_limits(requirements), requirements).unwrap();
+    let registry = Arc::new(
+        FrameLifecycleRegistry::new(profile, 1, &ledger, Arc::new(Clock), Arc::new(Sink)).unwrap(),
+    );
+    (registry, ledger)
+}
 async fn selected(registry: Arc<FrameLifecycleRegistry>) -> DriverFixture {
     let mut f = fixture(16);
     f.factory.client("target-a").set_frame_tree(frame_tree(
@@ -85,6 +95,58 @@ async fn close_first(f: &mut DriverFixture) {
         ))
         .unwrap();
     f.driver.receive_once(&f.runtime).await.unwrap();
+}
+
+#[test]
+fn allocator_backed_registry_retains_more_than_legacy_page_owner_count() {
+    // Arrange
+    let (registry, ledger) = allocator_backed_registry();
+    let epoch = ConnectionEpoch::new(1);
+    let mut topology = CdpTopology::new(
+        ObjectId::new(1),
+        epoch,
+        CdpTopologyLimits::new(300, 1, 129, 129, 0, 64),
+    )
+    .unwrap();
+    topology
+        .register_context(
+            epoch,
+            "context",
+            ObjectId::new(2),
+            CdpContextOwnership::Owned,
+        )
+        .unwrap();
+
+    // Act
+    for index in 0..129_u64 {
+        let page = ObjectId::new(3 + 2 * index);
+        let frame = ObjectId::new(4 + 2 * index);
+        topology
+            .attach_page(
+                epoch,
+                CdpPageTarget::new(
+                    format!("target-{index}"),
+                    format!("session-{index}"),
+                    "context",
+                ),
+                CdpPageObjectIds::new(page, frame),
+            )
+            .unwrap();
+        registry.prepare_page(&topology, page).unwrap();
+    }
+    let handles: Vec<_> = (0..129_u64)
+        .map(|index| {
+            registry
+                .page(ObjectId::new(3 + 2 * index))
+                .unwrap()
+                .unwrap()
+        })
+        .collect();
+
+    // Assert
+    assert_eq!(handles.len(), 129);
+    assert!(handles.iter().all(|handle| !handle.is_sealed()));
+    assert_eq!(ledger.metrics().unwrap().active_leases, 0);
 }
 
 #[tokio::test]

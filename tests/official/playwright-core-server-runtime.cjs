@@ -45,6 +45,12 @@ const proxyConfig = path.join(
   'config',
   'proxy.ts',
 );
+const thirdPartyCookies = path.join(
+  path.resolve(upstream),
+  'tests',
+  'library',
+  'browsercontext-cookies-third-party.spec.ts',
+);
 
 function sourcePath(value) {
   if (value instanceof URL) return value.protocol === 'file:' ? value.pathname : '';
@@ -56,7 +62,23 @@ function rewriteServerFixtures(source, enableCrossOriginForward) {
   const loopbackAfter = "loopback: [process.env.PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST, { scope: 'worker', option: true }],";
   if (!source.includes(loopbackBefore)) throw new Error('official server fixture loopback source drifted');
   source = source.replace(loopbackBefore, loopbackAfter);
-  if (!enableCrossOriginForward) return source;
+  if (!enableCrossOriginForward) {
+    const proxyBefore = '    const proxyServer = await TestProxy.create(proxyPort);';
+    const proxyAfter = `    const proxyServer = await TestProxy.create(proxyPort);
+
+    // A DNS root dot reaches the same full MagicDNS host while retaining the
+    // distinct Cookie domain that upstream gets from localhost vs 127.0.0.1.
+    for (const testServer of [server, httpsServer]) {
+      const crossProcessURL = new URL(testServer.CROSS_PROCESS_PREFIX);
+      crossProcessURL.hostname = \`\${crossProcessURL.hostname}.\`;
+      Object.defineProperty(testServer, 'CROSS_PROCESS_PREFIX', {
+        value: crossProcessURL.toString().replace(/\\/$/, ''),
+      });
+    }`;
+    if (!source.includes(proxyBefore))
+      throw new Error('official server fixture proxy source drifted');
+    return source.replace(proxyBefore, proxyAfter);
+  }
 
   const fixtureBefore = `    const proxyServer = await TestProxy.create(proxyPort);
 
@@ -106,6 +128,17 @@ function rewriteServerFixtures(source, enableCrossOriginForward) {
     }`;
   if (!source.includes(fixtureBefore)) throw new Error('official cross-origin server fixture source drifted');
   return source.replace(fixtureBefore, fixtureAfter);
+}
+
+function rewriteThirdPartyCookieSites(source) {
+  const labels = host.split('.');
+  if (labels.length < 2) throw new Error('official MagicDNS host has no tailnet suffix');
+  const site = labels.slice(1).join('.');
+  if (!source.includes("'https://localhost'") || !source.includes("'https://127.0.0.1'"))
+    throw new Error('official third-party cookie partition sites drifted');
+  return source
+    .replaceAll("'https://localhost'", `'https://${site}'`)
+    .replaceAll("'https://127.0.0.1'", `'https://${site}.'`);
 }
 
 async function startCrossOriginForward(targetPort) {
@@ -159,12 +192,15 @@ async function startCrossOriginForward(targetPort) {
 }
 
 function rewrite(pathname, value) {
-  if (pathname !== serverFixtures && pathname !== clientCertificates && pathname !== fetchProxy && pathname !== proxyConfig) return value;
+  if (pathname !== serverFixtures && pathname !== clientCertificates && pathname !== fetchProxy
+      && pathname !== proxyConfig && pathname !== thirdPartyCookies) return value;
   const buffer = Buffer.isBuffer(value);
   let source = buffer ? value.toString('utf8') : value;
   if (typeof source !== 'string') return value;
   if (pathname === serverFixtures) {
     source = rewriteServerFixtures(source, crossOriginForwardEnabled);
+  } else if (pathname === thirdPartyCookies) {
+    source = rewriteThirdPartyCookieSites(source);
   } else if (pathname === clientCertificates) {
     const before = "const host = options?.useFakeLocalhost ? 'local.playwright' : '127.0.0.1';";
     const after = 'const host = process.env.PLAYWRIGHT_RUST_OFFICIAL_SERVER_HOST!;';
@@ -228,4 +264,8 @@ fs.promises.readFile = async function playwrightRustOfficialPromiseReadFile(file
   return rewrite(sourcePath(file), await originalPromiseReadFile(file, ...args));
 };
 
-module.exports = { rewriteServerFixtures, startCrossOriginForward };
+module.exports = {
+  rewriteServerFixtures,
+  rewriteThirdPartyCookieSites,
+  startCrossOriginForward,
+};

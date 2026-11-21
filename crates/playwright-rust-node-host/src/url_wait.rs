@@ -14,9 +14,6 @@ use playwright_rust_core::{
 };
 use playwright_rust_plugin_chromium_frame_lifecycle::PageLifecycleHandle;
 
-const MAX_OPERATIONS: u64 = 8;
-const OPERATION_BYTES: u64 = 64 * 1024;
-const OPERATION_SCOPE: ResourceScope = ResourceScope::extension(129, 1);
 const SLOT_SCOPE: ResourceScope = ResourceScope::extension(129, 2);
 
 #[derive(Debug)]
@@ -33,13 +30,11 @@ impl<E> From<HostError> for UrlWaitError<E> {
 
 struct Slots {
     active: AtomicU64,
-    resources: ProductionResourceLedger,
     _lease: ResourceLease,
 }
 
 struct OperationPermit {
     owner: Arc<Slots>,
-    _storage: ResourceLease,
 }
 
 impl Drop for OperationPermit {
@@ -62,7 +57,6 @@ impl Slots {
             .map_err(HostError::backend)?;
         Ok(Arc::new(Self {
             active: AtomicU64::new(0),
-            resources: resources.clone(),
             _lease: lease,
         }))
     }
@@ -70,36 +64,12 @@ impl Slots {
     fn admit(self: &Arc<Self>) -> Result<OperationPermit, HostError> {
         self.active
             .fetch_update(Ordering::AcqRel, Ordering::Acquire, |active| {
-                (active < MAX_OPERATIONS).then_some(active + 1)
+                active.checked_add(1)
             })
-            .map_err(|_| {
-                HostError::ResourceExhausted(format!(
-                    "Page URL wait capacity exceeded ({MAX_OPERATIONS})"
-                ))
-            })?;
-        let storage = self
-            .resources
-            .claim(operation_requirements())
-            .map_err(HostError::backend)
-            .and_then(|ledger| {
-                ledger
-                    .reserve(
-                        OPERATION_SCOPE,
-                        ResourceClass::BackendStateBytes,
-                        OPERATION_BYTES,
-                    )
-                    .map_err(HostError::backend)
-            });
-        match storage {
-            Ok(storage) => Ok(OperationPermit {
-                owner: self.clone(),
-                _storage: storage,
-            }),
-            Err(error) => {
-                self.active.fetch_sub(1, Ordering::AcqRel);
-                Err(error)
-            }
-        }
+            .map_err(|_| HostError::ResourceExhausted("Page URL wait count overflow".into()))?;
+        Ok(OperationPermit {
+            owner: self.clone(),
+        })
     }
 }
 
@@ -114,18 +84,8 @@ const fn slot_requirements() -> ResourceRequirements {
         .with_metadata(1, 1)
 }
 
-const fn operation_requirements() -> ResourceRequirements {
-    ResourceRequirements::none()
-        .with_class(
-            ResourceClass::BackendStateBytes,
-            OPERATION_BYTES * MAX_OPERATIONS,
-            OPERATION_BYTES * MAX_OPERATIONS,
-        )
-        .with_metadata(1, MAX_OPERATIONS as usize)
-}
-
 pub(crate) fn requirements() -> ResourceRequirements {
-    operation_requirements().combine_concurrent(slot_requirements())
+    slot_requirements()
 }
 
 pub(crate) fn install(resources: &ProductionResourceLedger) -> Result<Installation, HostError> {
@@ -176,6 +136,58 @@ impl HostSession {
         let frame = parse_frame(frame_id)?;
         self.wait_for_frame_url(page_id, Some(frame), wait_until, timeout_ms, matches)
             .await
+    }
+
+    #[cfg(feature = "frame-expect-title")]
+    pub async fn frame_wait_for_title<E, M, F>(
+        &self,
+        page_id: &str,
+        frame_id: &str,
+        timeout_ms: u32,
+        mut matches: M,
+    ) -> Result<String, UrlWaitError<E>>
+    where
+        E: Send,
+        M: FnMut(String) -> F + Send,
+        F: Future<Output = Result<bool, E>> + Send,
+    {
+        let (_, _, _operation) = self.admit_operation(page_id)?;
+        let _permit = {
+            let state = self.state.lock().map_err(HostError::backend)?;
+            state
+                .as_ref()
+                .ok_or(HostError::TargetClosed)?
+                .url_wait
+                .slots
+                .admit()?
+        };
+        let frame = parse_frame(frame_id)?;
+        let page = self.frame_lifecycle(page_id).await?;
+        let deadline = (timeout_ms != 0)
+            .then(|| tokio::time::Instant::now() + Duration::from_millis(u64::from(timeout_ms)));
+        loop {
+            if page.is_sealed() || !self.is_connected() {
+                return Err(HostError::TargetClosed.into());
+            }
+            if deadline.is_some_and(|at| tokio::time::Instant::now() >= at) {
+                return Err(HostError::Timeout(timeout_ms).into());
+            }
+            let title = self.frame_title(&frame.get().to_string()).await?;
+            if matches(title.clone())
+                .await
+                .map_err(UrlWaitError::Matcher)?
+            {
+                return Ok(title);
+            }
+            tokio::select! {
+                biased;
+                () = self.stop.cancelled() => return Err(HostError::TargetClosed.into()),
+                () = self.disconnected.cancelled() => return Err(HostError::TargetClosed.into()),
+                () = page.closed() => return Err(HostError::TargetClosed.into()),
+                () = wait_deadline(deadline) => return Err(HostError::Timeout(timeout_ms).into()),
+                () = tokio::time::sleep(Duration::from_millis(50)) => {}
+            }
+        }
     }
 
     async fn wait_for_frame_url<E, M, F>(
@@ -306,21 +318,20 @@ mod tests {
     }
 
     #[test]
-    fn operation_capacity_is_fixed_and_reclaimed_on_drop() {
+    fn operation_admission_is_allocator_backed_and_reclaimed_on_drop() {
         // Arrange
         let resources = resources();
         let slots = Slots::new(&resources).unwrap();
-        let mut permits: Vec<_> = (0..MAX_OPERATIONS)
-            .map(|_| slots.admit().unwrap())
-            .collect();
+        let permits: Vec<_> = (0..129).map(|_| slots.admit().unwrap()).collect();
 
         // Act
-        let excess = slots.admit();
-        drop(permits.pop());
-        let reclaimed = slots.admit();
+        let additional = slots.admit();
 
         // Assert
-        assert!(matches!(excess, Err(HostError::ResourceExhausted(_))));
-        assert!(reclaimed.is_ok());
+        assert!(additional.is_ok());
+        assert_eq!(slots.active.load(Ordering::Acquire), 130);
+        drop(additional);
+        drop(permits);
+        assert_eq!(slots.active.load(Ordering::Acquire), 0);
     }
 }

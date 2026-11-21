@@ -5,6 +5,7 @@ use playwright_rust_composition_chromium::{ChromiumCloseCapacity, ChromiumCloseT
 pub(super) struct Capacity {
     owner: Arc<FrameTrees>,
     target: ChromiumCloseTarget,
+    allocator_backed: bool,
     reservations: Vec<LifecycleReservation>,
     notices: Vec<Notice>,
     storage: Storage,
@@ -15,24 +16,37 @@ impl Capacity {
         owner: Arc<FrameTrees>,
         target: ChromiumCloseTarget,
     ) -> Result<Self, HostError> {
-        // The FrameTrees and collection revision limits agree at sixteen Pages.
-        // Reserve future descendants too; do not derive capacity from today's view.
-        let maximum = match target {
-            ChromiumCloseTarget::Page(_) => 1,
-            ChromiumCloseTarget::BrowserContext(_) => super::super::PAGES + 1,
-        };
         let state = owner.state.lock().map_err(HostError::backend)?;
         if state.closed {
             return Err(HostError::TargetClosed);
         }
+        let allocator_backed = owner.factory.allocator_backed();
+        // Finite embedders retain their complete capacity before native close
+        // polling. The Playwright-compatible profile instead allocates exactly
+        // the observed close receipt; a dynamic Frame index has no honest
+        // artificial descendant maximum to predeclare.
+        let maximum = if allocator_backed {
+            0
+        } else {
+            match target {
+                ChromiumCloseTarget::Page(_) => 1,
+                ChromiumCloseTarget::BrowserContext(_) => super::super::FRAMES + 1,
+            }
+        };
         let storage = owner.factory.reserve_collection_storage(
             std::mem::size_of::<Self>()
                 + std::mem::size_of::<Prepared>()
                 + maximum
                     * (std::mem::size_of::<Notice>() + std::mem::size_of::<LifecycleReservation>()),
         )?;
-        let mut reservations = Vec::with_capacity(maximum);
-        let notices = Vec::with_capacity(maximum);
+        let mut reservations = Vec::new();
+        reservations
+            .try_reserve_exact(maximum)
+            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
+        let mut notices = Vec::new();
+        notices
+            .try_reserve_exact(maximum)
+            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
         for _ in 0..maximum {
             reservations.push(
                 owner
@@ -45,6 +59,7 @@ impl Capacity {
         Ok(Self {
             owner,
             target,
+            allocator_backed,
             reservations,
             notices,
             storage,
@@ -63,7 +78,8 @@ impl Capacity {
         let root = match self.target {
             ChromiumCloseTarget::Page(id) | ChromiumCloseTarget::BrowserContext(id) => id,
         };
-        let state = self.owner.state.lock().map_err(HostError::backend)?;
+        let owner = self.owner.clone();
+        let state = owner.state.lock().map_err(HostError::backend)?;
         if state.closed {
             return Err(HostError::TargetClosed);
         }
@@ -125,7 +141,10 @@ impl Capacity {
                     planned = planned
                         .with_visibility(member, false)
                         .map_err(HostError::backend)?;
-                    let reservation = self.reservations.pop().ok_or_else(capacity_exhausted)?;
+                    let reservation = self.reservation()?;
+                    self.notices
+                        .try_reserve(1)
+                        .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
                     self.notices.push(Notice {
                         member,
                         reservation,
@@ -136,7 +155,10 @@ impl Capacity {
                     planned = planned
                         .with_visibility(member, false)
                         .map_err(HostError::backend)?;
-                    let reservation = self.reservations.pop().ok_or_else(capacity_exhausted)?;
+                    let reservation = self.reservation()?;
+                    self.notices
+                        .try_reserve(1)
+                        .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
                     self.notices.push(Notice {
                         member,
                         reservation,
@@ -145,14 +167,25 @@ impl Capacity {
             }
         }
         drop(state);
-        // The envelope pre-admits both box layouts and both vector buffers.
-        // No new group or view storage is reserved in this short phase.
+        // Finite profiles pre-admit both box layouts and vector buffers. The
+        // allocator profile reserves exact notices from the observed receipt.
         Ok(Box::new(Prepared {
             owner: self.owner,
             before,
             notices: self.notices,
             _storage: self.storage,
         }))
+    }
+
+    fn reservation(&mut self) -> Result<LifecycleReservation, HostError> {
+        if self.allocator_backed {
+            self.owner
+                .urls
+                .publications()
+                .reserve_lifecycle(&self.owner.factory)
+        } else {
+            self.reservations.pop().ok_or_else(capacity_exhausted)
+        }
     }
 }
 

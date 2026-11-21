@@ -19,31 +19,28 @@ fn initialization_failures_latch_first_error_without_adding_duplicate_owners() {
 }
 
 #[test]
-fn initialization_failure_capacity_reclaims_only_retired_pages() {
+fn initialization_failures_grow_past_legacy_page_count_and_reclaim_retired_pages() {
     // Arrange
     let mut failures = InitializationFailures::new();
-    for id in 1..=MAX_FAILED_PAGES {
+    for id in 1..=129 {
         failures
-            .record(ObjectId::new(id as u64), HeaderSyntaxError::InvalidName)
+            .record(ObjectId::new(id), HeaderSyntaxError::InvalidName)
             .unwrap();
     }
-    let extra = ObjectId::new(100);
+    let extra = ObjectId::new(1_000);
     // Act
-    let rejected = failures.record(extra, HeaderSyntaxError::NonAsciiName);
-    // Assert
-    assert!(matches!(rejected, Err(HostError::ResourceExhausted(_))));
-    assert_eq!(failures.0.len(), MAX_FAILED_PAGES);
-    failures.retain(|id| id != ObjectId::new(1));
     failures
         .record(extra, HeaderSyntaxError::NonAsciiName)
         .unwrap();
+    failures.retain(|id| id != ObjectId::new(1));
+    // Assert
     assert_eq!(failures.get(ObjectId::new(1)), None);
     assert_eq!(
         failures.get(ObjectId::new(2)),
         Some(HeaderSyntaxError::InvalidName)
     );
     assert_eq!(failures.get(extra), Some(HeaderSyntaxError::NonAsciiName));
-    assert_eq!(failures.0.len(), MAX_FAILED_PAGES);
+    assert_eq!(failures.0.len(), 129);
 }
 
 #[test]
@@ -266,64 +263,37 @@ fn route_request_keeps_native_referrer_instead_of_adding_a_second_value() {
 }
 
 #[test]
-fn slot_admission_rejects_excess_without_incrementing_counter() {
-    // Arrange
-    let requests = AtomicUsize::new(MAX_REQUESTS);
-    // Act
-    let result = admit(&requests, MAX_REQUESTS);
-    // Assert
-    assert!(matches!(result, Err(HostError::ResourceExhausted(_))));
-    assert_eq!(requests.load(Ordering::Acquire), MAX_REQUESTS);
-}
-
-#[test]
-fn selected_allowances_cover_route_input_and_native_json_storage() {
+fn production_header_ownership_profiles_are_allocator_backed() {
     // Arrange
     let req = body_requirements();
-    let routes = MAX_ROUTES * std::mem::size_of::<Route>();
-    // Both plans share the same per-route watch, including its two waker slots.
-    let watches = MAX_ROUTES * session_retirement::route_bytes();
-    let inputs = MAX_HEADERS * std::mem::size_of::<HeaderRef<'static>>();
-    let plans = 2
-        * MAX_FAILED_PAGES
-        * std::mem::size_of::<(
-            ObjectId,
-            Option<playwright_rust_network_model::extra_headers::EffectiveHeaders>,
-        )>();
     // Act
-    let native_copy = HEADER_BYTES + MAX_HEADERS * 256 + 32 * 1024;
+    let values = value_profile().unwrap();
+    let settings = settings_profile().unwrap();
     // Assert
-    assert!(
-        2 * routes
-            + watches
-            + plans
-            + inputs
-            + native::plan_scratch_bytes()
-            + std::mem::size_of::<Request>()
-            + 16 * 1024
-            <= REQUEST_PLAN_BYTES
+    assert!(values.allocator_backed());
+    assert!(settings.allocator_backed());
+    assert_eq!(
+        values
+            .requirements()
+            .unwrap()
+            .class(ResourceClass::LiveObject)
+            .global,
+        0
     );
-    assert!(inputs + std::mem::size_of::<CreationHeaders>() + 16 * 1024 <= REQUEST_BYTES);
-    assert!(native_copy <= NATIVE_BYTES);
-    assert!(
-        req.class(ResourceClass::BackendStateBytes).global
-            >= (MAX_REQUESTS * REQUEST_BYTES + MAX_ROUTES * NATIVE_BYTES) as u64
-    );
+    assert!(req.class(ResourceClass::BackendStateBytes).global > 0);
 }
 
 #[test]
-fn selected_pool_covers_all_frozen_plans_and_overlapping_readers() {
-    // Arrange: deliberately overcount shared snapshots to bound unique owners.
+fn production_pool_grows_past_legacy_owner_count_and_reclaims_all_owners() {
+    // Arrange
     let resources = ledger();
     let pool = HeaderPool::new(value_profile().unwrap(), &resources).unwrap();
-    let required = 32 + MAX_REQUESTS * (18 + 16) + MAX_ROUTES + 1;
     // Act
-    let owners: Vec<_> = (0..required).map(|_| pool.page(&[]).unwrap()).collect();
-    let overflow = pool.page(&[]);
+    let owners: Vec<_> = (0..129).map(|_| pool.page(&[]).unwrap()).collect();
     // Assert
-    assert_eq!(required, MAX_VALUE_OWNERS);
-    assert!(matches!(overflow, Err(HeaderError::OwnerLimit)));
+    assert_eq!(pool.active_owners(), 129);
     drop(owners);
+    assert_eq!(pool.active_owners(), 0);
     drop(pool);
     for class in ResourceClass::ALL {
         assert_eq!(resources.metrics().unwrap().class(class).current, 0);
@@ -396,7 +366,7 @@ async fn production_rejection_precedes_held_compensation_and_drains_primary_sibl
                 &settings.lock().unwrap(),
                 vec![Route {
                     context,
-                    page,
+                    page: Some(page),
                     watch: session_retirement::Watch::new("session", "session", "target"),
                 }],
             )

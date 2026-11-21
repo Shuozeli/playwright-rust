@@ -9,48 +9,36 @@ use playwright_rust_backend_cdp_drag::{
 use playwright_rust_cdp::CdpClient;
 use playwright_rust_composition_chromium::ChromiumFrameWorldAccess;
 use playwright_rust_core::{
-    ObjectId, ProductionResourceLedger, ResourceClass, ResourceLease, ResourceRequirements,
-    ResourceScope,
+    ObjectId, ProductionResourceLedger, ResourceClass, ResourceLease, ResourceLimits,
+    ResourceRequirements, ResourceScope,
 };
 use std::{
     num::NonZeroUsize,
     sync::{Arc, Mutex},
 };
 
-const PAGES: usize = 32;
-pub(crate) const EVENT_SUBSCRIBERS: usize = PAGES;
-const WORLDS: usize = 32;
 const OPERATIONS: usize = crate::mouse::EXECUTING
     * playwright_rust_input_model::INPUT_MOUSE_MAX_CLICKS as usize
     + crate::keyboard::EXECUTING
     + crate::locator::keyboard::EXECUTING;
-const DISPATCHES: usize = crate::mouse::MAX_PENDING_COMMANDS
-    + crate::keyboard::EXECUTING
-    + crate::locator::keyboard::EXECUTING;
-const INVENTORY: ResourceScope = ResourceScope::extension(122, 1);
 const CONTROLLER: ResourceScope = ResourceScope::extension(122, 2);
 // Separate from reusable wrapper payloads. Native child futures, script/wire
 // argument trees and bounded errors remain host-owned provider allowances.
 const DATA_BYTES: usize = 256 * 1024;
-const PROVIDER_BYTES: u64 =
-    (WORLDS * (16 * 1024 + 16 * 1024) + OPERATIONS * (DATA_BYTES + 64 * 1024)) as u64;
+const PROVIDER_BYTES: u64 = (OPERATIONS * (DATA_BYTES + 64 * 1024)) as u64;
 fn controller_bytes() -> u64 {
     (std::mem::size_of::<PageController>() + 4096) as u64 + PROVIDER_BYTES
 }
-fn inventory_bytes() -> u64 {
-    (std::mem::size_of::<Installation>() + PAGES * std::mem::size_of::<Entry>() + 256) as u64
-}
 fn source_profile() -> Result<PageDragSourceProfile, HostError> {
-    PageDragSourceProfile::new(
+    PageDragSourceProfile::new_allocator_backed_worlds(
         ResourceScope::extension(122, 3),
         ResourceScope::extension(122, 4),
-        WORLDS,
         1,
     )
     .map_err(HostError::backend)
 }
 fn data_profile() -> Result<DragDataProfile, HostError> {
-    DragDataProfile::new(
+    DragDataProfile::new_allocator_backed_session(
         ResourceScope::extension(122, 5),
         DragDataLimits {
             items: 32,
@@ -62,24 +50,35 @@ fn data_profile() -> Result<DragDataProfile, HostError> {
     .map_err(HostError::backend)
 }
 pub(crate) fn requirements() -> Result<ResourceRequirements, HostError> {
-    let bytes = inventory_bytes() + PAGES as u64 * controller_bytes();
-    let mut required = ResourceRequirements::none()
-        .with_class(ResourceClass::BackendStateBytes, bytes, bytes)
-        .with_metadata(2, PAGES + 1);
-    let page = source_profile()?
-        .requirements()
-        .map_err(HostError::backend)?
-        .combine_concurrent(data_profile()?.requirements())
-        .combine_concurrent(DragListenerFactory::requirements(WORLDS).map_err(HostError::backend)?)
-        .combine_concurrent(DragCaptureFactory::requirements())
-        .combine_concurrent(DragPage::requirements(OPERATIONS).map_err(HostError::backend)?)
-        .combine_concurrent(
-            MouseDragDispatcher::requirements(DISPATCHES).map_err(HostError::backend)?,
-        );
-    for _ in 0..PAGES {
-        required = required.combine_concurrent(page);
+    Ok(ResourceRequirements::none())
+}
+fn controller_requirements() -> Result<ResourceRequirements, HostError> {
+    let storage = ResourceRequirements::none()
+        .with_class(
+            ResourceClass::BackendStateBytes,
+            controller_bytes(),
+            controller_bytes(),
+        )
+        .with_metadata(1, 1);
+    Ok(storage.combine_concurrent(
+        source_profile()?
+            .requirements()
+            .map_err(HostError::backend)?
+            .combine_concurrent(data_profile()?.requirements())
+            .combine_concurrent(DragListenerFactory::allocator_backed_requirements())
+            .combine_concurrent(DragCaptureFactory::requirements())
+            .combine_concurrent(DragPage::allocator_backed_requirements())
+            .combine_concurrent(MouseDragDispatcher::allocator_backed_requirements()),
+    ))
+}
+fn controller_resources() -> Result<ProductionResourceLedger, HostError> {
+    let requirements = controller_requirements()?;
+    let mut limits = ResourceLimits::deny_all(requirements.scopes, requirements.leases);
+    for class in ResourceClass::ALL {
+        let bound = requirements.class(class);
+        limits = limits.with_class(class, bound.global, bound.per_scope);
     }
-    Ok(required)
+    ProductionResourceLedger::new(limits, requirements).map_err(HostError::backend)
 }
 struct Entry {
     id: ObjectId,
@@ -87,16 +86,14 @@ struct Entry {
     controller: Arc<PageController>,
 }
 pub(crate) struct Installation {
-    pub(crate) locator_calls: std::sync::atomic::AtomicUsize,
     access: ChromiumFrameWorldAccess,
-    resources: ProductionResourceLedger,
     entries: Mutex<Vec<Entry>>,
-    _storage: ResourceLease,
 }
 pub(crate) struct PageController {
     pub(crate) dispatcher: Arc<MouseDragDispatcher>,
     page: DragPage,
     driver: tokio::sync::Mutex<MouseDragRetirementDriver>,
+    _resources: ProductionResourceLedger,
     _storage: ResourceLease,
 }
 impl PageController {
@@ -121,24 +118,11 @@ impl PageController {
 impl Installation {
     pub(crate) fn new(
         access: ChromiumFrameWorldAccess,
-        resources: &ProductionResourceLedger,
+        _resources: &ProductionResourceLedger,
     ) -> Result<Self, HostError> {
-        let ledger = resources
-            .claim(requirements()?)
-            .map_err(HostError::backend)?;
-        let storage = ledger
-            .reserve(
-                INVENTORY,
-                ResourceClass::BackendStateBytes,
-                inventory_bytes(),
-            )
-            .map_err(HostError::backend)?;
         Ok(Self {
-            locator_calls: std::sync::atomic::AtomicUsize::new(0),
             access,
-            resources: resources.clone(),
-            entries: Mutex::new(Vec::with_capacity(PAGES)),
-            _storage: storage,
+            entries: Mutex::new(Vec::new()),
         })
     }
     pub(crate) fn bind(
@@ -179,14 +163,10 @@ impl Installation {
                 index += 1;
             }
         }
-        if entries.len() >= PAGES {
-            return Err(HostError::ResourceExhausted(
-                "drag Page/session controller capacity exceeded".into(),
-            ));
-        }
-        let ledger = self
-            .resources
-            .claim(requirements()?)
+        entries.try_reserve(1).map_err(HostError::backend)?;
+        let resources = controller_resources()?;
+        let ledger = resources
+            .claim(controller_requirements()?)
             .map_err(HostError::backend)?;
         let storage = ledger
             .reserve(
@@ -198,29 +178,22 @@ impl Installation {
         let native = client.clone().retained_native_session().ok_or_else(|| {
             HostError::Backend("drag runtime requires the retained native session".into())
         })?;
-        let store =
-            DragDataStore::new(data_profile()?, &self.resources).map_err(HostError::backend)?;
+        let store = DragDataStore::new(data_profile()?, &resources).map_err(HostError::backend)?;
         let captures = DragCaptureFactory::new(
             native.clone(),
             store,
             ResourceScope::extension(122, 6),
-            &self.resources,
+            &resources,
         )
         .map_err(HostError::backend)?;
         let session = native
             .session_id()
             .ok_or_else(|| HostError::Backend("drag requires a Page session".into()))?;
-        if session.len() > 48 {
-            return Err(HostError::ResourceExhausted(
-                "drag listener namespace session ID exceeds 48 bytes".into(),
-            ));
-        }
         let namespace = format!("node-host-drag-{session}");
-        let listeners = DragListenerFactory::new(
+        let listeners = DragListenerFactory::new_allocator_backed(
             &namespace,
             ResourceScope::extension(122, 7),
-            WORLDS,
-            &self.resources,
+            &resources,
         )
         .map_err(HostError::backend)?;
         let source = Arc::new(
@@ -230,31 +203,30 @@ impl Installation {
                 listeners,
                 captures.clone(),
                 source_profile()?,
-                &self.resources,
+                &resources,
             )
             .map_err(HostError::backend)?,
         );
-        let page = DragPage::new(
+        let page = DragPage::new_allocator_backed(
             native,
             captures,
             ResourceScope::extension(122, 8),
-            OPERATIONS,
-            &self.resources,
+            &resources,
         )
         .map_err(HostError::backend)?;
-        let (dispatcher, driver) = MouseDragDispatcher::new(
+        let (dispatcher, driver) = MouseDragDispatcher::new_allocator_backed(
             client.clone(),
             page.clone(),
             source,
             ResourceScope::extension(122, 9),
-            DISPATCHES,
-            &self.resources,
+            &resources,
         )
         .map_err(HostError::backend)?;
         let controller = Arc::new(PageController {
             dispatcher: Arc::new(dispatcher),
             page,
             driver: tokio::sync::Mutex::new(driver),
+            _resources: resources,
             _storage: storage,
         });
         entries.push(Entry {
@@ -268,7 +240,8 @@ impl Installation {
         let mut first = None;
         // Mouse admission is sealed and all invocation workers have finished, so
         // the inventory cannot change. Never hold its std Mutex across await.
-        for index in 0..PAGES {
+        let mut index = 0;
+        loop {
             let controller = self
                 .entries
                 .lock()
@@ -281,7 +254,46 @@ impl Installation {
             if let Err(error) = controller.shutdown().await {
                 first.get_or_insert(error);
             }
+            index = index
+                .checked_add(1)
+                .ok_or_else(|| HostError::Backend("drag controller index overflow".into()))?;
         }
         first.map_or(Ok(()), Err)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn allocator_backed_controller_ownership_has_no_connection_count_plan() {
+        // Arrange
+        let mut controllers = Vec::new();
+        controllers.try_reserve(129).unwrap();
+
+        // Act
+        for _ in 0..129 {
+            let resources = controller_resources().unwrap();
+            let lease = resources
+                .claim(controller_requirements().unwrap())
+                .unwrap()
+                .reserve(
+                    CONTROLLER,
+                    ResourceClass::BackendStateBytes,
+                    controller_bytes(),
+                )
+                .unwrap();
+            controllers.push((resources, lease));
+        }
+
+        // Assert
+        assert_eq!(requirements().unwrap(), ResourceRequirements::none());
+        assert_eq!(controllers.len(), 129);
+        assert!(
+            controllers
+                .iter()
+                .all(|(resources, _)| { resources.metrics().unwrap().active_leases == 1 })
+        );
     }
 }

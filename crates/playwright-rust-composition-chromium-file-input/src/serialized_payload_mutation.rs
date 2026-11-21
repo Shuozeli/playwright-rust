@@ -122,6 +122,38 @@ impl<E: ReservedCleanupExecutor> SerializedPayloadMutationOperationService<E> {
         self.state.active.load(Ordering::Acquire)
     }
 
+    fn admit_owner(&self) -> Result<Owner, SerializedPayloadOperationError> {
+        if !self.is_cleanup_healthy() {
+            return Err(SerializedPayloadOperationError::Unhealthy);
+        }
+        self.state
+            .active
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |count| {
+                count
+                    .checked_add(1)
+                    .filter(|next| self.profile.allocator_backed || *next <= self.profile.capacity)
+            })
+            .map_err(|_| SerializedPayloadOperationError::Capacity)?;
+        let mut owner = Owner {
+            state: Arc::clone(&self.state),
+            lease: None,
+            armed: false,
+        };
+        if !self.profile.allocator_backed {
+            owner.lease = Some(self.ledger.reserve_many(
+                self.profile.scope,
+                &[
+                    ResourceRequest::new(ResourceClass::LiveObject, 1),
+                    ResourceRequest::new(
+                        ResourceClass::BackendStateBytes,
+                        self.profile.owner_bytes as u64,
+                    ),
+                ],
+            )?);
+        }
+        Ok(owner)
+    }
+
     /// Move the graph and exact validated owner into one operation. The
     /// retained value keeps the graph's external byte admission live through
     /// CDP settlement and terminal object-group release.
@@ -137,30 +169,7 @@ impl<E: ReservedCleanupExecutor> SerializedPayloadMutationOperationService<E> {
         retained: Retained,
     ) -> Result<SerializedPayloadMutationFuture<E::Reservation>, SerializedPayloadOperationError>
     {
-        if !self.is_cleanup_healthy() {
-            return Err(SerializedPayloadOperationError::Unhealthy);
-        }
-        self.state
-            .active
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |count| {
-                (count < self.profile.capacity).then(|| count + 1)
-            })
-            .map_err(|_| SerializedPayloadOperationError::Capacity)?;
-        let mut owner = Owner {
-            state: Arc::clone(&self.state),
-            lease: None,
-            armed: false,
-        };
-        owner.lease = Some(self.ledger.reserve_many(
-            self.profile.scope,
-            &[
-                ResourceRequest::new(ResourceClass::LiveObject, 1),
-                ResourceRequest::new(
-                    ResourceClass::BackendStateBytes,
-                    self.profile.owner_bytes as u64,
-                ),
-            ],
-        )?);
+        let mut owner = self.admit_owner()?;
         let reservation = self.cleanup.try_reserve()?;
         let backend = Arc::clone(&self.backend);
         let future = async move {

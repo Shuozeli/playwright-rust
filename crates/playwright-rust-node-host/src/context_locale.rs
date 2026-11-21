@@ -1,6 +1,6 @@
 //! Optional Context-scoped Chromium locale policy.
 //!
-//! Rust retains one bounded locale per owned Context and applies Playwright's
+//! Rust retains one locale string per owned Context in allocator-backed storage and applies Playwright's
 //! Chromium ICU locale override through the existing session-initialization
 //! fence before a Page or OOPIF is published. The sibling shared user-agent
 //! initializer composes this policy with device emulation's user agent so
@@ -13,8 +13,8 @@ use std::sync::{Arc, Mutex};
 use playwright_rust_backend_cdp_topology::CdpContextOwnership;
 use playwright_rust_cdp::{CdpConnection, connection::CdpError};
 use playwright_rust_core::{
-    ObjectId, ProductionResourceLedger, ResourceClass, ResourceLease, ResourceRequest,
-    ResourceRequirements, ResourceScope,
+    ObjectId, ProductionResourceLedger, ResourceClass, ResourceLease, ResourceRequirements,
+    ResourceScope,
 };
 use playwright_rust_plugin_chromium_session_initialization::{
     ChromiumSessionInitializationFuture, ChromiumSessionInitializationTarget,
@@ -23,9 +23,6 @@ use playwright_rust_plugin_chromium_session_initialization::{
 
 use crate::HostError;
 
-pub(crate) const MAX_CONTEXTS: usize = 16;
-pub(crate) const MAX_LOCALE_BYTES: usize = 256;
-const MAX_RETAINED_BYTES: u64 = (MAX_CONTEXTS * MAX_LOCALE_BYTES) as u64;
 const SCOPE: ResourceScope = ResourceScope::extension(183, 0);
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -33,21 +30,6 @@ pub struct ContextLocale(Box<str>);
 
 impl ContextLocale {
     pub fn new(value: String) -> Result<Self, HostError> {
-        if value.is_empty() {
-            return Err(HostError::InvalidArgument(
-                "BrowserContext locale must not be empty".into(),
-            ));
-        }
-        if value.len() > MAX_LOCALE_BYTES {
-            return Err(HostError::ResourceExhausted(format!(
-                "Context locale exceeds {MAX_LOCALE_BYTES} UTF-8 bytes"
-            )));
-        }
-        if value.chars().any(char::is_control) {
-            return Err(HostError::InvalidArgument(
-                "BrowserContext locale must not contain control characters".into(),
-            ));
-        }
         Ok(Self(value.into_boxed_str()))
     }
 
@@ -58,7 +40,6 @@ impl ContextLocale {
 
 pub(crate) struct StoredLocale {
     locale: ContextLocale,
-    _lease: ResourceLease,
 }
 
 impl StoredLocale {
@@ -79,26 +60,17 @@ struct State {
 }
 
 pub(crate) const fn requirements() -> ResourceRequirements {
-    let storage_bytes = (std::mem::size_of::<Installation>()
-        + std::mem::size_of::<State>()
-        + MAX_CONTEXTS * std::mem::size_of::<ContextEntry>()) as u64;
+    let storage_bytes = (std::mem::size_of::<Installation>() + std::mem::size_of::<State>()) as u64;
     ResourceRequirements::none()
-        .with_class(ResourceClass::EventItem, MAX_CONTEXTS as u64, 1)
-        .with_class(
-            ResourceClass::EventBytes,
-            MAX_RETAINED_BYTES,
-            MAX_LOCALE_BYTES as u64,
-        )
         .with_class(
             ResourceClass::BackendStateBytes,
             storage_bytes,
             storage_bytes,
         )
-        .with_metadata(MAX_CONTEXTS + 1, MAX_CONTEXTS * 3 + 1)
+        .with_metadata(1, 1)
 }
 
 pub(crate) struct Installation {
-    resources: playwright_rust_core::ResourceLedger,
     state: Mutex<State>,
     _storage: ResourceLease,
 }
@@ -117,34 +89,11 @@ impl Installation {
                 plan.class(ResourceClass::BackendStateBytes).global,
             )
             .map_err(HostError::backend)?;
-        let mut entries = Vec::new();
-        entries
-            .try_reserve_exact(MAX_CONTEXTS)
-            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
-        let default_locale = default_locale
-            .map(|locale| {
-                let bytes = u64::try_from(locale.as_str().len())
-                    .map_err(|_| HostError::ResourceExhausted("locale size overflow".into()))?;
-                let lease = ledger
-                    .reserve_many(
-                        SCOPE,
-                        &[
-                            ResourceRequest::new(ResourceClass::EventItem, 1),
-                            ResourceRequest::new(ResourceClass::EventBytes, bytes),
-                        ],
-                    )
-                    .map_err(HostError::backend)?;
-                Ok::<_, HostError>(Arc::new(StoredLocale {
-                    locale,
-                    _lease: lease,
-                }))
-            })
-            .transpose()?;
+        let default_locale = default_locale.map(|locale| Arc::new(StoredLocale { locale }));
         Ok(Arc::new(Self {
-            resources: ledger,
             state: Mutex::new(State {
                 default_locale,
-                entries,
+                entries: Vec::new(),
                 closed: false,
             }),
             _storage: storage,
@@ -165,33 +114,12 @@ impl Installation {
                 "locale is already installed for this Context".into(),
             ));
         }
-        let retained = state
-            .entries
-            .len()
-            .saturating_add(usize::from(state.default_locale.is_some()));
-        if retained >= MAX_CONTEXTS {
-            return Err(HostError::ResourceExhausted(format!(
-                "locale policy exceeds {MAX_CONTEXTS} live Contexts"
-            )));
-        }
-        let bytes = u64::try_from(locale.as_str().len())
-            .map_err(|_| HostError::ResourceExhausted("locale size overflow".into()))?;
-        let lease = self
-            .resources
-            .reserve_many(
-                ResourceScope::Object(context),
-                &[
-                    ResourceRequest::new(ResourceClass::EventItem, 1),
-                    ResourceRequest::new(ResourceClass::EventBytes, bytes),
-                ],
-            )
-            .map_err(HostError::backend)?;
+        state.entries.try_reserve(1).map_err(|error| {
+            HostError::ResourceExhausted(format!("locale policy allocation failed: {error}"))
+        })?;
         state.entries.push(ContextEntry {
             context,
-            locale: Arc::new(StoredLocale {
-                locale,
-                _lease: lease,
-            }),
+            locale: Arc::new(StoredLocale { locale }),
         });
         Ok(())
     }
@@ -268,7 +196,7 @@ impl<Downstream> Initializer<Downstream> {
         let Some(locale) = self.installation.locale(context, ownership)? else {
             return Ok(None);
         };
-        Ok(Some(locale_override_params(locale.as_str())))
+        Ok((!locale.as_str().is_empty()).then(|| locale_override_params(locale.as_str())))
     }
 }
 
@@ -419,26 +347,26 @@ mod tests {
     }
 
     #[test]
-    fn locale_rejects_empty_control_and_oversized_values() {
+    fn locale_defers_arbitrary_string_semantics_to_chromium() {
         // Arrange
-        let oversized = "x".repeat(MAX_LOCALE_BYTES + 1);
+        let large_input = "x".repeat(4096);
 
         // Act
         let empty = ContextLocale::new(String::new());
         let control = ContextLocale::new("en-US\n".to_owned());
-        let too_large = ContextLocale::new(oversized);
+        let large = ContextLocale::new(large_input.clone());
 
         // Assert
-        assert!(matches!(empty, Err(HostError::InvalidArgument(_))));
-        assert!(matches!(control, Err(HostError::InvalidArgument(_))));
-        assert!(matches!(too_large, Err(HostError::ResourceExhausted(_))));
+        assert_eq!(empty.unwrap().as_str(), "");
+        assert_eq!(control.unwrap().as_str(), "en-US\n");
+        assert_eq!(large.unwrap().as_str(), large_input);
     }
 
     #[test]
-    fn locale_rejects_more_than_the_fixed_context_capacity() {
+    fn locale_registry_grows_past_the_legacy_context_capacity() {
         // Arrange
         let installation = Installation::new_with_default(&resources(), None).unwrap();
-        for value in 1..=MAX_CONTEXTS {
+        for value in 1..=129 {
             installation
                 .install(
                     ObjectId::new(value as u64),
@@ -448,26 +376,23 @@ mod tests {
         }
 
         // Act
-        let error = installation
-            .install(
-                ObjectId::new((MAX_CONTEXTS + 1) as u64),
-                ContextLocale::new("fr-FR".to_owned()).unwrap(),
-            )
-            .unwrap_err();
+        let retained = installation
+            .locale(ObjectId::new(129), CdpContextOwnership::Owned)
+            .unwrap();
 
         // Assert
-        assert!(matches!(error, HostError::ResourceExhausted(_)));
+        assert_eq!(retained.unwrap().as_str(), "en-129");
     }
 
     #[test]
-    fn default_locale_counts_toward_the_fixed_context_capacity() {
+    fn default_locale_does_not_reduce_dynamic_context_capacity() {
         // Arrange
         let installation = Installation::new_with_default(
             &resources(),
             Some(ContextLocale::new("fr-FR".to_owned()).unwrap()),
         )
         .unwrap();
-        for value in 1..MAX_CONTEXTS {
+        for value in 1..=129 {
             installation
                 .install(
                     ObjectId::new(value as u64),
@@ -477,15 +402,12 @@ mod tests {
         }
 
         // Act
-        let error = installation
-            .install(
-                ObjectId::new(MAX_CONTEXTS as u64),
-                ContextLocale::new("de-DE".to_owned()).unwrap(),
-            )
-            .unwrap_err();
+        let retained = installation
+            .locale(ObjectId::new(129), CdpContextOwnership::Owned)
+            .unwrap();
 
         // Assert
-        assert!(matches!(error, HostError::ResourceExhausted(_)));
+        assert_eq!(retained.unwrap().as_str(), "en-129");
     }
 
     #[test]

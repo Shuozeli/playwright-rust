@@ -19,7 +19,18 @@ use serde_json::Value;
 use crate::{NativeSession, binding_error, boundary};
 
 const MAX_PORTABLE_ID_BYTES: usize = 20;
-const MAX_CDP_METHOD_BYTES: usize = 256;
+fn input_allowance(method_bytes: usize, params_bytes: usize) -> Result<u64, HostError> {
+    [method_bytes, params_bytes]
+        .into_iter()
+        .try_fold(boundary::SMALL_ALLOWANCE, |total, length| {
+            let length = u64::try_from(length).map_err(|_| {
+                HostError::ResourceExhausted("CDP input byte length overflow".into())
+            })?;
+            total.checked_add(length).ok_or_else(|| {
+                HostError::ResourceExhausted("CDP input byte allowance overflow".into())
+            })
+        })
+}
 
 /// Decode a JS BigInt directly to one word, without allocating an unbounded
 /// `Vec` for a caller-supplied BigInt before FFI admission.
@@ -128,18 +139,11 @@ pub struct NativeCdpEventBatch {
 impl NativeCdpEventBatch {
     #[napi]
     pub fn peek(&self) -> napi::Result<Option<(String, Value)>> {
-        self.batch
+        Ok(self
+            .batch
             .peek()
             .map_err(binding_error)?
-            .map(|event| {
-                if !event.params.is_object() {
-                    return Err(binding_error(HostError::Backend(
-                        "CDP event parameters are not an object".into(),
-                    )));
-                }
-                Ok((event.method, event.params))
-            })
-            .transpose()
+            .map(|event| (event.method, event.params)))
     }
 
     #[napi]
@@ -191,16 +195,14 @@ impl NativeSession {
         method: JsString<'_>,
         params_json: JsString<'_>,
     ) -> napi::Result<PromiseRaw<'env, Unknown<'env>>> {
+        let allowance =
+            input_allowance(method.utf8_len()?, params_json.utf8_len()?).map_err(binding_error)?;
         let execution = self
             .ffi
-            .admit(FfiLane::Command, boundary::READ_ALLOWANCE)
+            .admit(FfiLane::Command, allowance)
             .map_err(binding_error)?;
-        let method = boundary::bounded_string(method, MAX_CDP_METHOD_BYTES, "CDP method")?;
-        let params_json = boundary::bounded_string(
-            params_json,
-            validation::MAX_CDP_PARAMS_JSON_BYTES,
-            "CDP params JSON",
-        )?;
+        let method = method.into_utf8()?.into_owned()?;
+        let params_json = params_json.into_utf8()?.into_owned()?;
         let params = validation::parse_params_json(&params_json).map_err(binding_error)?;
         let token = token.0;
         let host = Arc::clone(&self.host);

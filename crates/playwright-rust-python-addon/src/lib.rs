@@ -30,8 +30,6 @@ use std::str::FromStr;
 use std::sync::Weak;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-#[cfg(feature = "owned-process-startup")]
-use std::time::Duration;
 #[cfg(any(
     feature = "playwright-server-initialize",
     feature = "playwright-server-connect-session"
@@ -42,6 +40,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use playwright_rust_cap_navigation::WaitUntil as FrameWaitUntil;
 #[cfg(feature = "persistent-context")]
 use playwright_rust_node_host::ChromiumPersistentProfile;
+#[cfg(feature = "service-worker-events")]
+use playwright_rust_node_host::ServiceWorkerNotice;
 #[cfg(feature = "worker-console-events")]
 use playwright_rust_node_host::WorkerConsoleNotice;
 #[cfg(feature = "context-cookies")]
@@ -103,8 +103,8 @@ use playwright_rust_node_host::network_events::{
 use playwright_rust_node_host::screenshot::{ScreenshotFormat, ScreenshotOptions, ScreenshotScale};
 #[cfg(feature = "selector-registration")]
 use playwright_rust_node_host::selector_registry::{
-    MAX_SELECTOR_ENGINE_NAME_BYTES, MAX_SELECTOR_ENGINE_SOURCE_BYTES, MAX_SELECTOR_ENGINES,
-    MAX_SELECTOR_REGISTRY_BYTES, MAX_TEST_ID_ATTRIBUTE_BYTES, SelectorRegistry,
+    MAX_SELECTOR_ENGINE_NAME_BYTES, MAX_SELECTOR_ENGINE_SOURCE_BYTES, MAX_SELECTOR_REGISTRY_BYTES,
+    MAX_TEST_ID_ATTRIBUTE_BYTES, SelectorRegistry,
 };
 #[cfg(feature = "touchscreen-input")]
 use playwright_rust_node_host::touchscreen::{
@@ -164,16 +164,11 @@ mod handles;
 #[cfg(feature = "page-select-option")]
 mod page_select_option;
 
-const NATIVE_ABI_VERSION: u32 = 131;
-const MAX_SESSIONS: usize = 16;
+const NATIVE_ABI_VERSION: u32 = 141;
 const SMALL_ALLOWANCE: u64 = 32 * 1024;
 const READ_ALLOWANCE: u64 = 1024 * 1024 + 4096;
 const NAVIGATION_ALLOWANCE: u64 = 256 * 1024;
 const ACTION_ALLOWANCE: u64 = 6 * 1024 * 1024;
-#[cfg(feature = "cdp-session")]
-const MAX_CDP_EVENT_PYTHON_DEPTH: usize = 64;
-#[cfg(feature = "cdp-session")]
-const MAX_CDP_EVENT_PYTHON_NODES: usize = 65_536;
 #[cfg(feature = "extra-headers")]
 const EXTRA_HEADERS_ALLOWANCE: u64 = 512 * 1024;
 #[cfg(feature = "extra-headers")]
@@ -202,8 +197,6 @@ fn validate_new_context_headers(headers: &[(String, String)]) -> Result<(), Host
 }
 #[cfg(feature = "fresh-launch")]
 const FRESH_LAUNCH_ALLOWANCE: u64 = 512 * 1024;
-#[cfg(feature = "owned-process-startup")]
-const OWNED_PROCESS_STARTUP_ALLOWANCE: u64 = 64 * 1024;
 #[cfg(any(
     feature = "playwright-server-initialize",
     feature = "playwright-server-connect-session"
@@ -474,6 +467,7 @@ type PythonGeolocation = (f64, f64, f64);
 type PythonHttpCredentials = (String, String, Option<String>, bool);
 #[cfg(feature = "persistent-context")]
 type PythonPersistentMediaOptions = (Option<String>, Option<String>, Option<String>);
+type PythonVideoOptions = (String, String, u32, u32);
 #[cfg(feature = "persistent-context")]
 type PythonPersistentExtraHeaders = Vec<(String, String)>;
 #[cfg(feature = "persistent-context")]
@@ -481,7 +475,7 @@ type PythonPersistentContextPolicies = (
     Option<String>,
     Option<String>,
     Option<PythonGeolocation>,
-    bool,
+    Vec<String>,
     Option<PythonHttpCredentials>,
     bool,
     bool,
@@ -494,6 +488,7 @@ type PythonPersistentLaunchOptions = (
     PythonPersistentContextPolicies,
     Option<PythonDeviceOptions>,
     Option<PythonPersistentMediaOptions>,
+    Option<PythonVideoOptions>,
     Option<PythonPersistentExtraHeaders>,
     Vec<String>,
     Option<String>,
@@ -748,7 +743,6 @@ fn element_click_options(options: &Bound<'_, PyDict>) -> PyResult<ClickOptionsV2
 #[cfg(any(
     feature = "persistent-context",
     feature = "fresh-launch",
-    feature = "owned-process-startup",
     feature = "playwright-server-initialize",
     feature = "playwright-server-connect-session"
 ))]
@@ -822,6 +816,99 @@ fn bounded_string(value: &str, maximum: usize, field: &str) -> PyResult<String> 
         ))));
     }
     Ok(value.to_owned())
+}
+
+#[cfg(any(
+    feature = "context-locale",
+    feature = "persistent-context-locale",
+    feature = "context-timezone",
+    feature = "persistent-context-timezone"
+))]
+fn string_input_allowance(base: u64, length: usize, operation: &str, field: &str) -> PyResult<u64> {
+    let length = u64::try_from(length).map_err(|_| {
+        binding_error(HostError::ResourceExhausted(format!(
+            "{operation} {field} input byte length overflow"
+        )))
+    })?;
+    base.checked_add(length).ok_or_else(|| {
+        binding_error(HostError::ResourceExhausted(format!(
+            "{operation} {field} FFI input byte allowance overflow"
+        )))
+    })
+}
+
+#[cfg(feature = "init-scripts")]
+fn init_script_input_allowance(identifier: &str, source: &str) -> PyResult<u64> {
+    [identifier.len(), source.len()]
+        .into_iter()
+        .try_fold(SMALL_ALLOWANCE, |total, length| {
+            let length = u64::try_from(length).map_err(|_| {
+                binding_error(HostError::ResourceExhausted(
+                    "init-script FFI input byte length overflow".into(),
+                ))
+            })?;
+            total.checked_add(length).ok_or_else(|| {
+                binding_error(HostError::ResourceExhausted(
+                    "init-script FFI input byte allowance overflow".into(),
+                ))
+            })
+        })
+}
+
+#[cfg(feature = "cdp-session")]
+fn cdp_session_input_allowance(method: &str, params_json: &str) -> PyResult<u64> {
+    [method.len(), params_json.len()]
+        .into_iter()
+        .try_fold(SMALL_ALLOWANCE, |total, length| {
+            let length = u64::try_from(length).map_err(|_| {
+                binding_error(HostError::ResourceExhausted(
+                    "CDP input byte length overflow".into(),
+                ))
+            })?;
+            total.checked_add(length).ok_or_else(|| {
+                binding_error(HostError::ResourceExhausted(
+                    "CDP input byte allowance overflow".into(),
+                ))
+            })
+        })
+}
+
+#[cfg(feature = "har-replay")]
+fn har_input_allowance(path: &str, pattern: Option<&str>) -> PyResult<u64> {
+    let path_bytes = u64::try_from(path.len()).map_err(|_| {
+        binding_error(HostError::ResourceExhausted(
+            "HAR path byte length overflow".into(),
+        ))
+    })?;
+    let pattern_bytes = u64::try_from(pattern.map(str::len).unwrap_or(0)).map_err(|_| {
+        binding_error(HostError::ResourceExhausted(
+            "HAR URL filter byte length overflow".into(),
+        ))
+    })?;
+    SMALL_ALLOWANCE
+        .checked_add(path_bytes)
+        .and_then(|value| value.checked_add(pattern_bytes))
+        .ok_or_else(|| {
+            binding_error(HostError::ResourceExhausted(
+                "HAR FFI input byte allowance overflow".into(),
+            ))
+        })
+}
+
+#[cfg(feature = "har-recording-regexp")]
+fn har_regexp_input_allowance(path: &str, source: &str, flags: &str) -> PyResult<u64> {
+    let flags_bytes = u64::try_from(flags.len()).map_err(|_| {
+        binding_error(HostError::ResourceExhausted(
+            "HAR RegExp flags byte length overflow".into(),
+        ))
+    })?;
+    har_input_allowance(path, Some(source))?
+        .checked_add(flags_bytes)
+        .ok_or_else(|| {
+            binding_error(HostError::ResourceExhausted(
+                "HAR RegExp FFI input byte allowance overflow".into(),
+            ))
+        })
 }
 
 #[cfg(feature = "cdp-handshake-headers")]
@@ -1534,9 +1621,6 @@ fn selected_features() -> Vec<&'static str> {
     if cfg!(feature = "fresh-launch") {
         features.push("fresh-launch");
     }
-    if cfg!(feature = "owned-process-startup") {
-        features.push("owned-process-startup");
-    }
     if cfg!(feature = "playwright-server-initialize") {
         features.push("playwright-server-initialize");
     }
@@ -1590,6 +1674,9 @@ fn selected_features() -> Vec<&'static str> {
     }
     if cfg!(feature = "persistent-context-javascript-disabled") {
         features.push("persistent-context-javascript-disabled");
+    }
+    if cfg!(feature = "video-recording") {
+        features.push("video-recording");
     }
     if cfg!(feature = "context-cookies") {
         features.push("context-cookies");
@@ -1654,6 +1741,9 @@ fn selected_features() -> Vec<&'static str> {
     if cfg!(feature = "frame-events") {
         features.push("frame-events");
     }
+    if cfg!(feature = "frame-detach-events") {
+        features.push("frame-detach-events");
+    }
     if cfg!(feature = "console-events") {
         features.push("console-events");
     }
@@ -1695,6 +1785,12 @@ fn selected_features() -> Vec<&'static str> {
     }
     if cfg!(feature = "har-replay") {
         features.push("har-replay");
+    }
+    if cfg!(feature = "har-recording") {
+        features.push("har-recording");
+    }
+    if cfg!(feature = "har-recording-regexp") {
+        features.push("har-recording-regexp");
     }
     if cfg!(feature = "wait-for-function") {
         features.push("wait-for-function");
@@ -1855,6 +1951,9 @@ fn selected_features() -> Vec<&'static str> {
     if cfg!(feature = "worker-events") {
         features.push("worker-events");
     }
+    if cfg!(feature = "service-worker-events") {
+        features.push("service-worker-events");
+    }
     if cfg!(feature = "worker-handle-evaluation") {
         features.push("worker-handle-evaluation");
     }
@@ -1910,111 +2009,33 @@ fn build_profile() -> String {
 #[pyfunction]
 fn resource_limits() -> BTreeMap<&'static str, u64> {
     let limits = BTreeMap::from([
-        ("sessions", MAX_SESSIONS as u64),
         ("connects", 16),
-        ("commands", 32),
         ("closes", 16),
         ("watches", MAX_FFI_WATCHES as u64),
         ("request_history_items_per_page", 100),
         ("request_history_owners", 4096),
         ("request_history_owners_per_page", 256),
-        ("device_contexts", 16),
         ("device_context_bytes", 64 * 1024),
-        ("locale_contexts", 16),
-        ("locale_bytes_per_context", 256),
-        ("timezone_contexts", 16),
-        ("timezone_bytes_per_context", 256),
-        ("offline_contexts", 16),
-        ("geolocation_contexts", 16),
-        ("geolocation_permission_contexts", 16),
-        ("http_credential_contexts", 16),
         ("http_credential_field_bytes", 64 * 1024),
         ("persistent_launch_arguments", 256),
         ("persistent_launch_argument_bytes", 1024 * 1024),
-        ("ignore_https_error_contexts", 16),
-        ("bypass_csp_contexts", 16),
-        ("javascript_disabled_contexts", 16),
-        (
-            "screenshot_bytes",
-            playwright_rust_node_host::screenshot::MAX_BYTES as u64,
-        ),
-        (
-            "screenshot_concurrent_captures",
-            playwright_rust_node_host::screenshot::MAX_CONCURRENT_CAPTURES as u64,
-        ),
-        ("selector_engines", 64),
         ("selector_engine_name_bytes", 64),
         ("selector_engine_source_bytes", 1024 * 1024),
         ("selector_registry_bytes", 8 * 1024 * 1024),
         ("test_id_attribute_bytes", 1024),
-        ("request_size_owners", 64),
-        ("request_event_contexts", 16),
         ("request_event_notices", 256),
         ("request_event_bytes", 16 * 1024 * 1024),
-        ("response_event_contexts", 16),
         ("response_event_notices", 256),
         ("response_event_bytes", 16 * 1024 * 1024),
         ("response_finished_owners", 256),
         ("response_finished_bytes", 64 * 1024),
-        ("download_contexts", 16),
-        ("download_owners", 64),
         ("download_notices", 64),
         ("download_path_bytes", 4096),
-        ("worker_owners", 64),
         ("worker_notices", 128),
         ("worker_url_bytes", 1024 * 1024),
         ("worker_concurrent_evaluations", 8),
-        ("worker_console_notices", 128),
-        ("worker_console_bytes", 16 * 1024 * 1024),
         ("reserved_bytes", 64 * 1024 * 1024),
     ]);
-    #[cfg(feature = "cdp-session")]
-    let limits = {
-        let mut limits = limits;
-        limits.insert(
-            "cdp_sessions",
-            playwright_rust_node_host::MAX_CDP_SESSIONS as u64,
-        );
-        limits.insert(
-            "cdp_session_events",
-            playwright_rust_node_host::MAX_CDP_SESSION_EVENTS as u64,
-        );
-        limits.insert(
-            "cdp_session_event_bytes",
-            playwright_rust_node_host::MAX_CDP_SESSION_EVENT_BYTES as u64,
-        );
-        limits
-    };
-    #[cfg(feature = "page-pdf")]
-    let limits = {
-        let mut limits = limits;
-        limits.insert(
-            "pdf_bytes",
-            playwright_rust_node_host::page_pdf::MAX_BYTES as u64,
-        );
-        limits.insert(
-            "pdf_concurrent_captures",
-            playwright_rust_node_host::page_pdf::MAX_CONCURRENT_CAPTURES as u64,
-        );
-        limits
-    };
-    #[cfg(feature = "har-replay")]
-    let limits = {
-        let mut limits = limits;
-        limits.insert(
-            "har_replay_archive_bytes",
-            playwright_rust_node_host::MAX_HAR_REPLAY_ARCHIVE_BYTES as u64,
-        );
-        limits.insert(
-            "har_replay_archives",
-            playwright_rust_node_host::MAX_HAR_REPLAY_ARCHIVES as u64,
-        );
-        limits.insert(
-            "har_replay_retained_bytes",
-            playwright_rust_node_host::MAX_HAR_REPLAY_RETAINED_BYTES as u64,
-        );
-        limits
-    };
     #[cfg(feature = "page-routes")]
     let limits = {
         let mut limits = limits;
@@ -2083,10 +2104,6 @@ fn resource_limits() -> BTreeMap<&'static str, u64> {
     let limits = {
         let mut limits = limits;
         limits.insert(
-            "page_viewport_pages",
-            playwright_rust_node_host::page_viewport::profile::PAGES as u64,
-        );
-        limits.insert(
             "page_viewport_bytes",
             playwright_rust_node_host::page_viewport::profile::BYTES,
         );
@@ -2117,10 +2134,6 @@ fn resource_limits() -> BTreeMap<&'static str, u64> {
     let limits = {
         let mut limits = limits;
         limits.insert(
-            "wait_for_timeout_operations",
-            playwright_rust_node_host::wait_for_timeout::profile::OPERATIONS,
-        );
-        limits.insert(
             "wait_for_timeout_bytes",
             playwright_rust_node_host::wait_for_timeout::profile::BYTES,
         );
@@ -2129,10 +2142,6 @@ fn resource_limits() -> BTreeMap<&'static str, u64> {
     #[cfg(feature = "worker-handle-evaluation")]
     let limits = {
         let mut limits = limits;
-        limits.insert(
-            "worker_handles",
-            playwright_rust_node_host::worker_handles::MAX_WORKER_HANDLES as u64,
-        );
         limits.insert(
             "worker_handle_concurrent_calls",
             playwright_rust_node_host::worker_handles::MAX_CONCURRENT_WORKER_HANDLE_CALLS as u64,
@@ -2205,7 +2214,7 @@ impl EnvironmentOwner {
             cleanup: Mutex::new(CleanupReport::default()),
             ffi: FfiBudget::new(FfiLimits {
                 connects: 16,
-                commands: 32,
+                commands: usize::MAX,
                 closes: 16,
                 watches: MAX_FFI_WATCHES,
                 reserved_bytes: 64 * 1024 * 1024,
@@ -2233,22 +2242,7 @@ impl EnvironmentOwner {
                 .upgrade()
                 .is_some_and(|session| session.is_connected())
         });
-        let remote_count = {
-            #[cfg(feature = "playwright-server-connect-session")]
-            {
-                state.remote_sessions.len()
-            }
-            #[cfg(not(feature = "playwright-server-connect-session"))]
-            {
-                0
-            }
-        };
-        if state.sessions.len() + remote_count + state.pending >= MAX_SESSIONS {
-            return Err(HostError::ResourceExhausted(
-                "Python environment session capacity exceeded (16)".into(),
-            ));
-        }
-        state.pending += 1;
+        playwright_rust_node_host::session_admission::admit_pending(&mut state.pending, "Python")?;
         Ok(Admission {
             owner: Arc::clone(self),
             pending: true,
@@ -2663,7 +2657,6 @@ impl NativeEnvironment {
         }
         #[cfg(feature = "selector-registration")]
         {
-            debug_assert_eq!(MAX_SELECTOR_ENGINES, 64);
             debug_assert_eq!(MAX_SELECTOR_ENGINE_NAME_BYTES, 64);
             debug_assert_eq!(MAX_SELECTOR_ENGINE_SOURCE_BYTES, 1024 * 1024);
             debug_assert_eq!(MAX_SELECTOR_REGISTRY_BYTES, 8 * 1024 * 1024);
@@ -2798,76 +2791,6 @@ impl NativeEnvironment {
         })
     }
 
-    #[cfg(feature = "owned-process-startup")]
-    #[pyo3(signature = (engine, executable_path, timeout_ms=30_000))]
-    fn observe_nonchromium_startup<'py>(
-        &self,
-        py: Python<'py>,
-        engine: &str,
-        executable_path: &str,
-        timeout_ms: u32,
-    ) -> PyResult<Bound<'py, PyAny>> {
-        let webkit = match engine {
-            "firefox" => false,
-            "webkit" => true,
-            _ => {
-                return Err(binding_error(HostError::InvalidArgument(
-                    "startup observation supports only Firefox or WebKit".into(),
-                )));
-            }
-        };
-        let mut execution = self
-            .owner
-            .ffi
-            .admit(FfiLane::Connect, OWNED_PROCESS_STARTUP_ALLOWANCE)
-            .map_err(binding_error)?;
-        let executable_path =
-            bounded_string(executable_path, MAX_PATH_BYTES, "browser executable path")?;
-        let admission = self.owner.admit().map_err(binding_error)?;
-        let owner = Arc::clone(&self.owner);
-        let future = async move {
-            let _admission = admission;
-            tokio::select! {
-                biased;
-                () = owner.stopped.cancelled() => Err(HostError::TargetClosed),
-                observed = playwright_rust_owned_process_startup::observe_explicit_exit(
-                    Path::new(&executable_path),
-                    &[],
-                    Duration::from_millis(u64::from(timeout_ms)),
-                ) => observed.map_err(backend_host_error),
-            }
-        };
-        execution
-            .reserve_future(std::mem::size_of_val(&future))
-            .map_err(binding_error)?;
-        pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let ticket = execution.run(future).await;
-            let outcome = ticket.deliver(|outcome| outcome).map_err(binding_error)?;
-            let result: PyResult<()> = match outcome.map_err(binding_error)? {
-                playwright_rust_owned_process_startup::StartupObservation::ExitedBeforeReady(status) => {
-                    let detail = status.code().map_or_else(
-                        || "signal termination".to_owned(),
-                        |code| format!("exit code {code}"),
-                    );
-                    let message = format!(
-                        "BrowserType.launch: explicit executable exited before browser protocol was ready ({detail})"
-                    );
-                    if webkit {
-                        Err(TargetClosedError::new_err(message))
-                    } else {
-                        Err(Error::new_err(message))
-                    }
-                }
-                playwright_rust_owned_process_startup::StartupObservation::RunningWithoutProtocol => {
-                    Err(UnsupportedError::new_err(
-                        "BrowserType.launch: Firefox/WebKit protocol is not installed; the explicitly launched process was stopped after the bounded startup probe",
-                    ))
-                }
-            };
-            result
-        })
-    }
-
     #[cfg(feature = "playwright-server-initialize")]
     #[pyo3(signature = (endpoint_url, timeout_ms=30_000))]
     fn observe_playwright_server_initialize<'py>(
@@ -2971,7 +2894,7 @@ impl NativeEnvironment {
                 "BrowserType.connect timeout must be between 1 and 120000 milliseconds".into(),
             )));
         }
-        if !matches!(browser_name, "chromium" | "firefox" | "webkit") {
+        if browser_name != "chromium" {
             return Err(binding_error(HostError::InvalidArgument(
                 "BrowserType.connect browser name is unsupported".into(),
             )));
@@ -3174,23 +3097,13 @@ impl NativeEnvironment {
         headless: bool,
         options: PythonPersistentLaunchOptions,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let mut execution = self
-            .owner
-            .ffi
-            .admit(FfiLane::Connect, PERSISTENT_LAUNCH_ALLOWANCE)
-            .map_err(binding_error)?;
-        let user_data_dir = bounded_string(
-            user_data_dir,
-            MAX_PATH_BYTES,
-            "persistent Chromium user-data directory",
-        )?;
         let (
             base_url,
             (
                 locale,
                 timezone_id,
                 geolocation,
-                geolocation_permission,
+                permissions,
                 http_credentials,
                 ignore_https_errors,
                 offline,
@@ -3199,12 +3112,39 @@ impl NativeEnvironment {
             ),
             device,
             media,
+            video,
             extra_headers,
             launch_arguments,
             executable_path,
             channel,
             timeout_ms,
         ) = options;
+        #[cfg(feature = "persistent-context-locale")]
+        let launch_allowance = string_input_allowance(
+            PERSISTENT_LAUNCH_ALLOWANCE,
+            locale.as_ref().map(String::len).unwrap_or(0),
+            "persistent Context launch",
+            "locale",
+        )?;
+        #[cfg(not(feature = "persistent-context-locale"))]
+        let launch_allowance = PERSISTENT_LAUNCH_ALLOWANCE;
+        #[cfg(feature = "persistent-context-timezone")]
+        let launch_allowance = string_input_allowance(
+            launch_allowance,
+            timezone_id.as_ref().map(String::len).unwrap_or(0),
+            "persistent Context launch",
+            "timezone_id",
+        )?;
+        let mut execution = self
+            .owner
+            .ffi
+            .admit(FfiLane::Connect, launch_allowance)
+            .map_err(binding_error)?;
+        let user_data_dir = bounded_string(
+            user_data_dir,
+            MAX_PATH_BYTES,
+            "persistent Chromium user-data directory",
+        )?;
         let executable_path = executable_path
             .as_deref()
             .map(|value| bounded_string(value, MAX_PATH_BYTES, "Chromium executable path"))
@@ -3220,9 +3160,7 @@ impl NativeEnvironment {
         #[cfg(feature = "persistent-context-locale")]
         let locale = locale
             .map(|value| {
-                bounded_string(&value, 256, "locale").and_then(|value| {
-                    playwright_rust_node_host::ContextLocale::new(value).map_err(binding_error)
-                })
+                playwright_rust_node_host::ContextLocale::new(value).map_err(binding_error)
             })
             .transpose()?;
         #[cfg(not(feature = "persistent-context-locale"))]
@@ -3234,9 +3172,7 @@ impl NativeEnvironment {
         #[cfg(feature = "persistent-context-timezone")]
         let timezone = timezone_id
             .map(|value| {
-                bounded_string(&value, 256, "timezone_id").and_then(|value| {
-                    playwright_rust_node_host::ContextTimezone::new(value).map_err(binding_error)
-                })
+                playwright_rust_node_host::ContextTimezone::new(value).map_err(binding_error)
             })
             .transpose()?;
         #[cfg(not(feature = "persistent-context-timezone"))]
@@ -3259,11 +3195,14 @@ impl NativeEnvironment {
             )));
         }
         #[cfg(not(feature = "persistent-context-geolocation-permission"))]
-        if geolocation_permission {
+        if !permissions.is_empty() {
             return Err(binding_error(HostError::UnsupportedOperation(
-                "persistent Context geolocation permission capability is not installed".into(),
+                "persistent Context permissions capability is not installed".into(),
             )));
         }
+        #[cfg(feature = "persistent-context-geolocation-permission")]
+        let permissions = playwright_rust_node_host::ContextPermissions::new(permissions)
+            .map_err(binding_error)?;
         #[cfg(feature = "persistent-context-http-credentials")]
         let http_credentials = http_credentials
             .map(|(username, password, origin, send_always)| {
@@ -3342,6 +3281,26 @@ impl NativeEnvironment {
                 "persistent Context media emulation capability is not installed".into(),
             )));
         }
+        #[cfg(feature = "video-recording")]
+        let video = video
+            .map(|(directory, ffmpeg, width, height)| {
+                let directory = bounded_string(&directory, MAX_PATH_BYTES, "record_video_dir")?;
+                let ffmpeg = bounded_string(&ffmpeg, MAX_PATH_BYTES, "FFmpeg executable path")?;
+                playwright_rust_node_host::PersistentContextVideoOptions::new(
+                    directory.into(),
+                    ffmpeg.into(),
+                    width,
+                    height,
+                )
+                .map_err(binding_error)
+            })
+            .transpose()?;
+        #[cfg(not(feature = "video-recording"))]
+        if video.is_some() {
+            return Err(binding_error(HostError::UnsupportedOperation(
+                "persistent Context video-recording capability is not installed".into(),
+            )));
+        }
         #[cfg(feature = "persistent-context-extra-headers")]
         let extra_headers = extra_headers
             .map(playwright_rust_node_host::PersistentContextExtraHeaders::new)
@@ -3393,7 +3352,8 @@ impl NativeEnvironment {
                     feature = "persistent-context-emulate-media",
                     feature = "persistent-context-extra-headers",
                     feature = "persistent-context-bypass-csp",
-                    feature = "persistent-context-javascript-disabled"
+                    feature = "persistent-context-javascript-disabled",
+                    feature = "video-recording"
                 ))]
                 let context_defaults =
                     playwright_rust_node_host::PersistentContextDefaults::default();
@@ -3406,8 +3366,7 @@ impl NativeEnvironment {
                 #[cfg(feature = "persistent-context-geolocation")]
                 let context_defaults = context_defaults.with_geolocation(geolocation);
                 #[cfg(feature = "persistent-context-geolocation-permission")]
-                let context_defaults =
-                    context_defaults.with_geolocation_permission(geolocation_permission);
+                let context_defaults = context_defaults.with_permissions(permissions);
                 #[cfg(feature = "persistent-context-http-credentials")]
                 let context_defaults = context_defaults.with_http_credentials(http_credentials);
                 #[cfg(feature = "persistent-context-device-emulation")]
@@ -3424,6 +3383,8 @@ impl NativeEnvironment {
                 #[cfg(feature = "persistent-context-javascript-disabled")]
                 let context_defaults =
                     context_defaults.with_javascript_disabled(!javascript_enabled);
+                #[cfg(feature = "video-recording")]
+                let context_defaults = context_defaults.with_video(video);
                 #[cfg(any(
                     feature = "persistent-context-locale",
                     feature = "persistent-context-timezone",
@@ -3437,7 +3398,8 @@ impl NativeEnvironment {
                     feature = "persistent-context-emulate-media",
                     feature = "persistent-context-extra-headers",
                     feature = "persistent-context-bypass-csp",
-                    feature = "persistent-context-javascript-disabled"
+                    feature = "persistent-context-javascript-disabled",
+                    feature = "video-recording"
                 ))]
                 let launch = HostSession::launch_persistent_chromium_with_lifecycle_events_and_context_defaults(
                         executable,
@@ -3462,7 +3424,8 @@ impl NativeEnvironment {
                     feature = "persistent-context-emulate-media",
                     feature = "persistent-context-extra-headers",
                     feature = "persistent-context-bypass-csp",
-                    feature = "persistent-context-javascript-disabled"
+                    feature = "persistent-context-javascript-disabled",
+                    feature = "video-recording"
                 )))]
                 let launch = HostSession::launch_persistent_chromium_with_lifecycle_events(
                     executable,
@@ -3990,7 +3953,7 @@ struct NativeCdpEventBatch {
 #[cfg(feature = "cdp-session")]
 #[pymethods]
 impl NativeCdpEventBatch {
-    fn peek(&self, py: Python<'_>) -> PyResult<Option<(String, Py<PyDict>)>> {
+    fn peek(&self, py: Python<'_>) -> PyResult<Option<(String, Py<PyAny>)>> {
         self.batch
             .peek()
             .map_err(binding_error)?
@@ -4210,13 +4173,16 @@ fn lifecycle_descriptor(
     py: Python<'_>,
     view: LifecycleNoticeView<'_>,
 ) -> PyResult<LifecycleDescriptor> {
-    #[cfg(feature = "frame-events")]
+    #[cfg(any(feature = "frame-events", feature = "frame-detach-events"))]
     let frame_id = match &view.notice {
+        #[cfg(feature = "frame-events")]
         LifecycleNotice::PageFrameAttached { frame, .. }
         | LifecycleNotice::PageFrameNavigated { frame, .. } => Some(frame.get().to_string()),
+        #[cfg(feature = "frame-detach-events")]
+        LifecycleNotice::PageFrameDetached { frame, .. } => Some(frame.get().to_string()),
         _ => None,
     };
-    #[cfg(not(feature = "frame-events"))]
+    #[cfg(not(any(feature = "frame-events", feature = "frame-detach-events")))]
     let frame_id: Option<String> = None;
     let (kind, context, page, opener, error, console, dialog, file_chooser) = match &view.notice {
         LifecycleNotice::PageClose { context, page } => (
@@ -4328,6 +4294,17 @@ fn lifecycle_descriptor(
         #[cfg(feature = "frame-events")]
         LifecycleNotice::PageFrameNavigated { context, page, .. } => (
             12,
+            *context,
+            Some(*page),
+            None,
+            None,
+            None,
+            DialogDescriptor::None,
+            FileChooserDescriptor::None,
+        ),
+        #[cfg(feature = "frame-detach-events")]
+        LifecycleNotice::PageFrameDetached { context, page, .. } => (
+            13,
             *context,
             Some(*page),
             None,
@@ -6879,28 +6856,18 @@ impl NativeSession {
         method: &str,
         params_json: &str,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let method = bounded_string(method, 256, "CDP method")?;
-        if method.is_empty() {
-            return Err(binding_error(HostError::InvalidArgument(
-                "CDP method must be nonempty".into(),
-            )));
-        }
-        let params_json = bounded_string(params_json, 1024 * 1024, "CDP params JSON")?;
-        let params: serde_json::Value = serde_json::from_str(&params_json).map_err(|error| {
+        let allowance = cdp_session_input_allowance(method, params_json)?;
+        let method = method.to_owned();
+        let params: serde_json::Value = serde_json::from_str(params_json).map_err(|error| {
             binding_error(HostError::InvalidArgument(format!(
                 "CDP params are not valid JSON: {error}"
             )))
         })?;
-        if !params.is_object() {
-            return Err(binding_error(HostError::InvalidArgument(
-                "CDP params must be a JSON object".into(),
-            )));
-        }
         let host = Arc::clone(&self.host);
         self.async_command(
             py,
             FfiLane::Command,
-            READ_ALLOWANCE,
+            allowance,
             async move { host.cdp_session_send(token, &method, params).await },
             |py, result| json_value_to_python(py, &result),
         )
@@ -8134,6 +8101,98 @@ impl NativeSession {
         )))
     }
 
+    #[cfg(feature = "video-recording")]
+    fn page_video_path<'py>(&self, py: Python<'py>, page_id: &str) -> PyResult<Bound<'py, PyAny>> {
+        let page_id = bounded_string(page_id, MAX_OBJECT_ID_BYTES, "Page ID")?;
+        let host = Arc::clone(&self.host);
+        self.async_command(
+            py,
+            FfiLane::Command,
+            SMALL_ALLOWANCE,
+            async move {
+                host.page_video_path(&page_id)
+                    .await?
+                    .into_os_string()
+                    .into_string()
+                    .map_err(|_| HostError::Backend("video path is not valid Unicode".into()))
+            },
+            |py, path| Ok(path.into_pyobject(py)?.into_any().unbind()),
+        )
+    }
+
+    #[cfg(not(feature = "video-recording"))]
+    fn page_video_path<'py>(
+        &self,
+        _py: Python<'py>,
+        _page_id: &str,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        Err(binding_error(HostError::UnsupportedOperation(
+            "Page.video capability is not installed".into(),
+        )))
+    }
+
+    #[cfg(feature = "video-recording")]
+    fn page_video_save_as<'py>(
+        &self,
+        py: Python<'py>,
+        page_id: &str,
+        destination: &str,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let page_id = bounded_string(page_id, MAX_OBJECT_ID_BYTES, "Page ID")?;
+        let destination = bounded_string(destination, MAX_PATH_BYTES, "Video.save_as path")?;
+        let host = Arc::clone(&self.host);
+        self.async_command(
+            py,
+            FfiLane::Command,
+            SMALL_ALLOWANCE + MAX_PATH_BYTES as u64,
+            async move {
+                host.page_video_save_as(&page_id, Path::new(&destination))
+                    .await
+            },
+            |py, ()| Ok(py.None()),
+        )
+    }
+
+    #[cfg(not(feature = "video-recording"))]
+    fn page_video_save_as<'py>(
+        &self,
+        _py: Python<'py>,
+        _page_id: &str,
+        _destination: &str,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        Err(binding_error(HostError::UnsupportedOperation(
+            "Page.video capability is not installed".into(),
+        )))
+    }
+
+    #[cfg(feature = "video-recording")]
+    fn page_video_delete<'py>(
+        &self,
+        py: Python<'py>,
+        page_id: &str,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let page_id = bounded_string(page_id, MAX_OBJECT_ID_BYTES, "Page ID")?;
+        let host = Arc::clone(&self.host);
+        self.async_command(
+            py,
+            FfiLane::Command,
+            SMALL_ALLOWANCE,
+            async move { host.page_video_delete(&page_id).await },
+            |py, ()| Ok(py.None()),
+        )
+    }
+
+    #[cfg(not(feature = "video-recording"))]
+    fn page_video_delete<'py>(
+        &self,
+        _py: Python<'py>,
+        _page_id: &str,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        Err(binding_error(HostError::UnsupportedOperation(
+            "Page.video capability is not installed".into(),
+        )))
+    }
+
     #[cfg(feature = "page-pdf")]
     #[pyo3(signature = (page_id, path=None, tagged=false, outline=false))]
     fn page_pdf<'py>(
@@ -8157,11 +8216,25 @@ impl NativeSession {
                 let output = host
                     .page_pdf(
                         &page_id,
-                        playwright_rust_node_host::page_pdf::PdfOptions { tagged, outline },
-                        30_000,
+                        playwright_rust_node_host::page_pdf::PdfOptions {
+                            tagged,
+                            outline,
+                            ..Default::default()
+                        },
                     )
                     .await?;
                 if let Some(path) = path {
+                    let path = std::path::PathBuf::from(path);
+                    if let Some(parent) = path
+                        .parent()
+                        .filter(|parent| !parent.as_os_str().is_empty())
+                    {
+                        tokio::fs::create_dir_all(parent).await.map_err(|error| {
+                            HostError::Backend(format!(
+                                "Page.pdf could not create output directory: {error}"
+                            ))
+                        })?;
+                    }
                     tokio::fs::write(path, output.as_bytes())
                         .await
                         .map_err(|error| {
@@ -8246,7 +8319,7 @@ impl NativeSession {
         )))
     }
 
-    #[pyo3(signature = (base_url=None, device=None, locale=None, timezone_id=None, geolocation=None, geolocation_permission=false, http_credentials=None, ignore_https_errors=false, offline=false, bypass_csp=false, javascript_enabled=true, accept_downloads=false, block_service_workers=false, forced_colors=None, strict_selectors=false, *, extra_http_headers=None))]
+    #[pyo3(signature = (base_url=None, device=None, locale=None, timezone_id=None, geolocation=None, permissions=None, http_credentials=None, ignore_https_errors=false, offline=false, bypass_csp=false, javascript_enabled=true, accept_downloads=false, block_service_workers=false, forced_colors=None, strict_selectors=false, *, extra_http_headers=None, video=None))]
     #[allow(clippy::too_many_arguments)]
     fn new_context<'py>(
         &self,
@@ -8256,7 +8329,7 @@ impl NativeSession {
         locale: Option<&str>,
         timezone_id: Option<&str>,
         geolocation: Option<PythonGeolocation>,
-        geolocation_permission: bool,
+        permissions: Option<Vec<String>>,
         http_credentials: Option<PythonHttpCredentials>,
         ignore_https_errors: bool,
         offline: bool,
@@ -8267,7 +8340,12 @@ impl NativeSession {
         forced_colors: Option<&str>,
         strict_selectors: bool,
         extra_http_headers: Option<Vec<(String, String)>>,
+        video: Option<PythonVideoOptions>,
     ) -> PyResult<Bound<'py, PyAny>> {
+        #[cfg(feature = "context-locale")]
+        let locale_input_bytes = locale.map(str::len).unwrap_or(0);
+        #[cfg(feature = "context-timezone")]
+        let timezone_input_bytes = timezone_id.map(str::len).unwrap_or(0);
         let base_url = base_url
             .map(|value| bounded_string(value, MAX_URL_BYTES, "base_url"))
             .transpose()?;
@@ -8292,9 +8370,8 @@ impl NativeSession {
         #[cfg(feature = "context-locale")]
         let locale = locale
             .map(|value| {
-                bounded_string(value, 256, "locale").and_then(|value| {
-                    playwright_rust_node_host::ContextLocale::new(value).map_err(binding_error)
-                })
+                playwright_rust_node_host::ContextLocale::new(value.to_owned())
+                    .map_err(binding_error)
             })
             .transpose()?;
         #[cfg(not(feature = "context-locale"))]
@@ -8306,9 +8383,8 @@ impl NativeSession {
         #[cfg(feature = "context-timezone")]
         let timezone = timezone_id
             .map(|value| {
-                bounded_string(value, 256, "timezone_id").and_then(|value| {
-                    playwright_rust_node_host::ContextTimezone::new(value).map_err(binding_error)
-                })
+                playwright_rust_node_host::ContextTimezone::new(value.to_owned())
+                    .map_err(binding_error)
             })
             .transpose()?;
         #[cfg(not(feature = "context-timezone"))]
@@ -8330,12 +8406,16 @@ impl NativeSession {
                 "Context geolocation capability is not installed".into(),
             )));
         }
+        let permissions = permissions.unwrap_or_default();
         #[cfg(not(feature = "context-geolocation-permission"))]
-        if geolocation_permission {
+        if !permissions.is_empty() {
             return Err(binding_error(HostError::UnsupportedOperation(
-                "Context geolocation permission capability is not installed".into(),
+                "Context permissions capability is not installed".into(),
             )));
         }
+        #[cfg(feature = "context-geolocation-permission")]
+        let permissions = playwright_rust_node_host::ContextPermissions::new(permissions)
+            .map_err(binding_error)?;
         #[cfg(feature = "context-http-credentials")]
         let http_credentials = http_credentials
             .map(|(username, password, origin, send_always)| {
@@ -8421,6 +8501,26 @@ impl NativeSession {
                 "service-worker policy capability is not installed".into(),
             )));
         }
+        #[cfg(feature = "video-recording")]
+        let video = video
+            .map(|(directory, ffmpeg, width, height)| {
+                let directory = bounded_string(&directory, MAX_PATH_BYTES, "record_video_dir")?;
+                let ffmpeg = bounded_string(&ffmpeg, MAX_PATH_BYTES, "FFmpeg executable path")?;
+                playwright_rust_node_host::PersistentContextVideoOptions::new(
+                    directory.into(),
+                    ffmpeg.into(),
+                    width,
+                    height,
+                )
+                .map_err(binding_error)
+            })
+            .transpose()?;
+        #[cfg(not(feature = "video-recording"))]
+        if video.is_some() {
+            return Err(binding_error(HostError::UnsupportedOperation(
+                "Browser.new_context video-recording capability is not installed".into(),
+            )));
+        }
         let host = Arc::clone(&self.host);
         #[cfg(feature = "context-strict-selectors")]
         let context_strict_selectors = Arc::clone(&self.context_strict_selectors);
@@ -8432,6 +8532,20 @@ impl NativeSession {
         };
         #[cfg(not(feature = "extra-headers"))]
         let creation_allowance = SMALL_ALLOWANCE;
+        #[cfg(feature = "context-locale")]
+        let creation_allowance = string_input_allowance(
+            creation_allowance,
+            locale_input_bytes,
+            "Context creation",
+            "locale",
+        )?;
+        #[cfg(feature = "context-timezone")]
+        let creation_allowance = string_input_allowance(
+            creation_allowance,
+            timezone_input_bytes,
+            "Context creation",
+            "timezone_id",
+        )?;
         self.async_command(
             py,
             FfiLane::Command,
@@ -8469,7 +8583,7 @@ impl NativeSession {
                 #[cfg(feature = "context-geolocation")]
                 let policies = policies.with_geolocation(geolocation);
                 #[cfg(feature = "context-geolocation-permission")]
-                let policies = policies.with_geolocation_permission(geolocation_permission);
+                let policies = policies.with_permissions(permissions);
                 #[cfg(feature = "context-http-credentials")]
                 let policies = policies.with_http_credentials(http_credentials);
                 #[cfg(all(
@@ -8709,6 +8823,17 @@ impl NativeSession {
                     }
                     return Err(primary);
                 }
+                #[cfg(feature = "video-recording")]
+                if let Some(video) = video
+                    && let Err(primary) = host.install_context_video(&context.id, video)
+                {
+                    if let Err(cleanup) = host.close_context(&context.id).await {
+                        return Err(HostError::Backend(format!(
+                            "video recording installation failed: {primary}; Context cleanup failed: {cleanup}"
+                        )));
+                    }
+                    return Err(primary);
+                }
                 Ok(context)
             },
             |py, context| {
@@ -8746,16 +8871,13 @@ impl NativeSession {
         source: &str,
     ) -> PyResult<Bound<'py, PyAny>> {
         let page_id = bounded_string(page_id, MAX_OBJECT_ID_BYTES, "Page ID")?;
-        let source = bounded_string(
-            source,
-            playwright_rust_node_host::init_scripts::MAX_SOURCE_BYTES,
-            "init script",
-        )?;
+        let allowance = init_script_input_allowance(&page_id, source)?;
+        let source = source.to_owned();
         let host = Arc::clone(&self.host);
         self.async_command(
             py,
             FfiLane::Command,
-            SMALL_ALLOWANCE,
+            allowance,
             async move { host.page_add_init_script(&page_id, source).await },
             |py, ()| Ok(py.None()),
         )
@@ -8781,16 +8903,13 @@ impl NativeSession {
         source: &str,
     ) -> PyResult<Bound<'py, PyAny>> {
         let context_id = bounded_string(context_id, MAX_OBJECT_ID_BYTES, "Context ID")?;
-        let source = bounded_string(
-            source,
-            playwright_rust_node_host::init_scripts::MAX_SOURCE_BYTES,
-            "init script",
-        )?;
+        let allowance = init_script_input_allowance(&context_id, source)?;
+        let source = source.to_owned();
         let host = Arc::clone(&self.host);
         self.async_command(
             py,
             FfiLane::Command,
-            SMALL_ALLOWANCE,
+            allowance,
             async move { host.context_add_init_script(&context_id, source).await },
             |py, ()| Ok(py.None()),
         )
@@ -8927,6 +9046,130 @@ impl NativeSession {
     ) -> PyResult<Bound<'py, PyAny>> {
         Err(binding_error(HostError::UnsupportedOperation(
             "BrowserContext.set_offline capability is not installed".into(),
+        )))
+    }
+
+    #[cfg(feature = "context-geolocation")]
+    fn set_context_geolocation<'py>(
+        &self,
+        py: Python<'py>,
+        context_id: &str,
+        geolocation: Option<PythonGeolocation>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let context_id = bounded_string(context_id, MAX_OBJECT_ID_BYTES, "Context ID")?;
+        let geolocation = geolocation
+            .map(|(longitude, latitude, accuracy)| {
+                playwright_rust_node_host::ContextGeolocation::new(longitude, latitude, accuracy)
+            })
+            .transpose()
+            .map_err(binding_error)?;
+        let host = Arc::clone(&self.host);
+        self.async_command(
+            py,
+            FfiLane::Command,
+            SMALL_ALLOWANCE,
+            async move { host.set_context_geolocation(&context_id, geolocation).await },
+            |py, ()| Ok(py.None()),
+        )
+    }
+
+    #[cfg(not(feature = "context-geolocation"))]
+    fn set_context_geolocation<'py>(
+        &self,
+        _py: Python<'py>,
+        _context_id: &str,
+        _geolocation: Option<PythonGeolocation>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        Err(binding_error(HostError::UnsupportedOperation(
+            "BrowserContext.set_geolocation capability is not installed".into(),
+        )))
+    }
+
+    #[cfg(feature = "context-geolocation-permission")]
+    fn grant_context_permissions<'py>(
+        &self,
+        py: Python<'py>,
+        context_id: &str,
+        permissions: Vec<String>,
+        origin: Option<&str>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let context_id = bounded_string(context_id, MAX_OBJECT_ID_BYTES, "Context ID")?;
+        let origin = origin
+            .map(|value| bounded_string(value, MAX_URL_BYTES, "permission origin"))
+            .transpose()?;
+        let input_bytes = permissions
+            .iter()
+            .try_fold(0usize, |total, permission| {
+                total.checked_add(permission.len())
+            })
+            .and_then(|total| total.checked_add(origin.as_ref().map_or(0, String::len)))
+            .ok_or_else(|| {
+                binding_error(HostError::ResourceExhausted(
+                    "permission input byte size overflow".into(),
+                ))
+            })?;
+        let allowance = SMALL_ALLOWANCE
+            .checked_add(u64::try_from(input_bytes).map_err(|_| {
+                binding_error(HostError::ResourceExhausted(
+                    "permission input exceeds the platform byte range".into(),
+                ))
+            })?)
+            .ok_or_else(|| {
+                binding_error(HostError::ResourceExhausted(
+                    "permission input allowance overflow".into(),
+                ))
+            })?;
+        let host = Arc::clone(&self.host);
+        self.async_command(
+            py,
+            FfiLane::Command,
+            allowance,
+            async move {
+                host.grant_context_permissions(&context_id, &permissions, origin.as_deref())
+                    .await
+            },
+            |py, ()| Ok(py.None()),
+        )
+    }
+
+    #[cfg(not(feature = "context-geolocation-permission"))]
+    fn grant_context_permissions<'py>(
+        &self,
+        _py: Python<'py>,
+        _context_id: &str,
+        _permissions: Vec<String>,
+        _origin: Option<&str>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        Err(binding_error(HostError::UnsupportedOperation(
+            "BrowserContext.grant_permissions capability is not installed".into(),
+        )))
+    }
+
+    #[cfg(feature = "context-geolocation-permission")]
+    fn clear_context_permissions<'py>(
+        &self,
+        py: Python<'py>,
+        context_id: &str,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let context_id = bounded_string(context_id, MAX_OBJECT_ID_BYTES, "Context ID")?;
+        let host = Arc::clone(&self.host);
+        self.async_command(
+            py,
+            FfiLane::Command,
+            SMALL_ALLOWANCE,
+            async move { host.clear_context_permissions(&context_id).await },
+            |py, ()| Ok(py.None()),
+        )
+    }
+
+    #[cfg(not(feature = "context-geolocation-permission"))]
+    fn clear_context_permissions<'py>(
+        &self,
+        _py: Python<'py>,
+        _context_id: &str,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        Err(binding_error(HostError::UnsupportedOperation(
+            "BrowserContext.clear_permissions capability is not installed".into(),
         )))
     }
 
@@ -9470,10 +9713,9 @@ impl NativeSession {
         let context_id = bounded_string(context_id, MAX_OBJECT_ID_BYTES, "Context ID")?;
         #[cfg(feature = "context-strict-selectors")]
         {
-            return self
-                .context_strict_selectors
+            self.context_strict_selectors
                 .resolve(&context_id, strict)
-                .map_err(binding_error);
+                .map_err(binding_error)
         }
         #[cfg(not(feature = "context-strict-selectors"))]
         {
@@ -10957,6 +11199,8 @@ impl NativeSession {
     }
 
     #[cfg(feature = "har-replay")]
+    #[allow(clippy::too_many_arguments)] // Public FFI shape mirrors Playwright HAR options.
+    #[pyo3(signature = (page_id, path, pattern=None, not_found=None, update=false, update_content=None, update_mode=None))]
     fn page_route_from_har<'py>(
         &self,
         py: Python<'py>,
@@ -10964,22 +11208,60 @@ impl NativeSession {
         path: &str,
         pattern: Option<&str>,
         not_found: Option<&str>,
+        update: bool,
+        update_content: Option<&str>,
+        update_mode: Option<&str>,
     ) -> PyResult<Bound<'py, PyAny>> {
         let page_id = bounded_string(page_id, MAX_OBJECT_ID_BYTES, "Page ID")?;
-        let path = bounded_string(path, 4 * 1024, "HAR path")?;
-        let pattern = pattern
-            .map(|value| bounded_string(value, 4 * 1024, "HAR route pattern"))
-            .transpose()?;
+        let allowance = har_input_allowance(path, pattern)?;
+        let path = path.to_owned();
+        let pattern = pattern.map(str::to_owned);
         let not_found = playwright_rust_node_host::HarNotFoundAction::parse(not_found)
             .map_err(binding_error)?;
+        #[cfg(not(feature = "har-recording"))]
+        let _ = (update_content, update_mode);
+        #[cfg(feature = "har-recording")]
+        let update_content = match update_content.unwrap_or("attach") {
+            "attach" => playwright_rust_node_host::HarUpdateContent::Attach,
+            "embed" => playwright_rust_node_host::HarUpdateContent::Embed,
+            value => {
+                return Err(binding_error(HostError::InvalidArgument(format!(
+                    "unsupported route_from_har update_content value {value:?}"
+                ))));
+            }
+        };
+        #[cfg(feature = "har-recording")]
+        let update_mode = match update_mode.unwrap_or("minimal") {
+            "full" => playwright_rust_node_host::HarUpdateMode::Full,
+            "minimal" => playwright_rust_node_host::HarUpdateMode::Minimal,
+            value => {
+                return Err(binding_error(HostError::InvalidArgument(format!(
+                    "unsupported route_from_har update_mode value {value:?}"
+                ))));
+            }
+        };
         let host = Arc::clone(&self.host);
         self.async_command(
             py,
             FfiLane::Command,
-            SMALL_ALLOWANCE,
+            allowance,
             async move {
-                host.page_route_from_har(&page_id, &path, pattern, not_found)
-                    .await
+                if update {
+                    #[cfg(feature = "har-recording")]
+                    {
+                        host.page_record_har(&page_id, &path, pattern, update_content, update_mode)
+                            .await
+                    }
+                    #[cfg(not(feature = "har-recording"))]
+                    {
+                        Err(HostError::UnsupportedOperation(
+                            "Page.route_from_har(update=True) is not installed".into(),
+                        ))
+                    }
+                } else {
+                    host.page_route_from_har(&page_id, &path, pattern, not_found)
+                        .await
+                }
             },
             |py, registration| {
                 Ok(registration
@@ -10992,6 +11274,8 @@ impl NativeSession {
     }
 
     #[cfg(feature = "har-replay")]
+    #[allow(clippy::too_many_arguments)] // Public FFI shape mirrors Playwright HAR options.
+    #[pyo3(signature = (context_id, path, pattern=None, not_found=None, update=false, update_content=None, update_mode=None))]
     fn context_route_from_har<'py>(
         &self,
         py: Python<'py>,
@@ -10999,21 +11283,120 @@ impl NativeSession {
         path: &str,
         pattern: Option<&str>,
         not_found: Option<&str>,
+        update: bool,
+        update_content: Option<&str>,
+        update_mode: Option<&str>,
     ) -> PyResult<Bound<'py, PyAny>> {
         let context_id = bounded_string(context_id, MAX_OBJECT_ID_BYTES, "Context ID")?;
-        let path = bounded_string(path, 4 * 1024, "HAR path")?;
-        let pattern = pattern
-            .map(|value| bounded_string(value, 4 * 1024, "HAR route pattern"))
-            .transpose()?;
+        let allowance = har_input_allowance(path, pattern)?;
+        let path = path.to_owned();
+        let pattern = pattern.map(str::to_owned);
         let not_found = playwright_rust_node_host::HarNotFoundAction::parse(not_found)
             .map_err(binding_error)?;
+        #[cfg(not(feature = "har-recording"))]
+        let _ = (update_content, update_mode);
+        #[cfg(feature = "har-recording")]
+        let update_content = match update_content.unwrap_or("attach") {
+            "attach" => playwright_rust_node_host::HarUpdateContent::Attach,
+            "embed" => playwright_rust_node_host::HarUpdateContent::Embed,
+            "omit" => playwright_rust_node_host::HarUpdateContent::Omit,
+            value => {
+                return Err(binding_error(HostError::InvalidArgument(format!(
+                    "unsupported route_from_har update_content value {value:?}"
+                ))));
+            }
+        };
+        #[cfg(feature = "har-recording")]
+        let update_mode = match update_mode.unwrap_or("minimal") {
+            "full" => playwright_rust_node_host::HarUpdateMode::Full,
+            "minimal" => playwright_rust_node_host::HarUpdateMode::Minimal,
+            value => {
+                return Err(binding_error(HostError::InvalidArgument(format!(
+                    "unsupported route_from_har update_mode value {value:?}"
+                ))));
+            }
+        };
         let host = Arc::clone(&self.host);
         self.async_command(
             py,
             FfiLane::Command,
-            SMALL_ALLOWANCE,
+            allowance,
             async move {
-                host.context_route_from_har(&context_id, &path, pattern, not_found)
+                if update {
+                    #[cfg(feature = "har-recording")]
+                    {
+                        host.context_record_har(
+                            &context_id,
+                            &path,
+                            pattern,
+                            update_content,
+                            update_mode,
+                        )
+                        .await
+                    }
+                    #[cfg(not(feature = "har-recording"))]
+                    {
+                        Err(HostError::UnsupportedOperation(
+                            "BrowserContext.route_from_har(update=True) is not installed".into(),
+                        ))
+                    }
+                } else {
+                    host.context_route_from_har(&context_id, &path, pattern, not_found)
+                        .await
+                }
+            },
+            |py, registration| {
+                Ok(registration
+                    .to_string()
+                    .into_pyobject(py)?
+                    .into_any()
+                    .unbind())
+            },
+        )
+    }
+
+    #[cfg(feature = "har-recording-regexp")]
+    fn context_record_har_regexp<'py>(
+        &self,
+        py: Python<'py>,
+        context_id: &str,
+        path: &str,
+        source: &str,
+        flags: &str,
+        policy: (String, String),
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let context_id = bounded_string(context_id, MAX_OBJECT_ID_BYTES, "Context ID")?;
+        let allowance = har_regexp_input_allowance(path, source, flags)?;
+        let path = path.to_owned();
+        let source = source.to_owned();
+        let flags = flags.to_owned();
+        let (content, mode) = policy;
+        let content = match content.as_str() {
+            "attach" => playwright_rust_node_host::HarUpdateContent::Attach,
+            "embed" => playwright_rust_node_host::HarUpdateContent::Embed,
+            "omit" => playwright_rust_node_host::HarUpdateContent::Omit,
+            value => {
+                return Err(binding_error(HostError::InvalidArgument(format!(
+                    "unsupported HAR content policy {value:?}"
+                ))));
+            }
+        };
+        let mode = match mode.as_str() {
+            "full" => playwright_rust_node_host::HarUpdateMode::Full,
+            "minimal" => playwright_rust_node_host::HarUpdateMode::Minimal,
+            value => {
+                return Err(binding_error(HostError::InvalidArgument(format!(
+                    "unsupported HAR mode {value:?}"
+                ))));
+            }
+        };
+        let host = Arc::clone(&self.host);
+        self.async_command(
+            py,
+            FfiLane::Command,
+            allowance,
+            async move {
+                host.context_record_har_regexp(&context_id, &path, source, flags, content, mode)
                     .await
             },
             |py, registration| {
@@ -11027,6 +11410,7 @@ impl NativeSession {
     }
 
     #[cfg(not(feature = "har-replay"))]
+    #[pyo3(signature = (_context_id, _path, _pattern=None, _not_found=None, _update=false, _update_content=None, _update_mode=None))]
     fn context_route_from_har<'py>(
         &self,
         _py: Python<'py>,
@@ -11034,6 +11418,9 @@ impl NativeSession {
         _path: &str,
         _pattern: Option<&str>,
         _not_found: Option<&str>,
+        _update: bool,
+        _update_content: Option<&str>,
+        _update_mode: Option<&str>,
     ) -> PyResult<Bound<'py, PyAny>> {
         Err(binding_error(HostError::UnsupportedOperation(
             "BrowserContext.route_from_har capability is not installed".into(),
@@ -11041,6 +11428,7 @@ impl NativeSession {
     }
 
     #[cfg(not(feature = "har-replay"))]
+    #[pyo3(signature = (_page_id, _path, _pattern=None, _not_found=None, _update=false, _update_content=None, _update_mode=None))]
     fn page_route_from_har<'py>(
         &self,
         _py: Python<'py>,
@@ -11048,6 +11436,9 @@ impl NativeSession {
         _path: &str,
         _pattern: Option<&str>,
         _not_found: Option<&str>,
+        _update: bool,
+        _update_content: Option<&str>,
+        _update_mode: Option<&str>,
     ) -> PyResult<Bound<'py, PyAny>> {
         Err(binding_error(HostError::UnsupportedOperation(
             "Page.route_from_har capability is not installed".into(),
@@ -11988,10 +12379,51 @@ impl NativeSession {
         )
     }
 
+    #[cfg(feature = "service-worker-events")]
+    fn next_service_worker_notice<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let host = Arc::clone(&self.host);
+        self.async_command(
+            py,
+            FfiLane::Watch,
+            WORKER_EVENT_ALLOWANCE,
+            async move { host.next_service_worker_notice().await },
+            service_worker_notice_to_python,
+        )
+    }
+
+    #[cfg(not(feature = "service-worker-events"))]
+    fn next_service_worker_notice<'py>(&self, _py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        Err(binding_error(HostError::UnsupportedOperation(
+            "BrowserContext service-worker events capability is not installed".into(),
+        )))
+    }
+
     #[cfg(not(feature = "worker-events"))]
     fn next_worker_notice<'py>(&self, _py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         Err(binding_error(HostError::UnsupportedOperation(
             "Page Worker events capability is not installed".into(),
+        )))
+    }
+
+    #[cfg(feature = "worker-console-events")]
+    fn set_worker_console_listener(
+        &self,
+        worker: PyRef<'_, NativeWorker>,
+        enabled: bool,
+    ) -> PyResult<()> {
+        self.host
+            .set_worker_console_listener(Arc::clone(&worker.owner), enabled)
+            .map_err(binding_error)
+    }
+
+    #[cfg(not(feature = "worker-console-events"))]
+    fn set_worker_console_listener(
+        &self,
+        _worker: &Bound<'_, PyAny>,
+        _enabled: bool,
+    ) -> PyResult<()> {
+        Err(binding_error(HostError::UnsupportedOperation(
+            "Worker console event capability is not installed".into(),
         )))
     }
 
@@ -12023,6 +12455,35 @@ impl NativeSession {
             values.append(worker_owner_to_python(py, owner)?)?;
         }
         Ok(values.into_any())
+    }
+
+    #[cfg(feature = "service-worker-events")]
+    fn context_service_workers<'py>(
+        &self,
+        py: Python<'py>,
+        context_id: &str,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let context_id = bounded_string(context_id, MAX_OBJECT_ID_BYTES, "BrowserContext ID")?;
+        let workers = self
+            .host
+            .context_service_workers(&context_id)
+            .map_err(binding_error)?;
+        let values = PyList::empty(py);
+        for owner in workers {
+            values.append(worker_owner_to_python(py, owner)?)?;
+        }
+        Ok(values.into_any())
+    }
+
+    #[cfg(not(feature = "service-worker-events"))]
+    fn context_service_workers<'py>(
+        &self,
+        _py: Python<'py>,
+        _context_id: &str,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        Err(binding_error(HostError::UnsupportedOperation(
+            "BrowserContext service-worker events capability is not installed".into(),
+        )))
     }
 
     #[cfg(not(feature = "worker-events"))]
@@ -12208,7 +12669,7 @@ impl NativeSession {
         self.async_command(
             py,
             FfiLane::Command,
-            2 * playwright_rust_node_host::response_body::MAX_BODY_BYTES as u64 + 4096,
+            playwright_rust_node_host::response_body::FFI_ALLOWANCE,
             async move {
                 host.frame_response_body(&page_id, &frame_id, &request_id)
                     .await
@@ -12751,8 +13212,12 @@ fn page_route_call_to_python(
             .unbind(),
         value
             .page
-            .get()
-            .to_string()
+            .map(|page| page.get().to_string())
+            .into_pyobject(py)?
+            .into_any()
+            .unbind(),
+        value
+            .service_worker_id
             .into_pyobject(py)?
             .into_any()
             .unbind(),
@@ -12879,38 +13344,65 @@ fn frame_navigation_to_python(
 }
 
 #[cfg(feature = "cdp-session")]
-fn cdp_event_to_python(py: Python<'_>, event: CdpSessionEvent) -> PyResult<(String, Py<PyDict>)> {
-    let params = event.params.as_object().ok_or_else(|| {
-        binding_error(HostError::InvalidArgument(
-            "CDP event parameters must be an object".into(),
-        ))
-    })?;
-    // A transport event is byte-bounded by the host, but Python objects can
-    // amplify tiny JSON nodes. Validate one event before allocating its tree.
-    let mut pending = vec![(&event.params, 0_usize)];
-    let mut nodes = 0_usize;
-    while let Some((value, depth)) = pending.pop() {
-        nodes += 1;
-        if nodes > MAX_CDP_EVENT_PYTHON_NODES || depth > MAX_CDP_EVENT_PYTHON_DEPTH {
-            return Err(binding_error(HostError::ResourceExhausted(
-                "CDP event parameters exceed Python conversion limits".into(),
-            )));
-        }
-        match value {
-            serde_json::Value::Array(values) => {
-                pending.extend(values.iter().map(|value| (value, depth + 1)));
+fn cdp_event_to_python(py: Python<'_>, event: CdpSessionEvent) -> PyResult<(String, Py<PyAny>)> {
+    let params = cdp_json_value_to_python(py, &event.params)?;
+    Ok((event.method, params))
+}
+
+/// Convert an allocator-backed CDP value without imposing public depth or node
+/// ceilings. The explicit post-order stack also avoids consuming one Rust
+/// stack frame per protocol nesting level.
+#[cfg(feature = "cdp-session")]
+fn cdp_json_value_to_python(py: Python<'_>, root: &serde_json::Value) -> PyResult<Py<PyAny>> {
+    enum Frame<'a> {
+        Visit(&'a serde_json::Value),
+        BuildArray(usize),
+        BuildObject(Vec<&'a str>),
+    }
+
+    let mut pending = vec![Frame::Visit(root)];
+    let mut converted = Vec::<Py<PyAny>>::new();
+    while let Some(frame) = pending.pop() {
+        match frame {
+            Frame::Visit(value) => match value {
+                serde_json::Value::Array(values) => {
+                    pending.push(Frame::BuildArray(values.len()));
+                    pending.extend(values.iter().rev().map(Frame::Visit));
+                }
+                serde_json::Value::Object(values) => {
+                    pending.push(Frame::BuildObject(
+                        values.keys().map(String::as_str).collect(),
+                    ));
+                    pending.extend(values.values().rev().map(Frame::Visit));
+                }
+                _ => converted.push(json_value_to_python(py, value)?),
+            },
+            Frame::BuildArray(length) => {
+                let first = converted.len().checked_sub(length).ok_or_else(|| {
+                    PyException::new_err("CDP array conversion stack is inconsistent")
+                })?;
+                let output = PyList::empty(py);
+                for value in converted.drain(first..) {
+                    output.append(value)?;
+                }
+                converted.push(output.into_any().unbind());
             }
-            serde_json::Value::Object(values) => {
-                pending.extend(values.values().map(|value| (value, depth + 1)));
+            Frame::BuildObject(keys) => {
+                let first = converted.len().checked_sub(keys.len()).ok_or_else(|| {
+                    PyException::new_err("CDP object conversion stack is inconsistent")
+                })?;
+                let output = PyDict::new(py);
+                for (name, value) in keys.into_iter().zip(converted.drain(first..)) {
+                    output.set_item(name, value)?;
+                }
+                converted.push(output.into_any().unbind());
             }
-            _ => {}
         }
     }
-    let output = PyDict::new(py);
-    for (name, value) in params {
-        output.set_item(name, json_value_to_python(py, value)?)?;
-    }
-    Ok((event.method, output.unbind()))
+    converted
+        .pop()
+        .filter(|_| converted.is_empty())
+        .ok_or_else(|| PyException::new_err("CDP value conversion stack is inconsistent"))
 }
 
 #[cfg(any(
@@ -12966,7 +13458,15 @@ fn request_record_to_python<'py>(
     result.set_item("id", &value.id)?;
     result.set_item("native_request_id", value.native_request_id.as_deref())?;
     #[cfg(feature = "request-frame")]
-    result.set_item("page_id", &value.page_id)?;
+    result.set_item(
+        "page_id",
+        value
+            .service_worker_id
+            .as_ref()
+            .map_or_else(|| Some(value.page_id.as_str()), |_| None),
+    )?;
+    result.set_item("context_id", value.context_id.as_deref())?;
+    result.set_item("service_worker_id", value.service_worker_id.as_deref())?;
     #[cfg(feature = "request-frame")]
     result.set_item("frame_id", value.frame_id.as_deref())?;
     #[cfg(feature = "request-frame")]
@@ -13067,6 +13567,8 @@ fn response_record_to_python<'py>(
     let result = PyDict::new(py);
     result.set_item("id", &value.id)?;
     result.set_item("request_id", &value.request_id)?;
+    result.set_item("context_id", value.context_id.as_deref())?;
+    result.set_item("service_worker_id", value.service_worker_id.as_deref())?;
     result.set_item("url", &value.url)?;
     result.set_item("status", value.status)?;
     result.set_item("status_text", &value.status_text)?;
@@ -13118,6 +13620,8 @@ fn response_record_to_python<'py>(
 #[cfg(feature = "response-events")]
 fn response_notice_to_python(py: Python<'_>, value: ResponseNotice) -> PyResult<Py<PyAny>> {
     let response = response_record_to_python(py, &value.response)?;
+    response.set_item("kind", "response")?;
+    response.set_item("native_request_id", value.native_request_id.as_deref())?;
     #[cfg(feature = "request-history")]
     if let Some(owner) = value.history_owner {
         response.set_item("request", request_history_to_python(py, owner)?)?;
@@ -13189,12 +13693,32 @@ fn worker_notice_to_python(py: Python<'_>, value: WorkerNotice) -> PyResult<Py<P
         .unbind())
 }
 
+#[cfg(feature = "service-worker-events")]
+fn service_worker_notice_to_python(
+    py: Python<'_>,
+    value: ServiceWorkerNotice,
+) -> PyResult<Py<PyAny>> {
+    let kind = match value.kind {
+        WorkerNoticeKind::Created => 0,
+        WorkerNoticeKind::Closed => 1,
+    };
+    let context = value.context.get().to_string();
+    let id = value.owner.id().to_owned();
+    let url = value.owner.url().to_owned();
+    let native = Py::new(py, NativeWorker { owner: value.owner })?;
+    Ok((kind, context, id, url, native)
+        .into_pyobject(py)?
+        .into_any()
+        .unbind())
+}
+
 #[cfg(feature = "worker-console-events")]
 fn worker_console_notice_to_python(
     py: Python<'_>,
     value: WorkerConsoleNotice,
 ) -> PyResult<Py<PyAny>> {
-    let page = value.page.get().to_string();
+    let page = value.page.map(|page| page.get().to_string());
+    let context = value.context.get().to_string();
     let id = value.owner.id().to_owned();
     let url = value.owner.url().to_owned();
     let native = Py::new(py, NativeWorker { owner: value.owner })?;
@@ -13205,24 +13729,43 @@ fn worker_console_notice_to_python(
         .into_iter()
         .map(|handle| Py::new(py, handles::NativeHandle::from_worker(handle)))
         .collect::<PyResult<Vec<_>>>()?;
-    Ok((
-        page,
-        id,
-        url,
-        native,
-        message.message_type().to_owned(),
-        message.text().to_owned(),
-        message.arguments_json().to_owned(),
-        message.location_url().to_owned(),
-        message.line_number(),
-        message.column_number(),
-        message.timestamp_micros(),
-        #[cfg(feature = "worker-console-argument-handles")]
-        argument_handles,
-    )
-        .into_pyobject(py)?
-        .into_any()
-        .unbind())
+    let mut fields = vec![
+        page.into_pyobject(py)?.into_any().unbind(),
+        context.into_pyobject(py)?.into_any().unbind(),
+        id.into_pyobject(py)?.into_any().unbind(),
+        url.into_pyobject(py)?.into_any().unbind(),
+        native.into_pyobject(py)?.into_any().unbind(),
+        message
+            .message_type()
+            .into_pyobject(py)?
+            .into_any()
+            .unbind(),
+        message.text().into_pyobject(py)?.into_any().unbind(),
+        message
+            .arguments_json()
+            .into_pyobject(py)?
+            .into_any()
+            .unbind(),
+        message
+            .location_url()
+            .into_pyobject(py)?
+            .into_any()
+            .unbind(),
+        message.line_number().into_pyobject(py)?.into_any().unbind(),
+        message
+            .column_number()
+            .into_pyobject(py)?
+            .into_any()
+            .unbind(),
+        message
+            .timestamp_micros()
+            .into_pyobject(py)?
+            .into_any()
+            .unbind(),
+    ];
+    #[cfg(feature = "worker-console-argument-handles")]
+    fields.push(argument_handles.into_pyobject(py)?.into_any().unbind());
+    Ok(PyTuple::new(py, fields)?.into_any().unbind())
 }
 
 #[cfg(feature = "request-history")]
@@ -13360,6 +13903,10 @@ fn _native(py: Python<'_>, module: &Bound<'_, PyModule>) -> PyResult<()> {
         browser_registry::browser_executable_path,
         module
     )?)?;
+    module.add_function(wrap_pyfunction!(
+        browser_registry::ffmpeg_executable_path,
+        module
+    )?)?;
     module.add_function(wrap_pyfunction!(selected_features, module)?)?;
     module.add_function(wrap_pyfunction!(build_profile, module)?)?;
     module.add_function(wrap_pyfunction!(resource_limits, module)?)?;
@@ -13434,12 +13981,23 @@ mod binding_tests {
     use super::*;
 
     #[test]
-    fn native_abi_is_131() {
+    fn native_abi_is_141() {
         // Act
         let version = native_abi_version();
 
         // Assert
-        assert_eq!(version, 131);
+        assert_eq!(version, 141);
+    }
+
+    #[cfg(feature = "cdp-session")]
+    #[test]
+    fn native_limits_do_not_report_retired_cdp_session_queue_caps() {
+        // Act
+        let limits = resource_limits();
+
+        // Assert
+        assert!(!limits.contains_key("cdp_session_events"));
+        assert!(!limits.contains_key("cdp_session_event_bytes"));
     }
 
     #[cfg(feature = "playwright-server-initialize")]
@@ -13573,17 +14131,12 @@ mod binding_tests {
                 params
                     .bind(py)
                     .get_item("requestId")
-                    .expect("lookup")
                     .expect("request id")
                     .extract::<String>()
                     .expect("string"),
                 "r1"
             );
-            let request = params
-                .bind(py)
-                .get_item("request")
-                .expect("lookup")
-                .expect("request");
+            let request = params.bind(py).get_item("request").expect("request");
             let url = request.get_item("url").expect("url");
             assert_eq!(
                 url.extract::<String>().expect("string"),
@@ -13594,12 +14147,50 @@ mod binding_tests {
 
     #[cfg(feature = "cdp-session")]
     #[test]
-    fn cdp_event_conversion_rejects_excessive_depth_before_python_allocation() {
+    fn cdp_event_conversion_preserves_non_object_params_for_chromium_parity() {
         Python::initialize();
         Python::attach(|py| {
             // Arrange
-            let mut nested = serde_json::json!(null);
-            for _ in 0..=MAX_CDP_EVENT_PYTHON_DEPTH {
+            let event = CdpSessionEvent {
+                method: "Runtime.customEvent".into(),
+                params: serde_json::json!(["value", 7, null]),
+            };
+
+            // Act
+            let (method, params) = cdp_event_to_python(py, event).expect("convert array event");
+
+            // Assert
+            assert_eq!(method, "Runtime.customEvent");
+            let params = params.bind(py).cast::<PyList>().expect("list params");
+            assert_eq!(params.len(), 3);
+            assert_eq!(
+                params
+                    .get_item(0)
+                    .expect("first item")
+                    .extract::<String>()
+                    .expect("string"),
+                "value"
+            );
+            assert_eq!(
+                params
+                    .get_item(1)
+                    .expect("second item")
+                    .extract::<u64>()
+                    .expect("integer"),
+                7
+            );
+            assert!(params.get_item(2).expect("third item").is_none());
+        });
+    }
+
+    #[cfg(feature = "cdp-session")]
+    #[test]
+    fn cdp_event_conversion_accepts_nesting_beyond_the_retired_depth_limit() {
+        Python::initialize();
+        Python::attach(|py| {
+            // Arrange
+            let mut nested = serde_json::json!("leaf");
+            for _ in 0..=64 {
                 nested = serde_json::json!([nested]);
             }
             let event = CdpSessionEvent {
@@ -13608,10 +14199,64 @@ mod binding_tests {
             };
 
             // Act
-            let error = cdp_event_to_python(py, event).expect_err("depth limit");
+            let (_, params) = cdp_event_to_python(py, event).expect("convert nested event");
 
             // Assert
-            assert!(error.is_instance_of::<ResourceExhaustedError>(py));
+            let mut current = params.bind(py).get_item("args").expect("args");
+            for _ in 0..=64 {
+                current = current.get_item(0).expect("nested element");
+            }
+            assert_eq!(current.extract::<String>().expect("leaf"), "leaf");
+        });
+    }
+
+    #[cfg(feature = "cdp-session")]
+    #[test]
+    fn cdp_event_conversion_accepts_more_than_the_retired_node_limit() {
+        Python::initialize();
+        Python::attach(|py| {
+            // Arrange
+            let values = vec![serde_json::Value::Null; 65_537];
+            let event = CdpSessionEvent {
+                method: "Runtime.consoleAPICalled".into(),
+                params: serde_json::json!({"args": values}),
+            };
+
+            // Act
+            let (_, params) = cdp_event_to_python(py, event).expect("convert wide event");
+
+            // Assert
+            let args = params.bind(py).get_item("args").expect("args");
+            assert_eq!(args.len().expect("list length"), 65_537);
+        });
+    }
+
+    #[cfg(feature = "cdp-session")]
+    #[test]
+    fn cdp_event_conversion_accepts_payload_beyond_the_retired_byte_limit() {
+        Python::initialize();
+        Python::attach(|py| {
+            // Arrange
+            let payload = "x".repeat(5 * 1024 * 1024);
+            let event = CdpSessionEvent {
+                method: "Runtime.consoleAPICalled".into(),
+                params: serde_json::json!({"payload": payload}),
+            };
+
+            // Act
+            let (_, params) = cdp_event_to_python(py, event).expect("convert large event");
+
+            // Assert
+            assert_eq!(
+                params
+                    .bind(py)
+                    .get_item("payload")
+                    .expect("payload")
+                    .extract::<String>()
+                    .expect("string")
+                    .len(),
+                5 * 1024 * 1024
+            );
         });
     }
 

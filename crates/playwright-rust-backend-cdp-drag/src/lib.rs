@@ -42,7 +42,7 @@ pub struct DragListenerFactory(Arc<Factory>);
 struct Factory {
     namespace: String,
     scope: ResourceScope,
-    capacity: usize,
+    capacity: Option<usize>,
     ledger: ResourceLedger,
     state: Mutex<FactoryState>,
     _storage: ResourceLease,
@@ -61,10 +61,21 @@ impl DragListenerFactory {
         if !(1..=MAX_LISTENERS).contains(&capacity) {
             return Err(error("drag listener capacity must be 1..=32"));
         }
-        let bytes = state_bytes() + operation_bytes() * capacity;
+        let bytes = finite_state_bytes() + finite_operation_bytes() * capacity;
         Ok(ResourceRequirements::none()
             .with_class(ResourceClass::BackendStateBytes, bytes as u64, bytes as u64)
             .with_metadata(1, capacity + 1))
+    }
+    /// Fixed factory state only. Listener ownership grows through the allocator;
+    /// exact native cleanup remains coupled to each returned owner.
+    pub fn allocator_backed_requirements() -> ResourceRequirements {
+        ResourceRequirements::none()
+            .with_class(
+                ResourceClass::BackendStateBytes,
+                allocator_backed_state_bytes() as u64,
+                allocator_backed_state_bytes() as u64,
+            )
+            .with_metadata(1, 1)
     }
     pub fn new(
         namespace: &str,
@@ -72,24 +83,50 @@ impl DragListenerFactory {
         capacity: usize,
         resources: &ProductionResourceLedger,
     ) -> Result<Self> {
-        if namespace.is_empty()
-            || namespace.len() > MAX_NAMESPACE
-            || !namespace
-                .bytes()
-                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_'))
+        Self::new_inner(namespace, scope, Some(capacity), resources)
+    }
+    pub fn new_allocator_backed(
+        namespace: &str,
+        scope: ResourceScope,
+        resources: &ProductionResourceLedger,
+    ) -> Result<Self> {
+        Self::new_inner(namespace, scope, None, resources)
+    }
+    fn new_inner(
+        namespace: &str,
+        scope: ResourceScope,
+        capacity: Option<usize>,
+        resources: &ProductionResourceLedger,
+    ) -> Result<Self> {
+        if namespace.is_empty() {
+            return Err(error("drag namespace must be non-empty"));
+        }
+        if capacity.is_some()
+            && (namespace.len() > MAX_NAMESPACE
+                || !namespace
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_')))
         {
             return Err(error(
                 "drag namespace must be 1..=64 ASCII identifier bytes",
             ));
         }
+        let requirements = match capacity {
+            Some(capacity) => Self::requirements(capacity)?,
+            None => Self::allocator_backed_requirements(),
+        };
         let ledger = resources
-            .claim(Self::requirements(capacity)?)
+            .claim(requirements)
             .map_err(|_| error("drag listener resource claim failed"))?;
         let storage = ledger
             .reserve(
                 scope,
                 ResourceClass::BackendStateBytes,
-                state_bytes() as u64,
+                if capacity.is_some() {
+                    finite_state_bytes()
+                } else {
+                    allocator_backed_state_bytes()
+                } as u64,
             )
             .map_err(|_| error("drag listener state admission failed"))?;
         Ok(Self(Arc::new(Factory {
@@ -108,28 +145,42 @@ impl DragListenerFactory {
     /// The exact unique context must be an already selected utility world.
     /// This method neither creates a world nor sends a native command.
     pub fn start(&self, client: Arc<dyn CdpClient>, unique_context: &str) -> Result<DragListener> {
-        if unique_context.is_empty() || unique_context.len() > MAX_CONTEXT {
+        if unique_context.is_empty() {
+            return Err(error("drag unique context must be non-empty"));
+        }
+        if self.0.capacity.is_some() && unique_context.len() > MAX_CONTEXT {
             return Err(error("drag unique context must be 1..=128 bytes"));
         }
         let mut state = self.0.state.lock().expect("drag factory poisoned");
-        if state.active == self.0.capacity {
+        if self
+            .0
+            .capacity
+            .is_some_and(|capacity| state.active == capacity)
+        {
             return Err(error("drag listener capacity exceeded"));
         }
         let next = state
             .next
             .checked_add(1)
             .ok_or_else(|| error("drag listener identifiers exhausted"))?;
+        let active = state
+            .active
+            .checked_add(1)
+            .ok_or_else(|| error("drag listener count overflow"))?;
         let storage = self
             .0
-            .ledger
-            .reserve(
-                self.0.scope,
-                ResourceClass::BackendStateBytes,
-                operation_bytes() as u64,
-            )
+            .capacity
+            .map(|_| {
+                self.0.ledger.reserve(
+                    self.0.scope,
+                    ResourceClass::BackendStateBytes,
+                    finite_operation_bytes() as u64,
+                )
+            })
+            .transpose()
             .map_err(|_| error("drag listener operation admission failed"))?;
         state.next = next;
-        state.active += 1;
+        state.active = active;
         drop(state);
         Ok(DragListener {
             client,
@@ -141,15 +192,18 @@ impl DragListenerFactory {
             retiring: false,
             _admission: Admission {
                 factory: self.clone(),
-                storage: Some(storage),
+                storage,
             },
         })
     }
 }
-fn state_bytes() -> usize {
-    std::mem::size_of::<Factory>() + 2 * std::mem::size_of::<usize>() + MAX_NAMESPACE
+fn allocator_backed_state_bytes() -> usize {
+    std::mem::size_of::<Factory>() + 2 * std::mem::size_of::<usize>()
 }
-fn operation_bytes() -> usize {
+fn finite_state_bytes() -> usize {
+    allocator_backed_state_bytes() + MAX_NAMESPACE
+}
+fn finite_operation_bytes() -> usize {
     // The async wrapper layout is independent of argument values. No provider
     // method is called while measuring it.
     std::mem::size_of::<DragListener>()

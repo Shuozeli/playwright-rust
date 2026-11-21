@@ -44,8 +44,6 @@ pub fn persistent_context_argument_error(
 ) -> napi::Result<Option<String>> {
     let engine = match browser_name.as_str() {
         "chromium" => BrowserEngine::Chromium,
-        "firefox" => BrowserEngine::Firefox,
-        "webkit" => BrowserEngine::WebKit,
         _ => {
             return Err(napi::Error::new(
                 napi::Status::InvalidArg,

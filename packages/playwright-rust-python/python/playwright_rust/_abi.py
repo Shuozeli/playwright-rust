@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from . import _native
 
-NATIVE_ABI_VERSION = 131
+NATIVE_ABI_VERSION = 141
 
 _observed_abi = _native.native_abi_version()
 if _observed_abi != NATIVE_ABI_VERSION:

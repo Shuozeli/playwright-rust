@@ -45,19 +45,6 @@ pub use playwright_rust_cap_handle_evaluation::{EvaluateHandleParams, HandleEval
 pub use playwright_rust_composition_chromium_handle_evaluation::CdpHandleEvaluationProgram as HandleEvaluationProgram;
 pub use properties::NamedPendingHandle;
 
-/// Ordinary cancellation capacity, one recovery/result ticket per Handle and
-/// eight abandoned-creation continuations plus eight unpublished batch
-/// compensation jobs in the same executor. The opt-in retained click adds
-/// eight parent-owner group continuations. Sibling tickets are independent.
-pub(crate) const CLEANUP_SLOTS: usize = 32
-    + MAX_HANDLES
-    + 2 * MAX_CALLS
-    + if cfg!(feature = "element-handle-click") {
-        MAX_CALLS
-    } else {
-        0
-    };
-
 use crate::{HostError, HostSession, evaluation};
 use playwright_rust_backend_cdp_evaluation::{CdpEvaluationLimits, CdpEvaluationProductionProfile};
 use playwright_rust_codec_handle_evaluation::HandleEvaluationCodecLimits;
@@ -69,7 +56,6 @@ use playwright_rust_composition_chromium::{
 pub use playwright_rust_composition_chromium_handle_lifecycle::ChromiumHandleRouteMetrics as HandleMetrics;
 use playwright_rust_core::{ProtocolVersion, ResourceScope};
 use playwright_rust_transport::FrameLimits;
-use std::num::NonZeroUsize;
 #[cfg(feature = "console-argument-handles")]
 use std::sync::Arc;
 
@@ -121,14 +107,13 @@ impl ReadyEventHandles {
     }
 }
 
-/// Explicit aggregate capacity, not one allocation for every Frame. Together
-/// with Browser/16 Contexts/16 Pages/64 Frames this fits 256 runtime objects.
-pub const MAX_HANDLES: usize = 64;
 #[cfg(feature = "console-argument-handles")]
 pub(crate) const MAX_EVENT_ARGUMENT_HANDLES: usize = 16;
+pub(crate) const MAX_PROPERTY_HANDLES: usize = 1024;
+#[cfg(test)]
+const MAX_HANDLES: usize = 129;
 pub const MAX_NATIVE_ID_BYTES: usize = 1024;
 pub const MAX_PREVIEW_BYTES: usize = 1024;
-pub const MAX_CALLS: usize = 8;
 // Inline state for the largest staged producer, including publication. This
 // remains inside each existing 8 MiB call allowance; no new lease is added.
 pub(crate) const CREATION_FUTURE_BYTES: usize = 8 * 1024;
@@ -136,7 +121,7 @@ pub(crate) const CREATION_FUTURE_BYTES: usize = 8 * 1024;
 pub(crate) fn select(
     profile: ChromiumAttachProductionProfile,
 ) -> Result<ChromiumAttachProductionProfile, HostError> {
-    let handle_subtree_objects = NonZeroUsize::new(MAX_HANDLES).unwrap();
+    let handle_subtree_objects = std::num::NonZeroUsize::new(1).unwrap();
     let wire = |version| {
         CapabilityWireProfile::new(
             version,
@@ -150,9 +135,8 @@ pub(crate) fn select(
         .with_extension_requirements(publication::requirements())
         .with_extension_requirements(batch_publication::requirements())
         .with_handle_lifecycle(HandleLifecycleInstallationProfile::new(
-            ChromiumHandleRouteProductionProfile::new(
+            ChromiumHandleRouteProductionProfile::new_allocator_backed(
                 ResourceScope::extension(152, 1),
-                MAX_HANDLES,
                 MAX_NATIVE_ID_BYTES,
                 MAX_PREVIEW_BYTES,
             ),
@@ -160,7 +144,7 @@ pub(crate) fn select(
             wire(ProtocolVersion::new(1, 0)),
         ))
         .with_handle_evaluation(HandleEvaluationInstallationProfile::new(
-            CdpEvaluationProductionProfile::new(
+            CdpEvaluationProductionProfile::new_allocator_backed(
                 ResourceScope::extension(152, 2),
                 CdpEvaluationLimits::new(
                     evaluation::SOURCE_BYTES,
@@ -168,7 +152,6 @@ pub(crate) fn select(
                     evaluation::ERROR_BYTES,
                     evaluation::input_value_limits(),
                 ),
-                MAX_CALLS,
             )
             .with_user_gesture(true),
             MAX_NATIVE_ID_BYTES,

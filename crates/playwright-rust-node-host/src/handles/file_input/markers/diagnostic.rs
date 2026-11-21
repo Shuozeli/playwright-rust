@@ -43,6 +43,13 @@ pub(super) fn bounded(error: HostError) -> HostError {
             locator: copy(&locator, BYTES),
             progress,
         },
+        HostError::RetainedClickTimeout {
+            timeout_ms,
+            progress,
+        } => HostError::RetainedClickTimeout {
+            timeout_ms,
+            progress: copy(&progress, BYTES),
+        },
         error @ (HostError::Timeout(_)
         | HostError::ConnectTimeout { .. }
         | HostError::TargetClosed

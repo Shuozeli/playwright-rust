@@ -8,7 +8,6 @@ mod worlds;
 use std::{
     future::{Future, Ready, pending, ready},
     marker::PhantomData,
-    num::NonZeroUsize,
     pin::Pin,
     sync::{
         Arc,
@@ -69,26 +68,6 @@ const EXECUTING: usize = 8;
 // A cancelled submitted upload may retain its group after the runtime lane is
 // returned. Selected uploads have one independent continuation slot.
 const RESOLVING: usize = EXECUTING + cfg!(feature = "file-input") as usize;
-const HANDLE_WORLDS: usize = if cfg!(feature = "handles") { 64 } else { 0 };
-// Retained acquisitions may keep one exact snapshot each after their runtime
-// command lane is returned. They are independent of Locator retries and the
-// already-admitted upload's one additional continuation snapshot.
-#[cfg(feature = "retained-file-input")]
-const RETAINED_UPLOAD_WORLDS: usize = crate::handles::MAX_CALLS;
-#[cfg(not(feature = "retained-file-input"))]
-const RETAINED_UPLOAD_WORLDS: usize = 0;
-// A retained click can hold its creation-world receipt through command
-// cancellation independently of its ordinary Handle read admission.
-#[cfg(feature = "element-handle-click")]
-const RETAINED_CLICK_WORLDS: usize = crate::handles::MAX_CALLS;
-#[cfg(not(feature = "element-handle-click"))]
-const RETAINED_CLICK_WORLDS: usize = 0;
-// Persistent marker worlds and retiring predecessors cannot borrow the
-// per-call acquisition slots: they intentionally survive ordinary completion.
-#[cfg(feature = "retained-target-marking")]
-const MARKER_WORLDS: usize = crate::handles::file_input::markers::WORLD_SLOTS;
-#[cfg(not(feature = "retained-target-marking"))]
-const MARKER_WORLDS: usize = 0;
 const PENDING: usize = 16;
 const STATE_SCOPE: ResourceScope = ResourceScope::extension(120, 15);
 const STATE_BYTES: u64 = 8192;
@@ -108,18 +87,6 @@ const COLLECTION_SELECTOR_BYTES: usize = if OPTIONAL_SELECTOR_BYTES > MAX_COMPIL
 };
 pub(crate) const COLLECTION_SOURCE_BYTES: usize =
     COLLECTION_SELECTOR_BYTES + evaluation::SOURCE_BYTES + COLLECTION_WRAPPER_BYTES;
-// Explicit drag installation can retain one <=32-world move per admitted
-// Page/session controller, independently of Locator's executing commands.
-#[cfg(feature = "drag-runtime")]
-const WORLD_SNAPSHOTS: usize = 32 * 32
-    + RESOLVING
-    + HANDLE_WORLDS
-    + RETAINED_UPLOAD_WORLDS
-    + RETAINED_CLICK_WORLDS
-    + MARKER_WORLDS;
-#[cfg(not(feature = "drag-runtime"))]
-const WORLD_SNAPSHOTS: usize =
-    RESOLVING + HANDLE_WORLDS + RETAINED_UPLOAD_WORLDS + RETAINED_CLICK_WORLDS + MARKER_WORLDS;
 const CALL_BYTES: u64 = (2
     * (evaluation::MAX_NODES * std::mem::size_of::<EvaluationValue>()
         + evaluation::MAX_ENTRIES * std::mem::size_of::<evaluation::EvaluationProperty>()
@@ -165,10 +132,9 @@ impl Profile {
             )
             .map_err(HostError::backend)?
             .with_user_gesture(true),
-            collection: CdpEvaluationProductionProfile::new(
+            collection: CdpEvaluationProductionProfile::new_allocator_backed(
                 ResourceScope::extension(120, 16),
                 collection_limits(),
-                EXECUTING,
             )
             .with_user_gesture(true),
             waiting: ResolutionWaitProfile::new(
@@ -183,11 +149,10 @@ impl Profile {
                 Duration::from_millis(20),
             )
             .map_err(HostError::backend)?,
-            access: ChromiumFrameWorldAccessProfile::new(
+            access: ChromiumFrameWorldAccessProfile::new_allocator_backed(
                 ResourceScope::extension(120, 14),
-                NonZeroUsize::new(WORLD_SNAPSHOTS).expect("positive fixed capacity"),
             )
-            .and_then(ChromiumFrameWorldAccessProfile::with_native_retirement)
+            .with_native_retirement()
             .map_err(HostError::backend)?,
         })
     }
@@ -213,10 +178,12 @@ impl Profile {
 
 struct Slots {
     active: AtomicUsize,
+    permits: Arc<tokio::sync::Semaphore>,
     _state: ResourceLease,
 }
 struct CallLease {
     slots: Arc<Slots>,
+    _permit: tokio::sync::OwnedSemaphorePermit,
     _lease: ResourceLease,
 }
 impl Drop for CallLease {
@@ -225,18 +192,16 @@ impl Drop for CallLease {
     }
 }
 impl CallLease {
-    fn admit(slots: Arc<Slots>, ledger: &ResourceLedger) -> Result<Self, HostError> {
-        slots
-            .active
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| {
-                (n < PENDING).then(|| n + 1)
-            })
-            .map_err(|_| {
-                HostError::ResourceExhausted("Locator evaluation pending capacity exceeded".into())
-            })?;
+    async fn admit(slots: Arc<Slots>, ledger: &ResourceLedger) -> Result<Self, HostError> {
+        let permit = Arc::clone(&slots.permits)
+            .acquire_owned()
+            .await
+            .map_err(|_| HostError::TargetClosed)?;
+        slots.active.fetch_add(1, Ordering::AcqRel);
         match ledger.reserve(STATE_SCOPE, ResourceClass::BackendStateBytes, CALL_BYTES) {
             Ok(lease) => Ok(Self {
                 slots,
+                _permit: permit,
                 _lease: lease,
             }),
             Err(error) => {
@@ -415,12 +380,13 @@ impl Installation {
             ledger,
             slots: Arc::new(Slots {
                 active: AtomicUsize::new(0),
+                permits: Arc::new(tokio::sync::Semaphore::new(PENDING)),
                 _state: state,
             }),
         })
     }
-    fn admit(&self) -> Result<CallLease, HostError> {
-        CallLease::admit(self.slots.clone(), &self.ledger)
+    async fn admit(&self) -> Result<CallLease, HostError> {
+        CallLease::admit(self.slots.clone(), &self.ledger).await
     }
 }
 
@@ -873,7 +839,7 @@ impl HostSession {
             let live = state.as_ref().ok_or(HostError::TargetClosed)?;
             (live.runtime.clone(), live.locator_evaluation.clone())
         };
-        let _lease = installation.admit()?;
+        let _lease = installation.admit().await?;
         let preparing = Arc::new(AtomicBool::new(true));
         let command = Command::<Evaluate<F>>::new(
             call_id,
@@ -1142,7 +1108,7 @@ impl HostSession {
             let live = state.as_ref().ok_or(HostError::TargetClosed)?;
             (live.runtime.clone(), live.locator_evaluation.clone())
         };
-        let _lease = installation.admit()?;
+        let _lease = installation.admit().await?;
         let preparing = Arc::new(AtomicBool::new(true));
         let command = Command::<EvaluateAll<F>>::new(
             call_id,

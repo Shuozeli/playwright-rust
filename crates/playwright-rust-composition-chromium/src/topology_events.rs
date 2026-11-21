@@ -11,11 +11,12 @@ use playwright_rust_backend_cdp::{
     CdpFrameAttachment, CdpFrameDetachReason, CdpTopologyEventError, CdpTopologyProductionProfile,
     CdpTopologyUpdate, CdpWorldAttachment, ConnectionEpoch,
 };
-use playwright_rust_cdp::connection::CdpError;
+use playwright_rust_cdp::connection::{CdpError, UNBOUNDED_CDP_BYTES};
 use playwright_rust_cdp::generated::{page, runtime, target};
 use playwright_rust_cdp::{
     CdpClient, CdpConnection, CdpConnectionProductionProfile, CdpEvent, CdpEventReceiver,
-    CdpEventRecvError, CdpEventSubscriptionError, CdpEventTryRecvError, SessionFactory,
+    CdpEventRecvError, CdpEventSubscriptionError, CdpEventTryRecvError,
+    ServiceWorkerInitializationCommand, SessionFactory,
 };
 use playwright_rust_codec_browser_events::BrowserEventsCodec;
 use playwright_rust_core::{
@@ -44,6 +45,10 @@ use crate::{
 pub(super) const UTILITY_WORLD_NAME_PREFIX: &str = "__playwright_rust_utility_";
 const FRAME_AUTO_ATTACH_TARGET_TYPES: &[&str] = &["page", "iframe"];
 const FRAME_AND_WORKER_AUTO_ATTACH_TARGET_TYPES: &[&str] = &["page", "iframe", "worker"];
+const FRAME_AND_SERVICE_WORKER_AUTO_ATTACH_TARGET_TYPES: &[&str] =
+    &["page", "iframe", "service_worker"];
+const FRAME_AND_ALL_WORKERS_AUTO_ATTACH_TARGET_TYPES: &[&str] =
+    &["page", "iframe", "worker", "service_worker"];
 
 /// One opt-in auxiliary browser-root CDP session whose child attachments are
 /// owned outside the portable topology. The owner registers the root session
@@ -55,8 +60,6 @@ pub struct ChromiumAuxiliarySessionParent {
     public_browser_sessions: Mutex<BTreeSet<Box<str>>>,
 }
 
-const MAX_PUBLIC_BROWSER_SESSIONS: usize = 8;
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ChromiumAuxiliarySessionParentError {
     InvalidNativeIdLimit,
@@ -64,7 +67,6 @@ pub enum ChromiumAuxiliarySessionParentError {
     SessionIdTooLong { actual: usize, limit: usize },
     AlreadyRegistered,
     PublicSessionAlreadyRegistered,
-    PublicSessionCapacityExceeded,
     StateUnavailable,
 }
 
@@ -86,9 +88,6 @@ impl Display for ChromiumAuxiliarySessionParentError {
             }
             Self::PublicSessionAlreadyRegistered => {
                 formatter.write_str("public browser CDP session ID is already registered")
-            }
-            Self::PublicSessionCapacityExceeded => {
-                formatter.write_str("public browser CDP session capacity exceeded")
             }
             Self::StateUnavailable => {
                 formatter.write_str("auxiliary CDP parent session state is unavailable")
@@ -173,9 +172,6 @@ impl ChromiumAuxiliarySessionParent {
             .map_err(|_| ChromiumAuxiliarySessionParentError::StateUnavailable)?;
         if sessions.contains(session_id) {
             return Err(ChromiumAuxiliarySessionParentError::PublicSessionAlreadyRegistered);
-        }
-        if sessions.len() >= MAX_PUBLIC_BROWSER_SESSIONS {
-            return Err(ChromiumAuxiliarySessionParentError::PublicSessionCapacityExceeded);
         }
         sessions.insert(session_id.into());
         Ok(())
@@ -298,6 +294,19 @@ pub struct ChromiumTopologyEventDriverProductionProfile {
     requirements: ResourceRequirements,
 }
 
+fn accounted_cdp_bytes(
+    bytes: usize,
+    copies: u64,
+) -> Result<u64, ChromiumTopologyEventDriverProfileError> {
+    if bytes == UNBOUNDED_CDP_BYTES {
+        return Ok(0);
+    }
+    u64::try_from(bytes)
+        .ok()
+        .and_then(|bytes| bytes.checked_mul(copies))
+        .ok_or(ChromiumTopologyEventDriverProfileError::CapacityOverflow)
+}
+
 impl ChromiumTopologyEventDriverProductionProfile {
     pub fn from_profiles(
         resource_scope: ResourceScope,
@@ -310,28 +319,41 @@ impl ChromiumTopologyEventDriverProductionProfile {
             );
         }
         let limits = topology.limits();
-        let max_sessions = limits
-            .pages
-            .checked_add(limits.frames)
-            .ok_or(ChromiumTopologyEventDriverProfileError::CapacityOverflow)?;
-        let session_bytes = u64::try_from(max_sessions)
-            .ok()
-            .and_then(|count| count.checked_mul(12))
-            .and_then(|slots| slots.checked_mul(u64::try_from(limits.native_id_bytes).ok()?))
-            .ok_or(ChromiumTopologyEventDriverProfileError::CapacityOverflow)?;
-        let context_bytes = u64::try_from(limits.contexts)
-            .ok()
-            .and_then(|count| count.checked_add(1))
-            .and_then(|count| count.checked_mul(u64::try_from(limits.native_id_bytes).ok()?))
-            .ok_or(ChromiumTopologyEventDriverProfileError::CapacityOverflow)?;
-        let event_bytes = u64::try_from(connection.config().max_event_bytes)
-            .ok()
-            .and_then(|bytes| bytes.checked_mul(4))
-            .ok_or(ChromiumTopologyEventDriverProfileError::CapacityOverflow)?;
-        let response_bytes = u64::try_from(connection.config().max_response_bytes)
-            .ok()
-            .and_then(|bytes| bytes.checked_mul(4))
-            .ok_or(ChromiumTopologyEventDriverProfileError::CapacityOverflow)?;
+        let allocator_backed = limits.pages == usize::MAX
+            && limits.frames == usize::MAX
+            && limits.contexts == usize::MAX;
+        let max_sessions = if allocator_backed {
+            usize::MAX
+        } else {
+            limits
+                .pages
+                .checked_add(limits.frames)
+                .ok_or(ChromiumTopologyEventDriverProfileError::CapacityOverflow)?
+        };
+        // Allocator-backed topology maps retain their native IDs in the maps
+        // themselves. Do not multiply an unbounded object-count sentinel into
+        // a fictitious up-front byte reservation. Finite profiles preserve the
+        // original exact accounting.
+        let session_bytes = if allocator_backed {
+            0
+        } else {
+            u64::try_from(max_sessions)
+                .ok()
+                .and_then(|count| count.checked_mul(12))
+                .and_then(|slots| slots.checked_mul(u64::try_from(limits.native_id_bytes).ok()?))
+                .ok_or(ChromiumTopologyEventDriverProfileError::CapacityOverflow)?
+        };
+        let context_bytes = if allocator_backed {
+            0
+        } else {
+            u64::try_from(limits.contexts)
+                .ok()
+                .and_then(|count| count.checked_add(1))
+                .and_then(|count| count.checked_mul(u64::try_from(limits.native_id_bytes).ok()?))
+                .ok_or(ChromiumTopologyEventDriverProfileError::CapacityOverflow)?
+        };
+        let event_bytes = accounted_cdp_bytes(connection.config().max_event_bytes, 4)?;
+        let response_bytes = accounted_cdp_bytes(connection.config().max_response_bytes, 4)?;
         let maximum_retained_bytes = session_bytes
             .checked_add(context_bytes)
             .and_then(|bytes| bytes.checked_add(event_bytes))
@@ -414,16 +436,18 @@ impl ChromiumTopologyEventDriverProductionProfile {
             );
         }
         if !self.parallel_session_prerequisites {
-            self.maximum_retained_bytes = u64::try_from(self.max_response_bytes)
-                .ok()
-                .and_then(|bytes| bytes.checked_mul(4))
-                .and_then(|bytes| self.maximum_retained_bytes.checked_add(bytes))
-                .ok_or(ChromiumTopologyEventDriverProfileError::CapacityOverflow)?;
-            self.requirements = self.requirements.with_class(
-                ResourceClass::BackendStateBytes,
-                self.maximum_retained_bytes,
-                self.maximum_retained_bytes,
-            );
+            let response_bytes = accounted_cdp_bytes(self.max_response_bytes, 4)?;
+            self.maximum_retained_bytes =
+                self.maximum_retained_bytes
+                    .checked_add(response_bytes)
+                    .ok_or(ChromiumTopologyEventDriverProfileError::CapacityOverflow)?;
+            if response_bytes != 0 {
+                self.requirements = self.requirements.with_class(
+                    ResourceClass::BackendStateBytes,
+                    self.maximum_retained_bytes,
+                    self.maximum_retained_bytes,
+                );
+            }
             self.parallel_session_prerequisites = true;
         }
         Ok(self)
@@ -449,16 +473,18 @@ impl ChromiumTopologyEventDriverProductionProfile {
         }
         let mut profile = self.with_parallel_session_prerequisites()?;
         if !profile.parallel_utility_world_registration {
-            profile.maximum_retained_bytes = u64::try_from(profile.max_response_bytes)
-                .ok()
-                .and_then(|bytes| bytes.checked_mul(4))
-                .and_then(|bytes| profile.maximum_retained_bytes.checked_add(bytes))
+            let response_bytes = accounted_cdp_bytes(profile.max_response_bytes, 4)?;
+            profile.maximum_retained_bytes = profile
+                .maximum_retained_bytes
+                .checked_add(response_bytes)
                 .ok_or(ChromiumTopologyEventDriverProfileError::CapacityOverflow)?;
-            profile.requirements = profile.requirements.with_class(
-                ResourceClass::BackendStateBytes,
-                profile.maximum_retained_bytes,
-                profile.maximum_retained_bytes,
-            );
+            if response_bytes != 0 {
+                profile.requirements = profile.requirements.with_class(
+                    ResourceClass::BackendStateBytes,
+                    profile.maximum_retained_bytes,
+                    profile.maximum_retained_bytes,
+                );
+            }
             profile.parallel_utility_world_registration = true;
         }
         Ok(profile)
@@ -486,16 +512,18 @@ impl ChromiumTopologyEventDriverProductionProfile {
         }
         let mut profile = self.with_parallel_utility_world_registration()?;
         if !profile.parallel_recursive_attachment {
-            profile.maximum_retained_bytes = u64::try_from(profile.max_response_bytes)
-                .ok()
-                .and_then(|bytes| bytes.checked_mul(8))
-                .and_then(|bytes| profile.maximum_retained_bytes.checked_add(bytes))
+            let response_bytes = accounted_cdp_bytes(profile.max_response_bytes, 8)?;
+            profile.maximum_retained_bytes = profile
+                .maximum_retained_bytes
+                .checked_add(response_bytes)
                 .ok_or(ChromiumTopologyEventDriverProfileError::CapacityOverflow)?;
-            profile.requirements = profile.requirements.with_class(
-                ResourceClass::BackendStateBytes,
-                profile.maximum_retained_bytes,
-                profile.maximum_retained_bytes,
-            );
+            if response_bytes != 0 {
+                profile.requirements = profile.requirements.with_class(
+                    ResourceClass::BackendStateBytes,
+                    profile.maximum_retained_bytes,
+                    profile.maximum_retained_bytes,
+                );
+            }
             profile.parallel_recursive_attachment = true;
         }
         Ok(profile)
@@ -511,7 +539,10 @@ impl ChromiumTopologyEventDriverProductionProfile {
         topology: CdpTopologyProductionProfile,
     ) -> bool {
         let limits = topology.limits();
-        limits.pages.checked_add(limits.frames) == Some(self.max_sessions)
+        (limits.pages.checked_add(limits.frames) == Some(self.max_sessions)
+            || (self.max_sessions == usize::MAX
+                && limits.pages == usize::MAX
+                && limits.frames == usize::MAX))
             && limits.contexts == self.max_contexts
             && limits.native_id_bytes == self.max_native_id_bytes
             && connection.config().max_response_bytes == self.max_response_bytes
@@ -904,7 +935,25 @@ impl Drop for ChromiumTopologyEventDriver {
 }
 
 impl ChromiumTopologyEventDriver {
-    fn auto_attach_target_types(&self) -> &'static [&'static str] {
+    fn browser_auto_attach_target_types(&self) -> &'static [&'static str] {
+        match self.frame_events.as_ref() {
+            Some(observer)
+                if observer.retains_worker_targets()
+                    && observer.retains_service_worker_targets() =>
+            {
+                FRAME_AND_ALL_WORKERS_AUTO_ATTACH_TARGET_TYPES
+            }
+            Some(observer) if observer.retains_worker_targets() => {
+                FRAME_AND_WORKER_AUTO_ATTACH_TARGET_TYPES
+            }
+            Some(observer) if observer.retains_service_worker_targets() => {
+                FRAME_AND_SERVICE_WORKER_AUTO_ATTACH_TARGET_TYPES
+            }
+            _ => FRAME_AUTO_ATTACH_TARGET_TYPES,
+        }
+    }
+
+    fn nested_auto_attach_target_types(&self) -> &'static [&'static str] {
         if self
             .frame_events
             .as_ref()
@@ -1242,7 +1291,12 @@ impl ChromiumTopologyEventDriver {
         self.ensure_topology_epoch()?;
 
         self.browser_client
-            .target_set_auto_attach_types(false, false, true, self.auto_attach_target_types())
+            .target_set_auto_attach_types(
+                false,
+                false,
+                true,
+                self.browser_auto_attach_target_types(),
+            )
             .await?;
         self.receiver.resubscribe();
 
@@ -1296,7 +1350,7 @@ impl ChromiumTopologyEventDriver {
             return Ok(CdpTopologyUpdate::idempotent());
         }
         self.browser_client
-            .target_set_auto_attach_types(true, true, true, self.auto_attach_target_types())
+            .target_set_auto_attach_types(true, true, true, self.browser_auto_attach_target_types())
             .await?;
         self.browser_client.target_get_target_info().await?;
         self.refresh_nondefault_contexts().await?;
@@ -1493,7 +1547,7 @@ impl ChromiumTopologyEventDriver {
                                 true,
                                 self.page_discovery.is_some(),
                                 true,
-                                self.auto_attach_target_types(),
+                                self.nested_auto_attach_target_types(),
                             )
                             .await?;
                     }
@@ -2130,25 +2184,74 @@ impl ChromiumTopologyEventDriver {
                 } else {
                     false
                 };
-                if retain_worker {
-                    let enable_network = self
+                let retain_service_worker = params.target_info.r#type == "service_worker"
+                    && self
                         .frame_events
                         .as_ref()
-                        .is_some_and(|observer| observer.enables_worker_network());
+                        .is_some_and(|observer| observer.retains_service_worker_targets());
+                if retain_worker || retain_service_worker {
+                    let mut service_worker_commands =
+                        Vec::<ServiceWorkerInitializationCommand>::new();
+                    if retain_service_worker {
+                        let topology = self
+                            .topology
+                            .lock()
+                            .map_err(|_| ChromiumCompositionError::TopologyStateUnavailable)?;
+                        self.frame_events
+                            .as_ref()
+                            .expect("retained Service Worker has an observer")
+                            .prepare_service_worker(topology.topology(), event)
+                            .map_err(ChromiumTopologyEventDriverError::FrameEventObserver)?;
+                        self.frame_events
+                            .as_ref()
+                            .expect("retained Service Worker has an observer")
+                            .service_worker_initialization_commands(
+                                topology.topology(),
+                                event,
+                                &mut service_worker_commands,
+                            )
+                            .map_err(ChromiumTopologyEventDriverError::FrameEventObserver)?;
+                    }
+                    let enable_network = self.frame_events.as_ref().is_some_and(|observer| {
+                        if retain_service_worker {
+                            observer.enables_service_worker_network()
+                        } else {
+                            observer.enables_worker_network()
+                        }
+                    }) || (retain_service_worker
+                        && !service_worker_commands.is_empty());
                     let client = self.session_factory.create_session(
                         params.session_id.clone(),
                         params.target_info.target_id.clone(),
                     );
                     let initialize: Result<(), ChromiumTopologyEventDriverError> = async {
+                        if retain_service_worker {
+                            // Service Worker network is Context-owned. Its
+                            // independent Context lane was registered by the
+                            // pre-resume observer hook above.
+                            client
+                                .service_worker_initialize_with_commands(
+                                    enable_network,
+                                    &service_worker_commands,
+                                )
+                                .await?;
+                            return Ok(());
+                        }
                         client.runtime_enable().await?;
-                        client
-                            .target_set_auto_attach_types(
-                                true,
-                                true,
-                                true,
-                                self.auto_attach_target_types(),
-                            )
-                            .await?;
+                        // Dedicated workers may spawn nested dedicated workers.
+                        // Chromium service-worker sessions are browser-root
+                        // leaves and do not reliably answer Target.setAutoAttach;
+                        // upstream initializes them with Runtime only.
+                        if retain_worker {
+                            client
+                                .target_set_auto_attach_types(
+                                    true,
+                                    true,
+                                    true,
+                                    self.nested_auto_attach_target_types(),
+                                )
+                                .await?;
+                        }
                         if enable_network {
                             client.network_enable().await?;
                         }
@@ -3911,10 +4014,11 @@ mod tests {
     use playwright_rust_cap_evaluation::EvaluationValueLimits;
     use playwright_rust_cap_network_events::NETWORK_REQUEST_EVENT_TAG;
     use playwright_rust_cap_page_events::{BrowserContextPage, PageLoad};
-    use playwright_rust_cdp::connection::{CdpError, ConnectionConfig};
+    use playwright_rust_cdp::connection::{CdpError, ConnectionConfig, UNBOUNDED_CDP_BYTES};
     use playwright_rust_cdp::generated::page;
     use playwright_rust_cdp::{
-        CdpClient, CdpConnectionProductionProfile, CdpEvent, SessionFactory,
+        CdpClient, CdpConnectionProductionProfile, CdpEvent, ServiceWorkerInitializationCommand,
+        SessionFactory,
     };
     use playwright_rust_codec_browser_events::BrowserEventsCodec;
     use playwright_rust_codec_control::ControlCodec;
@@ -4516,6 +4620,41 @@ mod tests {
         limits
     }
 
+    #[test]
+    fn allocator_backed_responses_and_events_are_not_projected_into_topology_storage() {
+        // Arrange
+        let connection = CdpConnectionProductionProfile::new(
+            ResourceScope::Connection,
+            ConnectionConfig {
+                max_response_bytes: UNBOUNDED_CDP_BYTES,
+                max_event_bytes: UNBOUNDED_CDP_BYTES,
+                max_websocket_bytes: UNBOUNDED_CDP_BYTES,
+                ..ConnectionConfig::default()
+            },
+        );
+        let topology = CdpTopologyProductionProfile::new(
+            CdpTopologyLimits::new(16, 2, 2, 8, 8, 128),
+            ResourceScope::extension(41, 91),
+        )
+        .unwrap();
+        let profile = ChromiumTopologyEventDriverProductionProfile::from_profiles(
+            ResourceScope::extension(41, 92),
+            &connection,
+            topology,
+        )
+        .unwrap();
+        let before = profile.maximum_retained_bytes();
+
+        // Act
+        let recursive = profile.with_parallel_recursive_attachment().unwrap();
+
+        // Assert
+        assert_eq!(recursive.maximum_retained_bytes(), before);
+        assert_eq!(recursive.max_response_bytes(), UNBOUNDED_CDP_BYTES);
+        assert_eq!(recursive.max_event_bytes(), UNBOUNDED_CDP_BYTES);
+        assert!(recursive.matches(&connection, topology));
+    }
+
     fn profiles(
         event_channel_capacity: usize,
     ) -> (
@@ -4880,6 +5019,7 @@ mod tests {
                 AtomicObjectIdSource::new(20).expect("network IDs should start above topology"),
             ),
             adapter_profile: adapter,
+            allocator_backed_adapters: false,
             resources: resources.clone(),
             max_page_lanes: 2,
             max_related_sessions: 0,
@@ -6290,6 +6430,42 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn selected_service_worker_observer_adds_only_service_worker_to_auto_attach_filter() {
+        // Arrange
+        let mut fixture = discovery_fixture(8);
+        fixture.driver = fixture
+            .driver
+            .with_frame_event_observer(Arc::new(ServiceWorkerRetentionObserver {
+                network: false,
+                offline: false,
+                prepared: AtomicUsize::new(0),
+            }))
+            .expect("service-worker observer should fit the declared profile");
+
+        // Act
+        fixture
+            .driver
+            .initialize_snapshot(&fixture.runtime, 0)
+            .await
+            .expect("initial discovery should install auto-attach");
+
+        // Assert
+        let calls = fixture.browser.calls();
+        assert_eq!(
+            calls[0],
+            (
+                "Target.setAutoAttach".to_owned(),
+                vec![serde_json::json!({
+                    "autoAttach": true,
+                    "waitForDebuggerOnStart": true,
+                    "flatten": true,
+                    "includedTargetTypes": ["page", "iframe", "service_worker"]
+                })]
+            )
+        );
+    }
+
+    #[tokio::test]
     async fn initial_snapshot_drains_preexisting_target_announcements() {
         // Arrange
         let mut fixture = discovery_fixture(8);
@@ -6761,28 +6937,24 @@ mod tests {
     }
 
     #[test]
-    fn public_browser_roots_are_bounded_and_cleared_by_exact_id() {
+    fn public_browser_roots_grow_past_the_legacy_count_and_clear_by_exact_id() {
         // Arrange
         let parent = ChromiumAuxiliarySessionParent::new(64).unwrap();
         parent.register("private-page-parent").unwrap();
-        for index in 0..super::MAX_PUBLIC_BROWSER_SESSIONS {
+        for index in 0..129 {
             parent
                 .register_public_browser_session(&format!("public-{index}"))
                 .unwrap();
         }
 
         // Act
-        let overflow = parent.register_public_browser_session("ninth");
         let unrelated_clear = parent.clear_public_browser_session("other");
         let exact_clear = parent.clear_public_browser_session("public-3");
 
         // Assert
-        assert_eq!(
-            overflow,
-            Err(ChromiumAuxiliarySessionParentError::PublicSessionCapacityExceeded)
-        );
         assert_eq!(unrelated_clear, Ok(false));
         assert_eq!(exact_clear, Ok(true));
+        assert_eq!(parent.matches("public-128"), Ok(true));
         assert_eq!(parent.matches("public-3"), Ok(false));
         assert_eq!(parent.matches("private-page-parent"), Ok(true));
         assert_eq!(
@@ -8135,6 +8307,83 @@ mod tests {
         network: bool,
     }
 
+    struct ServiceWorkerRetentionObserver {
+        network: bool,
+        offline: bool,
+        prepared: AtomicUsize,
+    }
+
+    impl playwright_rust_plugin_chromium_frame_observer::ChromiumFrameEventObserver
+        for ServiceWorkerRetentionObserver
+    {
+        fn observes_page(&self, _page: ObjectId) -> bool {
+            false
+        }
+
+        fn retains_service_worker_targets(&self) -> bool {
+            true
+        }
+
+        fn enables_service_worker_network(&self) -> bool {
+            self.network
+        }
+
+        fn prepare_service_worker(
+            &self,
+            _topology: &playwright_rust_backend_cdp::CdpTopology,
+            _event: &CdpEvent,
+        ) -> playwright_rust_plugin_chromium_frame_observer::FrameObservationResult {
+            self.prepared.fetch_add(1, Ordering::Relaxed);
+            Ok(())
+        }
+
+        fn service_worker_initialization_commands(
+            &self,
+            _topology: &playwright_rust_backend_cdp::CdpTopology,
+            _event: &CdpEvent,
+            commands: &mut Vec<ServiceWorkerInitializationCommand>,
+        ) -> playwright_rust_plugin_chromium_frame_observer::FrameObservationResult {
+            if self.offline {
+                commands.push(ServiceWorkerInitializationCommand::new(
+                    "Network.emulateNetworkConditions",
+                    serde_json::json!({
+                        "offline": true,
+                        "latency": 0,
+                        "downloadThroughput": -1,
+                        "uploadThroughput": -1
+                    }),
+                ));
+            }
+            Ok(())
+        }
+
+        fn initialize_frame(
+            &self,
+            _topology: &playwright_rust_backend_cdp::CdpTopology,
+            _session: &str,
+            _frame: &page::Frame,
+        ) -> playwright_rust_plugin_chromium_frame_observer::FrameObservationResult {
+            Ok(())
+        }
+
+        fn reconcile(
+            &self,
+            _topology: &playwright_rust_backend_cdp::CdpTopology,
+        ) -> playwright_rust_plugin_chromium_frame_observer::FrameObservationResult {
+            Ok(())
+        }
+
+        fn event(
+            &self,
+            _topology: &playwright_rust_backend_cdp::CdpTopology,
+            _event: &CdpEvent,
+        ) -> playwright_rust_plugin_chromium_frame_observer::FrameObservationResult {
+            Ok(())
+        }
+
+        fn seal(&self) {}
+    }
+
     impl playwright_rust_plugin_chromium_frame_observer::ChromiumFrameEventObserver
         for WorkerRetentionObserver
     {
@@ -8226,6 +8475,180 @@ mod tests {
                 .browser
                 .method_names()
                 .contains(&"Target.detachFromTargetInParent".to_owned())
+        );
+    }
+
+    #[tokio::test]
+    async fn selected_parent_scoped_service_worker_initializes_without_nested_auto_attach() {
+        // Arrange
+        let mut fixture = fixture(8);
+        fixture.driver = fixture
+            .driver
+            .with_frame_event_observer(Arc::new(ServiceWorkerRetentionObserver {
+                network: false,
+                offline: false,
+                prepared: AtomicUsize::new(0),
+            }))
+            .unwrap();
+        fixture
+            .sender
+            .send(CdpEvent::new(
+                "Target.attachedToTarget".to_owned(),
+                serde_json::json!({
+                    "sessionId": "session-service-worker",
+                    "targetInfo": {
+                        "targetId": "target-service-worker",
+                        "type": "service_worker",
+                        "title": "",
+                        "url": "https://example.test/sw.js",
+                        "attached": true,
+                        "canAccessOpener": false
+                    },
+                    "waitingForDebugger": true
+                }),
+                Some("session-a".to_owned()),
+            ))
+            .expect("Service Worker attachment should enqueue");
+
+        // Act
+        fixture
+            .driver
+            .receive_once(&fixture.runtime)
+            .await
+            .expect("selected Service Worker attachment should be retained");
+
+        // Assert
+        assert_eq!(
+            fixture
+                .factory
+                .client("target-service-worker")
+                .method_names(),
+            ["Runtime.enable", "Runtime.runIfWaitingForDebugger"]
+        );
+        let page_auto_attach = fixture
+            .factory
+            .client("target-a")
+            .calls()
+            .into_iter()
+            .find(|(method, _)| method == "Target.setAutoAttach")
+            .expect("Page session should install recursive auto-attach");
+        assert_eq!(
+            page_auto_attach.1,
+            vec![serde_json::json!({
+                "autoAttach": true,
+                "waitForDebuggerOnStart": false,
+                "flatten": true,
+                "includedTargetTypes": ["page", "iframe"]
+            })]
+        );
+    }
+
+    #[tokio::test]
+    async fn service_worker_network_observer_enables_network_before_releasing_debugger_pause() {
+        // Arrange
+        let mut fixture = fixture(8);
+        let observer = Arc::new(ServiceWorkerRetentionObserver {
+            network: true,
+            offline: false,
+            prepared: AtomicUsize::new(0),
+        });
+        fixture.driver = fixture
+            .driver
+            .with_frame_event_observer(observer.clone())
+            .unwrap();
+        fixture
+            .sender
+            .send(CdpEvent::new(
+                "Target.attachedToTarget".to_owned(),
+                serde_json::json!({
+                    "sessionId": "session-service-worker",
+                    "targetInfo": {
+                        "targetId": "target-service-worker",
+                        "type": "service_worker",
+                        "title": "",
+                        "url": "https://example.test/sw.js",
+                        "attached": true,
+                        "canAccessOpener": false
+                    },
+                    "waitingForDebugger": true
+                }),
+                Some("session-a".to_owned()),
+            ))
+            .expect("Service Worker attachment should enqueue");
+
+        // Act
+        fixture
+            .driver
+            .receive_once(&fixture.runtime)
+            .await
+            .expect("selected Service Worker attachment should be retained");
+
+        // Assert
+        assert_eq!(
+            fixture
+                .factory
+                .client("target-service-worker")
+                .method_names(),
+            [
+                "Runtime.enable",
+                "Network.enable",
+                "Runtime.runIfWaitingForDebugger"
+            ]
+        );
+        assert_eq!(observer.prepared.load(Ordering::Relaxed), 1);
+    }
+
+    #[tokio::test]
+    async fn service_worker_policy_is_applied_after_network_and_before_resume() {
+        // Arrange
+        let mut fixture = fixture(8);
+        fixture.driver = fixture
+            .driver
+            .with_frame_event_observer(Arc::new(ServiceWorkerRetentionObserver {
+                network: false,
+                offline: true,
+                prepared: AtomicUsize::new(0),
+            }))
+            .unwrap();
+        fixture
+            .sender
+            .send(CdpEvent::new(
+                "Target.attachedToTarget".to_owned(),
+                serde_json::json!({
+                    "sessionId": "session-service-worker-policy",
+                    "targetInfo": {
+                        "targetId": "target-service-worker-policy",
+                        "type": "service_worker",
+                        "title": "",
+                        "url": "https://example.test/sw.js",
+                        "attached": true,
+                        "canAccessOpener": false
+                    },
+                    "waitingForDebugger": true
+                }),
+                Some("session-a".to_owned()),
+            ))
+            .expect("Service Worker attachment should enqueue");
+
+        // Act
+        fixture
+            .driver
+            .receive_once(&fixture.runtime)
+            .await
+            .expect("selected Service Worker attachment should be retained");
+
+        // Assert
+        assert_eq!(
+            fixture
+                .factory
+                .client("target-service-worker-policy")
+                .method_names(),
+            [
+                "Runtime.enable",
+                "Network.enable",
+                "Network.emulateNetworkConditions",
+                "Runtime.runIfWaitingForDebugger"
+            ]
         );
     }
 

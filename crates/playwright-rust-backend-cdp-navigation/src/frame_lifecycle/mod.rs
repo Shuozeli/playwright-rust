@@ -117,6 +117,7 @@ pub struct FrameLifecycleProfile {
     frames: usize,
     requests: usize,
     bytes: u64,
+    allocator_backed: bool,
 }
 impl FrameLifecycleProfile {
     pub fn new(
@@ -143,7 +144,17 @@ impl FrameLifecycleProfile {
             frames,
             requests,
             bytes,
+            allocator_backed: false,
         })
+    }
+    pub const fn new_allocator_backed(scope: ResourceScope) -> Self {
+        Self {
+            scope,
+            frames: usize::MAX,
+            requests: usize::MAX,
+            bytes: 0,
+            allocator_backed: true,
+        }
     }
     pub const fn requirements(self) -> ResourceRequirements {
         ResourceRequirements::none()
@@ -178,28 +189,44 @@ pub struct FrameLifecycleStore {
     requests: Vec<Option<RequestState>>,
     now: Duration,
     invalidated: bool,
-    _lease: ResourceLease,
+    allocator_backed: bool,
+    _lease: Option<ResourceLease>,
 }
 impl FrameLifecycleStore {
     pub fn new(
         profile: FrameLifecycleProfile,
         resources: &ProductionResourceLedger,
     ) -> Result<Self, LifecycleError> {
-        let ledger = resources
-            .claim(profile.requirements())
-            .map_err(|_| LifecycleError::Resources)?;
-        let lease = ledger
-            .reserve(
-                profile.scope,
-                ResourceClass::BackendStateBytes,
-                profile.bytes,
+        let lease = if profile.allocator_backed {
+            None
+        } else {
+            let ledger = resources
+                .claim(profile.requirements())
+                .map_err(|_| LifecycleError::Resources)?;
+            Some(
+                ledger
+                    .reserve(
+                        profile.scope,
+                        ResourceClass::BackendStateBytes,
+                        profile.bytes,
+                    )
+                    .map_err(|_| LifecycleError::Resources)?,
             )
-            .map_err(|_| LifecycleError::Resources)?;
+        };
         Ok(Self {
-            frames: slots(profile.frames)?,
-            requests: slots(profile.requests)?,
+            frames: if profile.allocator_backed {
+                Vec::new()
+            } else {
+                slots(profile.frames)?
+            },
+            requests: if profile.allocator_backed {
+                Vec::new()
+            } else {
+                slots(profile.requests)?
+            },
             now: Duration::ZERO,
             invalidated: false,
+            allocator_backed: profile.allocator_backed,
             _lease: lease,
         })
     }

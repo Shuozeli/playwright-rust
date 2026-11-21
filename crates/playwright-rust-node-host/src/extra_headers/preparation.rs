@@ -1,6 +1,6 @@
 //! Host-owned synchronous metadata preparation. The outer lock excludes all
 //! host readers while admission can still fail; no native await holds it.
-use super::{MAX_FAILED_PAGES, Route};
+use super::Route;
 use crate::HostError;
 use playwright_rust_core::ObjectId;
 use playwright_rust_network_model::extra_headers::{
@@ -12,6 +12,7 @@ use std::sync::{Arc, Mutex};
 pub(super) struct DispatchPlan {
     pub(super) routes: Vec<Route>,
     pub(super) pages: Vec<(ObjectId, Option<EffectiveHeaders>)>,
+    pub(super) service_workers: Vec<(usize, Option<EffectiveHeaders>)>,
 }
 impl DispatchPlan {
     /// Vec/route storage is covered by the already admitted host request body;
@@ -20,31 +21,55 @@ impl DispatchPlan {
         settings: &HeaderSettings,
         routes: Vec<Route>,
     ) -> Result<Self, HostError> {
-        let mut pages = Vec::with_capacity(MAX_FAILED_PAGES);
-        for route in &routes {
-            if pages.iter().any(|(page, _)| *page == route.page) {
-                continue;
+        let mut pages = Vec::new();
+        let mut service_workers = Vec::new();
+        for (index, route) in routes.iter().enumerate() {
+            let first = pages.is_empty() && service_workers.is_empty();
+            match route.page {
+                Some(page) => {
+                    if pages.iter().any(|(candidate, _)| *candidate == page) {
+                        continue;
+                    }
+                    // Context dispatch reads its first Page synchronously, then
+                    // awaits that Page before reading the next. Freezing later
+                    // targets here would replay stale desired values after an
+                    // overlapping setter.
+                    let headers = if first {
+                        Some(
+                            settings
+                                .effective(route.context, page)
+                                .map_err(super::settings_error)?,
+                        )
+                    } else {
+                        None
+                    };
+                    pages
+                        .try_reserve(1)
+                        .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
+                    pages.push((page, headers));
+                }
+                None => {
+                    service_workers
+                        .try_reserve(1)
+                        .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
+                    let headers = if first {
+                        Some(
+                            settings
+                                .effective_context(route.context)
+                                .map_err(super::settings_error)?,
+                        )
+                    } else {
+                        None
+                    };
+                    service_workers.push((index, headers));
+                }
             }
-            if pages.len() == MAX_FAILED_PAGES {
-                return Err(HostError::ResourceExhausted(
-                    "extra header dispatch Page capacity exhausted".into(),
-                ));
-            }
-            // Context dispatch reads its first Page synchronously, then awaits
-            // that Page before reading the next. Freezing later Pages here
-            // would replay stale desired values after an overlapping setter.
-            let headers = if pages.is_empty() {
-                Some(
-                    settings
-                        .effective(route.context, route.page)
-                        .map_err(super::settings_error)?,
-                )
-            } else {
-                None
-            };
-            pages.push((route.page, headers));
         }
-        Ok(Self { routes, pages })
+        Ok(Self {
+            routes,
+            pages,
+            service_workers,
+        })
     }
 }
 
@@ -108,9 +133,68 @@ mod tests {
     fn route(page: u64, session: &str) -> Route {
         Route {
             context: ObjectId::new(1),
-            page: ObjectId::new(page),
+            page: Some(ObjectId::new(page)),
             watch: super::super::session_retirement::Watch::new(session, "main", session),
         }
+    }
+
+    fn service_worker_route(session: &str) -> Route {
+        Route {
+            context: ObjectId::new(1),
+            page: None,
+            watch: super::super::session_retirement::Watch::new(session, session, session),
+        }
+    }
+
+    #[test]
+    fn service_worker_group_freezes_only_context_headers() {
+        // Arrange
+        let resources = ledger();
+        let pool = HeaderPool::new(value_profile().unwrap(), &resources).unwrap();
+        let settings = HeaderSettings::new(settings_profile().unwrap(), pool, &resources).unwrap();
+        settings
+            .begin_context(
+                ObjectId::new(1),
+                &[HeaderRef {
+                    name: "X-Layer",
+                    value: "context",
+                }],
+            )
+            .unwrap()
+            .commit()
+            .unwrap();
+        settings
+            .begin_page(
+                ObjectId::new(1),
+                ObjectId::new(2),
+                &[HeaderRef {
+                    name: "X-Layer",
+                    value: "page",
+                }],
+            )
+            .unwrap()
+            .commit()
+            .unwrap();
+
+        // Act
+        let plan =
+            DispatchPlan::capture(&settings, vec![service_worker_route("service-worker")]).unwrap();
+
+        // Assert
+        assert!(plan.pages.is_empty());
+        assert_eq!(plan.service_workers.len(), 1);
+        assert_eq!(plan.service_workers[0].0, 0);
+        assert_eq!(
+            plan.service_workers[0]
+                .1
+                .as_ref()
+                .unwrap()
+                .iter()
+                .next()
+                .unwrap()
+                .value,
+            "context"
+        );
     }
 
     #[test]
@@ -261,7 +345,7 @@ mod tests {
     }
 
     #[test]
-    fn oversized_page_plan_releases_all_partial_effective_owners() {
+    fn page_plan_grows_past_legacy_page_count_without_extra_frozen_owners() {
         // Arrange
         let resources = ledger();
         let pool = HeaderPool::new(value_profile().unwrap(), &resources).unwrap();
@@ -271,13 +355,20 @@ mod tests {
             .unwrap()
             .class(ResourceClass::LiveObject)
             .current;
-        let routes = (0..=MAX_FAILED_PAGES)
-            .map(|page| route(page as u64 + 2, "native"))
-            .collect();
+        let routes = (0..129).map(|page| route(page + 2, "native")).collect();
         // Act
-        let result = DispatchPlan::capture(&settings, routes);
+        let plan = DispatchPlan::capture(&settings, routes).unwrap();
         // Assert
-        assert!(matches!(result, Err(HostError::ResourceExhausted(_))));
+        assert_eq!(plan.pages.len(), 129);
+        assert_eq!(
+            resources
+                .metrics()
+                .unwrap()
+                .class(ResourceClass::LiveObject)
+                .current,
+            before
+        );
+        drop(plan);
         assert_eq!(
             resources
                 .metrics()

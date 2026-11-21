@@ -32,6 +32,14 @@ pub struct CdpScreenshotProductionProfile {
 
 impl CdpScreenshotProductionProfile {
     pub fn new(max_screenshot_bytes: usize, max_concurrent_captures: usize) -> Self {
+        if max_screenshot_bytes == usize::MAX && max_concurrent_captures == usize::MAX {
+            return Self {
+                max_screenshot_bytes,
+                max_concurrent_captures,
+                intersect_viewport_clip: false,
+                requirements: ResourceRequirements::none(),
+            };
+        }
         let per_capture = u64::try_from(max_screenshot_bytes).unwrap_or(u64::MAX);
         let captures = u64::try_from(max_concurrent_captures).unwrap_or(u64::MAX);
         let total = per_capture.saturating_mul(captures);
@@ -48,6 +56,16 @@ impl CdpScreenshotProductionProfile {
             intersect_viewport_clip: false,
             requirements,
         }
+    }
+
+    /// Uses allocator failure for result storage and caller-side scheduling
+    /// for concurrency instead of fabricating public screenshot limits.
+    pub fn new_allocator_backed() -> Self {
+        Self::new(usize::MAX, usize::MAX)
+    }
+
+    const fn allocator_backed(self) -> bool {
+        self.max_screenshot_bytes == usize::MAX && self.max_concurrent_captures == usize::MAX
     }
 
     pub const fn max_screenshot_bytes(self) -> usize {
@@ -127,10 +145,8 @@ pub struct CdpScreenshotAdmission {
 }
 
 impl CdpScreenshotAdmission {
-    fn take_bytes(&mut self) -> ResourceLease {
-        self.bytes
-            .take()
-            .expect("capture admission owns byte lease")
+    fn take_bytes(&mut self) -> Option<ResourceLease> {
+        self.bytes.take()
     }
 }
 
@@ -171,25 +187,29 @@ impl CdpScreenshotService {
                 "the screenshot capture concurrency limit was reached",
             ));
         }
-        let maximum =
-            u64::try_from(self.resources.profile.max_screenshot_bytes()).unwrap_or(u64::MAX);
-        let bytes = match self.resources.ledger.reserve(
-            ResourceScope::Object(self.page_object_id),
-            ResourceClass::ScreenshotBytes,
-            maximum,
-        ) {
-            Ok(bytes) => bytes,
-            Err(error) => {
-                self.page_active.store(false, Ordering::Release);
-                let previous = self.resources.active.fetch_sub(1, Ordering::AcqRel);
-                debug_assert!(previous > 0);
-                return Err(map_resource_error(error));
+        let bytes = if self.resources.profile.allocator_backed() {
+            None
+        } else {
+            let maximum =
+                u64::try_from(self.resources.profile.max_screenshot_bytes()).unwrap_or(u64::MAX);
+            match self.resources.ledger.reserve(
+                ResourceScope::Object(self.page_object_id),
+                ResourceClass::ScreenshotBytes,
+                maximum,
+            ) {
+                Ok(bytes) => Some(bytes),
+                Err(error) => {
+                    self.page_active.store(false, Ordering::Release);
+                    let previous = self.resources.active.fetch_sub(1, Ordering::AcqRel);
+                    debug_assert!(previous > 0);
+                    return Err(map_resource_error(error));
+                }
             }
         };
         Ok(CdpScreenshotAdmission {
             page_active: Arc::clone(&self.page_active),
             global_active: Arc::clone(&self.resources.active),
-            bytes: Some(bytes),
+            bytes,
         })
     }
 
@@ -237,11 +257,14 @@ impl CdpScreenshotService {
                 self.resources.profile.max_screenshot_bytes()
             )));
         }
-        let bytes = BudgetedBytes::from_reserved(
-            admission.take_bytes(),
-            ResourceClass::ScreenshotBytes,
-            decoded,
-        )
+        let bytes = match admission.take_bytes() {
+            Some(lease) => {
+                BudgetedBytes::from_reserved(lease, ResourceClass::ScreenshotBytes, decoded)
+            }
+            None => {
+                BudgetedBytes::from_vec_allocator_backed(ResourceClass::ScreenshotBytes, decoded)
+            }
+        }
         .map_err(map_resource_error)?;
         Ok(ScreenshotData::new(bytes, format))
     }
@@ -513,6 +536,7 @@ fn map_cdp_error(
 
 #[cfg(test)]
 mod tests {
+    use base64::Engine as _;
     use std::sync::Arc;
     use std::task::{Context, Poll, Waker};
 
@@ -712,6 +736,32 @@ mod tests {
                 .current,
             0
         );
+    }
+
+    #[tokio::test]
+    async fn allocator_backed_profile_accepts_a_screenshot_larger_than_two_mibibytes() {
+        // Arrange
+        let profile = CdpScreenshotProductionProfile::new_allocator_backed();
+        let requirements = profile.requirements();
+        let resources = ProductionResourceLedger::new(
+            ResourceLimits::deny_all(requirements.scopes, requirements.leases),
+            requirements,
+        )
+        .unwrap();
+        let bytes = vec![0x5a; 2 * 1024 * 1024 + 17];
+        let client = Arc::new(FakeCdpClient::from_html(""));
+        client.set_screenshot_response(&super::STANDARD.encode(&bytes));
+        let service =
+            CdpScreenshotServiceFactory::new_with_production_resources(profile, &resources)
+                .unwrap()
+                .bind(client, ObjectId::new(9));
+
+        // Act
+        let result = service.call(ScreenshotOptions::default()).await.unwrap();
+
+        // Assert
+        assert_eq!(result.as_bytes(), bytes);
+        assert_eq!(result.len(), 2 * 1024 * 1024 + 17);
     }
 
     #[tokio::test]

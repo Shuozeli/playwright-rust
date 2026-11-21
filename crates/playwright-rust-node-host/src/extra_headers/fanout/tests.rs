@@ -126,22 +126,15 @@ async fn later_native_failure_is_observed_without_waiting_for_an_earlier_member(
 }
 
 #[test]
-fn fanout_count_and_future_body_are_checked_before_boxing() {
+fn fanout_grows_past_legacy_route_count() {
     // Arrange
     let mut calls = Fanout::new();
-    for _ in 0..super::super::MAX_ROUTES {
+    for _ in 0..129 {
         calls.push(std::future::pending()).unwrap();
     }
     // Act
-    let full = calls.push(std::future::pending());
-    let mut empty = Fanout::new();
-    let large = [0u8; FUTURE_BYTES + 1];
-    let oversized = empty.push(async move {
-        std::hint::black_box(large);
-        Ok(())
-    });
+    let additional = calls.push(std::future::pending());
     // Assert
-    assert!(matches!(full, Err(HostError::ResourceExhausted(_))));
-    assert!(matches!(oversized, Err(HostError::ResourceExhausted(_))));
-    assert!(empty.unstarted.is_empty());
+    assert!(additional.is_ok());
+    assert_eq!(calls.unstarted.len(), 130);
 }

@@ -17,8 +17,6 @@ const MAX_REVISION_LENGTH: usize = 128;
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum BrowserEngine {
     Chromium,
-    Firefox,
-    WebKit,
 }
 
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]

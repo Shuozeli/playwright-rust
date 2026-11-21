@@ -34,6 +34,36 @@ fn production(requirements: ResourceRequirements) -> ProductionResourceLedger {
     ProductionResourceLedger::new(limits, requirements).unwrap()
 }
 
+#[test]
+fn allocator_backed_mutation_owner_grows_past_legacy_counts() {
+    // Arrange
+    let backend_profile =
+        SerializedPayloadMutationProfile::new_allocator_backed(ResourceScope::extension(191, 90));
+    let backend_resources = production(backend_profile.requirements().unwrap());
+    let backend = Arc::new(
+        CdpSerializedPayloadMutationService::new(backend_profile, &backend_resources).unwrap(),
+    );
+    let owner_profile =
+        UploadProfile::new_allocator_backed(ResourceScope::extension(191, 91), 16 * 1024).unwrap();
+    let owner_resources = production(owner_profile.requirements());
+    let service = SerializedPayloadMutationOperationService::new(
+        owner_profile,
+        &owner_resources,
+        backend,
+        CleanupQueue::new(1),
+    )
+    .unwrap();
+
+    // Act
+    let owners: Vec<_> = (0..129).map(|_| service.admit_owner().unwrap()).collect();
+
+    // Assert
+    assert_eq!(service.active_operations(), 129);
+    assert_eq!(owner_resources.metrics().unwrap().active_leases, 1);
+    drop(owners);
+    assert_eq!(service.active_operations(), 0);
+}
+
 fn graph() -> Value {
     json!({
         "a": [{

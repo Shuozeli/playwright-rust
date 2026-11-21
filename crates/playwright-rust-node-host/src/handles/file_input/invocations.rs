@@ -1,4 +1,4 @@
-//! Bounded session hooks for already-admitted, possibly parked FFI work.
+//! Allocator-backed session hooks for already-admitted, possibly parked FFI work.
 //!
 //! Register only at the first native handoff, not during arbitrary language
 //! preparation. This registry proves its own identity, not source/session
@@ -16,7 +16,6 @@ use playwright_rust_core::{
 };
 use std::sync::{Arc, Mutex, Weak};
 
-const CAPACITY: usize = 8;
 const STORAGE_BYTES: u64 = 4 * 1024;
 const SCOPE: ResourceScope = ResourceScope::extension(169, 2);
 
@@ -28,7 +27,7 @@ struct Entry {
 struct State {
     sealed: bool,
     next_generation: u64,
-    entries: [Option<Entry>; CAPACITY],
+    entries: Vec<Entry>,
 }
 
 struct Inner {
@@ -36,7 +35,8 @@ struct Inner {
     _storage: ResourceLease,
 }
 
-/// Fixed weak hooks. No entry owns an FFI budget, task token or native result.
+/// Weak hooks with no fabricated public count limit. No entry owns an FFI
+/// budget, task token or native result.
 pub(super) struct Invocations(Arc<Inner>);
 
 /// A move-only weak receipt, valid only for its original registry generation.
@@ -44,7 +44,6 @@ pub(super) struct Invocations(Arc<Inner>);
 #[must_use = "retain the registration through every native/parked phase"]
 pub(super) struct Registration {
     origin: Weak<Inner>,
-    slot: usize,
     generation: u64,
 }
 
@@ -54,24 +53,23 @@ pub(super) struct Registration {
 /// caller admission locks are held.
 #[must_use = "invoke revoke after releasing all caller admission locks"]
 pub(crate) struct RevokeBatch {
-    entries: [Option<Entry>; CAPACITY],
+    entries: Vec<Entry>,
     // Retain administrative admission through wakeups/result destructors even
     // if the session owner disappears. Repeated empty seals retain no owner.
     _storage: Option<Arc<Inner>>,
 }
 
-// Include the heap index/Mutex and Arc header, the detached array and all eight
-// live public receipt values (including exact weak source metadata), one
-// resource request, plus bounded control temporaries.
+// Include the fixed heap index/Mutex and Arc header, empty detached-vector
+// owners, one public receipt value, one resource request, and bounded control
+// temporaries. Dynamic entries use ordinary allocator ownership.
 // FFI entries/results and shared ledger metadata have separate admission; weak
 // hooks do not duplicate those owners. This is not a process/V8 memory bound.
 const REQUIRED_BYTES: usize = std::mem::size_of::<Inner>()
     + 2 * std::mem::size_of::<usize>()
     + std::mem::size_of::<RevokeBatch>()
-    + CAPACITY * std::mem::size_of::<super::RetainedFileInputRegistration>()
+    + std::mem::size_of::<super::RetainedFileInputRegistration>()
     + std::mem::size_of::<ResourceRequest>()
     + 512;
-const _: () = assert!(CAPACITY == crate::handles::MAX_CALLS);
 const _: () = assert!(REQUIRED_BYTES <= STORAGE_BYTES as usize);
 
 impl Invocations {
@@ -100,7 +98,7 @@ impl Invocations {
             state: Mutex::new(State {
                 sealed: false,
                 next_generation: 0,
-                entries: std::array::from_fn(|_| None),
+                entries: Vec::new(),
             }),
             _storage: storage,
         })))
@@ -113,24 +111,17 @@ impl Invocations {
         if state.sealed {
             return Err(HostError::TargetClosed);
         }
-        let slot = state
-            .entries
-            .iter()
-            .position(Option::is_none)
-            .ok_or_else(|| {
-                HostError::ResourceExhausted("retained invocation capacity exceeded (8)".into())
-            })?;
         let generation = state.next_generation.checked_add(1).ok_or_else(|| {
             HostError::ResourceExhausted("retained invocation IDs exhausted".into())
         })?;
+        state.entries.try_reserve(1).map_err(HostError::backend)?;
         state.next_generation = generation;
-        state.entries[slot] = Some(Entry {
+        state.entries.push(Entry {
             generation,
             revoker,
         });
         Ok(Registration {
             origin: Arc::downgrade(&self.0),
-            slot,
             generation,
         })
     }
@@ -143,11 +134,10 @@ impl Invocations {
         }
         let state = self.0.state.lock().map_err(HostError::backend)?;
         if state.sealed
-            || !state.entries.get(registration.slot).is_some_and(|entry| {
-                entry
-                    .as_ref()
-                    .is_some_and(|entry| entry.generation == registration.generation)
-            })
+            || !state
+                .entries
+                .iter()
+                .any(|entry| entry.generation == registration.generation)
         {
             return Err(HostError::TargetClosed);
         }
@@ -164,7 +154,7 @@ impl Invocations {
             .unwrap_or_else(|error| error.into_inner());
         let first = !state.sealed;
         state.sealed = true;
-        let entries = std::mem::replace(&mut state.entries, std::array::from_fn(|_| None));
+        let entries = std::mem::take(&mut state.entries);
         RevokeBatch {
             entries,
             _storage: first.then(|| self.0.clone()),
@@ -180,10 +170,8 @@ impl RevokeBatch {
     }
 
     fn drain(&mut self) {
-        for slot in &mut self.entries {
-            if let Some(entry) = slot.take() {
-                entry.revoker.revoke();
-            }
+        for entry in self.entries.drain(..) {
+            entry.revoker.revoke();
         }
     }
 }
@@ -204,21 +192,15 @@ impl Drop for Registration {
                 .state
                 .lock()
                 .unwrap_or_else(|error| error.into_inner());
-            let Some(slot) = state.entries.get_mut(self.slot) else {
-                return;
-            };
-            if slot
-                .as_ref()
-                .is_some_and(|entry| entry.generation == self.generation)
-            {
-                slot.take()
-            } else {
-                None
-            }
+            state
+                .entries
+                .iter()
+                .position(|entry| entry.generation == self.generation)
+                .map(|index| state.entries.swap_remove(index))
         };
         // Drop the detached weak hook after releasing the registry lock; other
         // weak receipts may still retain its dead allocation backing. Stale
-        // receipts cannot unregister a reused slot.
+        // receipts cannot unregister a later generation.
         drop(removed);
     }
 }

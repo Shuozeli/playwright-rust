@@ -237,6 +237,48 @@ impl NativeSession {
 #[napi]
 impl NativeSession {
     #[napi]
+    pub fn new_context_with_policies_and_extra_http_headers<'env>(
+        &self,
+        env: &'env Env,
+        headers: Unknown<'env>,
+        channel_error: Function<'env>,
+        base_url: Option<JsString<'env>>,
+        options: crate::NativeContextCreationOptions,
+    ) -> napi::Result<PromiseRaw<'env, Unknown<'env>>> {
+        let allowance = options.ffi_allowance(FFI_ALLOWANCE + boundary::SMALL_ALLOWANCE)?;
+        let execution = self
+            .ffi
+            .admit(FfiLane::Command, allowance)
+            .map_err(binding_error)?;
+        let headers = read(
+            env,
+            headers,
+            "browser.newContext",
+            "extraHTTPHeaders",
+            &channel_error,
+        )?;
+        let base_url = crate::context_settings::read_base_url(env, base_url)?;
+        let options = options.into_host().map_err(binding_error)?;
+        let host = self.host.clone();
+        boundary::spawn_published(env, execution, self.publications.clone(), async move {
+            let input: Vec<_> = headers
+                .iter()
+                .map(|(name, value)| HeaderRef { name, value })
+                .collect();
+            crate::ContextDescriptor::try_from(
+                host.new_context_with_policies_and_extra_http_headers(
+                    base_url.as_deref(),
+                    #[cfg(feature = "device-emulation")]
+                    options.device,
+                    options.policies,
+                    &input,
+                )
+                .await?,
+            )
+        })
+    }
+
+    #[napi]
     pub fn new_context_with_extra_http_headers<'env>(
         &self,
         env: &'env Env,

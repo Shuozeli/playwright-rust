@@ -32,10 +32,11 @@ pub struct FrameTreeMetrics {
 pub struct FrameTreeFactory {
     ledger: ResourceLedger,
     limits: FrameTreeLimits,
+    allocator_backed: bool,
 }
 pub(crate) struct Storage {
-    _count: ResourceLease,
-    _bytes: ResourceLease,
+    _count: Option<ResourceLease>,
+    _bytes: Option<ResourceLease>,
 }
 fn invalid(message: &str) -> HostError {
     HostError::InvalidArgument(message.into())
@@ -76,6 +77,9 @@ impl FrameTreeFactory {
 
     #[cfg(feature = "frame-detach-events")]
     pub(crate) fn reserve_detach_revision(&self) -> Result<Storage, HostError> {
+        if self.allocator_backed {
+            return self.reserve(ResourceClass::EventItem, 0);
+        }
         let nodes = self
             .limits
             .frames_per_page
@@ -148,17 +152,46 @@ impl FrameTreeFactory {
         let ledger = ProductionResourceLedger::new(bounds, requirements)
             .and_then(|ledger| ledger.claim(requirements))
             .map_err(exhausted)?;
-        Ok(Self { ledger, limits })
+        Ok(Self {
+            ledger,
+            limits,
+            allocator_backed: false,
+        })
+    }
+    pub fn new_allocator_backed() -> Result<Self, HostError> {
+        let requirements = ResourceRequirements::none();
+        let ledger = ProductionResourceLedger::new(ResourceLimits::deny_all(0, 0), requirements)
+            .and_then(|ledger| ledger.claim(requirements))
+            .map_err(exhausted)?;
+        Ok(Self {
+            ledger,
+            limits: FrameTreeLimits {
+                states: usize::MAX,
+                frames_per_page: usize::MAX,
+                revisions: usize::MAX,
+                bytes: 0,
+            },
+            allocator_backed: true,
+        })
+    }
+    pub const fn allocator_backed(&self) -> bool {
+        self.allocator_backed
     }
     fn reserve(&self, class: ResourceClass, bytes: usize) -> Result<Storage, HostError> {
+        if self.allocator_backed {
+            return Ok(Storage {
+                _count: None,
+                _bytes: None,
+            });
+        }
         let count = self.ledger.reserve(SCOPE, class, 1).map_err(exhausted)?;
         let bytes = self
             .ledger
             .reserve(SCOPE, ResourceClass::BackendStateBytes, bytes as u64)
             .map_err(exhausted)?;
         Ok(Storage {
-            _count: count,
-            _bytes: bytes,
+            _count: Some(count),
+            _bytes: Some(bytes),
         })
     }
     pub fn frame(
@@ -176,6 +209,7 @@ impl FrameTreeFactory {
             parent,
             url,
             budget: self.ledger.clone(),
+            allocator_backed: self.allocator_backed,
             page_root_claimed: AtomicBool::new(false),
             detached: AtomicBool::new(false),
             #[cfg(feature = "frame-detach-events")]
@@ -214,7 +248,7 @@ impl FrameTreeFactory {
         retired: impl Iterator<Item = &'a FrameNode> + Clone,
     ) -> Result<Arc<Revision>, HostError> {
         let retired_count = retired.clone().count();
-        if retired_count > self.limits.states {
+        if !self.allocator_backed && retired_count > self.limits.states {
             return Err(exhausted("Frame retirement count exceeds admission"));
         }
         let bytes = frames
@@ -235,7 +269,7 @@ impl FrameTreeFactory {
         storage: Storage,
     ) -> Result<Arc<Revision>, HostError> {
         let retired_count = retired.clone().count();
-        if retired_count > self.limits.states {
+        if !self.allocator_backed && retired_count > self.limits.states {
             return Err(exhausted("Frame retirement count exceeds admission"));
         }
         // Two passes over borrowed state admit the final allocation before copy.
@@ -267,6 +301,7 @@ struct NodeState {
     parent: Option<ObjectId>,
     url: FrameUrlSnapshot,
     budget: ResourceLedger,
+    allocator_backed: bool,
     page_root_claimed: AtomicBool,
     detached: AtomicBool,
     #[cfg(feature = "frame-detach-events")]
@@ -412,26 +447,34 @@ impl FrameTreeRead {
             .iter()
             .find(|node| node.id() == id)
             .ok_or(HostError::TargetClosed)?;
-        let count = node
-            .0
-            .budget
-            .reserve(SCOPE, ResourceClass::LiveObject, 1)
-            .map_err(exhausted)?;
-        let bytes = node
-            .0
-            .budget
-            .reserve(
-                SCOPE,
-                ResourceClass::BackendStateBytes,
-                std::mem::size_of::<FrameBinding>() as u64,
-            )
-            .map_err(exhausted)?;
+        let storage = if node.0.allocator_backed {
+            Storage {
+                _count: None,
+                _bytes: None,
+            }
+        } else {
+            let count = node
+                .0
+                .budget
+                .reserve(SCOPE, ResourceClass::LiveObject, 1)
+                .map_err(exhausted)?;
+            let bytes = node
+                .0
+                .budget
+                .reserve(
+                    SCOPE,
+                    ResourceClass::BackendStateBytes,
+                    std::mem::size_of::<FrameBinding>() as u64,
+                )
+                .map_err(exhausted)?;
+            Storage {
+                _count: Some(count),
+                _bytes: Some(bytes),
+            }
+        };
         Ok(FrameBinding {
             node: node.clone(),
-            _storage: Storage {
-                _count: count,
-                _bytes: bytes,
-            },
+            _storage: storage,
         })
     }
 }
@@ -494,6 +537,7 @@ impl ReservedPageTree {
             parent: None,
             url: self.url,
             budget: self.factory.ledger.clone(),
+            allocator_backed: self.factory.allocator_backed,
             page_root_claimed: AtomicBool::new(true),
             detached: AtomicBool::new(false),
             #[cfg(feature = "frame-detach-events")]

@@ -116,6 +116,45 @@ impl ChromiumFrameNavigationProfile {
                 .with_metadata(1, leases),
         })
     }
+
+    /// Uses fallible allocator growth for route and snapshot ownership while
+    /// retaining the native-identity byte bound.
+    pub fn new_allocator_backed(
+        scope: ResourceScope,
+        native_id_bytes: NonZeroUsize,
+    ) -> Result<Self> {
+        let overflow = || FrameNavigationAccessError::Setup("storage ceiling overflow");
+        let entry = native_id_bytes
+            .get()
+            .checked_mul(5)
+            .and_then(|n| {
+                n.checked_add(size_of::<Entry>() + size_of::<CdpNavigationService>() + 256)
+            })
+            .ok_or_else(overflow)?;
+        let owner_bytes = u64::try_from(
+            size_of::<Owner>() + size_of::<CdpPageServices>() + 2 * size_of::<Table>() + 192,
+        )
+        .map_err(|_| overflow())?;
+        let snapshot_bytes = entry
+            .checked_add(size_of::<ChromiumFrameNavigationSnapshot>() + 64)
+            .and_then(|n| u64::try_from(n).ok())
+            .ok_or_else(overflow)?;
+        Ok(Self {
+            scope,
+            frames: usize::MAX,
+            snapshots: usize::MAX,
+            native_id_bytes: native_id_bytes.get(),
+            owner_bytes,
+            snapshot_bytes,
+            requirements: ResourceRequirements::none()
+                .with_class(ResourceClass::BackendStateBytes, owner_bytes, owner_bytes)
+                .with_metadata(1, 1),
+        })
+    }
+
+    const fn allocator_backed(self) -> bool {
+        self.frames == usize::MAX && self.snapshots == usize::MAX
+    }
     pub const fn requirements(self) -> ResourceRequirements {
         self.requirements
     }
@@ -157,10 +196,19 @@ impl Table {
             .as_ref()
             .ok_or(FrameNavigationAccessError::Unavailable)?;
         let mut entries: Vec<Arc<Entry>> = Vec::new();
+        let route_count = topology
+            .frame_page_routes()
+            .filter(|(frame, _)| topology.frame_navigation_route(*frame).is_some())
+            .count();
+        let reserve = if self.owner.profile.allocator_backed() {
+            route_count
+        } else {
+            self.owner.profile.frames
+        };
         entries
-            .try_reserve_exact(self.owner.profile.frames)
+            .try_reserve_exact(reserve)
             .map_err(|_| FrameNavigationAccessError::Allocation)?;
-        if entries.capacity() != self.owner.profile.frames {
+        if !self.owner.profile.allocator_backed() && entries.capacity() != reserve {
             return Err(FrameNavigationAccessError::Allocation);
         }
         if self.owner.sealed.load(Ordering::Acquire) {
@@ -174,7 +222,8 @@ impl Table {
             let Some(route) = topology.frame_navigation_route(frame) else {
                 continue;
             };
-            if entries.len() == self.owner.profile.frames {
+            if !self.owner.profile.allocator_backed() && entries.len() == self.owner.profile.frames
+            {
                 return Err(FrameNavigationAccessError::Capacity);
             }
             for id in [route.frame_id(), route.target_id(), route.session_id()] {
@@ -392,18 +441,26 @@ impl ChromiumFrameNavigationAccess {
         owner
             .active
             .fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| {
-                (n < owner.profile.snapshots).then(|| n + 1)
+                if owner.profile.allocator_backed() {
+                    n.checked_add(1)
+                } else {
+                    (n < owner.profile.snapshots).then(|| n + 1)
+                }
             })
             .map_err(|_| FrameNavigationAccessError::Capacity)?;
-        let lease = match owner.ledger.reserve(
-            owner.profile.scope,
-            ResourceClass::BackendStateBytes,
-            owner.profile.snapshot_bytes,
-        ) {
-            Ok(lease) => lease,
-            Err(_) => {
-                owner.active.fetch_sub(1, Ordering::AcqRel);
-                return Err(FrameNavigationAccessError::Resources);
+        let lease = if owner.profile.allocator_backed() {
+            None
+        } else {
+            match owner.ledger.reserve(
+                owner.profile.scope,
+                ResourceClass::BackendStateBytes,
+                owner.profile.snapshot_bytes,
+            ) {
+                Ok(lease) => Some(lease),
+                Err(_) => {
+                    owner.active.fetch_sub(1, Ordering::AcqRel);
+                    return Err(FrameNavigationAccessError::Resources);
+                }
             }
         };
         Ok(ChromiumFrameNavigationSnapshot {
@@ -440,7 +497,7 @@ impl ChromiumFrameNavigationAccess {
 pub struct ChromiumFrameNavigationSnapshot {
     entry: Arc<Entry>,
     owner: Arc<Owner>,
-    _lease: ResourceLease,
+    _lease: Option<ResourceLease>,
 }
 impl ChromiumFrameNavigationSnapshot {
     pub fn frame(&self) -> ObjectId {

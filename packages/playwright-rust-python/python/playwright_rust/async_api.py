@@ -64,8 +64,6 @@ _MAX_CDP_HANDSHAKE_HEADERS = 32
 _MAX_CDP_HANDSHAKE_HEADER_NAME_BYTES = 256
 _MAX_CDP_HANDSHAKE_HEADER_VALUE_BYTES = 4096
 _MAX_CDP_HANDSHAKE_HEADER_BYTES = 8192
-_MAX_BINDING_DISPATCHES = 64
-_MAX_BINDING_REGISTRATIONS = 64
 _BINDING_CLOSE_TIMEOUT_SECONDS = 5.0
 _CURRENT_BINDING_DISPATCH: contextvars.ContextVar[asyncio.Task[None] | None] = (
     contextvars.ContextVar("playwright_rust_binding_dispatch", default=None)
@@ -137,11 +135,9 @@ async def _shield_binding_registration(
     if browser._closed:
         raise TargetClosedError(_TARGET_CLOSED_MESSAGE)
     registrations = browser._binding_registration_tasks
-    if len(registrations) >= _MAX_BINDING_REGISTRATIONS:
-        raise ResourceExhaustedError("pending binding registration capacity exceeded (64)")
 
-    # Reserve before creating a transaction coroutine or task. A canceled caller
-    # must not release this slot while its shielded native commit/rollback runs.
+    # A canceled caller must not release its transaction while the shielded
+    # native commit or rollback is still running.
     async def run_registration() -> None:
         await operation()
 
@@ -182,6 +178,12 @@ def _wrap_handler(handler: Callable[..., object]) -> Callable[..., object]:
 class ViewportSize(TypedDict):
     width: int
     height: int
+
+
+class Geolocation(TypedDict, total=False):
+    latitude: float
+    longitude: float
+    accuracy: float | None
 
 
 class DeviceDescriptor(TypedDict):
@@ -643,18 +645,15 @@ def _geolocation_options(value: object, name: str) -> tuple[float, float, float]
     )
 
 
-def _geolocation_permission(value: object, name: str) -> bool:
-    if value is None:
-        return False
+def _permissions_options(value: object, name: str) -> list[str]:
     if isinstance(value, (str, bytes)) or not isinstance(value, Sequence):
         raise TypeError(f"{name} must be a sequence of strings")
-    values = cast(Sequence[object], value)
-    permissions = [_string_argument(permission, name) for permission in values]
-    unsupported = sorted({permission for permission in permissions if permission != "geolocation"})
-    if unsupported:
-        joined = ", ".join(unsupported)
-        raise UnsupportedError(f"{name} permissions are not installed: {joined}")
-    return "geolocation" in permissions
+    checked: list[str] = []
+    for value_item in cast(Sequence[object], value):
+        permission = _string_argument(value_item, name)
+        if permission not in checked:
+            checked.append(permission)
+    return checked
 
 
 def _http_credentials_options(value: object, name: str) -> tuple[str, str, str | None, bool] | None:
@@ -800,6 +799,30 @@ def _persistent_context_media_options(
         checked(contrast, "contrast", {"more", "no-preference"}),
     )
     return None if all(value is None for value in values) else values
+
+
+def _context_video_options(
+    directory: object,
+    size: object,
+    viewport: tuple[int, int] | None,
+) -> tuple[str, str, int, int] | None:
+    # Match prepareBrowserContextParams: videoSize has no effect without
+    # videosPath, and the server derives an 800px-bounded size otherwise.
+    if directory is None:
+        return None
+    path = Path(cast("str | os.PathLike[str]", directory)).resolve()
+    selected = _viewport(size, "record_video_size")
+    if selected is None:
+        source_width, source_height = viewport or _DEFAULT_VIEWPORT_SIZE
+        scale = min(1.0, 800 / max(source_width, source_height))
+        selected = (int(source_width * scale), int(source_height * scale))
+    width, height = selected
+    width &= ~1
+    height &= ~1
+    if width < 2 or height < 2:
+        raise Error("record_video_size width and height must be at least 2 after normalization")
+    ffmpeg = _native.ffmpeg_executable_path(str(Path(__file__).resolve().parent))
+    return str(path), ffmpeg, width, height
 
 
 def _persistent_context_extra_http_headers(
@@ -1337,6 +1360,19 @@ class Request:
         return str(self._value["resource_type"])
 
     @property
+    def service_worker(self) -> Worker | None:
+        worker_id = self._value.get("service_worker_id")
+        context = self._context
+        if worker_id is None or context is None:
+            return None
+        key = str(worker_id)
+        worker = context._service_workers.get(key)
+        if worker is None and not context._closed:
+            context.service_workers
+            worker = context._service_workers.get(key)
+        return worker
+
+    @property
     def headers(self) -> dict[str, str]:
         return {str(name).lower(): str(value) for name, value in self._value["headers"].items()}
 
@@ -1745,7 +1781,17 @@ class Response:
             if isinstance(raw_request, Mapping)
             else None
         )
+        self._merge_response_body_route(self._value, self._request)
         self._merge_request_timing()
+
+    def _merge_response_body_route(self, value: Mapping[str, Any], request: Request | None) -> None:
+        if self._navigation_body is not None or request is None:
+            return
+        page_id = request._value.get("page_id")
+        frame_id = request._value.get("frame_id")
+        request_id = value.get("native_request_id") or request._value.get("native_request_id")
+        if all(isinstance(part, str) and part for part in (page_id, frame_id, request_id)):
+            self._navigation_body = cast(tuple[str, str, str], (page_id, frame_id, request_id))
 
     def _merge_request_timing(self) -> None:
         timing = self._value.get("timing")
@@ -1767,6 +1813,7 @@ class Response:
             self._finished_owner = finished_owner
         if request is not None:
             self._request = request
+        self._merge_response_body_route(value, self._request)
         self._merge_request_timing()
 
     @property
@@ -5265,6 +5312,27 @@ class Download:
         return f"<Download url={self.url!r} suggested_filename={self.suggested_filename!r}>"
 
 
+class Video:
+    def __init__(self, page: Page) -> None:
+        self._page = page
+
+    async def path(self) -> Path:
+        return Path(
+            await self._page._context.browser._native.page_video_path(self._page._object_id)
+        )
+
+    async def save_as(self, path: str | Path) -> None:
+        await self._page._context.browser._native.page_video_save_as(
+            self._page._object_id, str(path)
+        )
+
+    async def delete(self) -> None:
+        await self._page._context.browser._native.page_video_delete(self._page._object_id)
+
+    def __repr__(self) -> str:
+        return f"<Video page={self._page}>"
+
+
 class SourceLocation(TypedDict):
     url: str
     lineNumber: int
@@ -5274,7 +5342,7 @@ class SourceLocation(TypedDict):
 class ConsoleMessage:
     def __init__(
         self,
-        page: Page,
+        page: Page | None,
         message_type: str,
         text: str,
         arguments_json: str,
@@ -5284,14 +5352,19 @@ class ConsoleMessage:
         argument_handles: list[_native.NativeHandle] | None = None,
         timestamp_micros: int = 0,
         worker: Worker | None = None,
+        context: BrowserContext | None = None,
     ) -> None:
+        owner_context = page._context if page is not None else context
+        if owner_context is None:
+            raise InvalidArgumentError("ConsoleMessage requires a Page or BrowserContext owner")
         self._page = page
+        self._context = owner_context
         self._worker = worker
         self._type = message_type
         self._text = text
         self._arguments_json = arguments_json
         self._args = [
-            _wrap_handle(page._context.browser._native, handle, page)
+            _wrap_handle(owner_context.browser._native, handle, page)
             for handle in (argument_handles or [])
         ]
         self._location = SourceLocation(
@@ -5302,7 +5375,7 @@ class ConsoleMessage:
         self._timestamp_micros = timestamp_micros
 
     @property
-    def page(self) -> Page:
+    def page(self) -> Page | None:
         return self._page
 
     @property
@@ -5335,12 +5408,14 @@ class ConsoleMessage:
 class Worker:
     def __init__(
         self,
-        page: Page,
+        page: Page | None,
+        context: BrowserContext,
         worker_id: str,
         url: str,
         native: _native.NativeWorker,
     ) -> None:
         self._page = page
+        self._context = context
         self._worker_id = worker_id
         self._url = url
         self._native: _native.NativeWorker | None = native
@@ -5350,6 +5425,7 @@ class Worker:
             str, list[tuple[asyncio.Future[object], WorkerEventPredicate | None]]
         ] = {}
         self._close_emitted = False
+        self._console_subscriptions = 0
 
     @property
     def url(self) -> str:
@@ -5359,16 +5435,14 @@ class Worker:
         native = self._native
         if self._closed or native is None:
             raise TargetClosedError(_TARGET_CLOSED_MESSAGE)
-        return await self._page._context.browser._native.worker_evaluate(native, expression, arg)
+        return await self._context.browser._native.worker_evaluate(native, expression, arg)
 
     async def evaluate_handle(self, expression: str, arg: object = None) -> JSHandle:
         native = self._native
         if self._closed or native is None:
             raise TargetClosedError(_TARGET_CLOSED_MESSAGE)
-        value = await self._page._context.browser._native.worker_evaluate_handle(
-            native, expression, arg
-        )
-        return _wrap_handle(self._page._context.browser._native, value, self._page)
+        value = await self._context.browser._native.worker_evaluate_handle(native, expression, arg)
+        return _wrap_handle(self._context.browser._native, value, self._page)
 
     def _arm_worker_event(
         self, event: str, predicate: WorkerEventPredicate | None
@@ -5379,6 +5453,8 @@ class Worker:
             raise ResourceExhaustedError(
                 f"Worker event waiter capacity exceeded ({_MAX_WORKER_EVENT_WAITERS})"
             )
+        if event == "console":
+            self._retain_console_subscription()
         waiter = asyncio.get_running_loop().create_future()
         self._event_waiters.setdefault(event, []).append((waiter, predicate))
         return waiter
@@ -5387,9 +5463,38 @@ class Worker:
         values = self._event_waiters.get(event)
         if values is None:
             return
+        removed = any(value[0] is waiter for value in values)
         self._event_waiters[event] = [value for value in values if value[0] is not waiter]
         if not self._event_waiters[event]:
             self._event_waiters.pop(event, None)
+        if removed and event == "console":
+            self._release_console_subscription()
+
+    def _retain_console_subscription(self) -> None:
+        native = self._native
+        if self._closed or native is None:
+            raise TargetClosedError(_TARGET_CLOSED_MESSAGE)
+        if self._console_subscriptions == 0:
+            self._context.browser._native.set_worker_console_listener(native, True)
+        self._console_subscriptions += 1
+
+    def _release_console_subscription(self) -> None:
+        if self._console_subscriptions == 0:
+            return
+        self._console_subscriptions -= 1
+        native = self._native
+        if self._console_subscriptions == 0 and native is not None:
+            with contextlib.suppress(Error):
+                self._context.browser._native.set_worker_console_listener(native, False)
+
+    def _release_all_console_subscriptions(self) -> None:
+        if self._console_subscriptions == 0:
+            return
+        self._console_subscriptions = 0
+        native = self._native
+        if native is not None:
+            with contextlib.suppress(Error):
+                self._context.browser._native.set_worker_console_listener(native, False)
 
     async def _match_worker_event(
         self,
@@ -5447,6 +5552,7 @@ class Worker:
         if self._closed and self._native is None:
             return
         self._closed = True
+        self._release_all_console_subscriptions()
         self._native = None
         self._emit_worker_event("close", self)
 
@@ -5456,6 +5562,8 @@ class Worker:
             installed.add("console")
         if event not in installed:
             raise UnsupportedError(f"Worker event {event!r} is not installed")
+        if event == "console":
+            self._retain_console_subscription()
         self._event_handlers.setdefault(event, []).append(handler)
 
     def once(self, event: str, handler: Callable[[object], object]) -> None:
@@ -5469,11 +5577,15 @@ class Worker:
         handlers = self._event_handlers.get(event)
         if handlers is None:
             return
+        removed = sum(registered == handler for registered in handlers)
         self._event_handlers[event] = [
             registered for registered in handlers if registered != handler
         ]
         if not self._event_handlers[event]:
             self._event_handlers.pop(event, None)
+        if event == "console":
+            for _ in range(removed):
+                self._release_console_subscription()
 
     def expect_event(
         self,
@@ -5493,7 +5605,11 @@ class Worker:
             self,
             event,
             predicate,
-            self._page._effective_timeout(timeout),
+            (
+                self._page._effective_timeout(timeout)
+                if self._page is not None
+                else self._context._effective_timeout(timeout)
+            ),
         )
 
     async def wait_for_event(
@@ -5563,6 +5679,7 @@ class Page:
         self._keyboard = Keyboard(self)
         self._mouse = Mouse(self)
         self._touchscreen = Touchscreen(self)
+        self._video: Video | None = None
 
     def _queue_file_chooser_interception(self, enabled: bool) -> None:
         previous = self._file_chooser_interception_task
@@ -5727,6 +5844,14 @@ class Page:
         return self._touchscreen
 
     @property
+    def video(self) -> Video | None:
+        if self._context._record_video_dir is None:
+            return None
+        if self._video is None:
+            self._video = Video(self)
+        return self._video
+
+    @property
     def url(self) -> str:
         return self._url
 
@@ -5739,7 +5864,7 @@ class Page:
             live_ids.add(worker_id)
             worker = self._workers.get(worker_id)
             if worker is None:
-                self._workers[worker_id] = Worker(self, worker_id, url, native)
+                self._workers[worker_id] = Worker(self, self._context, worker_id, url, native)
                 self._retired_worker_ids.discard(worker_id)
             else:
                 worker._url = url
@@ -5881,6 +6006,8 @@ class Page:
         installed = {"load", "domcontentloaded", "close", "popup", "pageerror", "dialog"}
         if "frame-events" in _native.selected_features():
             installed.update({"frameattached", "framenavigated"})
+        if "frame-detach-events" in _native.selected_features():
+            installed.add("framedetached")
         if "worker-events" in _native.selected_features():
             installed.add("worker")
         if "console-events" in _native.selected_features():
@@ -6321,9 +6448,7 @@ class Page:
         update_content: Literal["attach", "embed"] | None = None,
         update_mode: Literal["full", "minimal"] | None = None,
     ) -> None:
-        if update:
-            raise UnsupportedError("Page.route_from_har(update=True) is not installed")
-        if update_content is not None or update_mode is not None:
+        if not update and (update_content is not None or update_mode is not None):
             raise UnsupportedError(
                 "Page.route_from_har update_content and update_mode require update=True"
             )
@@ -6336,6 +6461,9 @@ class Page:
             str(har),
             url,
             not_found,
+            bool(update),
+            update_content,
+            update_mode,
         )
 
     async def unroute_all(
@@ -7587,8 +7715,6 @@ class CDPSession:
     def on(self, event: str, handler: Callable[[dict[str, object]], object]) -> None:
         if not isinstance(cast(object, event), str) or not event:
             raise TypeError("CDPSession.on event must be a nonempty string")
-        if sum(map(len, self._event_handlers.values())) >= 64:
-            raise ResourceExhaustedError("CDPSession event handler limit exceeded")
         self._event_handlers.setdefault(event, []).append(handler)
         schedule = getattr(self._context.browser, "_schedule_cdp_registration_flush", None)
         if callable(schedule):
@@ -7623,10 +7749,6 @@ class CDPSession:
             self._event_handlers.pop(event, None)
 
     def _schedule_event_handler(self, outcome: object) -> None:
-        if len(self._pending_event_handlers) >= 64:
-            if inspect.iscoroutine(outcome):
-                outcome.close()
-            raise ResourceExhaustedError("CDPSession pending async event handler limit exceeded")
         if isinstance(outcome, asyncio.Future):
             future = cast(asyncio.Future[object], outcome)
         else:
@@ -7685,21 +7807,17 @@ class CDPSession:
     ) -> dict[str, object]:
         if self._closed or self._detach_task is not None:
             raise TargetClosedError(_TARGET_CLOSED_MESSAGE)
-        if not isinstance(cast(object, method), str) or not method:
-            raise TypeError("CDPSession.send method must be a nonempty string")
-        if params is not None and not isinstance(cast(object, params), Mapping):
-            raise TypeError("CDPSession.send params must be a mapping")
+        if not isinstance(cast(object, method), str):
+            raise TypeError("CDPSession.send method must be a string")
         try:
             params_json = json.dumps(
-                {} if params is None else dict(params),
+                {} if params is None else params,
                 ensure_ascii=True,
                 allow_nan=False,
                 separators=(",", ":"),
             )
         except (TypeError, ValueError) as error:
             raise TypeError("CDPSession.send params must be JSON-serializable") from error
-        if len(params_json) > 1024 * 1024:
-            raise ResourceExhaustedError("CDPSession.send params exceed 1 MiB")
         result = await self._context.browser._native.cdp_session_send(
             self._token, method, params_json
         )
@@ -7757,12 +7875,22 @@ class BrowserContext:
         object_id: str,
         base_url: str | None,
         viewport_size: tuple[int, int] | None = None,
+        record_video_dir: Path | None = None,
     ) -> None:
         self._browser = browser
         self._object_id = object_id
         self._base_url = base_url
         self._viewport_size = viewport_size
+        self._record_video_dir = record_video_dir
         self._pages: dict[str, Page] = {}
+        self._service_workers: dict[str, Worker] = {}
+        self._network_requests: dict[str, Request] = {}
+        self._network_request_refs: weakref.WeakValueDictionary[str, Request] = (
+            weakref.WeakValueDictionary()
+        )
+        self._network_responses: weakref.WeakValueDictionary[str, Response] = (
+            weakref.WeakValueDictionary()
+        )
         self._cdp_sessions: dict[int, CDPSession] = {}
         self._bindings: dict[str, tuple[Callable[..., object], bool]] = {}
         self._binding_registration_lock: asyncio.Lock | None = None
@@ -7917,8 +8045,50 @@ class BrowserContext:
                 return page._wrap_response(value)
             return page._wrap_request(value)
         if value.get("kind") == "response":
-            return Response(value, self._browser._native, self)
-        return Request(value, self._browser._native, self)
+            request: Request | None = None
+            if raw_request is not None:
+                request = self._wrap_context_request(raw_request)
+            if request is None:
+                request_id = value.get("request_id")
+                if request_id is not None:
+                    request = self._network_requests.get(
+                        str(request_id)
+                    ) or self._network_request_refs.get(str(request_id))
+            response_id = str(value["id"])
+            response = self._network_responses.get(response_id)
+            if response is None:
+                response = Response(value, self._browser._native, self, request=request)
+                self._network_responses[response_id] = response
+            else:
+                response._merge(value, request)
+            return response
+        return self._wrap_context_request(value)
+
+    def _wrap_context_request(self, value: Mapping[str, Any]) -> Request:
+        request_id = str(value["id"])
+        request = self._network_requests.get(request_id) or self._network_request_refs.get(
+            request_id
+        )
+        if request is None:
+            request = Request(value, self._browser._native, self)
+            self._network_requests[request_id] = request
+            self._network_request_refs[request_id] = request
+        else:
+            request._merge(value, self._browser._native, self)
+        redirected_from_id = value.get("redirected_from_id")
+        if redirected_from_id is not None:
+            redirected_from = self._network_requests.get(
+                str(redirected_from_id)
+            ) or self._network_request_refs.get(str(redirected_from_id))
+            if redirected_from is not None:
+                request._redirected_from = redirected_from
+                redirected_from._redirected_to = request
+        return request
+
+    def _forget_context_request(self, value: Mapping[str, Any]) -> None:
+        request_id = value.get("id")
+        if request_id is not None:
+            self._network_requests.pop(str(request_id), None)
 
     def _effective_timeout(self, value: object) -> int:
         if value is not None:
@@ -8018,6 +8188,12 @@ class BrowserContext:
 
     def on(self, event: str, handler: Callable[[object], object]) -> None:
         installed = {"page", "close"}
+        if "request-events" in _native.selected_features():
+            installed.update({"request", "requestfinished", "requestfailed"})
+        if "response-events" in _native.selected_features():
+            installed.add("response")
+        if "service-worker-events" in _native.selected_features():
+            installed.add("serviceworker")
         if "console-events" in _native.selected_features():
             installed.add("console")
         if "page-dialogs" in _native.selected_features():
@@ -8073,6 +8249,8 @@ class BrowserContext:
                 timeout_ms,
             )
         lifecycle_events = {"page", "close"}
+        if "service-worker-events" in _native.selected_features():
+            lifecycle_events.add("serviceworker")
         if "console-events" in _native.selected_features():
             lifecycle_events.add("console")
         if "page-dialogs" in _native.selected_features():
@@ -8152,6 +8330,43 @@ class BrowserContext:
                 page._closed = True
         self._pages = seen
         return list(seen.values())
+
+    @property
+    def background_pages(self) -> list[Page]:
+        # Deprecated in Playwright 1.56 and never emitted by 1.58. Keep the
+        # public compatibility surface without inventing a target owner.
+        return []
+
+    @property
+    def service_workers(self) -> list[Worker]:
+        if self._closed:
+            return []
+        if "service-worker-events" not in _native.selected_features():
+            raise UnsupportedError("BrowserContext.service_workers requires service-worker-events")
+        live_ids: set[str] = set()
+        for worker_id, url, native in self._browser._native.context_service_workers(
+            self._object_id
+        ):
+            live_ids.add(worker_id)
+            worker = self._service_workers.get(worker_id)
+            if worker is None:
+                self._service_workers[worker_id] = Worker(None, self, worker_id, url, native)
+            else:
+                worker._url = url
+        for worker_id in set(self._service_workers) - live_ids:
+            self._service_workers.pop(worker_id)._close()
+        return list(self._service_workers.values())
+
+    def _retire_service_workers(self) -> None:
+        workers = list(self._service_workers.values())
+        self._service_workers.clear()
+        for worker in workers:
+            worker._close()
+
+    def _retire_network_values(self) -> None:
+        self._network_requests.clear()
+        self._network_request_refs.clear()
+        self._network_responses.clear()
 
     async def new_page(self) -> Page:
         object_id, _context_id, main_frame_id, url = await self._browser._native.new_page(
@@ -8362,6 +8577,32 @@ class BrowserContext:
             _boolean_argument(offline, "BrowserContext.set_offline offline"),
         )
 
+    async def set_geolocation(self, geolocation: Geolocation | None = None) -> None:
+        await self._browser._native.set_context_geolocation(
+            self._object_id,
+            _geolocation_options(geolocation, "BrowserContext.set_geolocation geolocation"),
+        )
+
+    async def grant_permissions(
+        self,
+        permissions: Sequence[str],
+        *,
+        origin: str | None = None,
+    ) -> None:
+        if origin is not None and not isinstance(cast(object, origin), str):
+            raise TypeError("BrowserContext.grant_permissions origin must be a string")
+        await self._browser._native.grant_context_permissions(
+            self._object_id,
+            _permissions_options(
+                permissions,
+                "BrowserContext.grant_permissions permissions",
+            ),
+            origin,
+        )
+
+    async def clear_permissions(self) -> None:
+        await self._browser._native.clear_context_permissions(self._object_id)
+
     async def route(
         self,
         url: RouteURLMatcher,
@@ -8462,9 +8703,7 @@ class BrowserContext:
         update_content: Literal["attach", "embed"] | None = None,
         update_mode: Literal["full", "minimal"] | None = None,
     ) -> None:
-        if update:
-            raise UnsupportedError("BrowserContext.route_from_har(update=True) is not installed")
-        if update_content is not None or update_mode is not None:
+        if not update and (update_content is not None or update_mode is not None):
             raise UnsupportedError(
                 "BrowserContext.route_from_har update_content and update_mode require update=True"
             )
@@ -8477,6 +8716,9 @@ class BrowserContext:
             str(har),
             url,
             not_found,
+            bool(update),
+            update_content,
+            update_mode,
         )
 
     async def unroute_all(
@@ -8499,7 +8741,12 @@ class BrowserContext:
     async def close(self, *, reason: str | None = None) -> None:
         if self._closed:
             return
-        self._ensure_request_context()
+        if self._browser._persistent_context:
+            # Chromium's persistent Context is the browser's native default
+            # Context. It cannot be disposed with Target.disposeBrowserContext;
+            # closing it closes the owned browser process instead.
+            await self._browser.close()
+            return
         if self._request_context is not None:
             self._request_context._dispose_from_owner(reason)
         await self._browser._native.close_context(self._object_id)
@@ -8509,14 +8756,14 @@ class BrowserContext:
         self._route_patterns.clear()
         self._route_handler_keys.clear()
         self._bindings.clear()
+        self._retire_network_values()
         for page in self._pages.values():
             page._retire_workers()
             page._closed = True
+        self._retire_service_workers()
         if "page-events" not in _native.selected_features():
             self._pages.clear()
             self._browser._contexts.pop(self._object_id, None)
-        if self._browser._persistent_context:
-            await self._browser.close()
 
 
 class RemotePage(Page):
@@ -8604,8 +8851,6 @@ class RemotePage(Page):
     def on(self, event: str, handler: Callable[[object], object]) -> None:
         if event != "close":
             raise UnsupportedError(f"Page event {event!r} remote operation is not installed")
-        if len(self._remote_close_handlers) >= 64:
-            raise ResourceExhaustedError("Page close handler capacity exceeded (64)")
         self._remote_close_handlers.append(handler)
 
     def once(self, event: str, handler: Callable[[object], object]) -> None:
@@ -8693,8 +8938,6 @@ class RemoteBrowserContext(BrowserContext):
             raise UnsupportedError(
                 f"BrowserContext event {event!r} remote operation is not installed"
             )
-        if len(self._remote_close_handlers) >= 64:
-            raise ResourceExhaustedError("BrowserContext close handler capacity exceeded (64)")
         self._remote_close_handlers.append(handler)
 
     def once(self, event: str, handler: Callable[[object], object]) -> None:
@@ -8770,6 +9013,7 @@ class Browser:
         fresh_owned: bool = False,
         persistent_context: bool = False,
         persistent_context_viewport: tuple[int, int] | None = None,
+        persistent_context_video_dir: Path | None = None,
     ) -> None:
         self._browser_type = browser_type
         self._native = cast(_native.NativeSession, native)
@@ -8790,11 +9034,12 @@ class Browser:
         self._fresh_owned = fresh_owned
         self._persistent_context = persistent_context
         self._persistent_context_viewport = persistent_context_viewport
+        self._persistent_context_video_dir = persistent_context_video_dir
         self._contexts: dict[str, BrowserContext] = {}
         self._remote_contexts: dict[str, RemoteBrowserContext] = {}
         self._pending_context_ids: set[str] = set()
         self._pending_context_cleanup_tasks: dict[str, asyncio.Task[None]] = {}
-        self._unidentified_storage_state_creations = 0
+        self._unidentified_context_creations = 0
         self._closed = False
         self._binding_watch_error: BaseException | None = None
         self._binding_task: asyncio.Task[None] | None = None
@@ -8817,6 +9062,8 @@ class Browser:
         self._download_task: asyncio.Task[None] | None = None
         self._worker_watch_error: BaseException | None = None
         self._worker_task: asyncio.Task[None] | None = None
+        self._service_worker_watch_error: BaseException | None = None
+        self._service_worker_task: asyncio.Task[None] | None = None
         self._worker_console_watch_error: BaseException | None = None
         self._worker_console_task: asyncio.Task[None] | None = None
         self._cdp_watch_error: BaseException | None = None
@@ -8840,6 +9087,15 @@ class Browser:
             self._download_task = asyncio.create_task(self._watch_download_notices())
         if "worker-events" in features:
             self._worker_task = asyncio.create_task(self._watch_worker_notices())
+        if "service-worker-events" in features:
+            # A CDP attachment publishes already-running service workers as
+            # initial topology notices. Seed their wrappers from the native
+            # snapshot before the watcher consumes that backlog so they are
+            # exposed through service_workers without being misreported as
+            # serviceworker events created after connect_over_cdp returned.
+            for context in self.contexts:
+                context.service_workers
+            self._service_worker_task = asyncio.create_task(self._watch_service_worker_notices())
         if "worker-console-events" in features:
             self._worker_console_task = asyncio.create_task(self._watch_worker_console_notices())
         if remote:
@@ -9026,8 +9282,6 @@ class Browser:
     def on(self, event: str, handler: Callable[[object], object]) -> None:
         if not self._remote or event != "disconnected":
             raise UnsupportedError(f"Browser event {event!r} is not installed")
-        if len(self._remote_event_handlers.get(event, [])) >= 64:
-            raise ResourceExhaustedError("Browser disconnected handler capacity exceeded (64)")
         self._remote_event_handlers.setdefault(event, []).append(handler)
 
     def once(self, event: str, handler: Callable[[object], object]) -> None:
@@ -9281,12 +9535,13 @@ class Browser:
         if kind == 1:
             if context is None:
                 return
-            context._ensure_request_context()
             for page in list(context._pages.values()):
                 page._retire_workers()
                 page._closed = True
                 page._emit_page_event("close", page)
             context._pages.clear()
+            context._retire_service_workers()
+            context._retire_network_values()
             context._closed = True
             if context._request_context is not None:
                 context._request_context._dispose_from_owner(None)
@@ -9352,6 +9607,16 @@ class Browser:
                     )
                 else:
                     page._emit_page_event("framenavigated", frame)
+        elif (
+            kind == 13
+            and frame_id is not None
+            and "frame-detach-events" in _native.selected_features()
+        ):
+            frame = page._frames.pop(frame_id, None)
+            if frame is not None:
+                if page._frame_attaches_this_turn is not None:
+                    page._frame_attaches_this_turn.discard(frame_id)
+                page._emit_page_event("framedetached", frame)
         elif kind == 6 and console_descriptor is not None:
             if len(console_descriptor) == 6:
                 (
@@ -9474,20 +9739,43 @@ class Browser:
                 return page
         return None
 
+    def _network_context(self, context_id: str) -> BrowserContext | None:
+        context = self._contexts.get(context_id)
+        if context is not None:
+            return context
+        self.contexts
+        return self._contexts.get(context_id)
+
     async def _watch_request_notices(self) -> None:
         try:
             while not self._closed:
-                page_id, sequence, raw = await self._native.next_request_notice()
-                page = self._network_page(page_id)
-                if page is None:
-                    raise Error(f"Request notice references unknown Page {page_id}")
+                owner_id, sequence, raw = await self._native.next_request_notice()
                 event = str(raw.get("kind", "request"))
                 if event not in {"request", "requestfinished", "requestfailed"}:
                     raise Error(f"Request notice has unknown event kind {event!r}")
-                request = page._wrap_request(raw)
-                page._emit_page_event(event, request)
-                if event in {"requestfinished", "requestfailed"}:
-                    page._forget_route_request_snapshot(raw)
+                service_worker_id = raw.get("service_worker_id")
+                if service_worker_id is not None:
+                    context_id = raw.get("context_id")
+                    if context_id is None or str(context_id) != owner_id:
+                        raise Error(
+                            "Service Worker request notice has an invalid BrowserContext owner"
+                        )
+                    context = self._network_context(owner_id)
+                    if context is None:
+                        raise Error(f"Request notice references unknown BrowserContext {owner_id}")
+                    request = cast(Request, context._wrap_network_value(raw))
+                    context._emit_context_event(event, request)
+                    if event in {"requestfinished", "requestfailed"}:
+                        context._forget_context_request(raw)
+                else:
+                    page = self._network_page(owner_id)
+                    if page is None:
+                        raise Error(f"Request notice references unknown Page {owner_id}")
+                    request = page._wrap_request(raw)
+                    page._context._emit_context_event(event, request)
+                    page._emit_page_event(event, request)
+                    if event in {"requestfinished", "requestfailed"}:
+                        page._forget_route_request_snapshot(raw)
                 async with self._network_notice_condition:
                     self._request_notice_sequence = sequence
                     self._network_notice_condition.notify_all()
@@ -9513,11 +9801,26 @@ class Browser:
     async def _watch_response_notices(self) -> None:
         try:
             while not self._closed:
-                page_id, sequence, raw = await self._native.next_response_notice()
-                page = self._network_page(page_id)
-                if page is None:
-                    raise Error(f"Response notice references unknown Page {page_id}")
-                page._emit_page_event("response", page._wrap_response(raw))
+                owner_id, sequence, raw = await self._native.next_response_notice()
+                service_worker_id = raw.get("service_worker_id")
+                if service_worker_id is not None:
+                    context_id = raw.get("context_id")
+                    if context_id is None or str(context_id) != owner_id:
+                        raise Error(
+                            "Service Worker response notice has an invalid BrowserContext owner"
+                        )
+                    context = self._network_context(owner_id)
+                    if context is None:
+                        raise Error(f"Response notice references unknown BrowserContext {owner_id}")
+                    response = cast(Response, context._wrap_network_value(raw))
+                    context._emit_context_event("response", response)
+                else:
+                    page = self._network_page(owner_id)
+                    if page is None:
+                        raise Error(f"Response notice references unknown Page {owner_id}")
+                    response = page._wrap_response(raw)
+                    page._context._emit_context_event("response", response)
+                    page._emit_page_event("response", response)
                 async with self._network_notice_condition:
                     self._response_notice_sequence = sequence
                     self._network_notice_condition.notify_all()
@@ -9603,7 +9906,7 @@ class Browser:
                 if kind == 0:
                     worker = page._workers.get(worker_id)
                     if worker is None:
-                        worker = Worker(page, worker_id, url, native)
+                        worker = Worker(page, page._context, worker_id, url, native)
                         page._workers[worker_id] = worker
                         page._retired_worker_ids.discard(worker_id)
                         page._emit_page_event("worker", worker)
@@ -9630,13 +9933,55 @@ class Browser:
         with contextlib.suppress(asyncio.CancelledError):
             await task
 
+    async def _watch_service_worker_notices(self) -> None:
+        try:
+            while not self._closed:
+                (
+                    kind,
+                    context_id,
+                    worker_id,
+                    url,
+                    native,
+                ) = await self._native.next_service_worker_notice()
+                context = self._contexts.get(context_id)
+                if context is None or context._closed:
+                    continue
+                if kind == 0:
+                    worker = context._service_workers.get(worker_id)
+                    if worker is None:
+                        worker = Worker(None, context, worker_id, url, native)
+                        context._service_workers[worker_id] = worker
+                        context._emit_context_event("serviceworker", worker)
+                    else:
+                        worker._url = url
+                else:
+                    worker = context._service_workers.pop(worker_id, None)
+                    if worker is not None:
+                        worker._close()
+        except TargetClosedError:
+            return
+        except asyncio.CancelledError:
+            raise
+        except BaseException as error:
+            self._service_worker_watch_error = error
+
+    async def _cancel_service_worker_watcher(self) -> None:
+        task = self._service_worker_task
+        self._service_worker_task = None
+        if task is None:
+            return
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+
     async def _watch_worker_console_notices(self) -> None:
         try:
             while not self._closed:
                 notice = await self._native.next_worker_console_notice()
-                if len(notice) == 11:
+                if len(notice) == 12:
                     (
                         page_id,
+                        context_id,
                         worker_id,
                         worker_url,
                         native,
@@ -9652,6 +9997,7 @@ class Browser:
                 else:
                     (
                         page_id,
+                        context_id,
                         worker_id,
                         worker_url,
                         native,
@@ -9664,16 +10010,32 @@ class Browser:
                         timestamp_micros,
                         argument_handles,
                     ) = notice
-                page = self._network_page(page_id)
-                if page is None or page.is_closed() or worker_id in page._retired_worker_ids:
+                context = self._contexts.get(context_id)
+                if context is None or context._closed:
                     continue
-                worker = page._workers.get(worker_id)
-                if worker is None:
-                    worker = Worker(page, worker_id, worker_url, native)
-                    page._workers[worker_id] = worker
-                    page._emit_page_event("worker", worker)
+                page = None if page_id is None else self._network_page(page_id)
+                if page_id is not None:
+                    if page is None or page.is_closed() or worker_id in page._retired_worker_ids:
+                        continue
+                    worker = page._workers.get(worker_id)
+                    if worker is None:
+                        worker = Worker(page, context, worker_id, worker_url, native)
+                        page._workers[worker_id] = worker
+                        page._emit_page_event("worker", worker)
+                    else:
+                        worker._url = worker_url
                 else:
-                    worker._url = worker_url
+                    worker = context._service_workers.get(worker_id)
+                    if worker is None:
+                        # The native attach notice is ordered before console,
+                        # but separate binding watchers can run in either
+                        # order. Preserve Playwright's serviceworker-before-
+                        # console observation when this watcher wins the race.
+                        worker = Worker(None, context, worker_id, worker_url, native)
+                        context._service_workers[worker_id] = worker
+                        context._emit_context_event("serviceworker", worker)
+                    else:
+                        worker._url = worker_url
                 message = ConsoleMessage(
                     page,
                     message_type,
@@ -9685,10 +10047,20 @@ class Browser:
                     argument_handles=argument_handles,
                     timestamp_micros=timestamp_micros,
                     worker=worker,
+                    context=context,
                 )
                 worker._emit_worker_event("console", message)
-                page._emit_page_event("console", message)
-                page.context._emit_context_event("console", message)
+                if page is not None:
+                    page._emit_page_event("console", message)
+                else:
+                    scope = urljoin(worker_url, ".")
+                    if scope and not scope.endswith("/"):
+                        scope += "/"
+                    if scope:
+                        for candidate in tuple(context._pages.values()):
+                            if not candidate.is_closed() and candidate.url.startswith(scope):
+                                candidate._emit_page_event("console", message)
+                context._emit_context_event("console", message)
         except TargetClosedError:
             return
         except asyncio.CancelledError:
@@ -9822,16 +10194,9 @@ class Browser:
                 # A callback may evaluate another exposed binding. Keep the
                 # sole queue consumer moving while each call owns its own
                 # acknowledgement/result lifecycle. Native Page retirement can
-                # release a Rust pending slot before its callback completes, so
-                # independently cap Python dispatchers across Page/Context churn.
-                if len(self._binding_dispatch_tasks) >= _MAX_BINDING_DISPATCHES:
-                    with contextlib.suppress(TargetClosedError, InvalidArgumentError):
-                        await self._native.acknowledge_page_binding_call(call[0])
-                    await self._deliver_binding_error(
-                        call[0],
-                        ResourceExhaustedError("pending binding dispatch capacity exceeded (64)"),
-                    )
-                    continue
+                # release its native pending record before the callback
+                # completes, so Python retains every live dispatcher until its
+                # own exact result, cancellation, or Browser shutdown.
                 dispatch = asyncio.create_task(self._dispatch_page_binding(call))
                 self._binding_dispatch_tasks.add(dispatch)
                 dispatch.add_done_callback(self._binding_dispatch_tasks.discard)
@@ -9873,7 +10238,8 @@ class Browser:
             str,
             str,
             str,
-            str,
+            str | None,
+            str | None,
             str | None,
             str,
             str,
@@ -9890,6 +10256,7 @@ class Browser:
             registration_id,
             context_id,
             page_id,
+            service_worker_id,
             frame_id,
             url,
             method,
@@ -9901,7 +10268,7 @@ class Browser:
             native_request_id,
         ) = call
         context = self._contexts.get(context_id)
-        page = context._pages.get(page_id) if context is not None else None
+        page = context._pages.get(page_id) if context is not None and page_id is not None else None
         handler = None if page is None else page._routes.get(registration_id)
         if handler is not None and expires and page is not None:
             page._routes.pop(registration_id, None)
@@ -9915,6 +10282,7 @@ class Browser:
                 getattr(context, "_route_handler_keys", {}).pop(registration_id, None)
         if (
             page is not None
+            and page_id is not None
             and native_request_id is not None
             and "route-redirects" in _native.selected_features()
         ):
@@ -9932,6 +10300,7 @@ class Browser:
                     "is_navigation_request": is_navigation_request,
                     "failure_text": None,
                     "page_id": page_id,
+                    "service_worker_id": service_worker_id,
                     "frame_id": frame_id,
                     "frame_available": frame_id is not None,
                     "native_request_id": native_request_id,
@@ -9952,6 +10321,7 @@ class Browser:
                     "is_navigation_request": is_navigation_request,
                     "failure_text": None,
                     "page_id": page_id,
+                    "service_worker_id": service_worker_id,
                     "frame_id": frame_id,
                     "frame_available": frame_id is not None,
                     "native_request_id": native_request_id,
@@ -10075,13 +10445,14 @@ class Browser:
                 continue
             context = self._contexts.get(object_id)
             if context is None:
-                if getattr(self, "_unidentified_storage_state_creations", 0):
+                if getattr(self, "_unidentified_context_creations", 0):
                     continue
                 context = BrowserContext(
                     self,
                     object_id,
                     base_url,
                     self._persistent_context_viewport,
+                    getattr(self, "_persistent_context_video_dir", None),
                 )
             seen[object_id] = context
         for object_id, context in self._contexts.items():
@@ -10115,6 +10486,13 @@ class Browser:
         accept_downloads: bool = False,
         service_workers: Literal["allow", "block"] = "allow",
         storage_state: Mapping[str, object] | str | os.PathLike[str] | None = None,
+        record_har_path: str | os.PathLike[str] | None = None,
+        record_har_omit_content: bool | None = None,
+        record_har_url_filter: str | Pattern[str] | None = None,
+        record_har_mode: Literal["full", "minimal"] | None = None,
+        record_har_content: Literal["attach", "embed", "omit"] | None = None,
+        record_video_dir: str | Path | None = None,
+        record_video_size: Mapping[str, int] | None = None,
         forced_colors: Literal["active", "none"] | None = None,
         strict_selectors: bool = False,
         **kwargs: object,
@@ -10157,6 +10535,13 @@ class Browser:
                 "accept_downloads": accept_downloads is not False,
                 "service_workers": service_workers != "allow",
                 "storage_state": storage_state is not None,
+                "record_har_path": record_har_path is not None,
+                "record_har_omit_content": record_har_omit_content is not None,
+                "record_har_url_filter": record_har_url_filter is not None,
+                "record_har_mode": record_har_mode is not None,
+                "record_har_content": record_har_content is not None,
+                "record_video_dir": record_video_dir is not None,
+                "record_video_size": record_video_size is not None,
                 "forced_colors": forced_colors is not None,
                 "strict_selectors": strict_selectors is not False,
                 **{name: True for name in kwargs},
@@ -10193,12 +10578,19 @@ class Browser:
             is_mobile=is_mobile,
             has_touch=has_touch,
         )
+        video = _context_video_options(
+            record_video_dir,
+            record_video_size,
+            None if device is None else device[1],
+        )
         checked_ignore_https_errors = _boolean_argument(
             ignore_https_errors, "Browser.new_context ignore_https_errors"
         )
         checked_geolocation = _geolocation_options(geolocation, "Browser.new_context geolocation")
-        geolocation_permission = _geolocation_permission(
-            permissions, "Browser.new_context permissions"
+        checked_permissions = (
+            []
+            if permissions is None
+            else _permissions_options(permissions, "Browser.new_context permissions")
         )
         checked_http_credentials = _http_credentials_options(
             http_credentials, "Browser.new_context http_credentials"
@@ -10247,12 +10639,87 @@ class Browser:
             raise UnsupportedError(
                 "Browser.new_context strict_selectors requires the context-strict-selectors profile"
             )
+        har_initialization: (
+            tuple[
+                str,
+                str | tuple[str, str] | None,
+                Literal["attach", "embed", "omit"],
+                Literal["full", "minimal"],
+            ]
+            | None
+        ) = None
+        if record_har_path is not None:
+            if "har-recording" not in _native.selected_features():
+                raise UnsupportedError(
+                    "Browser.new_context record_har_path requires the har-recording profile"
+                )
+            native_har_path = os.fspath(record_har_path)
+            har_filter: str | tuple[str, str] | None
+            har_filter_value = cast(object, record_har_url_filter)
+            if isinstance(har_filter_value, Pattern):
+                if "har-recording-regexp" not in _native.selected_features():
+                    raise UnsupportedError(
+                        "Browser.new_context record_har_url_filter regex requires the "
+                        "har-recording-regexp profile"
+                    )
+                har_source, har_flags = _text_match(
+                    cast(Pattern[str], har_filter_value),
+                    "Browser.new_context record_har_url_filter",
+                )
+                if har_flags is None:
+                    raise AssertionError("compiled HAR regular expression has no flags")
+                har_filter = (har_source, har_flags)
+            elif har_filter_value is None or isinstance(har_filter_value, str):
+                har_filter = har_filter_value
+            else:
+                raise TypeError(
+                    "Browser.new_context record_har_url_filter must be a string or compiled regex"
+                )
+            checked_har_mode = (
+                "full"
+                if record_har_mode is None
+                else _string_argument(record_har_mode, "Browser.new_context record_har_mode")
+            )
+            if checked_har_mode not in ("full", "minimal"):
+                raise Error("Browser.new_context record_har_mode must be 'full' or 'minimal'")
+            checked_har_omit_content = (
+                False
+                if record_har_omit_content is None
+                else _boolean_argument(
+                    record_har_omit_content,
+                    "Browser.new_context record_har_omit_content",
+                )
+            )
+            default_har_content = "attach" if native_har_path.endswith(".zip") else "embed"
+            checked_har_content = (
+                None
+                if record_har_content is None
+                else _string_argument(record_har_content, "Browser.new_context record_har_content")
+            )
+            if checked_har_content is not None and checked_har_content not in (
+                "attach",
+                "embed",
+                "omit",
+            ):
+                raise Error("Browser.new_context record_har_content must be attach, embed, or omit")
+            content = checked_har_content or (
+                "omit" if checked_har_omit_content else default_har_content
+            )
+            har_initialization = (
+                native_har_path,
+                har_filter,
+                content,
+                checked_har_mode,
+            )
         storage_state_json: str | None = None
         if storage_state is not None:
             _require_context_storage_state()
             storage_state_json = await _browser_storage_state_json(storage_state)
-            self._unidentified_storage_state_creations += 1
-        unidentified_storage_context = storage_state_json is not None
+        unidentified_context = (
+            storage_state_json is not None or har_initialization is not None or video is not None
+        )
+        if unidentified_context:
+            self._unidentified_context_creations += 1
         pending_context_id: str | None = None
         retain_pending_context = False
         try:
@@ -10262,7 +10729,7 @@ class Browser:
                 locale,
                 timezone_id,
                 checked_geolocation,
-                geolocation_permission,
+                checked_permissions,
                 checked_http_credentials,
                 checked_ignore_https_errors,
                 checked_offline,
@@ -10271,7 +10738,36 @@ class Browser:
                 checked_accept_downloads,
                 checked_service_workers == "block",
             )
-            if checked_extra_http_headers is not None:
+            if video is not None and checked_extra_http_headers is not None:
+                object_id, published_base_url = await self._native.new_context(
+                    *native_options,
+                    forced_colors=checked_forced_colors,
+                    strict_selectors=checked_strict_selectors,
+                    extra_http_headers=checked_extra_http_headers,
+                    video=video,
+                )
+            elif (
+                video is not None and checked_forced_colors is None and not checked_strict_selectors
+            ):
+                object_id, published_base_url = await self._native.new_context(
+                    *native_options, video=video
+                )
+            elif video is not None and checked_forced_colors is None:
+                object_id, published_base_url = await self._native.new_context(
+                    *native_options, strict_selectors=True, video=video
+                )
+            elif video is not None and not checked_strict_selectors:
+                object_id, published_base_url = await self._native.new_context(
+                    *native_options, forced_colors=checked_forced_colors, video=video
+                )
+            elif video is not None:
+                object_id, published_base_url = await self._native.new_context(
+                    *native_options,
+                    forced_colors=checked_forced_colors,
+                    strict_selectors=True,
+                    video=video,
+                )
+            elif checked_extra_http_headers is not None:
                 object_id, published_base_url = await self._native.new_context(
                     *native_options,
                     forced_colors=checked_forced_colors,
@@ -10294,14 +10790,38 @@ class Browser:
                     forced_colors=checked_forced_colors,
                     strict_selectors=True,
                 )
-            if storage_state_json is not None:
+            if storage_state_json is not None or har_initialization is not None:
                 self._pending_context_ids.add(object_id)
                 pending_context_id = object_id
-                self._unidentified_storage_state_creations -= 1
-                unidentified_storage_context = False
+                self._unidentified_context_creations -= 1
+                unidentified_context = False
+                initialization_phase = "storage state restore"
                 try:
-                    await self._native.context_set_storage_state(object_id, storage_state_json)
-                except BaseException as restore_error:
+                    if storage_state_json is not None:
+                        await self._native.context_set_storage_state(object_id, storage_state_json)
+                    if har_initialization is not None:
+                        initialization_phase = "HAR recording initialization"
+                        har_path, har_filter, har_content, har_mode = har_initialization
+                        if isinstance(har_filter, tuple):
+                            har_source, har_flags = har_filter
+                            await self._native.context_record_har_regexp(
+                                object_id,
+                                har_path,
+                                har_source,
+                                har_flags,
+                                (har_content, har_mode),
+                            )
+                        else:
+                            await self._native.context_route_from_har(
+                                object_id,
+                                har_path,
+                                har_filter,
+                                None,
+                                True,
+                                har_content,
+                                har_mode,
+                            )
+                except BaseException as initialization_error:
 
                     async def close_pending_context() -> None:
                         await self._native.close_context(object_id)
@@ -10319,9 +10839,9 @@ class Browser:
                     except Exception as cleanup_error:
                         retain_pending_context = True
                         raise Error(
-                            "Browser.new_context: storage state restore failed: "
-                            f"{restore_error}; Context cleanup failed: {cleanup_error}"
-                        ) from restore_error
+                            f"Browser.new_context: {initialization_phase} failed: "
+                            f"{initialization_error}; Context cleanup failed: {cleanup_error}"
+                        ) from initialization_error
                     except BaseException:
                         retain_pending_context = True
                         raise
@@ -10334,12 +10854,13 @@ class Browser:
                 object_id,
                 published_base_url,
                 _owned_context_viewport(device),
+                None if video is None else Path(video[0]),
             )
             self._contexts[object_id] = context
             return context
         finally:
-            if unidentified_storage_context:
-                self._unidentified_storage_state_creations -= 1
+            if unidentified_context:
+                self._unidentified_context_creations -= 1
             if pending_context_id is not None and not retain_pending_context:
                 self._pending_context_ids.discard(pending_context_id)
 
@@ -10371,10 +10892,18 @@ class Browser:
         *,
         base_url: str | None = None,
         accept_downloads: bool = False,
+        record_video_dir: str | Path | None = None,
+        record_video_size: Mapping[str, int] | None = None,
         **kwargs: object,
     ) -> Page:
         if getattr(self, "_remote", False):
-            if base_url is not None or accept_downloads or kwargs:
+            if (
+                base_url is not None
+                or accept_downloads
+                or record_video_dir is not None
+                or record_video_size is not None
+                or kwargs
+            ):
                 raise UnsupportedError("Browser.new_page remote options are not installed")
             remote_context_type = getattr(_native, "NativeRemoteContext", None)
             if remote_context_type is not None and not callable(
@@ -10397,7 +10926,7 @@ class Browser:
                         "Browser.new_page failed and implicit Context cleanup failed"
                     ) from cleanup_error
                 raise
-        if kwargs:
+        if record_video_dir is not None or record_video_size is not None or kwargs:
             context_factory = cast(
                 Callable[..., Awaitable[BrowserContext]],
                 self.new_context,
@@ -10405,6 +10934,8 @@ class Browser:
             context = await context_factory(
                 base_url=base_url,
                 accept_downloads=accept_downloads,
+                record_video_dir=record_video_dir,
+                record_video_size=record_video_size,
                 **kwargs,
             )
             page = await context.new_page()
@@ -10470,17 +11001,18 @@ class Browser:
         self._closed = True
         await self._cancel_cdp_event_watcher()
         await self._cancel_worker_console_watcher()
+        await self._cancel_service_worker_watcher()
         for context in self._contexts.values():
             for page in context._pages.values():
                 page._retire_workers()
+            context._retire_service_workers()
+            context._retire_network_values()
         await self._cancel_lifecycle_watcher()
         await self._cancel_route_watcher()
         await self._cancel_request_watcher()
         await self._cancel_response_watcher()
         await self._cancel_download_watcher()
         await self._cancel_worker_watcher()
-        for context in self._contexts.values():
-            context._ensure_request_context()
         await self._native.close()
         await self._settle_cdp_detach_tasks()
         await self._finish_binding_watcher()
@@ -10499,7 +11031,9 @@ class Browser:
 
 
 class BrowserType:
-    def __init__(self, playwright: Playwright, name: str) -> None:
+    def __init__(self, playwright: Playwright, name: Literal["chromium"] = "chromium") -> None:
+        if name != "chromium":
+            raise ValueError(f"unsupported browser engine: {name}")
         self._playwright = playwright
         self.name = name
 
@@ -10509,6 +11043,23 @@ class BrowserType:
     @property
     def executable_path(self) -> str:
         return _native.browser_executable_path(self.name, str(Path(__file__).resolve().parent))
+
+    def _owned_executable_path(
+        self,
+        executable_path: str | Path | None,
+        channel: str | None,
+    ) -> Path | None:
+        requested = (
+            self.executable_path
+            if executable_path is None and channel == "chromium"
+            else executable_path
+        )
+        if requested is None:
+            return None
+        checked_path = Path(requested).resolve()
+        if not checked_path.is_file():
+            raise Error(f"executable doesn't exist at {checked_path}")
+        return checked_path
 
     async def connect(
         self,
@@ -10562,8 +11113,6 @@ class BrowserType:
         headers: Mapping[str, str] | None = None,
         is_local: bool | None = None,
     ) -> Browser:
-        if self.name != "chromium":
-            raise UnsupportedError("connect_over_cdp is only available for Chromium")
         _unsupported_option("slow_mo", slow_mo)
         _unsupported_option("is_local", is_local)
         checked_headers = None if headers is None else _cdp_handshake_headers(headers)
@@ -10596,38 +11145,10 @@ class BrowserType:
         checked_args = _persistent_context_launch_arguments(args)
         if checked_args:
             raise UnsupportedError("BrowserType.launch args are not installed")
-        checked_path = None if executable_path is None else Path(executable_path).resolve()
-        if checked_path is not None and not checked_path.is_file():
-            raise Error(f"executable doesn't exist at {checked_path}")
+        checked_path = self._owned_executable_path(executable_path, channel)
         proxy_options = kwargs.get("proxy")
         if isinstance(proxy_options, Mapping) and "server" in proxy_options:
             _string_argument(cast(Mapping[str, object], proxy_options)["server"], "proxy.server")
-        if self.name != "chromium":
-            if (
-                self.name in {"firefox", "webkit"}
-                and checked_path is not None
-                and "owned-process-startup" in _native.selected_features()
-            ):
-                if channel is not None:
-                    raise UnsupportedError(
-                        "BrowserType.launch channel is not installed for Firefox/WebKit"
-                    )
-                if kwargs:
-                    options = ", ".join(sorted(kwargs))
-                    raise UnsupportedError(
-                        "BrowserType.launch options are not installed "
-                        f"for Firefox/WebKit: {options}"
-                    )
-                _boolean_argument(
-                    True if headless is None else headless, "BrowserType.launch headless"
-                )
-                await self._playwright._environment.observe_nonchromium_startup(
-                    self.name, str(checked_path), _timeout_ms(timeout)
-                )
-                raise UnsupportedError(
-                    "BrowserType.launch Firefox/WebKit protocol is not installed"
-                )
-            raise UnsupportedError("launch is only available for Chromium")
         if "fresh-launch" not in _native.selected_features():
             raise UnsupportedError("BrowserType.launch requires the fresh-launch profile")
         if kwargs:
@@ -10676,17 +11197,14 @@ class BrowserType:
         color_scheme: Literal["dark", "light", "no-preference"] | None = None,
         reduced_motion: Literal["no-preference", "reduce"] | None = None,
         contrast: Literal["more", "no-preference"] | None = None,
+        record_video_dir: str | Path | None = None,
+        record_video_size: Mapping[str, int] | None = None,
         args: Sequence[str] | None = None,
         executable_path: str | Path | None = None,
         channel: str | None = None,
         timeout: float | None = None,
         **kwargs: object,
     ) -> BrowserContext:
-        if self.name == "webkit":
-            # Match WebKit's pre-spawn argument validation without enabling launch.
-            _persistent_context_launch_arguments(args)
-        if self.name != "chromium":
-            raise UnsupportedError("launch_persistent_context is only available for Chromium")
         if isinstance(user_data_dir, str) and user_data_dir == "":
             raise UnsupportedError(
                 "BrowserType.launch_persistent_context with an empty user_data_dir "
@@ -10701,8 +11219,13 @@ class BrowserType:
         checked_geolocation = _geolocation_options(
             geolocation, "BrowserType.launch_persistent_context geolocation"
         )
-        geolocation_permission = _geolocation_permission(
-            permissions, "BrowserType.launch_persistent_context permissions"
+        checked_permissions = (
+            []
+            if permissions is None
+            else _permissions_options(
+                permissions,
+                "BrowserType.launch_persistent_context permissions",
+            )
         )
         checked_http_credentials = _http_credentials_options(
             http_credentials, "BrowserType.launch_persistent_context http_credentials"
@@ -10734,6 +11257,12 @@ class BrowserType:
             reduced_motion=reduced_motion,
             contrast=contrast,
         )
+        video = _context_video_options(
+            record_video_dir,
+            record_video_size,
+            None if device is None else device[1],
+        )
+        checked_path = self._owned_executable_path(executable_path, channel)
         native = await self._playwright._environment.launch_persistent_context(
             str(Path(user_data_dir).resolve()),
             True if headless is None else headless,
@@ -10743,7 +11272,7 @@ class BrowserType:
                     locale,
                     timezone_id,
                     checked_geolocation,
-                    geolocation_permission,
+                    checked_permissions,
                     checked_http_credentials,
                     checked_ignore_https_errors,
                     checked_offline,
@@ -10752,9 +11281,10 @@ class BrowserType:
                 ),
                 device,
                 media,
+                video,
                 _persistent_context_extra_http_headers(extra_http_headers),
                 checked_launch_arguments,
-                None if executable_path is None else str(Path(executable_path).resolve()),
+                None if checked_path is None else str(checked_path),
                 channel,
                 _timeout_ms(timeout),
             ),
@@ -10764,6 +11294,7 @@ class BrowserType:
             native,
             persistent_context=True,
             persistent_context_viewport=_owned_context_viewport(device),
+            persistent_context_video_dir=None if video is None else Path(video[0]),
         )
         self._playwright._browsers.append(browser)
         contexts = browser.contexts
@@ -10807,9 +11338,7 @@ class Playwright:
         self._environment = _native.NativeEnvironment()
         self._browsers: list[Browser] = []
         self._stopped = False
-        self.chromium = BrowserType(self, "chromium")
-        self.firefox = BrowserType(self, "firefox")
-        self.webkit = BrowserType(self, "webkit")
+        self.chromium = BrowserType(self)
         self.selectors = Selectors(self._environment)
         self.devices = _device_descriptors()
         self.request = APIRequest()
@@ -10817,10 +11346,6 @@ class Playwright:
     def __getitem__(self, name: str) -> BrowserType:
         if name == "chromium":
             return self.chromium
-        if name == "firefox":
-            return self.firefox
-        if name == "webkit":
-            return self.webkit
         raise KeyError(name)
 
     async def stop(self) -> None:
@@ -10841,6 +11366,7 @@ class Playwright:
             await browser._cancel_response_watcher()
             await browser._cancel_download_watcher()
             await browser._cancel_worker_watcher()
+            await browser._cancel_service_worker_watcher()
             await browser._cancel_worker_console_watcher()
             for context in browser._contexts.values():
                 context._retire_all_cdp_sessions()
@@ -10901,6 +11427,7 @@ __all__ = [
     "Keyboard",
     "Mouse",
     "Touchscreen",
+    "Video",
     "Page",
     "Playwright",
     "PlaywrightContextManager",

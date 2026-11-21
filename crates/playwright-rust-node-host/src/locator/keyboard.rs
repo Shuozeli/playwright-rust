@@ -43,39 +43,23 @@ mod selected {
     use crate::drag::host::{Installation, PageController};
     use playwright_rust_composition_chromium::{CdpPageServices, ChromiumLocatorKeyboardRoute};
     use playwright_rust_core::{
-        CallMetadata, CancellationReason, FailureKind, ObjectId, OperationContext, ResourceClass,
-        ResourceLease, ResourceRequirements, ResourceScope,
+        CallMetadata, CancellationReason, FailureKind, ObjectId, OperationContext,
+        ResourceRequirements,
     };
     use std::{
         future::Future,
         pin::Pin,
-        sync::{Arc, OnceLock, atomic::Ordering},
+        sync::{Arc, OnceLock},
         time::Duration,
     };
 
     pub(crate) const EXECUTING: usize = 8;
-    const RETAINED: usize = 16;
-    // Retained selector/text params, service/snapshot/cancellation future storage.
-    // Native provider futures and Frame route leases remain separate owners.
-    const CALL_BYTES: u64 = 1024 * 1024 + 64 * 1024 + 16 * 1024;
-    const SCOPE: ResourceScope = ResourceScope::extension(122, 10);
     pub(crate) fn requirements() -> ResourceRequirements {
         ResourceRequirements::none()
-            .with_class(
-                ResourceClass::BackendStateBytes,
-                CALL_BYTES * RETAINED as u64,
-                CALL_BYTES * RETAINED as u64,
-            )
-            .with_metadata(1, RETAINED)
     }
     struct Lease {
-        _storage: ResourceLease,
+        // Retain the drag manager that owns any lazily selected Page controller.
         manager: Arc<Installation>,
-    }
-    impl Drop for Lease {
-        fn drop(&mut self) {
-            self.manager.locator_calls.fetch_sub(1, Ordering::AcqRel);
-        }
     }
     struct Binding {
         route: ChromiumLocatorKeyboardRoute,
@@ -215,7 +199,7 @@ mod selected {
             + CommandCancellation<C>,
     {
         let (frame, call, _operation) = host.admit_operation(id)?;
-        let (runtime, manager, resources) = {
+        let (runtime, manager) = {
             let state = host.state.lock().map_err(HostError::backend)?;
             let live = state.as_ref().ok_or(HostError::TargetClosed)?;
             (
@@ -223,29 +207,7 @@ mod selected {
                 live.mouse.drag_installation().cloned().ok_or_else(|| {
                     HostError::Backend("Locator drag installation missing".into())
                 })?,
-                live.composition.resources().clone(),
             )
-        };
-        manager
-            .locator_calls
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |count| {
-                (count < RETAINED).then_some(count + 1)
-            })
-            .map_err(|_| {
-                HostError::ResourceExhausted(
-                    "Locator keyboard retained invocation capacity exceeded".into(),
-                )
-            })?;
-        let storage = match resources.claim(requirements()).and_then(|ledger| {
-            ledger
-                .reserve(SCOPE, ResourceClass::BackendStateBytes, CALL_BYTES)
-                .map_err(Into::into)
-        }) {
-            Ok(storage) => storage,
-            Err(error) => {
-                manager.locator_calls.fetch_sub(1, Ordering::AcqRel);
-                return Err(HostError::backend(error));
-            }
         };
         let invocation = Arc::new(Invocation {
             runtime: Arc::downgrade(&runtime),
@@ -253,10 +215,7 @@ mod selected {
             frame,
             services: runtime.service().clone(),
             binding: OnceLock::new(),
-            lease: Lease {
-                _storage: storage,
-                manager,
-            },
+            lease: Lease { manager },
         });
         let timeout = (timeout_ms != 0).then(|| Duration::from_millis(u64::from(timeout_ms)));
         let command = Command::<C>::new(call, frame, CallMetadata::new(timeout, None), params);
@@ -272,5 +231,22 @@ mod selected {
         result
             .into_outcome()
             .map_err(|error| map_error(error, timeout_ms))
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn retained_locator_keyboard_calls_have_no_fixed_count_plan() {
+            // Arrange
+            let none = ResourceRequirements::none();
+
+            // Act
+            let required = requirements();
+
+            // Assert
+            assert_eq!(required, none);
+        }
     }
 }

@@ -83,7 +83,10 @@ impl<Downstream> Initializer<Downstream> {
             .transpose()?
             .flatten();
         #[cfg(feature = "context-locale")]
-        let accept_language = locale.as_ref().map(|locale| locale.as_str());
+        let accept_language = locale
+            .as_ref()
+            .map(|locale| locale.as_str())
+            .filter(|locale| !locale.is_empty());
         #[cfg(not(feature = "context-locale"))]
         let accept_language = None;
 

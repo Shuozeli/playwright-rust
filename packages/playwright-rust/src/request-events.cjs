@@ -71,17 +71,17 @@ module.exports = function requestEvents({
     }
   }
 
-  function knownRequest(page, id) {
-    return page._networkRequests?.get(id) ?? page._networkRequestRefs?.get(id)?.deref() ?? null;
+  function knownRequest(owner, id) {
+    return owner._networkRequests?.get(id) ?? owner._networkRequestRefs?.get(id)?.deref() ?? null;
   }
 
-  function rememberRequest(page, id, request) {
-    page._networkRequestRefs ??= new Map();
-    page._networkRequestFinalizer ??= new FinalizationRegistry(key => {
-      if (!page._networkRequestRefs.get(key)?.deref()) page._networkRequestRefs.delete(key);
+  function rememberRequest(owner, id, request) {
+    owner._networkRequestRefs ??= new Map();
+    owner._networkRequestFinalizer ??= new FinalizationRegistry(key => {
+      if (!owner._networkRequestRefs.get(key)?.deref()) owner._networkRequestRefs.delete(key);
     });
-    page._networkRequestRefs.set(id, new WeakRef(request));
-    page._networkRequestFinalizer.register(request, id);
+    owner._networkRequestRefs.set(id, new WeakRef(request));
+    owner._networkRequestFinalizer.register(request, id);
   }
 
   class NetworkRequest extends Request {
@@ -89,30 +89,30 @@ module.exports = function requestEvents({
       if (this._redirectedFrom) return this._redirectedFrom;
       if (typeof this._call.redirectedFrom !== 'string' || this._historyOwner == null)
         return null;
-      const session = this._page._context._browser._session;
+      const session = this._context._browser._session;
       if (typeof session.requestRedirectedFrom !== 'function') return null;
       let predecessor;
       try { predecessor = session.requestRedirectedFrom(this._historyOwner); }
       catch (error) { throw mapError(error, 'request.redirectedFrom'); }
       if (predecessor == null) return null;
-      const previous = canonicalize(this._page, predecessor.request, predecessor.historyOwner);
+      const previous = canonicalize(this._page ?? this._context, predecessor.request, predecessor.historyOwner);
       if (previous !== this) this._linkRedirectedFrom(previous);
       return this._redirectedFrom;
     }
   }
 
-  function canonicalize(page, metadata, historyOwner = null) {
+  function canonicalize(owner, metadata, historyOwner = null) {
     const id = metadata.id;
-    if (typeof id !== 'string') return new NetworkRequest(page, metadata, historyOwner);
-    let request = knownRequest(page, id);
+    if (typeof id !== 'string') return new NetworkRequest(owner, metadata, historyOwner);
+    let request = knownRequest(owner, id);
     if (request) request._adoptNetworkNotice(metadata, historyOwner);
     else {
-      request = new NetworkRequest(page, metadata, historyOwner);
-      rememberRequest(page, id, request);
+      request = new NetworkRequest(owner, metadata, historyOwner);
+      rememberRequest(owner, id, request);
     }
     const predecessorId = metadata.redirectedFrom;
     if (typeof predecessorId === 'string' && predecessorId !== id) {
-      const predecessor = knownRequest(page, predecessorId);
+      const predecessor = knownRequest(owner, predecessorId);
       if (predecessor && request._redirectedFrom !== predecessor)
         request._linkRedirectedFrom(predecessor);
     }
@@ -120,21 +120,26 @@ module.exports = function requestEvents({
   }
 
   function dispatch(browser, notice) {
-    const page = [...browser._contexts.values()]
-      .map(context => context._pages.get(notice.pageId))
-      .find(Boolean);
-    if (!page) return;
+    const serviceWorkerId = notice.serviceWorkerId ?? notice.request.serviceWorkerId;
+    const contextId = notice.contextId ?? notice.request.contextId;
+    const page = serviceWorkerId == null ? [...browser._contexts.values()]
+      .map(candidate => candidate._pages.get(notice.pageId))
+      .find(Boolean) : null;
+    const context = page?._context ?? browser._contexts.get(contextId);
+    if (!context) return;
+    const owner = page ?? context;
+    owner._networkRequests ??= new Map();
     const id = notice.request.id;
-    const request = canonicalize(page, notice.request, notice.historyOwner);
+    const request = canonicalize(owner, notice.request, notice.historyOwner);
     if (!['request', 'requestfinished', 'requestfailed'].includes(notice.kind))
       throw new Error(`Unsupported native request notice kind: ${notice.kind}`);
-    if (notice.kind === 'request') page._networkRequests.set(id, request);
+    if (notice.kind === 'request') owner._networkRequests.set(id, request);
     if (notice.kind === 'requestfailed') request._setFailure(notice.failureText ?? null);
     try {
-      page._context.emit?.(notice.kind, request);
-      page.emit(notice.kind, request);
+      context.emit?.(notice.kind, request);
+      page?.emit(notice.kind, request);
     } finally {
-      if (notice.kind !== 'request') page._networkRequests.delete(id);
+      if (notice.kind !== 'request') owner._networkRequests.delete(id);
     }
   }
 

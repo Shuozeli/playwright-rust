@@ -4,8 +4,8 @@ use std::collections::BTreeSet;
 use std::future::Future;
 use std::num::NonZeroU32;
 use std::pin::Pin;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::{Arc, LazyLock};
 
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
@@ -27,6 +27,26 @@ pub const EVALUATION_RUNTIME: &str = r#"function(c) {
   'use strict';
   const handles = Array.prototype.slice.call(arguments, 1);
   const isOwn = c.constructor.prototype.propertyIsEnumerable;
+  // Playwright exposes the pristine UtilityScript builtins to its own test
+  // suite only. Keep this behind the same process-level environment switch;
+  // user programs must not gain a non-standard `window.builtins` in normal
+  // operation.
+  if (c.isUnderTest) {
+    const global = globalThis;
+    global.builtins = global.__pwClock ? global.__pwClock.builtins : {
+      setTimeout: global.setTimeout?.bind(global),
+      clearTimeout: global.clearTimeout?.bind(global),
+      setInterval: global.setInterval?.bind(global),
+      clearInterval: global.clearInterval?.bind(global),
+      requestAnimationFrame: global.requestAnimationFrame?.bind(global),
+      cancelAnimationFrame: global.cancelAnimationFrame?.bind(global),
+      requestIdleCallback: global.requestIdleCallback?.bind(global),
+      cancelIdleCallback: global.cancelIdleCallback?.bind(global),
+      performance: global.performance,
+      Intl: global.Intl,
+      Date: global.Date
+    };
+  }
   // `c` is materialized by CDP itself, so its prototype keeps the realm's
   // intrinsic Object.prototype even after page code overwrites global
   // URL/Date/RegExp bindings. Avoid consulting those mutable globals while
@@ -573,6 +593,41 @@ impl CdpEvaluationProductionProfile {
         }
     }
 
+    /// Uses fallible allocator growth rather than a fabricated operation
+    /// count. Payload validation and optional route/chunked-result ownership
+    /// remain independently bounded.
+    pub fn new_allocator_backed(scope: ResourceScope, limits: CdpEvaluationLimits) -> Self {
+        let maximum_retained_bytes_per_operation = limits.maximum_retained_bytes_per_operation();
+        let maximum_chunked_string_retained_bytes = limits.maximum_chunked_string_retained_bytes();
+        let requirements = if maximum_chunked_string_retained_bytes == 0 {
+            ResourceRequirements::none()
+        } else {
+            ResourceRequirements::none()
+                .with_class(
+                    ResourceClass::BackendStateBytes,
+                    maximum_chunked_string_retained_bytes,
+                    maximum_chunked_string_retained_bytes,
+                )
+                .with_metadata(1, 1)
+        };
+        Self {
+            scope,
+            user_gesture: false,
+            limits,
+            max_concurrent_operations: usize::MAX,
+            max_context_routes: 0,
+            max_native_id_bytes: 0,
+            maximum_retained_bytes_per_operation,
+            maximum_chunked_string_retained_bytes,
+            maximum_route_retained_bytes: 0,
+            requirements,
+        }
+    }
+
+    const fn allocator_backed(self) -> bool {
+        self.max_concurrent_operations == usize::MAX
+    }
+
     /// Select Playwright-style transient activation only for user evaluations.
     /// Default profiles and internal CDP reads retain their original behavior.
     pub fn with_user_gesture(mut self, enabled: bool) -> Self {
@@ -594,14 +649,21 @@ impl CdpEvaluationProductionProfile {
     ) -> Self {
         self.max_context_routes = max_context_routes;
         self.max_native_id_bytes = max_native_id_bytes;
-        self.maximum_route_retained_bytes = u64::try_from(max_context_routes)
-            .unwrap_or(u64::MAX)
-            .saturating_mul(5)
-            .saturating_mul(u64::try_from(max_native_id_bytes).unwrap_or(u64::MAX));
-        let operations = u64::try_from(self.max_concurrent_operations).unwrap_or(u64::MAX);
-        let bytes = self
-            .maximum_retained_bytes_per_operation
-            .saturating_mul(operations)
+        self.maximum_route_retained_bytes = if max_context_routes == usize::MAX {
+            0
+        } else {
+            u64::try_from(max_context_routes)
+                .unwrap_or(u64::MAX)
+                .saturating_mul(5)
+                .saturating_mul(u64::try_from(max_native_id_bytes).unwrap_or(u64::MAX))
+        };
+        let operation_bytes = if self.allocator_backed() {
+            0
+        } else {
+            self.maximum_retained_bytes_per_operation
+                .saturating_mul(u64::try_from(self.max_concurrent_operations).unwrap_or(u64::MAX))
+        };
+        let bytes = operation_bytes
             .saturating_add(self.maximum_chunked_string_retained_bytes)
             .saturating_add(self.maximum_route_retained_bytes);
         self.requirements = if bytes == 0 {
@@ -611,11 +673,13 @@ impl CdpEvaluationProductionProfile {
                 .with_class(ResourceClass::BackendStateBytes, bytes, bytes)
                 .with_metadata(
                     1,
-                    self.max_concurrent_operations
-                        .saturating_add(usize::from(self.maximum_route_retained_bytes > 0))
-                        .saturating_add(usize::from(
-                            self.maximum_chunked_string_retained_bytes > 0,
-                        )),
+                    if self.allocator_backed() {
+                        0
+                    } else {
+                        self.max_concurrent_operations
+                    }
+                    .saturating_add(usize::from(self.maximum_route_retained_bytes > 0))
+                    .saturating_add(usize::from(self.maximum_chunked_string_retained_bytes > 0)),
                 )
         };
         self
@@ -644,6 +708,9 @@ impl CdpEvaluationProductionProfile {
     }
     pub const fn maximum_route_retained_bytes(self) -> u64 {
         self.maximum_route_retained_bytes
+    }
+    pub const fn context_routes_allocator_backed(self) -> bool {
+        self.max_context_routes == usize::MAX
     }
     pub const fn requirements(self) -> ResourceRequirements {
         self.requirements
@@ -909,11 +976,16 @@ impl CdpEvaluationService {
         let Some(resources) = &self.resources else {
             return Ok(None);
         };
+        let allocator_backed = resources.profile.allocator_backed();
         let limit = resources.profile.max_concurrent_operations();
         if resources
             .active
             .fetch_update(Ordering::AcqRel, Ordering::Acquire, |current| {
-                (current < limit).then_some(current + 1)
+                if allocator_backed {
+                    current.checked_add(1)
+                } else {
+                    (current < limit).then_some(current + 1)
+                }
             })
             .is_err()
         {
@@ -921,20 +993,24 @@ impl CdpEvaluationService {
                 "evaluation operation concurrency limit was reached",
             ));
         }
-        let resource = match resources.ledger.reserve(
-            resources.profile.resource_scope(),
-            ResourceClass::BackendStateBytes,
-            resources.profile.maximum_retained_bytes_per_operation(),
-        ) {
-            Ok(resource) => resource,
-            Err(error) => {
-                let previous = resources.active.fetch_sub(1, Ordering::AcqRel);
-                debug_assert!(previous > 0);
-                return Err(map_resource_error(error));
+        let resource = if allocator_backed {
+            None
+        } else {
+            match resources.ledger.reserve(
+                resources.profile.resource_scope(),
+                ResourceClass::BackendStateBytes,
+                resources.profile.maximum_retained_bytes_per_operation(),
+            ) {
+                Ok(resource) => Some(resource),
+                Err(error) => {
+                    let previous = resources.active.fetch_sub(1, Ordering::AcqRel);
+                    debug_assert!(previous > 0);
+                    return Err(map_resource_error(error));
+                }
             }
         };
         Ok(Some(EvaluationLease {
-            _resource: Some(resource),
+            _resource: resource,
             active: resources.active.clone(),
         }))
     }
@@ -1253,6 +1329,23 @@ fn build_script(
     limits: CdpEvaluationLimits,
     production: bool,
 ) -> Result<String, OperationError<EvaluationErrorDetails>> {
+    build_script_with_test_mode(params, limits, production, *IS_UNDER_TEST)
+}
+
+static IS_UNDER_TEST: LazyLock<bool> = LazyLock::new(|| {
+    let value = std::env::var("PWTEST_UNDER_TEST")
+        .ok()
+        .or_else(|| std::env::var("npm_config_pwtest_under_test").ok())
+        .or_else(|| std::env::var("npm_package_config_pwtest_under_test").ok());
+    value.is_some_and(|value| !value.is_empty() && value != "0" && value != "false")
+});
+
+fn build_script_with_test_mode(
+    params: &EvaluateParams,
+    limits: CdpEvaluationLimits,
+    production: bool,
+    is_under_test: bool,
+) -> Result<String, OperationError<EvaluationErrorDetails>> {
     let source = serde_json::to_string(params.source()).map_err(json_build_error)?;
     let argument = params.argument().map(value_to_json);
     let argument = argument
@@ -1282,6 +1375,8 @@ fn build_script(
     script.push_str(",argument:");
     script.push_str(argument.as_deref().unwrap_or("null"));
     script.push_str(",receiverSlot:null");
+    script.push_str(",isUnderTest:");
+    script.push_str(if is_under_test { "true" } else { "false" });
     script.push_str(",errorBytes:");
     script.push_str(&limits.error_bytes.to_string());
     script.push_str(",maxDepth:");
@@ -1936,7 +2031,7 @@ mod tests {
 
     use super::{
         CdpEvaluationLimits, CdpEvaluationProductionProfile, CdpEvaluationService,
-        CdpEvaluationServiceFactory,
+        CdpEvaluationServiceFactory, build_script_with_test_mode,
     };
 
     fn production_profile(max_concurrent_operations: usize) -> CdpEvaluationProductionProfile {
@@ -2450,6 +2545,27 @@ mod tests {
         assert_eq!(client.calls()[0].1[0]["uniqueContextId"], "unique-child");
     }
 
+    #[test]
+    fn allocator_backed_context_routes_do_not_reserve_infinite_bytes() {
+        // Arrange
+        let ordinary = production_profile(1);
+
+        // Act
+        let profile = ordinary.with_context_routes(usize::MAX, 64);
+
+        // Assert
+        assert!(profile.context_routes_allocator_backed());
+        assert_eq!(profile.maximum_route_retained_bytes(), 0);
+        assert_eq!(
+            profile
+                .requirements()
+                .class(ResourceClass::BackendStateBytes),
+            ordinary
+                .requirements()
+                .class(ResourceClass::BackendStateBytes)
+        );
+    }
+
     #[tokio::test]
     async fn omitted_function_argument_is_passed_as_javascript_undefined() {
         // Arrange
@@ -2494,6 +2610,27 @@ mod tests {
                 .as_str()
                 .unwrap()
                 .contains("const result = evaluator.evaluate()")
+        );
+    }
+
+    #[test]
+    fn playwright_test_builtins_are_selected_only_by_test_mode() {
+        // Arrange
+        let params = EvaluateParams::function_without_argument("() => 1");
+        let limits = CdpEvaluationLimits::default();
+
+        // Act
+        let ordinary = build_script_with_test_mode(&params, limits, false, false).unwrap();
+        let under_test = build_script_with_test_mode(&params, limits, false, true).unwrap();
+
+        // Assert
+        assert!(ordinary.contains("isUnderTest:false"));
+        assert!(!ordinary.contains("isUnderTest:true"));
+        assert!(under_test.contains("isUnderTest:true"));
+        assert!(under_test.contains("global.builtins = global.__pwClock"));
+        assert!(
+            under_test
+                .contains("requestAnimationFrame: global.requestAnimationFrame?.bind(global)")
         );
     }
 

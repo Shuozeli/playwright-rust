@@ -37,6 +37,10 @@ mod context_proxy;
 pub mod context_storage_state;
 #[cfg(feature = "context-timezone")]
 mod context_timezone;
+#[cfg(feature = "context-tracing-screenshots")]
+mod context_tracing;
+#[cfg(all(feature = "context-api-request", feature = "context-tracing-network"))]
+pub use context_tracing::ContextApiRequestTrace;
 #[cfg(feature = "device-emulation")]
 mod device_emulation;
 #[cfg(feature = "download-events")]
@@ -73,6 +77,14 @@ mod frame_metadata;
 mod frame_navigation;
 #[cfg(feature = "handles")]
 pub mod handles;
+#[cfg(feature = "har-replay")]
+mod har_archive;
+#[cfg(feature = "har-recording")]
+mod har_recording;
+#[cfg(feature = "har-recording")]
+pub use playwright_rust_har_recording::{
+    HarContentPolicy as HarUpdateContent, HarMode as HarUpdateMode,
+};
 #[cfg(feature = "history-navigation")]
 mod history_navigation;
 #[cfg(feature = "ignore-https-errors")]
@@ -152,6 +164,10 @@ pub mod screenshot;
 pub mod selector_registry;
 #[cfg(feature = "service-worker-policy")]
 mod service_worker_policy;
+mod session_close;
+pub use session_close::HostSessionCloseTimeouts;
+pub mod session_admission;
+mod session_owned_resources;
 #[cfg(feature = "set-content")]
 mod set_content;
 mod shutdown_admission;
@@ -160,6 +176,8 @@ mod timeout_settings;
 mod topology_recovery;
 #[cfg(feature = "url-wait")]
 mod url_wait;
+#[cfg(feature = "video-recording")]
+mod video_recording;
 #[cfg(feature = "wait-for-function")]
 pub mod wait_for_function;
 #[cfg(feature = "wait-for-timeout")]
@@ -179,16 +197,18 @@ mod ws_invalid_frame;
 #[cfg(feature = "url-wait")]
 pub use url_wait::UrlWaitError;
 
-#[cfg(feature = "playwright-trace")]
+#[cfg(any(feature = "playwright-trace", feature = "video-recording"))]
 use std::path::Path;
-#[cfg(feature = "owned-launch")]
+#[cfg(any(feature = "owned-launch", feature = "video-recording"))]
 use std::path::PathBuf;
-use std::sync::atomic::AtomicU64;
+#[cfg(feature = "owned-launch")]
+use std::sync::atomic::AtomicU8;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 #[cfg(feature = "owned-launch")]
-use playwright_rust_browser_provider::LaunchedBrowser;
+use playwright_rust_browser_provider::{BrowserProcessLease, LaunchedBrowser};
 #[cfg(feature = "cdp-handshake-headers")]
 use playwright_rust_cdp::CdpHandshakeHeaders;
 use playwright_rust_cdp::CdpSession;
@@ -205,13 +225,15 @@ use playwright_rust_composition_chromium_launch::ChromiumLaunchCompositionFactor
 use playwright_rust_core::{ProductionResourceLedger, ResourceClass};
 #[cfg(feature = "owned-launch")]
 use playwright_rust_provider_chromium::{
-    ChromiumBrowserShutdown, ChromiumLaunchRequest, ChromiumShutdownPolicy, ChromiumShutdownReport,
+    ChromiumBrowserShutdown, ChromiumLaunchRequest, ChromiumShutdownPolicy,
 };
 #[cfg(feature = "owned-launch")]
 pub use playwright_rust_provider_chromium::{
     ChromiumChannel, ChromiumExecutable, ChromiumPersistentProfile, discover_system_chromium,
 };
 use playwright_rust_runtime::ControlledDispatcher;
+#[cfg(any(feature = "handles", feature = "worker-handle-evaluation"))]
+use playwright_rust_runtime_tokio::TokioCleanupEvent;
 use playwright_rust_runtime_tokio::{TokioCleanupExecutor, TokioDeadlineScheduler};
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -224,13 +246,12 @@ type CommandRuntime = ControlledDispatcher<
     TokioCleanupExecutor,
 >;
 #[cfg(feature = "cdp-session")]
-pub use cdp_sessions::{
-    CdpSessionEvent, CdpSessionEventBatch, MAX_CDP_SESSION_EVENT_BYTES, MAX_CDP_SESSION_EVENTS,
-    MAX_CDP_SESSIONS,
-};
+pub use cdp_sessions::{CDP_SESSION_EVENT_BATCH_LIMIT, CdpSessionEvent, CdpSessionEventBatch};
 pub use commands::{NavigationResult, ResponseMetadata};
 #[cfg(feature = "context-geolocation")]
 pub use context_geolocation::ContextGeolocation;
+#[cfg(feature = "context-geolocation-permission")]
+pub use context_geolocation_permission::ContextPermissions;
 #[cfg(feature = "context-http-credentials")]
 pub use context_http_credentials::{ContextHttpCredentials, MAX_HTTP_CREDENTIAL_FIELD_BYTES};
 pub use context_lifecycle::ContextPolicyOptions;
@@ -271,6 +292,8 @@ pub use frame_metadata::{
 };
 #[cfg(feature = "service-worker-policy")]
 pub use service_worker_policy::ServiceWorkerPolicy;
+#[cfg(feature = "video-recording")]
+pub use video_recording::PersistentContextVideoOptions;
 
 #[cfg(feature = "persistent-context-launch-arguments")]
 const MAX_PERSISTENT_LAUNCH_ARGUMENTS: usize = 256;
@@ -355,18 +378,15 @@ struct PersistentChromiumLaunchOptions<'a> {
     launch_arguments: PersistentLaunchArguments,
     timeout_ms: u32,
 }
-use frame_metadata::{FrameMetadata, FrameMetadataLimits};
+use frame_metadata::FrameMetadata;
 pub use lifecycle::ClosePageDisposition;
 use lifecycle::{DriverRequest, LifecycleServices};
 #[cfg(feature = "page-bindings")]
 pub use page_bindings::BindingCall;
+#[cfg(feature = "har-replay")]
+pub use page_routes::HarNotFoundAction;
 #[cfg(feature = "route-fulfill-path")]
 pub use page_routes::MAX_ROUTE_FULFILL_PATH_BYTES;
-#[cfg(feature = "har-replay")]
-pub use page_routes::{
-    HarNotFoundAction, MAX_HAR_REPLAY_ARCHIVE_BYTES, MAX_HAR_REPLAY_ARCHIVES,
-    MAX_HAR_REPLAY_RETAINED_BYTES,
-};
 #[cfg(feature = "page-routes")]
 pub use page_routes::{
     MAX_ROUTE_CONTINUE_INPUT_BYTES, MAX_ROUTE_FULFILL_BODY_BYTES, MAX_ROUTE_INITIALIZING_SESSIONS,
@@ -375,7 +395,7 @@ pub use page_routes::{
 #[cfg(feature = "worker-console-events")]
 pub use worker_console_events::WorkerConsoleNotice;
 #[cfg(feature = "worker-events")]
-pub use worker_events::{WorkerNotice, WorkerNoticeKind, WorkerOwner};
+pub use worker_events::{ServiceWorkerNotice, WorkerNotice, WorkerNoticeKind, WorkerOwner};
 #[cfg(feature = "worker-handle-evaluation")]
 pub use worker_handles::{WorkerHandle, WorkerHandleRelease};
 
@@ -387,7 +407,7 @@ pub struct PersistentContextDefaults {
     #[cfg(feature = "context-geolocation")]
     geolocation: Option<ContextGeolocation>,
     #[cfg(feature = "context-geolocation-permission")]
-    geolocation_permission: bool,
+    permissions: ContextPermissions,
     #[cfg(feature = "context-http-credentials")]
     http_credentials: Option<ContextHttpCredentials>,
     #[cfg(feature = "context-locale")]
@@ -408,6 +428,8 @@ pub struct PersistentContextDefaults {
     media: Option<PersistentContextMediaOptions>,
     #[cfg(feature = "extra-headers")]
     extra_headers: Option<PersistentContextExtraHeaders>,
+    #[cfg(feature = "video-recording")]
+    video: Option<PersistentContextVideoOptions>,
 }
 
 impl PersistentContextDefaults {
@@ -420,8 +442,8 @@ impl PersistentContextDefaults {
 
     #[cfg(feature = "persistent-context-geolocation-permission")]
     #[must_use]
-    pub const fn with_geolocation_permission(mut self, enabled: bool) -> Self {
-        self.geolocation_permission = enabled;
+    pub fn with_permissions(mut self, permissions: ContextPermissions) -> Self {
+        self.permissions = permissions;
         self
     }
 
@@ -492,6 +514,13 @@ impl PersistentContextDefaults {
     #[must_use]
     pub fn with_extra_headers(mut self, headers: Option<PersistentContextExtraHeaders>) -> Self {
         self.extra_headers = headers;
+        self
+    }
+
+    #[cfg(feature = "video-recording")]
+    #[must_use]
+    pub fn with_video(mut self, video: Option<PersistentContextVideoOptions>) -> Self {
+        self.video = video;
         self
     }
 }
@@ -672,6 +701,8 @@ struct LiveSession {
     handles: Arc<handles::Installation>,
     #[cfg(feature = "network-events")]
     network_events: Arc<network_events::Installation>,
+    #[cfg(feature = "har-recording")]
+    har_recording: Arc<har_recording::Installation>,
     #[cfg(feature = "download-events")]
     download_events: Arc<download_events::Installation>,
     #[cfg(feature = "worker-events")]
@@ -737,7 +768,87 @@ struct LiveSession {
 
 #[cfg(feature = "owned-launch")]
 struct OwnedBrowserProcess {
-    shutdown: owned_browser_shutdown::OneFlightShutdown<Result<ChromiumShutdownReport, String>>,
+    termination: owned_browser_shutdown::OneFlightShutdown<Result<(), String>>,
+    mode: Arc<AtomicU8>,
+}
+
+#[cfg(feature = "owned-launch")]
+struct OwnedDriverShutdown {
+    host: Mutex<
+        Option<(
+            tokio::sync::oneshot::Receiver<()>,
+            tokio::sync::oneshot::Sender<()>,
+        )>,
+    >,
+}
+
+#[cfg(feature = "owned-launch")]
+struct OwnedDriverShutdownCheckpoint {
+    ready: tokio::sync::oneshot::Sender<()>,
+    resume: tokio::sync::oneshot::Receiver<()>,
+}
+
+#[cfg(feature = "owned-launch")]
+impl OwnedDriverShutdown {
+    fn new() -> (Self, OwnedDriverShutdownCheckpoint) {
+        let (ready, ready_waiter) = tokio::sync::oneshot::channel();
+        let (resume, resume_waiter) = tokio::sync::oneshot::channel();
+        (
+            Self {
+                host: Mutex::new(Some((ready_waiter, resume))),
+            },
+            OwnedDriverShutdownCheckpoint {
+                ready,
+                resume: resume_waiter,
+            },
+        )
+    }
+
+    fn take(
+        &self,
+    ) -> Option<(
+        tokio::sync::oneshot::Receiver<()>,
+        tokio::sync::oneshot::Sender<()>,
+    )> {
+        self.host
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .take()
+    }
+}
+
+#[cfg(feature = "owned-launch")]
+impl OwnedDriverShutdownCheckpoint {
+    async fn pause(self) {
+        let _ = self.ready.send(());
+        // Dropping a cancelled close caller releases this waiter too, so the
+        // serialized driver can never be stranded at the provider boundary.
+        let _ = self.resume.await;
+    }
+}
+
+#[cfg(feature = "owned-launch")]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[repr(u8)]
+enum OwnedBrowserTermination {
+    Graceful = 1,
+    KillForTests = 2,
+}
+
+#[cfg(feature = "owned-launch")]
+impl OwnedBrowserProcess {
+    async fn terminate(
+        &self,
+        requested: OwnedBrowserTermination,
+    ) -> Result<Arc<Result<(), String>>, HostError> {
+        let _ = self
+            .mode
+            .compare_exchange(0, requested as u8, Ordering::AcqRel, Ordering::Acquire);
+        self.termination
+            .run(Duration::from_secs(30))
+            .await
+            .map_err(HostError::backend)
+    }
 }
 
 /// One environment-local session. Explicit close joins its topology driver.
@@ -746,8 +857,11 @@ struct OwnedBrowserProcess {
 pub struct HostSession {
     browser_id: String,
     state: Arc<Mutex<Option<LiveSession>>>,
+    transport: Mutex<Option<Arc<playwright_rust_cdp::CdpConnection>>>,
     stop: CancellationToken,
     disconnected: CancellationToken,
+    admission_closed: AtomicBool,
+    close_gate: tokio::sync::Mutex<()>,
     driver: tokio::sync::Mutex<Option<JoinHandle<Result<(), HostError>>>>,
     version: String,
     #[cfg(feature = "context-api-request")]
@@ -761,10 +875,17 @@ pub struct HostSession {
     context_metadata: context_metadata::ContextMetadata,
     #[cfg(feature = "context-storage-state")]
     context_storage_state: Arc<context_storage_state::Installation>,
-    topology_barriers: tokio::sync::mpsc::Sender<DriverRequest>,
+    #[cfg(feature = "context-tracing-screenshots")]
+    context_tracing: Arc<context_tracing::Installation>,
+    topology_barriers: tokio::sync::mpsc::UnboundedSender<DriverRequest>,
     browser_pages: browser_page::BrowserPages,
+    session_owned: session_owned_resources::SessionOwnedResources,
+    #[cfg(feature = "video-recording")]
+    video_recording: Arc<video_recording::Installation>,
     #[cfg(feature = "owned-launch")]
     owned_browser: Option<OwnedBrowserProcess>,
+    #[cfg(feature = "owned-launch")]
+    owned_driver_shutdown: Option<OwnedDriverShutdown>,
     #[cfg(feature = "playwright-trace")]
     trace_directory: Option<playwright_rust_trace_playwright_v8::PreparedTraceDirectory>,
 }
@@ -777,6 +898,8 @@ struct SessionTeardown {
     context_metadata: context_metadata::ContextMetadata,
     #[cfg(feature = "context-storage-state")]
     context_storage_state: Arc<context_storage_state::Installation>,
+    #[cfg(feature = "video-recording")]
+    video_recording: Arc<video_recording::Installation>,
 }
 
 impl Drop for SessionTeardown {
@@ -800,6 +923,10 @@ impl Drop for SessionTeardown {
         #[cfg(feature = "network-events")]
         if let Some(live) = retired.as_ref() {
             live.network_events.close();
+        }
+        #[cfg(feature = "har-recording")]
+        if let Some(live) = retired.as_ref() {
+            live.har_recording.close();
         }
         #[cfg(feature = "context-http-credentials")]
         if let Some(live) = retired.as_ref() {
@@ -826,6 +953,8 @@ impl Drop for SessionTeardown {
         self.context_metadata.clear();
         #[cfg(feature = "context-storage-state")]
         self.context_storage_state.close();
+        #[cfg(feature = "video-recording")]
+        self.video_recording.abort();
         self.frame_metadata.clear();
         self.disconnected.cancel();
     }
@@ -843,6 +972,27 @@ enum SessionContextScope {
     All,
     #[cfg(feature = "owned-launch")]
     OwnedOnly,
+}
+
+struct CompositionOptions<'a> {
+    publication: LifecyclePublication,
+    context_scope: SessionContextScope,
+    initial_default_base_url: Option<&'a str>,
+    context_defaults: PersistentContextDefaults,
+    #[cfg(feature = "owned-launch")]
+    owned_browser: Option<OwnedBrowserProcess>,
+    #[cfg(feature = "playwright-trace")]
+    trace_directory: Option<playwright_rust_trace_playwright_v8::PreparedTraceDirectory>,
+}
+
+#[cfg(feature = "owned-launch")]
+struct ChromiumLaunchSessionOptions<'a> {
+    timeout_ms: u32,
+    base_url: Option<&'a str>,
+    context_defaults: PersistentContextDefaults,
+    context_scope: SessionContextScope,
+    #[cfg(feature = "playwright-trace")]
+    trace_directory: Option<playwright_rust_trace_playwright_v8::PreparedTraceDirectory>,
 }
 
 impl HostSession {
@@ -993,14 +1143,16 @@ impl HostSession {
         Self::from_composition(
             composition,
             phase,
-            publication,
-            SessionContextScope::All,
-            None,
-            PersistentContextDefaults::default(),
-            #[cfg(feature = "owned-launch")]
-            None,
-            #[cfg(feature = "playwright-trace")]
-            None,
+            CompositionOptions {
+                publication,
+                context_scope: SessionContextScope::All,
+                initial_default_base_url: None,
+                context_defaults: PersistentContextDefaults::default(),
+                #[cfg(feature = "owned-launch")]
+                owned_browser: None,
+                #[cfg(feature = "playwright-trace")]
+                trace_directory: None,
+            },
         )
         .await
     }
@@ -1097,13 +1249,15 @@ impl HostSession {
         Self::launch_chromium_request_inner(
             attachment,
             request,
-            timeout_ms,
-            None,
-            PersistentContextDefaults::default(),
-            SessionContextScope::OwnedOnly,
             phase,
-            #[cfg(feature = "playwright-trace")]
-            trace_directory,
+            ChromiumLaunchSessionOptions {
+                timeout_ms,
+                base_url: None,
+                context_defaults: PersistentContextDefaults::default(),
+                context_scope: SessionContextScope::OwnedOnly,
+                #[cfg(feature = "playwright-trace")]
+                trace_directory,
+            },
         )
         .await
     }
@@ -1178,20 +1332,24 @@ impl HostSession {
 
     /// Launches an owned persistent Chromium whose optional default Context
     /// policies are admitted before the initial Page topology is initialized.
-    #[cfg(any(
-        feature = "persistent-context-locale",
-        feature = "persistent-context-timezone",
-        feature = "persistent-context-offline",
-        feature = "persistent-context-geolocation",
-        feature = "persistent-context-geolocation-permission",
-        feature = "persistent-context-http-credentials",
-        feature = "persistent-context-launch-arguments",
-        feature = "persistent-context-ignore-https-errors",
-        feature = "persistent-context-device-emulation",
-        feature = "persistent-context-emulate-media",
-        feature = "persistent-context-extra-headers",
-        feature = "persistent-context-bypass-csp",
-        feature = "persistent-context-javascript-disabled"
+    #[cfg(all(
+        feature = "owned-launch",
+        any(
+            feature = "persistent-context-locale",
+            feature = "persistent-context-timezone",
+            feature = "persistent-context-offline",
+            feature = "persistent-context-geolocation",
+            feature = "persistent-context-geolocation-permission",
+            feature = "persistent-context-http-credentials",
+            feature = "persistent-context-launch-arguments",
+            feature = "persistent-context-ignore-https-errors",
+            feature = "persistent-context-device-emulation",
+            feature = "persistent-context-emulate-media",
+            feature = "persistent-context-extra-headers",
+            feature = "persistent-context-bypass-csp",
+            feature = "persistent-context-javascript-disabled",
+            feature = "video-recording"
+        )
     ))]
     pub async fn launch_persistent_chromium_with_lifecycle_events_and_context_defaults(
         executable: ChromiumExecutable,
@@ -1255,13 +1413,15 @@ impl HostSession {
         Self::launch_chromium_request_inner(
             attachment,
             request,
-            timeout_ms,
-            base_url,
-            context_defaults,
-            SessionContextScope::All,
             phase,
-            #[cfg(feature = "playwright-trace")]
-            None,
+            ChromiumLaunchSessionOptions {
+                timeout_ms,
+                base_url,
+                context_defaults,
+                context_scope: SessionContextScope::All,
+                #[cfg(feature = "playwright-trace")]
+                trace_directory: None,
+            },
         )
         .await
     }
@@ -1270,15 +1430,17 @@ impl HostSession {
     async fn launch_chromium_request_inner(
         attachment: ChromiumAttachFactory,
         mut request: ChromiumLaunchRequest,
-        timeout_ms: u32,
-        base_url: Option<&str>,
-        context_defaults: PersistentContextDefaults,
-        context_scope: SessionContextScope,
         phase: &mut ConnectPhase,
-        #[cfg(feature = "playwright-trace")] trace_directory: Option<
-            playwright_rust_trace_playwright_v8::PreparedTraceDirectory,
-        >,
+        options: ChromiumLaunchSessionOptions<'_>,
     ) -> Result<Self, HostError> {
+        let ChromiumLaunchSessionOptions {
+            timeout_ms,
+            base_url,
+            context_defaults,
+            context_scope,
+            #[cfg(feature = "playwright-trace")]
+            trace_directory,
+        } = options;
         if timeout_ms != 0 {
             request = request.with_startup_timeout(Duration::from_millis(u64::from(timeout_ms)));
         }
@@ -1295,8 +1457,21 @@ impl HostSession {
         // not orphan the process whose unique lease is moving into the host.
         lease.arm_kill_on_drop();
         let browser = LaunchedBrowser::new(Arc::clone(composition.connection()), lease);
+        let termination_mode = Arc::new(AtomicU8::new(0));
+        let selected_mode = Arc::clone(&termination_mode);
         let owned_browser = OwnedBrowserProcess {
-            shutdown: owned_browser_shutdown::OneFlightShutdown::new(async move {
+            termination: owned_browser_shutdown::OneFlightShutdown::new(async move {
+                if selected_mode.load(Ordering::Acquire)
+                    == OwnedBrowserTermination::KillForTests as u8
+                {
+                    let (connection, lease) = browser.into_connection_and_lease();
+                    drop(connection);
+                    return lease
+                        .terminate()
+                        .await
+                        .map(|_| ())
+                        .map_err(|error| error.to_string());
+                }
                 let policy = ChromiumShutdownPolicy::new(
                     Duration::from_secs(5),
                     Duration::from_secs(5),
@@ -1306,19 +1481,23 @@ impl HostSession {
                 ChromiumBrowserShutdown::new()
                     .shutdown(browser, policy)
                     .await
+                    .map(|_| ())
                     .map_err(|error| error.to_string())
             }),
+            mode: termination_mode,
         };
         Self::from_composition(
             composition,
             phase,
-            LifecyclePublication::Events,
-            context_scope,
-            base_url,
-            context_defaults,
-            Some(owned_browser),
-            #[cfg(feature = "playwright-trace")]
-            trace_directory,
+            CompositionOptions {
+                publication: LifecyclePublication::Events,
+                context_scope,
+                initial_default_base_url: base_url,
+                context_defaults,
+                owned_browser: Some(owned_browser),
+                #[cfg(feature = "playwright-trace")]
+                trace_directory,
+            },
         )
         .await
     }
@@ -1326,15 +1505,18 @@ impl HostSession {
     async fn from_composition(
         mut composition: AttachedChromiumComposition,
         phase: &mut ConnectPhase,
-        publication: LifecyclePublication,
-        context_scope: SessionContextScope,
-        initial_default_base_url: Option<&str>,
-        context_defaults: PersistentContextDefaults,
-        #[cfg(feature = "owned-launch")] owned_browser: Option<OwnedBrowserProcess>,
-        #[cfg(feature = "playwright-trace")] trace_directory: Option<
-            playwright_rust_trace_playwright_v8::PreparedTraceDirectory,
-        >,
+        options: CompositionOptions<'_>,
     ) -> Result<Self, HostError> {
+        let CompositionOptions {
+            publication,
+            context_scope,
+            initial_default_base_url,
+            context_defaults,
+            #[cfg(feature = "owned-launch")]
+            owned_browser,
+            #[cfg(feature = "playwright-trace")]
+            trace_directory,
+        } = options;
         #[cfg(not(any(
             feature = "context-geolocation",
             feature = "context-geolocation-permission",
@@ -1346,7 +1528,8 @@ impl HostSession {
             feature = "bypass-csp",
             feature = "javascript-disabled",
             feature = "emulate-media",
-            feature = "extra-headers"
+            feature = "extra-headers",
+            feature = "video-recording"
         )))]
         let _ = context_defaults;
         *phase = ConnectPhase::BrowserVersion;
@@ -1379,27 +1562,53 @@ impl HostSession {
             .split_once('/')
             .map_or(version.product.as_str(), |(_, version)| version)
             .to_owned();
-        // Existing runtime/lifecycle capacity plus two pre-reserved native
-        // continuation slots for each of eight Locator evaluation commands.
-        #[cfg(not(feature = "handles"))]
+        // Finite profiles keep their explicit cleanup bound. Handle profiles
+        // reserve one allocator-backed cleanup continuation per retained
+        // native owner so public Handle count is not fabricated.
+        #[cfg(not(any(feature = "handles", feature = "worker-handle-evaluation")))]
         let cleanup_slots = 32usize;
-        #[cfg(feature = "handles")]
-        let cleanup_slots = handles::CLEANUP_SLOTS;
-        #[cfg(any(feature = "console-events", feature = "console-history"))]
+        #[cfg(all(
+            not(any(feature = "handles", feature = "worker-handle-evaluation")),
+            any(feature = "console-events", feature = "console-history")
+        ))]
         let cleanup_slots = cleanup_slots
             .checked_add(console_events::MAX_LOG_RELEASE_JOBS)
             .ok_or_else(|| HostError::ResourceExhausted("cleanup capacity overflow".into()))?;
-        #[cfg(feature = "worker-console-events")]
+        #[cfg(all(
+            not(any(feature = "handles", feature = "worker-handle-evaluation")),
+            feature = "worker-console-events"
+        ))]
         let cleanup_slots = cleanup_slots
             .checked_add(worker_console_events::MAX_WORKER_CONSOLE_RELEASE_JOBS)
             .ok_or_else(|| HostError::ResourceExhausted("cleanup capacity overflow".into()))?;
-        #[cfg(feature = "worker-handle-evaluation")]
-        let cleanup_slots = cleanup_slots
-            .checked_add(worker_handles::CLEANUP_SLOTS)
-            .ok_or_else(|| HostError::ResourceExhausted("cleanup capacity overflow".into()))?;
+        #[cfg(not(any(feature = "handles", feature = "worker-handle-evaluation")))]
         let cleanup =
             TokioCleanupExecutor::new_with_job_timeout(cleanup_slots, Duration::from_secs(5))
                 .map_err(HostError::backend)?;
+        #[cfg(any(feature = "handles", feature = "worker-handle-evaluation"))]
+        let cleanup_diagnostic = Arc::new(Mutex::new(None::<String>));
+        #[cfg(any(feature = "handles", feature = "worker-handle-evaluation"))]
+        let cleanup_diagnostic_reporter = Arc::clone(&cleanup_diagnostic);
+        #[cfg(any(feature = "handles", feature = "worker-handle-evaluation"))]
+        let cleanup = TokioCleanupExecutor::new_allocator_backed_with_reporter(move |event| {
+            let detail = match event {
+                TokioCleanupEvent::JobFailed { failure, .. } => Some(failure.to_string()),
+                TokioCleanupEvent::JobTimedOut { job_id } => {
+                    Some(format!("cleanup job {} timed out", job_id.get()))
+                }
+                TokioCleanupEvent::SubmissionRejected { error } => Some(error.to_string()),
+                _ => None,
+            };
+            if let Some(mut detail) = detail
+                && let Ok(mut stored) = cleanup_diagnostic_reporter.lock()
+                && stored.is_none()
+            {
+                detail.truncate(detail.floor_char_boundary(4096));
+                *stored = Some(detail);
+            }
+        })
+        .with_job_timeout(Duration::from_secs(5))
+        .map_err(HostError::backend)?;
         #[cfg(not(feature = "handles"))]
         let runtime =
             composition.new_controlled_page_runtime(TokioDeadlineScheduler, cleanup.clone());
@@ -1435,34 +1644,13 @@ impl HostSession {
         #[cfg(feature = "file-chooser-events")]
         let page_file_chooser =
             page_file_chooser::Installation::new(composition.resources(), &file_input)?;
-        let frame_metadata = Arc::new(
-            FrameMetadata::new(FrameMetadataLimits {
-                entries: 128,
-                url_bytes: 16 * 1024,
-                total_bytes: 2 * 1024 * 1024,
-                publications: (if cfg!(any(feature = "console-events", feature = "page-errors")) {
-                    512
-                } else {
-                    256
-                }) + if cfg!(feature = "frame-detach-events") {
-                    254
-                } else {
-                    0
-                } + frame_trees::FRAME_EVENT_RESERVATIONS,
-            })?
-            .with_names(frame_metadata::FrameNameLimits {
+        let frame_metadata = Arc::new(FrameMetadata::new_allocator_backed(16 * 1024)?.with_names(
+            frame_metadata::FrameNameLimits {
                 name_bytes: 16 * 1024,
-                total_bytes: 2 * 1024 * 1024,
-            })?,
-        );
-        let context_metadata =
-            context_metadata::ContextMetadata::new(context_metadata::ContextMetadataLimits {
-                active_contexts: 16,
-                states: 256,
-                conversions: 128,
-                base_url_bytes: 16 * 1024,
-                bytes: 2 * 1024 * 1024,
-            })?;
+                total_bytes: 0,
+            },
+        )?);
+        let context_metadata = context_metadata::ContextMetadata::new_allocator_backed(16 * 1024)?;
         let context_metadata = match context_scope {
             SessionContextScope::All => context_metadata,
             #[cfg(feature = "owned-launch")]
@@ -1472,7 +1660,7 @@ impl HostSession {
             Some(base_url) => context_metadata.with_external_base_url(base_url)?,
             None => context_metadata,
         };
-        let frame_trees = frame_trees::FrameTrees::new(frame_metadata.clone())?
+        let frame_trees = frame_trees::FrameTrees::new_allocator_backed(frame_metadata.clone())?
             .with_collections(context_metadata.clone())?;
         let frame_trees = Arc::new(match publication {
             LifecyclePublication::Collections => frame_trees,
@@ -1483,14 +1671,25 @@ impl HostSession {
                 .with_external_close_publication()?
                 .with_ready_publication()?,
         });
+        #[cfg(feature = "video-recording")]
+        let video_recording = video_recording::Installation::new(
+            composition.connection().clone(),
+            context_defaults.video.clone(),
+        );
         #[cfg(feature = "context-storage-state")]
         let context_storage_state =
             context_storage_state::Installation::new(composition.resources())?;
+        #[cfg(feature = "context-tracing-screenshots")]
+        let context_tracing = Arc::new(context_tracing::Installation::default());
         #[cfg(feature = "network-events")]
         let network_events = Arc::new(network_events::Installation::new(
             runtime.as_ref(),
             composition.resources(),
         )?);
+        #[cfg(feature = "har-recording")]
+        let har_recording = Arc::new(har_recording::Installation::new(Arc::new(
+            har_recording::SystemClock,
+        )));
         #[cfg(feature = "download-events")]
         let download_events = download_events::Installation::new(composition.resources())?;
         #[cfg(feature = "worker-events")]
@@ -1502,6 +1701,8 @@ impl HostSession {
             context_metadata.clone(),
             frame_trees.clone(),
         )?;
+        #[cfg(feature = "worker-network-events")]
+        worker_events.set_network_registration(network_registration.clone())?;
         #[cfg(feature = "worker-handle-evaluation")]
         let worker_handles =
             worker_handles::Installation::new(composition.resources(), cleanup.clone())?;
@@ -1596,7 +1797,7 @@ impl HostSession {
             context_geolocation_permission::Installation::new_with_default(
                 composition.resources(),
                 composition.connection().clone(),
-                context_defaults.geolocation_permission,
+                context_defaults.permissions,
             )?;
         #[cfg(feature = "context-geolocation-permission")]
         context_geolocation_permission.apply_default().await?;
@@ -1615,6 +1816,12 @@ impl HostSession {
             composition.resources(),
             context_defaults.offline,
         )?;
+        #[cfg(all(
+            feature = "worker-events",
+            feature = "service-worker-events",
+            feature = "context-offline"
+        ))]
+        worker_events.set_context_offline(context_offline.clone())?;
         #[cfg(feature = "context-proxy")]
         let context_proxy = context_proxy::Installation::new(composition.resources())?;
         #[cfg(feature = "ignore-https-errors")]
@@ -1713,6 +1920,8 @@ impl HostSession {
         #[cfg(feature = "file-chooser-events")]
         let defaults =
             page_file_chooser::Initializer::new(defaults, composition.connection().clone());
+        #[cfg(feature = "video-recording")]
+        let defaults = video_recording::Initializer::new(defaults, video_recording.clone());
         #[cfg(feature = "extra-headers")]
         let extra_headers = extra_headers::Installation::new_with_default(
             composition.connection().clone(),
@@ -1780,6 +1989,12 @@ impl HostSession {
         #[cfg(feature = "frame-lifecycle")]
         let frame_observer = frame_lifecycle.clone()
             as Arc<dyn playwright_rust_plugin_chromium_frame_observer::ChromiumFrameEventObserver>;
+        #[cfg(feature = "har-recording")]
+        let frame_observer = Arc::new(har_recording::Observer::new(
+            har_recording.clone(),
+            frame_observer,
+        ))
+            as Arc<dyn playwright_rust_plugin_chromium_frame_observer::ChromiumFrameEventObserver>;
         #[cfg(feature = "page-events")]
         let frame_observer = Arc::new(page_events::Observer::new(
             frame_trees.clone(),
@@ -1819,6 +2034,12 @@ impl HostSession {
             frame_observer,
         ))
             as Arc<dyn playwright_rust_plugin_chromium_frame_observer::ChromiumFrameEventObserver>;
+        #[cfg(feature = "video-recording")]
+        let frame_observer = Arc::new(video_recording::Observer::new(
+            video_recording.clone(),
+            frame_observer,
+        ))
+            as Arc<dyn playwright_rust_plugin_chromium_frame_observer::ChromiumFrameEventObserver>;
         #[cfg(feature = "page-routes")]
         let frame_observer = Arc::new(page_routes::Observer::new(
             page_routes.clone(),
@@ -1833,17 +2054,21 @@ impl HostSession {
             as Arc<dyn playwright_rust_plugin_chromium_frame_observer::ChromiumFrameEventObserver>;
         #[cfg(any(feature = "console-events", feature = "console-history"))]
         let console_observer = Arc::new(console_events::Observer::new(
-            #[cfg(feature = "console-events")]
-            frame_trees.clone(),
-            #[cfg(feature = "console-events")]
-            console_subscriptions.clone(),
-            #[cfg(feature = "console-history")]
-            console_history.clone(),
+            console_events::ObserverBindings {
+                #[cfg(feature = "console-events")]
+                trees: frame_trees.clone(),
+                #[cfg(feature = "console-events")]
+                subscriptions: console_subscriptions.clone(),
+                #[cfg(feature = "console-history")]
+                history: console_history.clone(),
+                #[cfg(feature = "context-tracing-console")]
+                tracing: context_tracing.clone(),
+                #[cfg(feature = "console-argument-handles")]
+                handles: handles.clone(),
+            },
             frame_observer,
             composition.connection().clone(),
             cleanup.clone(),
-            #[cfg(feature = "console-argument-handles")]
-            handles.clone(),
         ));
         #[cfg(feature = "console-argument-handles")]
         let task_console_observer = console_observer.clone();
@@ -1869,6 +2094,7 @@ impl HostSession {
         let frame_observer = Arc::new(worker_console_events::Observer::new(
             worker_console_events.clone(),
             worker_events.clone(),
+            console_subscriptions.clone(),
             frame_observer,
         ))
             as Arc<dyn playwright_rust_plugin_chromium_frame_observer::ChromiumFrameEventObserver>;
@@ -1959,7 +2185,9 @@ impl HostSession {
                 .enable_initial_response_contexts(&contexts)
                 .await?;
         }
-        let closed = composition.connection().closed();
+        let connection = composition.connection().clone();
+        let session_transport = Arc::clone(&connection);
+        let closed = connection.closed();
         let stop = CancellationToken::new();
         #[cfg(feature = "concurrent-close")]
         let mut close_jobs =
@@ -1979,7 +2207,7 @@ impl HostSession {
                 network: None,
             },
         )?;
-        let io_finished = composition.connection().io_finished();
+        let io_finished = connection.io_finished();
         let resources = composition.resources().clone();
         let disconnected = CancellationToken::new();
         let browser_id = composition.browser_object_id().get().to_string();
@@ -2006,6 +2234,8 @@ impl HostSession {
         let task_page_routes = page_routes.clone();
         #[cfg(all(feature = "network-events", feature = "request-frame"))]
         let task_network_topology = composition.shared_topology();
+        #[cfg(feature = "har-recording")]
+        let task_har_connection = composition.connection().clone();
         let state = Arc::new(Mutex::new(Some(LiveSession {
             #[cfg(feature = "cdp-session")]
             cdp_sessions: cdp_sessions.clone(),
@@ -2029,6 +2259,8 @@ impl HostSession {
             handles,
             #[cfg(feature = "network-events")]
             network_events: network_events.clone(),
+            #[cfg(feature = "har-recording")]
+            har_recording: har_recording.clone(),
             #[cfg(feature = "download-events")]
             download_events: download_events.clone(),
             #[cfg(feature = "worker-events")]
@@ -2104,11 +2336,31 @@ impl HostSession {
         let task_cdp_sessions = cdp_sessions.clone();
         #[cfg(feature = "context-storage-state")]
         let task_context_storage_state = context_storage_state.clone();
+        #[cfg(feature = "video-recording")]
+        let task_video_recording = video_recording.clone();
         #[cfg(feature = "network-events")]
         let task_network_events = network_events.clone();
+        #[cfg(feature = "har-recording")]
+        let task_har_recording = har_recording.clone();
+        #[cfg(feature = "har-recording")]
+        let har_capture_wakeup = har_recording.capture_wakeup();
+        #[cfg(feature = "download-events")]
+        let task_download_events = download_events.clone();
+        #[cfg(feature = "worker-events")]
+        let task_worker_events = worker_events.clone();
+        #[cfg(feature = "worker-console-events")]
+        let task_worker_console_events = worker_console_events.clone();
         #[cfg(feature = "context-http-credentials")]
         let task_context_http_credentials = context_http_credentials.clone();
-        let (topology_barriers, mut barriers) = tokio::sync::mpsc::channel::<DriverRequest>(8);
+        let (topology_barriers, mut barriers) =
+            tokio::sync::mpsc::unbounded_channel::<DriverRequest>();
+        #[cfg(feature = "owned-launch")]
+        let (owned_driver_shutdown, task_owned_driver_shutdown) = if owned_browser.is_some() {
+            let (host, driver) = OwnedDriverShutdown::new();
+            (Some(host), Some(driver))
+        } else {
+            (None, None)
+        };
         let driver = tokio::spawn(async move {
             let teardown = SessionTeardown {
                 state: Arc::clone(&task_state),
@@ -2118,6 +2370,8 @@ impl HostSession {
                 context_metadata: task_context_metadata.clone(),
                 #[cfg(feature = "context-storage-state")]
                 context_storage_state: task_context_storage_state,
+                #[cfg(feature = "video-recording")]
+                video_recording: task_video_recording,
             };
             #[cfg(feature = "extra-headers")]
             let mut header_jobs = extra_headers::Jobs::new();
@@ -2172,7 +2426,7 @@ impl HostSession {
                             &mut topology_driver,
                             runtime.as_ref(),
                             async {
-                            #[cfg(any(feature = "extra-headers", feature = "concurrent-close", feature = "handles", feature = "network-events"))]
+                            #[cfg(any(feature = "extra-headers", feature = "concurrent-close", feature = "handles", feature = "network-events", feature = "har-recording"))]
                             tokio::select! {
                                 received = barriers.recv() => { barrier = received; }
                                 _result = async {
@@ -2208,8 +2462,14 @@ impl HostSession {
                                     #[cfg(not(feature = "concurrent-close"))]
                                     std::future::pending::<()>().await;
                                 } => {}
+                                () = async {
+                                    #[cfg(feature = "har-recording")]
+                                    har_capture_wakeup.notified().await;
+                                    #[cfg(not(feature = "har-recording"))]
+                                    std::future::pending::<()>().await;
+                                } => {}
                             }
-                            #[cfg(not(any(feature = "extra-headers", feature = "concurrent-close", feature = "handles", feature = "network-events")))]
+                            #[cfg(not(any(feature = "extra-headers", feature = "concurrent-close", feature = "handles", feature = "network-events", feature = "har-recording")))]
                             { barrier = barriers.recv().await; }
                             },
                         );
@@ -2219,8 +2479,8 @@ impl HostSession {
                         if let Some(result) = network_result
                             && let Some(batch) = result.map_err(HostError::backend)?
                         {
-                            let page = batch.page().ok_or_else(|| {
-                                HostError::Backend("network batch has no Page source".into())
+                            let owner = batch.owner().ok_or_else(|| {
+                                HostError::Backend("network batch has no owner".into())
                             })?;
                             #[cfg(feature = "page-routes")]
                             let fulfilled_body = match (batch.session_id(), batch.native_request_id()) {
@@ -2230,25 +2490,108 @@ impl HostSession {
                             };
                             #[cfg(not(feature = "page-routes"))]
                             let fulfilled_body = None;
-                            #[cfg(feature = "request-frame")]
-                            let network_topology = task_network_topology
-                                .lock()
-                                .map_err(HostError::backend)?;
-                            task_network_events.publish(
-                                &batch,
-                                runtime.as_ref(),
+                            #[cfg(feature = "har-recording")]
+                            let har_request_override =
+                                match (batch.session_id(), batch.native_request_id()) {
+                                    (Some(session_id), Some(request_id)) => task_page_routes
+                                        .har_request_override(session_id, request_id)?,
+                                    _ => None,
+                                };
+                            let publication = {
                                 #[cfg(feature = "request-frame")]
-                                network_topology.topology(),
-                                fulfilled_body,
-                                // Keep runtime lifecycle and request history for
-                                // scratch navigation, but never enqueue a
-                                // language-visible notice. Native retirement
-                                // waits for the single batch acknowledgement.
-                                !teardown.frame_trees.is_internal_page(page)?,
-                            )?;
+                                let network_topology = task_network_topology
+                                    .lock()
+                                    .map_err(HostError::backend)?;
+                                task_network_events.publish(
+                                    &batch,
+                                    runtime.as_ref(),
+                                    #[cfg(feature = "request-frame")]
+                                    network_topology.topology(),
+                                    fulfilled_body,
+                                    #[cfg(feature = "har-recording")]
+                                    task_har_recording.as_ref(),
+                                    #[cfg(feature = "har-recording")]
+                                    har_request_override.as_deref(),
+                                    // Keep runtime lifecycle and request history for
+                                    // scratch navigation, but never enqueue a
+                                    // language-visible notice. Native retirement
+                                    // waits for the single batch acknowledgement.
+                                    batch.service_worker().is_some()
+                                        || !teardown.frame_trees.is_internal_page(owner)?,
+                                )?
+                            };
+                            #[cfg(not(feature = "har-recording"))]
+                            let _ = publication;
+                            #[cfg(feature = "har-recording")]
+                            if publication.request_terminal
+                                && let (Some(session_id), Some(native_request_id)) =
+                                    (batch.session_id(), batch.native_request_id())
+                            {
+                                task_page_routes.retire_har_request_override(
+                                    session_id,
+                                    native_request_id,
+                                )?;
+                            }
+                            #[cfg(feature = "har-recording")]
+                            if let Some(request_id) = publication.response_body_request
+                                && let (Some(session_id), Some(native_request_id)) =
+                                    (batch.session_id(), batch.native_request_id())
+                            {
+                                let session = CdpSession::new(
+                                    task_har_connection.clone(),
+                                    session_id.to_owned(),
+                                    String::new(),
+                                );
+                                // Playwright tolerates body retrieval failures (for example
+                                // redirects and evicted resources) and still exports the HAR.
+                                if let Ok(body) = session
+                                    .network_get_response_body(native_request_id)
+                                    .await
+                                    .map_err(HostError::backend)
+                                    .and_then(har_recording::decode_response_body)
+                                {
+                                    task_har_recording.set_response_body(&request_id, &body)?;
+                                }
+                            }
                             network_driver
-                                .acknowledge_batch_publication(page)
+                                .acknowledge_batch_publication(owner)
                                 .map_err(HostError::backend)?;
+                        }
+                        #[cfg(feature = "har-recording")]
+                        for job in task_har_recording.take_page_capture_jobs()? {
+                            let session_id = {
+                                let state = task_state.lock().map_err(HostError::backend)?;
+                                let Some(live) = state.as_ref() else {
+                                    continue;
+                                };
+                                let topology = live
+                                    .composition
+                                    .topology()
+                                    .map_err(HostError::backend)?;
+                                topology
+                                    .topology()
+                                    .page_session_routes()
+                                    .find(|route| route.object_id() == job.page)
+                                    .map(|route| route.session_id().to_owned())
+                            };
+                            let Some(session_id) = session_id else {
+                                continue;
+                            };
+                            let session = CdpSession::new(
+                                task_har_connection.clone(),
+                                session_id,
+                                String::new(),
+                            );
+                            let Ok(value) = session
+                                .runtime_evaluate(har_recording::page_capture_expression(job.phase))
+                                .await
+                            else {
+                                continue;
+                            };
+                            let Ok(capture) = har_recording::decode_page_capture(&value) else {
+                                continue;
+                            };
+                            task_har_recording.complete_page_capture(job, capture)?;
                         }
                         context_lifecycle::prune_metadata(&task_state, &task_context_metadata)?;
                         #[cfg(feature = "cdp-session")]
@@ -2269,7 +2612,6 @@ impl HostSession {
                             #[cfg(feature = "concurrent-close")]
                             let barrier = match close_jobs.admit(&task_state, barrier)? {
                                 close_jobs::Admission::Queued => continue,
-                                close_jobs::Admission::Reply(completed) => { reply = Some(completed); None }
                                 close_jobs::Admission::Other(request) => Some(request),
                             };
                             #[cfg(not(feature = "concurrent-close"))]
@@ -2382,6 +2724,22 @@ impl HostSession {
             task_network_events.close();
             #[cfg(feature = "network-events")]
             drop(task_network_events);
+            #[cfg(feature = "har-recording")]
+            task_har_recording.close();
+            #[cfg(feature = "har-recording")]
+            drop(task_har_recording);
+            #[cfg(feature = "download-events")]
+            task_download_events.close();
+            #[cfg(feature = "download-events")]
+            drop(task_download_events);
+            #[cfg(feature = "worker-console-events")]
+            task_worker_console_events.close();
+            #[cfg(feature = "worker-console-events")]
+            drop(task_worker_console_events);
+            #[cfg(feature = "worker-events")]
+            task_worker_events.close();
+            #[cfg(feature = "worker-events")]
+            drop(task_worker_events);
             #[cfg(feature = "context-http-credentials")]
             task_context_http_credentials.close();
             input_start.close();
@@ -2498,29 +2856,12 @@ impl HostSession {
                 // waiting before detach would strand them until cleanup expiry
                 // and discard the registry witness. Ready results are already
                 // revoked; their release failures still require BOTH the exact
-                // detach acknowledgement and local object retirement. Continue
-                // consuming detach events/committing releases until they drain.
-                let result = {
-                    let waiting = task_handles.wait();
-                    tokio::pin!(waiting);
-                    if native_available {
-                        loop {
-                            tokio::select! {
-                                biased;
-                                result = &mut waiting => break result,
-                                event = topology_driver.receive_once(runtime.as_ref()) => {
-                                    task_handles.native_event_processed();
-                                    if let Err(error) = event {
-                                        let remaining = waiting.await;
-                                        break remaining.and(Err(HostError::backend(error)));
-                                    }
-                                }
-                            }
-                        }
-                    } else {
-                        waiting.await
-                    }
-                };
+                // detach acknowledgement and local object retirement. The
+                // explicit native-session retirement above records that exact
+                // acknowledgement directly. Do not resume topology delivery
+                // after command admission has been sealed: late frame events
+                // would cross the shutdown publication fence.
+                let result = task_handles.wait().await;
                 drop(task_handles);
                 result
             };
@@ -2550,6 +2891,12 @@ impl HostSession {
             #[cfg(feature = "file-input")]
             drop(file_input);
             let cleanup_report = task_cleanup.shutdown().await;
+            #[cfg(feature = "owned-launch")]
+            if let Some(checkpoint) = task_owned_driver_shutdown {
+                // All language/native owners are drained, but the exact CDP
+                // connection remains usable for the provider's Browser.close.
+                checkpoint.pause().await;
+            }
             let cleanup = runtime.close_transport().map_err(HostError::backend);
             // Release all routes and the native connection before publishing
             // terminal state. No live state is kept by the driver itself.
@@ -2572,8 +2919,18 @@ impl HostSession {
             drop(lifecycle_services);
             drop(runtime);
             let retired = task_state.lock().map_err(HostError::backend)?.take();
+            // Logical runtime closure does not own the borrowed CDP socket.
+            // Explicitly disconnect the exact driver connection even if live
+            // state was already retired by another terminal path. In
+            // particular, service-worker bootstrap commands can retain a
+            // CdpSession while Chromium intentionally leaves Runtime.enable
+            // unanswered after resuming the target; waiting for Arc
+            // destruction alone would therefore strand the I/O join and its
+            // reclaiming-event bookkeeping lease indefinitely.
+            connection.request_disconnect();
             drop(retired);
             io_finished.await;
+            drop(connection);
             drop(teardown);
             #[cfg(feature = "file-input")]
             let retirement = retirement.and(upload_cleanup);
@@ -2623,9 +2980,20 @@ impl HostSession {
                 )
                 .and(
                     if cleanup_report.metrics.failed > 0 || cleanup_report.metrics.timed_out > 0 {
-                        Err(HostError::Backend(
-                            "native command cancellation cleanup failed".into(),
-                        ))
+                        #[cfg(any(feature = "handles", feature = "worker-handle-evaluation"))]
+                        let detail = cleanup_diagnostic
+                            .lock()
+                            .ok()
+                            .and_then(|value| value.clone())
+                            .unwrap_or_else(|| "unknown cleanup failure".into());
+                        #[cfg(not(any(
+                            feature = "handles",
+                            feature = "worker-handle-evaluation"
+                        )))]
+                        let detail = "unknown cleanup failure".to_owned();
+                        Err(HostError::Backend(format!(
+                            "native command cancellation cleanup failed: {detail}"
+                        )))
                     } else {
                         Ok(())
                     },
@@ -2634,8 +3002,11 @@ impl HostSession {
         Ok(Self {
             browser_id,
             state,
+            transport: Mutex::new(Some(session_transport)),
             stop,
             disconnected,
+            admission_closed: AtomicBool::new(false),
+            close_gate: tokio::sync::Mutex::new(()),
             driver: tokio::sync::Mutex::new(Some(driver)),
             version,
             #[cfg(feature = "context-api-request")]
@@ -2649,10 +3020,17 @@ impl HostSession {
             context_metadata,
             #[cfg(feature = "context-storage-state")]
             context_storage_state,
+            #[cfg(feature = "context-tracing-screenshots")]
+            context_tracing,
             topology_barriers,
             browser_pages: browser_page::BrowserPages::new(),
+            session_owned: session_owned_resources::SessionOwnedResources::default(),
+            #[cfg(feature = "video-recording")]
+            video_recording,
             #[cfg(feature = "owned-launch")]
             owned_browser,
+            #[cfg(feature = "owned-launch")]
+            owned_driver_shutdown,
             #[cfg(feature = "playwright-trace")]
             trace_directory,
         })
@@ -2670,7 +3048,9 @@ impl HostSession {
     }
 
     pub fn is_connected(&self) -> bool {
-        !self.stop.is_cancelled() && !self.disconnected.is_cancelled()
+        !self.admission_closed.load(Ordering::Acquire)
+            && !self.stop.is_cancelled()
+            && !self.disconnected.is_cancelled()
     }
 
     pub fn disconnect_signal(&self) -> CancellationToken {
@@ -2680,6 +3060,7 @@ impl HostSession {
     /// Cancels the environment owner even when in-flight FFI futures still
     /// hold safe Arc references. Joining remains an explicit close operation.
     pub fn request_shutdown(&self) {
+        self.admission_closed.store(true, Ordering::Release);
         self.stop.cancel();
     }
 
@@ -2751,6 +3132,52 @@ impl HostSession {
                 })
             })
             .collect()
+    }
+
+    #[cfg(feature = "video-recording")]
+    pub fn install_context_video(
+        &self,
+        context_id: &str,
+        options: PersistentContextVideoOptions,
+    ) -> Result<(), HostError> {
+        let context = context_id
+            .parse::<u64>()
+            .ok()
+            .filter(|id| *id != 0)
+            .map(playwright_rust_core::ObjectId::new)
+            .ok_or_else(|| {
+                HostError::InvalidArgument("invalid portable BrowserContext ID".into())
+            })?;
+        self.require_visible_context_id(context)?;
+        if self.context_ownership(context_id)?
+            != Some(playwright_rust_backend_cdp_topology::CdpContextOwnership::Owned)
+        {
+            return Err(HostError::InvalidArgument(
+                "video recording can only be installed on an owned BrowserContext".into(),
+            ));
+        }
+        self.video_recording.install_context(context, options)
+    }
+
+    #[cfg(feature = "video-recording")]
+    pub async fn page_video_path(&self, page_id: &str) -> Result<PathBuf, HostError> {
+        self.video_recording.path(video_page_id(page_id)?).await
+    }
+
+    #[cfg(feature = "video-recording")]
+    pub async fn page_video_save_as(
+        &self,
+        page_id: &str,
+        destination: &Path,
+    ) -> Result<(), HostError> {
+        self.video_recording
+            .save_as(video_page_id(page_id)?, destination)
+            .await
+    }
+
+    #[cfg(feature = "video-recording")]
+    pub async fn page_video_delete(&self, page_id: &str) -> Result<(), HostError> {
+        self.video_recording.delete(video_page_id(page_id)?).await
     }
 
     pub fn reserve_metadata_conversion(
@@ -3021,11 +3448,7 @@ impl HostSession {
         // The provider report is retained by the one-flight owner. A second
         // close cannot observe a taken lease as successful shutdown, and a
         // cancelled caller cannot cancel the started provider shutdown.
-        let outcome = owner
-            .shutdown
-            .run(Duration::from_secs(30))
-            .await
-            .map_err(HostError::backend)?;
+        let outcome = owner.terminate(OwnedBrowserTermination::Graceful).await?;
         match outcome.as_ref() {
             Ok(_) => Ok(()),
             Err(error) => Err(HostError::backend(format_args!(
@@ -3034,22 +3457,165 @@ impl HostSession {
         }
     }
 
+    #[cfg(feature = "official-test-browser-kill")]
+    pub async fn kill_owned_browser_for_tests(&self) -> Result<(), HostError> {
+        let owner = self.owned_browser.as_ref().ok_or_else(|| {
+            HostError::InvalidArgument("killForTests requires a Rust-owned Chromium process".into())
+        })?;
+        let outcome = owner
+            .terminate(OwnedBrowserTermination::KillForTests)
+            .await?;
+        #[cfg(feature = "video-recording")]
+        self.video_recording.abort();
+        match outcome.as_ref() {
+            Ok(()) => Ok(()),
+            Err(error) => Err(HostError::backend(format_args!(
+                "owned Chromium force termination failed: {error}"
+            ))),
+        }
+    }
+
     pub async fn close(&self) -> Result<(), HostError> {
-        #[cfg(feature = "owned-launch")]
-        let owned_result = self.shutdown_owned_browser().await;
-        let mut driver = self.driver.lock().await;
+        self.close_with_timeouts(HostSessionCloseTimeouts::default())
+            .await
+    }
+
+    pub async fn close_with_timeouts(
+        &self,
+        timeouts: HostSessionCloseTimeouts,
+    ) -> Result<(), HostError> {
+        let _close_gate = self.close_gate.lock().await;
+        let timeouts = timeouts.validate()?;
+        self.admission_closed.store(true, Ordering::Release);
+        // Creation records ownership only after the serialized driver publishes
+        // its result. Seal new operation tokens and let every already-admitted
+        // call reach that commit/compensation boundary before taking the exact
+        // target snapshot. Otherwise a concurrent new_page/new_context could
+        // publish after the snapshot and leak a target in shared Chrome.
+        self.operations.close();
+        let operation_drain = tokio::time::timeout(timeouts.graceful, self.operations.wait())
+            .await
+            .map_err(|_| {
+                HostError::backend(format_args!(
+                    "in-flight HostSession operations did not finish within {:?}",
+                    timeouts.graceful
+                ))
+            });
+        let owned_cleanup = self.close_created_resources(timeouts.graceful).await;
+        let transport = self
+            .transport
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take();
+        let close_transport = transport.clone();
+        let _disconnect_on_return_or_cancellation = session_close::OnDrop::new(move || {
+            if let Some(transport) = close_transport {
+                transport.request_disconnect();
+            }
+        });
         self.stop.cancel();
+        #[cfg(feature = "video-recording")]
+        let video_result =
+            match tokio::time::timeout(timeouts.graceful, self.video_recording.close()).await {
+                Ok(result) => result,
+                Err(_) => {
+                    self.video_recording.abort();
+                    Err(HostError::backend(format_args!(
+                        "video shutdown did not finish within {:?}",
+                        timeouts.graceful
+                    )))
+                }
+            };
+        let mut driver = self.driver.lock().await;
+        #[cfg(feature = "owned-launch")]
+        let owned_result = if driver.is_some() {
+            let rendezvous = self
+                .owned_driver_shutdown
+                .as_ref()
+                .and_then(OwnedDriverShutdown::take);
+            if let Some((ready, resume)) = rendezvous {
+                let _ = ready.await;
+                let result = self.shutdown_owned_browser().await;
+                let _ = resume.send(());
+                result
+            } else {
+                self.shutdown_owned_browser().await
+            }
+        } else {
+            self.shutdown_owned_browser().await
+        };
         let driver_result = if let Some(task) = driver.as_mut() {
-            let result = task.await;
+            let timeout_transport = transport.clone();
+            let result = session_close::join_driver_bounded(task, timeouts, move || async move {
+                if let Some(transport) = timeout_transport {
+                    transport.request_disconnect();
+                }
+            })
+            .await;
             driver.take();
-            result.map_err(HostError::backend)?
+            let io_result = if let Some(transport) = transport.as_ref() {
+                transport.request_disconnect();
+                tokio::time::timeout(timeouts.forced, transport.io_finished())
+                    .await
+                    .map_err(|_| {
+                        HostError::backend(format_args!(
+                            "CDP transport tasks did not finish within {:?} after disconnect",
+                            timeouts.forced
+                        ))
+                    })
+            } else {
+                Ok(())
+            };
+            result.and(io_result)
         } else {
             Ok(())
         };
         #[cfg(feature = "owned-launch")]
-        return owned_result.and(driver_result);
+        return {
+            #[cfg(feature = "video-recording")]
+            {
+                operation_drain
+                    .and(owned_cleanup)
+                    .and(video_result)
+                    .and(normalize_owned_driver_close(driver_result))
+                    .and(owned_result)
+            }
+            #[cfg(not(feature = "video-recording"))]
+            {
+                operation_drain
+                    .and(owned_cleanup)
+                    .and(normalize_owned_driver_close(driver_result))
+                    .and(owned_result)
+            }
+        };
         #[cfg(not(feature = "owned-launch"))]
-        driver_result
+        {
+            #[cfg(feature = "video-recording")]
+            {
+                operation_drain
+                    .and(owned_cleanup)
+                    .and(video_result)
+                    .and(driver_result)
+            }
+            #[cfg(not(feature = "video-recording"))]
+            {
+                operation_drain.and(owned_cleanup).and(driver_result)
+            }
+        }
+    }
+}
+
+#[cfg(feature = "owned-launch")]
+fn normalize_owned_driver_close(result: Result<(), HostError>) -> Result<(), HostError> {
+    match result {
+        Err(HostError::Backend(message))
+            if message == "native driver: the Chromium network event stream closed" =>
+        {
+            // A concurrent provider-side exit or force-termination request can
+            // close the network stream while the serialized driver is joining.
+            Ok(())
+        }
+        other => other,
     }
 }
 
@@ -3066,15 +3632,110 @@ fn eagerly_activate_network_context(
         || ownership == playwright_rust_backend_cdp_topology::CdpContextOwnership::Owned
 }
 
+#[cfg(feature = "video-recording")]
+fn video_page_id(page_id: &str) -> Result<playwright_rust_core::ObjectId, HostError> {
+    page_id
+        .parse::<u64>()
+        .ok()
+        .filter(|id| *id != 0)
+        .map(playwright_rust_core::ObjectId::new)
+        .ok_or_else(|| HostError::InvalidArgument("invalid portable Page ID".into()))
+}
+
 impl Drop for HostSession {
     fn drop(&mut self) {
+        #[cfg(feature = "video-recording")]
+        self.video_recording.abort();
+        self.admission_closed.store(true, Ordering::Release);
         self.stop.cancel();
+        if let Some(transport) = self
+            .transport
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take()
+        {
+            transport.request_disconnect();
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "owned-launch")]
+    use std::sync::atomic::{AtomicU8, Ordering};
+    #[cfg(feature = "owned-launch")]
+    use std::time::Duration;
+
     use super::{ConnectPhase, HostError};
+    #[cfg(feature = "owned-launch")]
+    use super::{OwnedBrowserTermination, OwnedDriverShutdown, normalize_owned_driver_close};
+
+    #[cfg(feature = "owned-launch")]
+    #[tokio::test]
+    async fn cancelled_owned_close_releases_the_driver_checkpoint() {
+        // Arrange
+        let (host, checkpoint) = OwnedDriverShutdown::new();
+        let (ready, resume) = host.take().expect("host rendezvous");
+        let paused = tokio::spawn(checkpoint.pause());
+        ready.await.expect("driver reached the provider boundary");
+
+        // Act
+        drop(resume);
+
+        // Assert
+        tokio::time::timeout(Duration::from_secs(1), paused)
+            .await
+            .expect("driver checkpoint remained stranded")
+            .expect("driver checkpoint task failed");
+    }
+
+    #[cfg(feature = "owned-launch")]
+    #[test]
+    fn owned_close_accepts_only_the_expected_network_stream_termination() {
+        // Arrange
+        let expected =
+            HostError::Backend("native driver: the Chromium network event stream closed".into());
+        let unrelated = HostError::Backend("native driver: topology reconciliation failed".into());
+
+        // Act
+        let expected_result = normalize_owned_driver_close(Err(expected));
+        let unrelated_result = normalize_owned_driver_close(Err(unrelated));
+
+        // Assert
+        assert!(expected_result.is_ok());
+        assert!(
+            matches!(unrelated_result, Err(HostError::Backend(message)) if message == "native driver: topology reconciliation failed")
+        );
+    }
+
+    #[cfg(feature = "owned-launch")]
+    #[test]
+    fn first_owned_browser_termination_request_wins() {
+        // Arrange
+        let selected = AtomicU8::new(0);
+
+        // Act
+        let first = selected.compare_exchange(
+            0,
+            OwnedBrowserTermination::KillForTests as u8,
+            Ordering::AcqRel,
+            Ordering::Acquire,
+        );
+        let second = selected.compare_exchange(
+            0,
+            OwnedBrowserTermination::Graceful as u8,
+            Ordering::AcqRel,
+            Ordering::Acquire,
+        );
+
+        // Assert
+        assert!(first.is_ok());
+        assert_eq!(second, Err(OwnedBrowserTermination::KillForTests as u8));
+        assert_eq!(
+            selected.load(Ordering::Acquire),
+            OwnedBrowserTermination::KillForTests as u8
+        );
+    }
 
     #[cfg(all(unix, feature = "owned-launch"))]
     #[tokio::test]

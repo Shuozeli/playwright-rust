@@ -152,6 +152,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::result_large_err)] // tungstenite fixes the handshake callback error type.
     async fn merged_user_agent_reaches_http_discovery_and_websocket_upgrade() {
         // Arrange
         let (bind_ip, client_host) = match (

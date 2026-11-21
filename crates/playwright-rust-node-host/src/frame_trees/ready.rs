@@ -4,8 +4,6 @@ use crate::frame_metadata::CreationDelivery;
 use crate::{CollectionView, FramePublications, LifecycleCause, LifecycleReservation};
 use playwright_rust_backend_cdp_topology::CdpTopologyEffect;
 
-const GROUPS: usize = 32;
-
 #[cfg(test)]
 mod tests;
 
@@ -16,17 +14,14 @@ pub(super) struct ReadySource {
 
 impl ReadySource {
     fn reserve(
-        book: &FramePublications,
+        _book: &FramePublications,
         factory: &FrameTreeFactory,
     ) -> Result<Box<Self>, HostError> {
-        let storage = factory.reserve_collection_storage(
-            std::mem::size_of::<Self>() + GROUPS * std::mem::size_of::<LifecycleReservation>(),
-        )?;
-        let mut source = Self {
-            reserved: Vec::with_capacity(GROUPS),
+        let storage = factory.reserve_collection_storage(std::mem::size_of::<Self>())?;
+        let source = Self {
+            reserved: Vec::new(),
             _storage: storage,
         };
-        source.replenish(book, factory)?;
         Ok(Box::new(source))
     }
 
@@ -39,11 +34,15 @@ impl ReadySource {
 
     pub(super) fn replenish(
         &mut self,
+        target: usize,
         book: &FramePublications,
         factory: &FrameTreeFactory,
     ) -> Result<(), HostError> {
         let before = self.len();
-        while self.len() < GROUPS {
+        self.reserved
+            .try_reserve(target.saturating_sub(before))
+            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
+        while self.len() < target {
             match book.reserve_lifecycle(factory) {
                 Ok(reserved) => self.reserved.push(reserved),
                 Err(error) => {

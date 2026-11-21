@@ -68,6 +68,10 @@ pub struct DragMove {
     lifetime: Option<Arc<dyn DragWorldLifetime>>,
     _storage: ResourceLease,
 }
+struct StartOptions {
+    lifetime: Option<Arc<dyn DragWorldLifetime>>,
+    allocator_backed: bool,
+}
 fn poll_borrowed<F: Future>(future: F, cx: &mut Context<'_>) -> Poll<F::Output> {
     pin!(future).poll(cx)
 }
@@ -90,6 +94,12 @@ impl DragMove {
         Ok(ResourceRequirements::none()
             .with_class(ResourceClass::BackendStateBytes, bytes, bytes)
             .with_metadata(1, 1))
+    }
+    pub fn allocator_backed_requirements() -> ResourceRequirements {
+        let bytes = std::mem::size_of::<Self>() as u64;
+        ResourceRequirements::none()
+            .with_class(ResourceClass::BackendStateBytes, bytes, bytes)
+            .with_metadata(1, 1)
     }
     /// Admits before allocating the world vector. All children are created fresh
     /// and unpolled here, so construction failure cannot leave native work.
@@ -119,7 +129,57 @@ impl DragMove {
         movement: DragToggleFuture,
         lifetime: Option<Arc<dyn DragWorldLifetime>>,
     ) -> Result<Self> {
-        let requirements = Self::requirements(worlds.len())?;
+        Self::start_with_world_lifetime_inner(
+            scope,
+            resources,
+            listeners,
+            captures,
+            worlds,
+            movement,
+            StartOptions {
+                lifetime,
+                allocator_backed: false,
+            },
+        )
+    }
+    /// Allocator-backed counterpart for Playwright-compatible profiles whose
+    /// existing Frame count follows the live Page rather than a fabricated cap.
+    pub fn start_with_world_lifetime_allocator_backed(
+        scope: ResourceScope,
+        resources: &ProductionResourceLedger,
+        listeners: &DragListenerFactory,
+        captures: &DragCaptureFactory,
+        worlds: &[DragWorld<'_>],
+        movement: DragToggleFuture,
+        lifetime: Option<Arc<dyn DragWorldLifetime>>,
+    ) -> Result<Self> {
+        Self::start_with_world_lifetime_inner(
+            scope,
+            resources,
+            listeners,
+            captures,
+            worlds,
+            movement,
+            StartOptions {
+                lifetime,
+                allocator_backed: true,
+            },
+        )
+    }
+    fn start_with_world_lifetime_inner(
+        scope: ResourceScope,
+        resources: &ProductionResourceLedger,
+        listeners: &DragListenerFactory,
+        captures: &DragCaptureFactory,
+        worlds: &[DragWorld<'_>],
+        movement: DragToggleFuture,
+        options: StartOptions,
+    ) -> Result<Self> {
+        let requirements = if options.allocator_backed {
+            Self::allocator_backed_requirements()
+        } else {
+            Self::requirements(worlds.len())?
+        };
         let ledger = resources
             .claim(requirements)
             .map_err(|_| error("drag move resource claim failed"))?;
@@ -131,7 +191,10 @@ impl DragMove {
             )
             .map_err(|_| error("drag move storage admission failed"))?;
         let capture = captures.start()?;
-        let mut owned = Vec::with_capacity(worlds.len());
+        let mut owned = Vec::new();
+        owned
+            .try_reserve(worlds.len())
+            .map_err(|_| error("drag move world allocation failed"))?;
         for world in worlds {
             owned.push(World {
                 listener: listeners.start(world.client.clone(), world.unique_context)?,
@@ -152,7 +215,7 @@ impl DragMove {
             retirement_active: false,
             capture_cleanup_observed: false,
             retirement_error: None,
-            lifetime,
+            lifetime: options.lifetime,
             _storage: storage,
         })
     }

@@ -105,7 +105,7 @@ impl PreparedPayload {
 pub struct PreparedPayloads {
     entries: Vec<PreparedPayload>,
     plan: UploadPlan,
-    _lease: ResourceLease,
+    _lease: Option<ResourceLease>,
 }
 impl PreparedPayloads {
     /// Apply a post-read filesystem observation without resizing any storage.
@@ -152,6 +152,27 @@ impl PreparedPayloads {
         let lease = ledger
             .reserve_many(scope, &requests[..request_count])
             .map_err(SourceError::Budget)?;
+        Self::materialize_planned(plan, sources, Some(lease))
+    }
+
+    /// Materialize an independently owned batch without an artificial global
+    /// batch-count admission. Semantic item/metadata/payload limits still come
+    /// from `limits`; actual storage is fallibly allocated by this operation.
+    pub fn materialize_allocator_backed(
+        limits: FileInputLimits,
+        sources: &mut [PayloadSource<'_>],
+    ) -> Result<Self, SourceError> {
+        let plan = limits
+            .payloads_iter(sources.iter().map(PayloadSource::metadata))
+            .map_err(SourceError::Policy)?;
+        Self::materialize_planned(plan, sources, None)
+    }
+
+    fn materialize_planned(
+        plan: UploadPlan,
+        sources: &mut [PayloadSource<'_>],
+        lease: Option<ResourceLease>,
+    ) -> Result<Self, SourceError> {
         let mut entries = Vec::new();
         entries
             .try_reserve_exact(plan.items())

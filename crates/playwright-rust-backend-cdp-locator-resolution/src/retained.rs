@@ -36,7 +36,7 @@ impl CdpLocatorResolutionService {
     fn prepare_retained(
         &self,
         request: &RetainedElementRequest,
-    ) -> Result<(String, ResourceLease, ResourceLease), ResolutionError> {
+    ) -> Result<(String, Option<ResourceLease>, Option<ResourceLease>), ResolutionError> {
         if !self.profile.retained_reference {
             return Err(ResolutionError::Setup(
                 "retained-reference storage was not selected in the resource profile",
@@ -62,18 +62,27 @@ impl CdpLocatorResolutionService {
                 "retained adoption requires bounded native IDs and a positive utility context",
             ));
         }
-        let owner = self.ledger.reserve_many(
-            self.profile.scope,
-            &[
-                ResourceRequest::new(ResourceClass::RemoteHandle, NATIVE_UNITS),
-                ResourceRequest::new(ResourceClass::BackendStateBytes, NATIVE_UNITS * OWNER_BYTES),
-            ],
-        )?;
-        let scratch = self.ledger.reserve(
-            self.profile.scope,
-            ResourceClass::BackendStateBytes,
-            ATTEMPT_BYTES,
-        )?;
+        let (owner, scratch) = if self.profile.allocator_backed {
+            (None, None)
+        } else {
+            (
+                Some(self.ledger.reserve_many(
+                    self.profile.scope,
+                    &[
+                        ResourceRequest::new(ResourceClass::RemoteHandle, NATIVE_UNITS),
+                        ResourceRequest::new(
+                            ResourceClass::BackendStateBytes,
+                            NATIVE_UNITS * OWNER_BYTES,
+                        ),
+                    ],
+                )?),
+                Some(self.ledger.reserve(
+                    self.profile.scope,
+                    ResourceClass::BackendStateBytes,
+                    ATTEMPT_BYTES,
+                )?),
+            )
+        };
         let id = self
             .ids
             .next_object_id()

@@ -1,28 +1,38 @@
-import { chromium, firefox, webkit, selectors, errors, compatibility, type Browser, type BrowserContext, type Page, type Response, type Locator, type FrameLocator, type Route } from '@shuozeli/playwright-rust';
+import * as playwrightRust from '@shuozeli/playwright-rust';
+import { chromium, selectors, errors, compatibility, type Browser, type BrowserContext, type Page, type Response, type Locator, type FrameLocator, type Route } from '@shuozeli/playwright-rust';
 
-const firefoxName: 'firefox' = firefox.name();
-const webkitName: 'webkit' = webkit.name();
 const expectedChromiumPath: string = chromium.executablePath();
-const expectedFirefoxPath: string = firefox.executablePath();
-const expectedWebkitPath: string = webkit.executablePath();
-const firefoxCdp: Promise<Browser> = firefox.connectOverCDP({ endpointURL: 'ws://foo' });
-void firefoxName; void webkitName; void firefoxCdp;
-void expectedChromiumPath; void expectedFirefoxPath; void expectedWebkitPath;
+void expectedChromiumPath;
+// @ts-expect-error Firefox is deliberately not an executable provider.
+playwrightRust.firefox;
+// @ts-expect-error WebKit is deliberately not an executable provider.
+playwrightRust.webkit;
 const launchServerUnsupported: Promise<never> = chromium.launchServer({ channel: 'chrome' });
 const ownedLaunch: Promise<Browser> = chromium.launch({ executablePath: '/absolute/chromium', headless: true, timeout: 5000 });
 const noSigintHandler: Promise<Browser> = chromium.launch({ executablePath: '/absolute/chromium', handleSIGINT: false });
 const traceDirectoryLaunch: Promise<Browser> = chromium.launch({ executablePath: '/absolute/chromium', tracesDir: 'relative/traces' });
-const persistentPreflightOnly: Promise<never> = webkit.launchPersistentContext('foo', {
+const persistentContext: Promise<BrowserContext> = chromium.launchPersistentContext('foo', {
+  executablePath: '/absolute/chromium',
+  headless: true,
+  timeout: 5000,
+  baseURL: 'https://example.test/',
+  locale: 'fr-FR',
+  timezoneId: 'America/Jamaica',
+  geolocation: { longitude: -73.9857, latitude: 40.7484, accuracy: 12 },
+  permissions: ['geolocation', 'camera'],
+  httpCredentials: { username: 'user', password: 'pass', origin: 'https://example.test', send: 'always' },
+  offline: true,
+  bypassCSP: true,
+  javaScriptEnabled: false,
+  ignoreHTTPSErrors: true,
   port: 1234,
   args: ['http://example.test/page'],
   ignoreDefaultArgs: [],
   clientCertificates: [{ origin: 'test' }],
 });
-void launchServerUnsupported; void ownedLaunch; void noSigintHandler; void traceDirectoryLaunch; void persistentPreflightOnly;
+void launchServerUnsupported; void ownedLaunch; void noSigintHandler; void traceDirectoryLaunch; void persistentContext;
 // @ts-expect-error fresh launch requires an explicit executable and excludes persistent profile options
 chromium.launch({ userDataDir: 'random-path', port: 1234 });
-// @ts-expect-error Firefox launch has no implementation
-firefox.launch({ executablePath: '/absolute/firefox' });
 // @ts-expect-error launch arguments are outside the narrow owned capability
 chromium.launch({ executablePath: '/absolute/chromium', args: ['--no-sandbox'] });
 // @ts-expect-error installing a SIGINT handler is outside the owned profile
@@ -62,8 +72,19 @@ const selectOptionTimeoutProfile: import('@shuozeli/playwright-rust').NativeProf
 const selectOptionTimeoutConformanceProfile: import('@shuozeli/playwright-rust').NativeProfile = 'official-conformance-page-select-option-timeout-progress';
 const selectOptionNavigationCommitProfile: import('@shuozeli/playwright-rust').NativeProfile = 'select-option-navigation-commit';
 const selectOptionNavigationCommitConformanceProfile: import('@shuozeli/playwright-rust').NativeProfile = 'official-conformance-page-select-option-navigation-commit';
+const contextGeolocationProfile: import('@shuozeli/playwright-rust').NativeProfile = 'context-geolocation';
+const persistentContextGeolocationProfile: import('@shuozeli/playwright-rust').NativeProfile = 'persistent-context-geolocation';
+const contextPermissionsProfile: import('@shuozeli/playwright-rust').NativeProfile = 'context-permissions';
+const persistentContextPermissionsProfile: import('@shuozeli/playwright-rust').NativeProfile = 'persistent-context-permissions';
+const contextHttpCredentialsProfile: import('@shuozeli/playwright-rust').NativeProfile = 'context-http-credentials';
+const persistentContextHttpCredentialsProfile: import('@shuozeli/playwright-rust').NativeProfile = 'persistent-context-http-credentials';
+const contextBindingsProfile: import('@shuozeli/playwright-rust').NativeProfile = 'context-bindings';
 void dispatchEventProfile; void frameElementProfile; void frameElementConformanceProfile; void browserRegistryProfile; void browserCdpSessionProfile; void cdpHandshakeHeadersProfile; void cdpHandshakeHeadersConformanceProfile; void playwrightTraceProfile; void frameNavigationBurstProfile; void pageGotoBurstProfile; void routeOverrideProfile; void routeConformanceProfile; void unrouteProfile; void routeUnrouteConformanceProfile; void routeRegExpProfile; void routeRegExpConformanceProfile; void routeHistoryProfile; void routeHistoryConformanceProfile; void largePostDataConformanceProfile; void fillNavigationCommitProfile; void fillNavigationCommitConformanceProfile;
 void selectOptionNavigationCommitProfile; void selectOptionNavigationCommitConformanceProfile;
+void contextGeolocationProfile; void persistentContextGeolocationProfile;
+void contextPermissionsProfile; void persistentContextPermissionsProfile;
+void contextHttpCredentialsProfile; void persistentContextHttpCredentialsProfile;
+void contextBindingsProfile;
 
 const selectorRegistration: Promise<void> = selectors.register('tag', () => ({
   query(root: Document | Element | ShadowRoot, body: string) { return root.querySelector(body); },
@@ -83,6 +104,52 @@ declare const browser: Browser;
 const browserCdpSession: Promise<import('@shuozeli/playwright-rust').CDPSession> = browser.newBrowserCDPSession();
 void browserCdpSession;
 const configuredContext: Promise<BrowserContext> = browser.newContext({ baseURL: 'https://example.com/path/' });
+const localeContext: Promise<BrowserContext> = browser.newContext({ locale: 'fr-FR' });
+const geolocationContext: Promise<BrowserContext> = browser.newContext({
+  geolocation: { longitude: -122.4194, latitude: 37.7749 },
+});
+const permissionContext: Promise<BrowserContext> = browser.newContext({ permissions: ['geolocation'] });
+const credentialsContext: Promise<BrowserContext> = browser.newContext({
+  httpCredentials: { username: 'user', password: 'pass', send: 'unauthorized' },
+});
+void credentialsContext;
+const recordedContext: Promise<BrowserContext> = browser.newContext({
+  recordHar: { path: 'capture.har', content: 'embed', mode: 'full', urlFilter: '**/*.js' },
+});
+const videoContext: Promise<BrowserContext> = browser.newContext({
+  userAgent: 'playwright-rust-mobile',
+  viewport: { width: 320, height: 240 },
+  screen: { width: 640, height: 480 },
+  deviceScaleFactor: 3,
+  isMobile: true,
+  recordVideo: { dir: 'videos', size: { width: 640, height: 360 } },
+});
+const legacyVideoContext: Promise<BrowserContext> = browser.newContext({
+  videosPath: 'videos', videoSize: { width: 640, height: 360 },
+});
+const nullViewportVideoContext: Promise<BrowserContext> = browser.newContext({
+  viewport: null, recordVideo: { dir: 'videos' },
+});
+const videoPage: Promise<Page> = browser.newPage({ recordVideo: { dir: 'videos' } });
+const videoRecordingProfile: import('@shuozeli/playwright-rust').NativeProfile = 'video-recording';
+const ownedVideoRecordingProfile: import('@shuozeli/playwright-rust').NativeProfile = 'owned-launch-video-recording';
+const officialVideoRecordingProfile: import('@shuozeli/playwright-rust').NativeProfile = 'official-conformance-page-video-recording';
+const contextTracingScreenshotsProfile: import('@shuozeli/playwright-rust').NativeProfile = 'context-tracing-screenshots';
+const contextTracingChunksProfile: import('@shuozeli/playwright-rust').NativeProfile = 'context-tracing-chunks';
+const contextTracingActionsProfile: import('@shuozeli/playwright-rust').NativeProfile = 'context-tracing-actions';
+const contextTracingConsoleProfile: import('@shuozeli/playwright-rust').NativeProfile = 'context-tracing-console';
+const contextTracingNetworkProfile: import('@shuozeli/playwright-rust').NativeProfile = 'context-tracing-network';
+const apiRequestTracingProfile: import('@shuozeli/playwright-rust').NativeProfile = 'api-request-tracing';
+const contextStorageStateProfile: import('@shuozeli/playwright-rust').NativeProfile = 'context-storage-state';
+const officialContextTracingProfile: import('@shuozeli/playwright-rust').NativeProfile = 'official-conformance-page-context-tracing';
+const harRecordingProfile: import('@shuozeli/playwright-rust').NativeProfile = 'har-recording';
+const harRecordingConformanceProfile: import('@shuozeli/playwright-rust').NativeProfile = 'official-conformance-page-har-recording';
+const harReplayProfile: import('@shuozeli/playwright-rust').NativeProfile = 'har-replay';
+const harReplayRegExpProfile: import('@shuozeli/playwright-rust').NativeProfile = 'har-replay-regexp';
+const harReplayConformanceProfile: import('@shuozeli/playwright-rust').NativeProfile = 'official-conformance-page-har-replay';
+void recordedContext; void geolocationContext; void permissionContext; void harRecordingProfile; void harRecordingConformanceProfile; void harReplayProfile; void harReplayRegExpProfile; void harReplayConformanceProfile; void officialContextTracingProfile; void contextStorageStateProfile; void contextTracingConsoleProfile; void contextTracingNetworkProfile; void apiRequestTracingProfile; void contextTracingActionsProfile; void contextTracingChunksProfile;
+// @ts-expect-error HAR mode must match Playwright's public values
+browser.newContext({ recordHar: { path: 'capture.har', mode: 'everything' } });
 const touchContext: Promise<BrowserContext> = browser.newContext({ hasTouch: true });
 const implicitPage: Promise<Page> = browser.newPage({ baseURL: 'https://example.com/path/' });
 const downloadRejectingImplicitPage: Promise<Page> = browser.newPage({ acceptDownloads: false });
@@ -106,9 +173,57 @@ const contextMetadataBytes: number = browser.playwrightRustContextMetadataMetric
 void configuredContext; void touchContext; void contextMetadataBytes;
 // @ts-expect-error baseURL must be a string
 browser.newContext({ baseURL: 42 });
-// @ts-expect-error nondefault viewport requires an additional capability
-browser.newContext({ viewport: { width: 800, height: 600 } });
-const page: Page = browser.contexts()[0].pages()[0];
+const viewportContext: Promise<BrowserContext> = browser.newContext({ viewport: { width: 800, height: 600 } });
+void viewportContext;
+const context: BrowserContext = browser.contexts()[0];
+const setContextGeolocation: Promise<void> = context.setGeolocation({ longitude: 2.3522, latitude: 48.8566, accuracy: 5 });
+const clearContextGeolocation: Promise<void> = context.setGeolocation(null);
+const setContextHttpCredentials: Promise<void> = context.setHTTPCredentials({ username: 'user', password: 'pass' });
+const clearContextHttpCredentials: Promise<void> = context.setHTTPCredentials(null);
+const grantContextPermissions: Promise<void> = context.grantPermissions(['camera'], { origin: 'https://example.test' });
+const clearContextPermissions: Promise<void> = context.clearPermissions();
+const contextBinding: Promise<void> = context.exposeBinding('shared', source => source.page.url(), { handle: false });
+const contextFunction: Promise<void> = context.exposeFunction('sum', (left, right) => Number(left) + Number(right));
+void setContextGeolocation; void clearContextGeolocation; void setContextHttpCredentials; void clearContextHttpCredentials;
+void grantContextPermissions; void clearContextPermissions;
+void contextBinding; void contextFunction;
+// @ts-expect-error geolocation coordinates must be numbers
+context.setGeolocation({ longitude: 'west', latitude: 48.8566 });
+// @ts-expect-error Playwright requires an explicit geolocation or null
+context.setGeolocation();
+// @ts-expect-error Playwright requires explicit credentials or null
+context.setHTTPCredentials();
+// @ts-expect-error runtime credentials require a string password
+context.setHTTPCredentials({ username: 'user', password: 42 });
+// @ts-expect-error runtime credentials do not expose creation-only origin/send fields
+context.setHTTPCredentials({ username: 'user', password: 'pass', origin: 'https://example.test' });
+// @ts-expect-error BrowserContext binding callback must be callable
+context.exposeBinding('shared', 42);
+// @ts-expect-error BrowserContext binding handle option must be a boolean
+context.exposeBinding('shared', () => 17, { handle: 'yes' });
+// @ts-expect-error BrowserContext function callback must be callable
+context.exposeFunction('sum', 'not a function');
+// @ts-expect-error permissions must be strings
+context.grantPermissions(['camera', 42]);
+// @ts-expect-error permission origin must be a string
+context.grantPermissions(['camera'], { origin: 42 });
+// @ts-expect-error HTTP credential password must be a string
+browser.newContext({ httpCredentials: { username: 'user', password: 42 } });
+// @ts-expect-error HTTP credential send policy is closed
+browser.newContext({ httpCredentials: { username: 'user', password: 'pass', send: 'eager' } });
+const browserContextStorageState: Promise<import('@shuozeli/playwright-rust').APIRequestStorageState> = context.storageState({ indexedDB: true });
+void browserContextStorageState;
+const traceStart: Promise<void> = context.tracing.start({ screenshots: true, snapshots: true, sources: true, name: 'trace', title: 'title' });
+const traceDiscard: Promise<void> = context.tracing.stop();
+const traceExport: Promise<void> = context.tracing.stop({ path: 'trace.zip' });
+const traceChunkStart: Promise<void> = context.tracing.startChunk({ title: 'chunk' });
+const traceChunkExport: Promise<void> = context.tracing.stopChunk({ path: 'chunk.zip' });
+const traceGroup: Promise<void> = context.tracing.group('setup');
+const traceGroupEnd: Promise<void> = context.tracing.groupEnd();
+void traceStart; void traceDiscard; void traceExport; void traceChunkStart; void traceChunkExport; void traceGroup; void traceGroupEnd;
+// @ts-expect-error trace export path must be a string
+context.tracing.stop({ path: 42 });
+const page: Page = context.pages()[0];
 const frameOwnerElement: Promise<import('@shuozeli/playwright-rust').ElementHandle<HTMLIFrameElement | HTMLFrameElement>> = page.mainFrame().frameElement();
 void frameOwnerElement;
 const cdpPage: Promise<import('@shuozeli/playwright-rust').CDPSession> = page.context().newCDPSession(page);
@@ -154,16 +269,35 @@ const pageUnrouteAll: Promise<void> = page.unroute('**/*.css');
 const pageUnrouteHandler: Promise<void> = page.unroute('**/*.css', pageRouteHandler);
 const pageRegExpRoute: Promise<void> = page.route(/\.css$/, pageRouteHandler);
 const pageRegExpUnroute: Promise<void> = page.unroute(/\.css$/, pageRouteHandler);
+const pageUnrouteEveryRoute: Promise<void> = page.unrouteAll({ behavior: 'wait' });
+const contextRoute: Promise<void> = context.route('**/*.css', pageRouteHandler, { times: 2 });
+const contextRegExpRoute: Promise<void> = context.route(/\.css$/, pageRouteHandler);
+const contextUnroute: Promise<void> = context.unroute('**/*.css', pageRouteHandler);
+const contextUnrouteEveryRoute: Promise<void> = context.unrouteAll({ behavior: 'ignoreErrors' });
+const contextHarReplay: Promise<void> = context.routeFromHAR('archive.har', { url: '**/*.js', notFound: 'fallback' });
+const pageHarReplay: Promise<void> = page.routeFromHAR('archive.zip', { url: /\.(js|css)$/u });
+const pageHarUpdate: Promise<void> = page.routeFromHAR('capture.har', { update: true, updateContent: 'embed', updateMode: 'full' });
 void pageUnrouteAll; void pageUnrouteHandler; void pageRegExpRoute; void pageRegExpUnroute;
+void pageUnrouteEveryRoute; void contextRoute; void contextRegExpRoute; void contextUnroute;
+void contextUnrouteEveryRoute; void contextHarReplay; void pageHarReplay; void pageHarUpdate;
 // @ts-expect-error unroute handler must be callable
 page.unroute('**/*.css', 42);
+// @ts-expect-error unrouteAll behavior must match Playwright's public values
+context.unrouteAll({ behavior: 'later' });
+// @ts-expect-error HAR notFound must match Playwright's public values
+context.routeFromHAR('archive.har', { notFound: 'continue' });
+// @ts-expect-error HAR updateContent must match Playwright's public values
+page.routeFromHAR('archive.har', { update: true, updateContent: 'omit' });
 const pageSelectorClick: Promise<void> = page.click('button', { strict: true, clickCount: 3 });
+const pageSelectorHover: Promise<void> = page.hover('button', { strict: true, trial: true });
 const frameSelectorClick: Promise<void> = page.mainFrame().click('button', { strict: false, trial: true });
 const pageSelectorDblclick: Promise<void> = page.dblclick('button', { strict: true, trial: true });
 const frameSelectorDblclick: Promise<void> = page.mainFrame().dblclick('button', { strict: false });
 void pageSelectorClick; void frameSelectorClick; void pageSelectorDblclick; void frameSelectorDblclick;
 // @ts-expect-error selector-based strict mode requires a Boolean
 page.click('button', { strict: 'yes' });
+// @ts-expect-error strict is a boolean
+page.hover('button', { strict: 'yes' });
 // @ts-expect-error dblclick does not accept clickCount
 page.dblclick('button', { clickCount: 3 });
 declare const route: Route;
@@ -176,13 +310,18 @@ const routeFulfill: Promise<void> = route.fulfill({
 void routeFulfill;
 const routeContinueHeaders: Promise<void> = route.continue({ headers: { 'x-test': 'yes' } });
 const routeFallbackUrl: Promise<void> = route.fallback({ url: 'https://example.test/bar' });
-void routeContinueHeaders; void routeFallbackUrl;
+const routeFallbackOverrides: Promise<void> = route.fallback({
+  url: 'https://example.test/bar', method: 'POST', headers: { 'x-test': 'yes' }, postData: 11,
+});
+void routeContinueHeaders; void routeFallbackUrl; void routeFallbackOverrides;
 // @ts-expect-error Route.continue header values must be strings
 route.continue({ headers: { 'x-test': 42 } });
 // @ts-expect-error Route.continue URL overrides are not in this selected capability
 route.continue({ url: 'https://example.test/bar' });
 // @ts-expect-error Route.fallback URLs must be strings
 route.fallback({ url: 42 });
+// @ts-expect-error Route.fallback methods must be strings
+route.fallback({ method: 42 });
 // @ts-expect-error Route.fulfill header values must be strings
 route.fulfill({ headers: { 'x-test': 42 } });
 const pageRequest: import('@shuozeli/playwright-rust').APIRequestContext = page.request;
@@ -291,6 +430,23 @@ const retainedSelectionByValue: Promise<string[]> = retainedOption.selectOption(
 retainedOption.selectOption({ value: 'blue' });
 void retainedSelectionByValue;
 const screenshot: Promise<Buffer> = page.screenshot({ type: 'jpeg', quality: 80, fullPage: true, timeout: 5000 });
+const pdf: Promise<Buffer> = page.pdf({
+  path: 'output.pdf',
+  scale: 0.75,
+  displayHeaderFooter: true,
+  headerTemplate: '<span class="title"></span>',
+  footerTemplate: '<span class="pageNumber"></span>',
+  printBackground: true,
+  landscape: true,
+  pageRanges: '1-3, 5',
+  format: 'A4',
+  width: 192,
+  height: '25.4mm',
+  preferCSSPageSize: true,
+  margin: { top: 96, right: '1in', bottom: '2.54cm', left: '25.4mm' },
+  tagged: true,
+  outline: true,
+});
 void pageInnerText; void frameInnerText; void pageTextContent; void frameTextContent; void screenshot;
 void pageAttribute; void frameAttribute; void pageHtml; void frameInputValue;
 void pageEnabled; void frameChecked; void pageFill; void frameSelection;
@@ -444,6 +600,7 @@ const closedContext: Promise<void> = page.context().close();
 void newContext; void closedContext;
 const closedPage: Promise<void> = page.close({ runBeforeUnload: false });
 void newPage; void closedPage;
+void videoContext; void legacyVideoContext; void nullViewportVideoContext; void videoPage; void videoRecordingProfile; void ownedVideoRecordingProfile; void officialVideoRecordingProfile;
 const navigation: Promise<Response | null> = page.goto('about:blank', {
   waitUntil: 'commit', timeout: 5000, referer: 'https://example.com/',
 });

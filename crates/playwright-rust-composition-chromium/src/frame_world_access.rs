@@ -71,6 +71,7 @@ impl From<ProductionResourceError> for FrameWorldAccessError {
 pub struct ChromiumFrameWorldAccessProfile {
     scope: ResourceScope,
     capacity: NonZeroUsize,
+    allocator_backed: bool,
     pub(crate) native_retirement: bool,
     state_bytes: u64,
     requirements: ResourceRequirements,
@@ -90,6 +91,7 @@ impl ChromiumFrameWorldAccessProfile {
         Ok(Self {
             scope,
             capacity,
+            allocator_backed: false,
             native_retirement: false,
             state_bytes: STATE_BYTES,
             requirements: ResourceRequirements::none()
@@ -97,21 +99,47 @@ impl ChromiumFrameWorldAccessProfile {
                 .with_metadata(1, leases),
         })
     }
+    /// Use allocator-backed retained-snapshot ownership without a fabricated
+    /// public operation-count ceiling. The fixed accessor state remains
+    /// resource-accounted; each snapshot owns only the allocations it creates.
+    pub fn new_allocator_backed(scope: ResourceScope) -> Self {
+        Self {
+            scope,
+            capacity: NonZeroUsize::new(usize::MAX).expect("positive allocator sentinel"),
+            allocator_backed: true,
+            native_retirement: false,
+            state_bytes: STATE_BYTES,
+            requirements: ResourceRequirements::none()
+                .with_class(ResourceClass::BackendStateBytes, STATE_BYTES, STATE_BYTES)
+                .with_metadata(1, 1),
+        }
+    }
+    pub const fn allocator_backed(self) -> bool {
+        self.allocator_backed
+    }
     pub const fn requirements(self) -> ResourceRequirements {
         self.requirements
     }
     /// Install bounded, monotonic native destruction receipts. Not selected by
     /// default; route invalidation alone can never satisfy these receipts.
     pub fn with_native_retirement(mut self) -> Result<Self> {
-        let extra = crate::native_world_retirement::Registry::storage_bytes(self.capacity.get())
-            .ok_or(FrameWorldAccessError::Setup("retirement capacity overflow"))?;
+        let extra = if self.allocator_backed {
+            crate::native_world_retirement::Registry::allocator_backed_storage_bytes()
+        } else {
+            crate::native_world_retirement::Registry::storage_bytes(self.capacity.get())
+                .ok_or(FrameWorldAccessError::Setup("retirement capacity overflow"))?
+        };
         self.state_bytes = STATE_BYTES
             .checked_add(extra)
             .ok_or(FrameWorldAccessError::Setup("retirement state overflow"))?;
-        let bytes = (self.capacity.get() as u64)
-            .checked_mul(SNAPSHOT_BYTES)
-            .and_then(|bytes| bytes.checked_add(self.state_bytes))
-            .ok_or(FrameWorldAccessError::Setup("retirement resource overflow"))?;
+        let bytes = if self.allocator_backed {
+            self.state_bytes
+        } else {
+            (self.capacity.get() as u64)
+                .checked_mul(SNAPSHOT_BYTES)
+                .and_then(|bytes| bytes.checked_add(self.state_bytes))
+                .ok_or(FrameWorldAccessError::Setup("retirement resource overflow"))?
+        };
         self.requirements =
             self.requirements
                 .with_class(ResourceClass::BackendStateBytes, bytes, bytes);
@@ -129,7 +157,7 @@ pub(crate) struct State {
 }
 pub(crate) struct Permit {
     pub(crate) state: Arc<State>,
-    _lease: ResourceLease,
+    _lease: Option<ResourceLease>,
 }
 impl Drop for Permit {
     fn drop(&mut self) {
@@ -206,6 +234,7 @@ impl ChromiumFrameWorldAccess {
             routes.native_world_retirement =
                 Some(Arc::new(crate::native_world_retirement::Registry::new(
                     profile.capacity.get(),
+                    profile.allocator_backed,
                     lease.clone(),
                 )));
         }
@@ -219,19 +248,30 @@ impl ChromiumFrameWorldAccess {
     }
 
     pub(crate) fn admit(&self) -> Result<Permit> {
+        let profile = self.0.profile;
         self.0
             .active
             .fetch_update(Ordering::AcqRel, Ordering::Acquire, |count| {
-                (count < self.0.profile.capacity.get()).then(|| count + 1)
+                count
+                    .checked_add(1)
+                    .filter(|next| profile.allocator_backed || *next <= profile.capacity.get())
             })
             .map_err(|_| FrameWorldAccessError::Capacity {
-                limit: self.0.profile.capacity.get(),
+                limit: profile.capacity.get(),
             })?;
-        match self.0.ledger.reserve(
-            self.0.profile.scope,
-            ResourceClass::BackendStateBytes,
-            SNAPSHOT_BYTES,
-        ) {
+        let lease = if profile.allocator_backed {
+            Ok(None)
+        } else {
+            self.0
+                .ledger
+                .reserve(
+                    profile.scope,
+                    ResourceClass::BackendStateBytes,
+                    SNAPSHOT_BYTES,
+                )
+                .map(Some)
+        };
+        match lease {
             Ok(lease) => Ok(Permit {
                 state: self.0.clone(),
                 _lease: lease,
@@ -259,23 +299,25 @@ impl ChromiumFrameWorldAccess {
         }))
     }
 
-    /// Admit synchronously, then await both observed worlds for this exact
-    /// Frame. A Page ID is not substituted with its main Frame. The caller
-    /// supplies its original timeout and lifecycle cancellation by dropping
-    /// this future; no deadline or stop task is started here.
+    /// Await both observed worlds for this exact Frame, then admit the retained
+    /// snapshot and recheck under that permit. A queued readiness waiter does
+    /// not consume a retained-snapshot allowance before a world exists.
     pub fn snapshot(
         &self,
         frame: ObjectId,
     ) -> impl Future<Output = Result<ChromiumFrameWorldSnapshot>> + Send + 'static {
-        let admitted = self.admit();
+        let access = self.clone();
         async move {
-            let permit = Arc::new(admitted?);
-            let state = &permit.state;
+            let state = &access.0;
             let readiness = state
                 .services
                 .world_readiness
                 .as_ref()
                 .expect("validated readiness");
+            readiness
+                .resolve(|| state.lookup(frame, None).map(|value| value.map(|_| ())))
+                .await?;
+            let permit = Arc::new(access.admit()?);
             let data = readiness
                 .resolve(|| state.lookup(frame, Some(&permit)))
                 .await?;
@@ -295,15 +337,22 @@ impl ChromiumFrameWorldAccess {
         &self,
         frame: ObjectId,
     ) -> impl Future<Output = Result<ChromiumMainWorldSnapshot>> + Send + 'static {
-        let admitted = self.admit();
+        let access = self.clone();
         async move {
-            let permit = Arc::new(admitted?);
-            let state = &permit.state;
+            let state = &access.0;
             let readiness = state
                 .services
                 .world_readiness
                 .as_ref()
                 .expect("validated readiness");
+            readiness
+                .resolve(|| {
+                    state
+                        .lookup_main(frame, None)
+                        .map(|value| value.map(|_| ()))
+                })
+                .await?;
+            let permit = Arc::new(access.admit()?);
             let data = readiness
                 .resolve(|| state.lookup_main(frame, Some(&permit)))
                 .await?;

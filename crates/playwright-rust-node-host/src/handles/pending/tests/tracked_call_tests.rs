@@ -23,13 +23,13 @@ fn bytes(resources: &ProductionResourceLedger) -> u64 {
 }
 
 #[tokio::test]
-async fn tracked_call_shares_the_eight_call_limit_without_native_or_owner_admission() {
+async fn tracked_calls_grow_past_the_legacy_lane_without_native_or_owner_admission() {
     // Arrange
     let (owners, resources) = owners();
     let cleanup = TokioCleanupExecutor::new(1);
     let released = Arc::new(AtomicUsize::new(0));
     let pending = retained(&owners, &cleanup, &released);
-    let ordinary = (1..MAX_CALLS)
+    let ordinary = (0..MAX_HANDLES)
         .map(|_| owners.admit_call().unwrap())
         .collect::<Vec<_>>();
 
@@ -37,37 +37,31 @@ async fn tracked_call_shares_the_eight_call_limit_without_native_or_owner_admiss
     let tracked = owners.admit_tracked_call(&pending).unwrap();
     let admitted = resources.metrics().unwrap();
     let caller = tracked.call.clone();
-    let overflow_tracked = owners.admit_tracked_call(&pending);
-    let overflow_read = owners.admit_tracked_read(&pending);
-    let overflow_ordinary = owners.admit_call();
+    let additional_tracked = owners.admit_tracked_call(&pending).unwrap();
+    let additional_read = owners.admit_tracked_read(&pending).unwrap();
+    let additional_ordinary = owners.admit_call().unwrap();
 
     // Assert
-    assert!(matches!(
-        overflow_tracked,
-        Err(HostError::ResourceExhausted(_))
-    ));
-    assert!(matches!(
-        overflow_read,
-        Err(HostError::ResourceExhausted(_))
-    ));
-    assert!(matches!(
-        overflow_ordinary,
-        Err(HostError::ResourceExhausted(_))
-    ));
     assert_eq!(resources.metrics().unwrap(), admitted);
-    assert_eq!(owners.capacity.calls.load(Ordering::Acquire), MAX_CALLS);
+    assert_eq!(
+        owners.capacity.calls.load(Ordering::Acquire),
+        MAX_HANDLES + 4
+    );
     assert_eq!(owners.capacity.owners.load(Ordering::Acquire), 1);
     assert_eq!(admitted.class(ResourceClass::RemoteHandle).current, 0);
     assert_eq!(admitted.class(ResourceClass::RemoteHandle).peak, 0);
-    assert_eq!(admitted.active_leases, MAX_CALLS + 2);
-    assert_eq!(
-        bytes(&resources),
-        STATE_BYTES + OWNER_BYTES + CALL_BYTES * MAX_CALLS as u64
-    );
+    assert_eq!(bytes(&resources), STATE_BYTES);
     drop(tracked);
-    assert_eq!(owners.capacity.calls.load(Ordering::Acquire), MAX_CALLS);
+    assert_eq!(
+        owners.capacity.calls.load(Ordering::Acquire),
+        MAX_HANDLES + 4
+    );
     drop(caller);
-    assert_eq!(owners.capacity.calls.load(Ordering::Acquire), MAX_CALLS - 1);
+    assert_eq!(
+        owners.capacity.calls.load(Ordering::Acquire),
+        MAX_HANDLES + 3
+    );
+    drop((additional_tracked, additional_read, additional_ordinary));
     drop(ordinary);
     pending.dispose().await.unwrap();
     drop(pending);
@@ -82,13 +76,13 @@ async fn tracked_call_shares_the_eight_call_limit_without_native_or_owner_admiss
 }
 
 #[tokio::test]
-async fn dropping_one_of_eight_tracked_calls_returns_exactly_one_reusable_slot() {
+async fn dropping_allocator_backed_tracked_calls_reclaims_exactly_one_owner() {
     // Arrange
     let (owners, resources) = owners();
     let cleanup = TokioCleanupExecutor::new(1);
     let released = Arc::new(AtomicUsize::new(0));
     let pending = retained(&owners, &cleanup, &released);
-    let mut calls = (0..MAX_CALLS)
+    let mut calls = (0..MAX_HANDLES)
         .map(|_| owners.admit_tracked_call(&pending).unwrap())
         .collect::<Vec<_>>();
     let full = resources.metrics().unwrap();
@@ -98,26 +92,18 @@ async fn dropping_one_of_eight_tracked_calls_returns_exactly_one_reusable_slot()
     let released_slot = resources.metrics().unwrap();
     let replacement = owners.admit_tracked_call(&pending).unwrap();
     let restored = resources.metrics().unwrap();
-    let overflow = owners.admit_tracked_call(&pending);
+    let additional = owners.admit_tracked_call(&pending).unwrap();
 
     // Assert
-    assert_eq!(released_slot.active_leases + 1, full.active_leases);
-    assert_eq!(
-        released_slot
-            .class(ResourceClass::BackendStateBytes)
-            .current
-            + CALL_BYTES,
-        full.class(ResourceClass::BackendStateBytes).current
-    );
-    assert_eq!(restored.active_leases, full.active_leases);
-    assert_eq!(
-        restored.class(ResourceClass::BackendStateBytes).current,
-        full.class(ResourceClass::BackendStateBytes).current
-    );
+    assert_eq!(released_slot, full);
+    assert_eq!(restored, full);
     assert_eq!(restored.class(ResourceClass::RemoteHandle).peak, 0);
     assert_eq!(owners.capacity.owners.load(Ordering::Acquire), 1);
-    assert!(matches!(overflow, Err(HostError::ResourceExhausted(_))));
-    drop((calls, replacement));
+    assert_eq!(
+        owners.capacity.calls.load(Ordering::Acquire),
+        MAX_HANDLES + 1
+    );
+    drop((calls, replacement, additional));
     pending.dispose().await.unwrap();
     drop(pending);
     owners.close();
@@ -189,7 +175,7 @@ async fn explicit_disposal_wins_and_invalidates_a_previously_admitted_source() {
     assert_eq!(resources.metrics().unwrap(), after_disposal);
     assert_eq!(owners.capacity.calls.load(Ordering::Acquire), 1);
     assert_eq!(after_disposal.class(ResourceClass::RemoteHandle).peak, 0);
-    assert_eq!(bytes(&resources), STATE_BYTES + OWNER_BYTES + CALL_BYTES);
+    assert_eq!(bytes(&resources), STATE_BYTES);
     drop((tracked, pending));
     owners.close();
     owners.wait().await;

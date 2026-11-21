@@ -9,6 +9,7 @@ pub enum CollectionRebaseError {
     IdentityChanged(CollectionMember),
     VisibleMemberMissing(CollectionMember),
     VisibleOrderChanged(CollectionMember),
+    Allocation,
 }
 
 impl fmt::Display for CollectionRebaseError {
@@ -19,19 +20,19 @@ impl fmt::Display for CollectionRebaseError {
 
 impl Error for CollectionRebaseError {}
 
-/// Called only for visible members. The candidate mask is local until every
+/// Called only for visible members. The candidate visibility is local until every
 /// validation succeeds; neither input can be modified on failure.
 fn retain_position(
     member: CollectionMember,
     position: Option<usize>,
-    mask: &mut u16,
+    mask: &mut [bool],
     last: &mut Option<usize>,
 ) -> Result<(), CollectionRebaseError> {
     let position = position.ok_or(CollectionRebaseError::VisibleMemberMissing(member))?;
     if last.is_some_and(|previous| position <= previous) {
         return Err(CollectionRebaseError::VisibleOrderChanged(member));
     }
-    *mask |= 1u16 << position;
+    mask[position] = true;
     *last = Some(position);
     Ok(())
 }
@@ -79,8 +80,16 @@ impl CollectionView {
                 ));
             }
         }
-        let mut contexts = 0;
-        let mut pages = 0;
+        let mut contexts = Vec::new();
+        contexts
+            .try_reserve_exact(revision.contexts().len())
+            .map_err(|_| CollectionRebaseError::Allocation)?;
+        contexts.resize(revision.contexts().len(), false);
+        let mut pages = Vec::new();
+        pages
+            .try_reserve_exact(revision.pages().len())
+            .map_err(|_| CollectionRebaseError::Allocation)?;
+        pages.resize(revision.pages().len(), false);
         let mut last = None;
         for old in self.contexts() {
             retain_position(
@@ -104,8 +113,8 @@ impl CollectionView {
         }
         Ok(Self {
             revision: revision.clone(),
-            contexts,
-            pages,
+            contexts: contexts.into(),
+            pages: pages.into(),
         })
     }
 }

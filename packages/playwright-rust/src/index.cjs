@@ -5,7 +5,9 @@ const NativeConsoleEventEmitter = require('./console-subscriptions.cjs');
 const FrameCache = require('./frame-cache.cjs');
 const lifecycleEvents = require('./lifecycle-events.cjs');
 const { existsSync } = require('node:fs');
-const { isAbsolute, resolve } = require('node:path');
+const { readFile, writeFile } = require('node:fs/promises');
+const { isAbsolute, resolve, sep } = require('node:path');
+const { fileURLToPath } = require('node:url');
 const { nativeArtifact, nativeFeatures, verifyNativeArtifact } = require('./native-artifact.cjs');
 const cdpHandshakeHeadersSelected = typeof nativeFeatures === 'function'
   && nativeFeatures(nativeArtifact.profile).includes('cdp-handshake-headers');
@@ -17,8 +19,36 @@ const bidiStartupFailureSelected = typeof nativeFeatures === 'function'
   && nativeFeatures(nativeArtifact.profile).includes('bidi-startup-failure');
 const playwrightTraceDirSelected = typeof nativeFeatures === 'function'
   && nativeFeatures(nativeArtifact.profile).includes('playwright-trace');
+const contextTracingScreenshotsSelected = typeof nativeFeatures === 'function'
+  && nativeFeatures(nativeArtifact.profile).includes('context-tracing-screenshots');
+const contextTracingChunksSelected = typeof nativeFeatures === 'function'
+  && nativeFeatures(nativeArtifact.profile).includes('context-tracing-chunks');
+const contextTracingActionsSelected = typeof nativeFeatures === 'function'
+  && nativeFeatures(nativeArtifact.profile).includes('context-tracing-actions');
+const contextTracingSnapshotsSelected = typeof nativeFeatures === 'function'
+  && nativeFeatures(nativeArtifact.profile).includes('context-tracing-snapshots');
+const contextTracingNetworkSelected = typeof nativeFeatures === 'function'
+  && nativeFeatures(nativeArtifact.profile).includes('context-tracing-network');
+const contextStorageStateSelected = typeof nativeFeatures === 'function'
+  && nativeFeatures(nativeArtifact.profile).includes('context-storage-state');
 const persistentContextPreflightSelected = typeof nativeFeatures === 'function'
   && nativeFeatures(nativeArtifact.profile).includes('persistent-context-preflight');
+const persistentContextLocaleSelected = typeof nativeFeatures === 'function'
+  && nativeFeatures(nativeArtifact.profile).includes('persistent-context-locale');
+const persistentContextTimezoneSelected = typeof nativeFeatures === 'function'
+  && nativeFeatures(nativeArtifact.profile).includes('persistent-context-timezone');
+const persistentContextGeolocationSelected = typeof nativeFeatures === 'function'
+  && nativeFeatures(nativeArtifact.profile).includes('persistent-context-geolocation');
+const persistentContextPermissionsSelected = typeof nativeFeatures === 'function'
+  && nativeFeatures(nativeArtifact.profile).includes('persistent-context-geolocation-permission');
+const persistentContextHttpCredentialsSelected = typeof nativeFeatures === 'function'
+  && nativeFeatures(nativeArtifact.profile).includes('persistent-context-http-credentials');
+const persistentContextOfflineSelected = typeof nativeFeatures === 'function'
+  && nativeFeatures(nativeArtifact.profile).includes('persistent-context-offline');
+const persistentContextBypassCspSelected = typeof nativeFeatures === 'function'
+  && nativeFeatures(nativeArtifact.profile).includes('persistent-context-bypass-csp');
+const persistentContextJavascriptDisabledSelected = typeof nativeFeatures === 'function'
+  && nativeFeatures(nativeArtifact.profile).includes('persistent-context-javascript-disabled');
 const serverConnectWsErrorSelected = typeof nativeFeatures === 'function'
   && nativeFeatures(nativeArtifact.profile).includes('playwright-server-connect-ws-error');
 const serverConnectCloseErrorSelected = typeof nativeFeatures === 'function'
@@ -57,6 +87,20 @@ class UnsupportedOperationError extends Error {
 
 const contextDevice = require('./context-device.cjs')({ UnsupportedOperationError });
 const contextNullViewport = require('./context-null-viewport.cjs')({ UnsupportedOperationError });
+const harRecording = require('./har-recording.cjs')({ UnsupportedOperationError });
+const videoRecording = require('./video-recording.cjs')({
+  UnsupportedOperationError,
+  mapError,
+  resolvePath: resolve,
+  ffmpegPath: () => {
+    if (!browserRegistrySnapshot)
+      throw new UnsupportedOperationError('recordVideo (select browser-registry native profile)');
+    return nativeAddon().ffmpegExecutablePathSnapshot(
+      resolve(__dirname, '..'),
+      browserRegistrySnapshot,
+    );
+  },
+});
 
 const compatibility = Object.freeze({
   oracle: 'playwright@1.58.2',
@@ -68,7 +112,6 @@ const compatibility = Object.freeze({
 
 const bidiStartupChannels = Object.freeze({
   chromium: Object.freeze(['bidi-chromium', 'bidi-chrome-canary', 'bidi-chrome-stable']),
-  firefox: Object.freeze(['moz-firefox', 'moz-firefox-beta', 'moz-firefox-nightly']),
 });
 
 let defaultLaunchOptions;
@@ -118,6 +161,101 @@ function mapError(error, api) {
       : new Error(`${api}: ${message}`);
   mapped.code = match[1];
   return mapped;
+}
+
+function tracingCallsite() {
+  const ownSourceFile = typeof __filename === 'string' ? __filename : undefined;
+  const ownSourceDirectory = typeof __dirname === 'string' ? resolve(__dirname) : undefined;
+  const captured = {};
+  if (typeof Error.captureStackTrace === 'function')
+    Error.captureStackTrace(captured, runTracingAction);
+  else
+    captured.stack = new Error().stack;
+  for (const line of String(captured.stack ?? '').split('\n').slice(1)) {
+    const match = line.match(/\(?((?:file:\/\/\/|\/)[^()\n]+):(\d+):(\d+)\)?$/);
+    if (!match) continue;
+    let file = match[1];
+    if (file.startsWith('file://')) {
+      try { file = fileURLToPath(file); }
+      catch { continue; }
+    }
+    const isOwnSource = file === ownSourceFile
+      || (ownSourceDirectory !== undefined
+        && (file === ownSourceDirectory || file.startsWith(`${ownSourceDirectory}${sep}`)))
+      || /[\\/]src[\\/][^\\/]+\.cjs$/.test(file);
+    const isPlaywrightInternal = /[\\/]packages[\\/](?:playwright|playwright-core)[\\/](?:lib|src)[\\/]/.test(file)
+      || /[\\/]node_modules[\\/](?:playwright|playwright-core)[\\/](?:lib|src)[\\/]/.test(file);
+    const isRuntimeInternal = file.startsWith('/async_local_storage/')
+      || file.startsWith('/internal/');
+    if (!isOwnSource && !isPlaywrightInternal && !isRuntimeInternal && isAbsolute(file)) {
+      const prefix = line.slice(0, match.index).replace(/^\s*at\s*/, '').replace(/\s*\($/, '');
+      return {
+        file,
+        line: Number(match[2]),
+        column: Number(match[3]),
+        function: prefix,
+      };
+    }
+  }
+  return undefined;
+}
+
+async function runTracingAction(owner, action, detail, operation) {
+  const context = owner?._context ?? owner;
+  const pageId = owner?._context ? owner._id : undefined;
+  const snapshotsEligible = !action.startsWith('dialog-')
+    && action !== 'frame-expect-title'
+    && !(action === 'page-wait-for-event' && detail === 'dialog');
+  const session = context?._browser?._session;
+  if (!contextTracingActionsSelected || !session?.contextTracingActionBegin
+      || !session?.contextTracingActionEnd)
+    return operation();
+  let callId;
+  try {
+    const callsite = tracingCallsite();
+    const sourceFile = context._traceSources ? callsite?.file : undefined;
+    callId = session.contextTracingActionBegin(
+      context._id,
+      pageId,
+      action,
+      detail,
+      sourceFile,
+      callsite === undefined ? undefined : JSON.stringify(callsite),
+    );
+    if (snapshotsEligible && callId !== undefined && callId !== null && pageId !== undefined
+        && typeof session.contextTracingCaptureSnapshot === 'function') {
+      try { await session.contextTracingCaptureSnapshot(context._id, pageId, callId, 'before'); }
+      catch {}
+    }
+  } catch (error) {
+    throw mapError(error, 'browserContext.tracing');
+  }
+  try {
+    const result = await operation();
+    if (callId !== undefined && callId !== null) {
+      const resultType = typeof result;
+      const resultJson = action === 'page-screenshot' && Buffer.isBuffer(result)
+        ? JSON.stringify({ binary: '<Buffer>' })
+        : result === null || resultType === 'string' || resultType === 'number' || resultType === 'boolean'
+          ? JSON.stringify({ value: result })
+          : undefined;
+      if (resultJson === undefined)
+        session.contextTracingActionEnd(context._id, callId);
+      else
+        session.contextTracingActionEnd(context._id, callId, resultJson);
+      if (snapshotsEligible && pageId !== undefined && typeof session.contextTracingCaptureSnapshot === 'function') {
+        try { await session.contextTracingCaptureSnapshot(context._id, pageId, callId, 'after'); }
+        catch {}
+      }
+    }
+    return result;
+  } catch (error) {
+    if (callId !== undefined && callId !== null) {
+      try { session.contextTracingActionEnd(context._id, callId); }
+      catch {}
+    }
+    throw error;
+  }
 }
 
 const RemoteBrowser = require('./remote-browser.cjs')({
@@ -186,12 +324,16 @@ function navigationWaitUntil(value, api) {
 const selectors = require('./selectors.cjs')({ getNativeEnvironment, mapError, validateOptions });
 
 const handles = require('./handles.cjs')({ mapError, validateOptions, UnsupportedOperationError });
-const locatorApi = require('./locator.cjs')({ mapError, validateOptions, UnsupportedOperationError, handleKind: handles.handleKind });
+const locatorApi = require('./locator.cjs')({
+  mapError, validateOptions, UnsupportedOperationError,
+  handleKind: handles.handleKind,
+  runTracingAction,
+});
 const frameLocatorApi = require('./frame-locator.cjs')(locatorApi);
 const fileInput = require('./file-input.cjs')({ mapError, validateOptions, UnsupportedOperationError });
 const screenshotOptions = require('./screenshot.cjs')({ validateOptions });
-const Keyboard = require('./keyboard.cjs')({ mapError, validateOptions });
-const Mouse = require('./mouse.cjs')({ mapError, validateOptions });
+const Keyboard = require('./keyboard.cjs')({ mapError, validateOptions, runTracingAction });
+const Mouse = require('./mouse.cjs')({ mapError, validateOptions, runTracingAction });
 const Touchscreen = require('./touchscreen.cjs')({ mapError, UnsupportedOperationError });
 const pageActions = require('./page-actions.cjs')({
   mapError,
@@ -219,6 +361,7 @@ const frameUrlExpectation = require('./frame-expect-url.cjs')({
   mapError,
   validateOptions,
   UnsupportedOperationError,
+  runTracingAction,
 });
 const querySelector = require('./query-selector.cjs')();
 const pageWaitForSelector = require('./page-wait-for-selector.cjs')({ validateOptions, mapError });
@@ -226,6 +369,7 @@ const waitForTimeout = require('./wait-for-timeout.cjs')({ mapError, Unsupported
 const timeoutSettings = require('./timeout-settings.cjs')({ mapError, UnsupportedOperationError });
 const emulateMedia = require('./emulate-media.cjs')({ mapError, validateOptions, UnsupportedOperationError });
 const requestGC = require('./request-gc.cjs')({ mapError, UnsupportedOperationError });
+const pagePdf = require('./page-pdf.cjs')({ mapError, validateOptions, UnsupportedOperationError });
 const pageViewport = require('./page-viewport.cjs')({ mapError, validateOptions, UnsupportedOperationError });
 const responseBodies = require('./response-body.cjs')({ mapError, UnsupportedOperationError });
 const responseFinished = require('./response-finished.cjs')({ mapError, UnsupportedOperationError });
@@ -239,11 +383,13 @@ const request = require('./api-request.cjs')({
   nativeAddon,
   validateOptions,
   UnsupportedOperationError,
+  runTracingAction,
 });
 const preflightPersistentContext = require('./persistent-context-preflight.cjs');
-const Dialog = require('./dialog.cjs')({ mapError });
+const Dialog = require('./dialog.cjs')({ mapError, runTracingAction });
 const pageRoutes = require('./page-routes.cjs')({
   mapError,
+  runTracingAction,
   validateOptions,
   UnsupportedOperationError,
   createResponseFromNotice: (page, notice, request) => responseEvents.fromNotice(page, notice, request),
@@ -263,12 +409,22 @@ const responseRequests = require('./response-request.cjs')({
 });
 const responseEvents = require('./response-events.cjs')({
   createResponse,
+  canonicalizeRequest: requestEvents.canonicalize,
   mapError,
   validateOptions,
   UnsupportedOperationError,
   waitForEvent,
 });
-const contextPolicies = require('./context-policies.cjs')({ UnsupportedOperationError });
+const serviceWorkerEvents = require('./service-worker-events.cjs')({
+  mapError,
+  UnsupportedOperationError,
+});
+const contextPolicies = require('./context-policies.cjs')({
+  UnsupportedOperationError,
+  contextDevice,
+  featureSelected: feature => typeof nativeFeatures !== 'function'
+    || nativeFeatures(nativeArtifact.profile).includes(feature),
+});
 const contextCookies = require('./context-cookies.cjs')({ mapError, UnsupportedOperationError });
 const cdpSessions = require('./cdp-session.cjs')({ mapError, UnsupportedOperationError });
 const devices = require('./device-descriptors.json');
@@ -296,7 +452,10 @@ function watchSession(signal, browserRef) {
 }
 
 class BrowserType {
-  constructor(name) { this._name = name; }
+  constructor() {
+    this._name = 'chromium';
+    this._playwright = { _defaultTracesDir: undefined };
+  }
   name() { return this._name; }
   executablePath() {
     const api = 'browserType.executablePath';
@@ -312,13 +471,6 @@ class BrowserType {
 
   async connectOverCDP(endpointURL, options = {}) {
     const api = 'browserType.connectOverCDP';
-    if (this._name !== 'chromium') {
-      if (typeof endpointURL !== 'string') {
-        const url = 'endpointURL' in endpointURL ? endpointURL.endpointURL : endpointURL.wsEndpoint;
-        if (!url) throw new Error('Cannot connect over CDP without wsEndpoint.');
-      }
-      throw new Error('Connecting over CDP is only supported in Chromium.');
-    }
     if (endpointURL !== null && typeof endpointURL === 'object') {
       validateOptions(endpointURL, ['endpointURL', 'wsEndpoint', 'timeout', 'headers'], api);
       options = { ...endpointURL };
@@ -342,7 +494,7 @@ class BrowserType {
         // merges the same bounded header set for discovery and WS upgrade.
         const os = require('node:os');
         session = await getNativeEnvironment().connectOverCDPWithDefaultUserAgent(
-          endpointURL, timeout, headers ?? [], os.platform(), os.arch(), os.release());
+          endpointURL, timeout, headers ?? [], [os.platform(), os.arch(), os.release()]);
       } else if (headers === undefined) {
         session = await getNativeEnvironment().connectOverCDP(endpointURL, timeout);
       } else {
@@ -376,15 +528,12 @@ class BrowserType {
     // assertions. Keep unsupported merged fields visible to validation.
     options = { ...defaultLaunchOptions, ...options };
     const bidiStartupFailureRoute = bidiStartupFailureSelected && explicitExecutablePath &&
-      bidiStartupChannels[this._name]?.includes(options.channel);
+      bidiStartupChannels.chromium.includes(options.channel);
     if (Array.isArray(options.args)) {
-      const profileArg = this._name === 'firefox' ? '--profile' : '--user-data-dir';
       const hasProfileArg = options.args.some(arg => typeof arg === 'string' &&
-        (this._name === 'firefox'
-          ? arg.startsWith('-profile') || arg.startsWith('--profile')
-          : arg.startsWith('--user-data-dir')));
+        arg.startsWith('--user-data-dir'));
       if (hasProfileArg)
-        throw new Error(`Pass userDataDir parameter to 'browserType.launchPersistentContext(userDataDir, options)' instead of specifying '${profileArg}' argument`);
+        throw new Error("Pass userDataDir parameter to 'browserType.launchPersistentContext(userDataDir, options)' instead of specifying '--user-data-dir' argument");
       if (options.args.some(arg => typeof arg === 'string' && !arg.startsWith('-')))
         throw new Error('Arguments can not specify page to be opened');
     }
@@ -394,8 +543,10 @@ class BrowserType {
     validateOptions(options, [
       'executablePath', 'headless', 'timeout', 'handleSIGINT',
       ...(playwrightTraceDirSelected ? ['tracesDir'] : []),
-      ...(bidiStartupFailureRoute ? ['channel', 'firefoxUserPrefs'] : []),
+      ...(ownedLaunchSelected || bidiStartupFailureRoute ? ['channel'] : []),
     ], api);
+    if (options.channel !== undefined && typeof options.channel !== 'string')
+      throw new TypeError(`${api}: channel must be a string`);
     if (playwrightTraceDirSelected && options.tracesDir !== undefined && typeof options.tracesDir !== 'string')
       throw new TypeError(`${api}: tracesDir must be a string`);
     if (options.handleSIGINT !== undefined) {
@@ -406,16 +557,9 @@ class BrowserType {
       if (options.handleSIGINT)
         throw new UnsupportedOperationError(`${api} option handleSIGINT=true`);
     }
-    if (!bidiStartupFailureRoute && this._name !== 'chromium' && typeof options.executablePath === 'string' &&
-        options.executablePath.length > 0 && !existsSync(options.executablePath))
-      throw new Error(`${api}: Failed to launch ${this._name} because executable doesn't exist at ${options.executablePath}`);
     if (bidiStartupFailureRoute) {
       // Failure-only startup observation does not create a browser or apply
       // preferences. Keep the channel and executable scope explicit.
-      if (options.firefoxUserPrefs !== undefined &&
-          (options.firefoxUserPrefs === null || typeof options.firefoxUserPrefs !== 'object' ||
-           Array.isArray(options.firefoxUserPrefs)))
-        throw new TypeError(`${api}: firefoxUserPrefs must be an object`);
       const executablePath = options.executablePath;
       if (typeof executablePath !== 'string' || !isAbsolute(executablePath))
         throw new TypeError(`${api}: executablePath must be a nonempty absolute path`);
@@ -429,13 +573,16 @@ class BrowserType {
         throw new TypeError(`${api}: timeout must be an integer in [0, 4294967295]`);
       try {
         await getNativeEnvironment().observeBidiStartupFailure(
-          this._name, executablePath, timeout, options.tracesDir ?? '', process.cwd());
+          'chromium', executablePath, timeout, options.tracesDir ?? '', process.cwd());
         throw new UnsupportedOperationError(`${api} startup observation returned without a browser protocol`);
       } catch (error) { throw mapError(error, api); }
     }
-    if (this._name !== 'chromium' || !ownedLaunchSelected)
+    if (!ownedLaunchSelected)
       throw new UnsupportedOperationError(api);
-    const executablePath = options.executablePath;
+    if (options.channel !== undefined && options.channel !== 'chromium')
+      throw new UnsupportedOperationError(`${api} channel ${options.channel}`);
+    const executablePath = options.executablePath ??
+      (browserRegistrySnapshot ? this.executablePath() : undefined);
     if (typeof executablePath !== 'string' || executablePath.length === 0)
       throw new TypeError(`${api}: executablePath must be a nonempty absolute path`);
     // Playwright creates an explicit tracesDir before checking the executable.
@@ -484,11 +631,152 @@ class BrowserType {
     throw new UnsupportedOperationError('browserType.launchServer');
   }
   async launchPersistentContext(userDataDir, options = {}) {
+    const api = 'browserType.launchPersistentContext';
     if (options.port)
       throw new Error('Cannot specify a port without launching as a server.');
-    await preflightPersistentContext(this._name, { ...defaultLaunchOptions, ...options }, undefined,
+    options = { ...defaultLaunchOptions, ...options };
+    await preflightPersistentContext(this._name, options, undefined,
       persistentContextPreflightSelected ? nativeAddon : undefined);
-    throw new UnsupportedOperationError('browserType.launchPersistentContext');
+    if (options.channel !== undefined && options.channel !== 'chromium')
+      throw new UnsupportedOperationError(`${api} channel ${options.channel}`);
+    const plan = videoRecording.prepare(
+      options.recordVideo,
+      options.viewport,
+      api,
+      options.videosPath,
+      options.videoSize,
+    );
+    if (!ownedLaunchSelected)
+      throw new UnsupportedOperationError(api);
+    if (typeof userDataDir !== 'string' && !(userDataDir instanceof String))
+      throw new TypeError(`${api}: userDataDir must be a string`);
+    const executablePath = options.executablePath ?? this.executablePath();
+    if (typeof executablePath !== 'string' || !isAbsolute(executablePath))
+      throw new TypeError(`${api}: executablePath must be a nonempty absolute path`);
+    if (!existsSync(executablePath))
+      throw new Error(`${api}: Failed to launch ${this._name} because executable doesn't exist at ${executablePath}`);
+    const headless = options.headless ?? true;
+    if (typeof headless !== 'boolean')
+      throw new TypeError(`${api}: headless must be a boolean`);
+    const timeout = options.timeout ?? 30_000;
+    if (!Number.isInteger(timeout) || timeout < 0 || timeout > 0xffff_ffff)
+      throw new TypeError(`${api}: timeout must be an integer in [0, 4294967295]`);
+    if (options.baseURL !== undefined && typeof options.baseURL !== 'string')
+      throw new TypeError(`${api}: baseURL must be a string`);
+    if (options.locale !== undefined && typeof options.locale !== 'string')
+      throw new TypeError(`${api}: locale must be a string`);
+    if (options.timezoneId !== undefined && typeof options.timezoneId !== 'string')
+      throw new TypeError(`${api}: timezoneId must be a string`);
+    const geolocation = options.geolocation === undefined
+      ? undefined
+      : contextPolicies.normalizeGeolocation(options.geolocation, api);
+    const permissions = options.permissions === undefined
+      ? undefined
+      : contextPolicies.normalizePermissions(options.permissions, api);
+    const httpCredentials = options.httpCredentials === undefined
+      ? undefined
+      : contextPolicies.normalizeHttpCredentials(options.httpCredentials, api);
+    if (options.offline !== undefined && typeof options.offline !== 'boolean')
+      throw new TypeError(`${api}: offline must be a boolean`);
+    if (options.bypassCSP !== undefined && typeof options.bypassCSP !== 'boolean')
+      throw new TypeError(`${api}: bypassCSP must be a boolean`);
+    if (options.javaScriptEnabled !== undefined && typeof options.javaScriptEnabled !== 'boolean')
+      throw new TypeError(`${api}: javaScriptEnabled must be a boolean`);
+    const locale = options.locale === '' ? undefined : options.locale;
+    const timezoneId = options.timezoneId === '' ? undefined : options.timezoneId;
+    const offline = options.offline === true;
+    const bypassCsp = options.bypassCSP === true;
+    const javaScriptEnabled = options.javaScriptEnabled;
+    if (locale !== undefined && !persistentContextLocaleSelected)
+      throw new UnsupportedOperationError(`${api} option locale`);
+    if (timezoneId !== undefined && !persistentContextTimezoneSelected)
+      throw new UnsupportedOperationError(`${api} option timezoneId`);
+    if (geolocation !== undefined && !persistentContextGeolocationSelected)
+      throw new UnsupportedOperationError(`${api} option geolocation`);
+    if (permissions?.length && !persistentContextPermissionsSelected)
+      throw new UnsupportedOperationError(`${api} option permissions`);
+    if (httpCredentials !== undefined && !persistentContextHttpCredentialsSelected)
+      throw new UnsupportedOperationError(`${api} option httpCredentials`);
+    if (offline && !persistentContextOfflineSelected)
+      throw new UnsupportedOperationError(`${api} option offline`);
+    if (bypassCsp && !persistentContextBypassCspSelected)
+      throw new UnsupportedOperationError(`${api} option bypassCSP`);
+    if (javaScriptEnabled === false && !persistentContextJavascriptDisabledSelected)
+      throw new UnsupportedOperationError(`${api} option javaScriptEnabled`);
+    const hasContextDefaults = locale !== undefined || timezoneId !== undefined || geolocation !== undefined
+      || permissions?.length || httpCredentials !== undefined
+      || offline || bypassCsp || javaScriptEnabled === false;
+    try {
+      const environment = getNativeEnvironment();
+      let session;
+      if (plan === undefined) {
+        if (!hasContextDefaults) {
+          if (typeof environment.launchPersistentChromium !== 'function')
+            throw new UnsupportedOperationError(api);
+          session = await environment.launchPersistentChromium(
+            executablePath,
+            resolve(String(userDataDir)),
+            timeout,
+            options.baseURL,
+            (headless ? 1 : 0) | (options.ignoreHTTPSErrors === true ? 2 : 0),
+          );
+        } else {
+          if (typeof environment.launchPersistentChromiumWithContextDefaults !== 'function')
+            throw new UnsupportedOperationError(`${api} context defaults`);
+          session = await environment.launchPersistentChromiumWithContextDefaults(
+            executablePath,
+            resolve(String(userDataDir)),
+            timeout,
+            options.baseURL,
+            (headless ? 1 : 0) | (options.ignoreHTTPSErrors === true ? 2 : 0),
+            { locale, timezoneId, geolocation, permissions, offline, bypassCsp, javaScriptEnabled,
+              ...(httpCredentials === undefined ? {} : { httpCredentials }) },
+          );
+        }
+      } else {
+        if (!hasContextDefaults) {
+          if (typeof environment.launchPersistentChromiumWithVideo !== 'function')
+            throw new UnsupportedOperationError(`${api} recordVideo`);
+          session = await environment.launchPersistentChromiumWithVideo(
+              executablePath,
+              resolve(String(userDataDir)),
+              (headless ? 1 : 0) | (options.ignoreHTTPSErrors === true ? 2 : 0),
+              timeout,
+              options.baseURL,
+              plan.directory,
+              plan.ffmpeg,
+              plan.width,
+              plan.height,
+          );
+        } else {
+          if (typeof environment.launchPersistentChromiumWithVideoAndContextDefaults !== 'function')
+            throw new UnsupportedOperationError(`${api} options recordVideo and context defaults`);
+          session = await environment.launchPersistentChromiumWithVideoAndContextDefaults(
+              executablePath,
+              resolve(String(userDataDir)),
+              (headless ? 1 : 0) | (options.ignoreHTTPSErrors === true ? 2 : 0),
+              timeout,
+              options.baseURL,
+              { locale, timezoneId, geolocation, permissions, offline, bypassCsp, javaScriptEnabled,
+                ...(httpCredentials === undefined ? {} : { httpCredentials }) },
+              plan.directory,
+              plan.ffmpeg,
+              plan.width,
+              plan.height,
+          );
+        }
+      }
+      const browser = new Browser(this, session, true);
+      const contexts = browser.contexts();
+      if (contexts.length !== 1) {
+        try { await browser.close(); } catch {}
+        throw new Error(`${api}: persistent Chromium did not publish exactly one default context`);
+      }
+      const context = contexts[0];
+      if (plan !== undefined) context._recordVideo = plan;
+      frameUrlExpectation.setContextBaseURL(context, options.baseURL);
+      return context;
+    } catch (error) { throw mapError(error, api); }
   }
   async connect(wsEndpoint, options = {}) {
     const api = 'browserType.connect';
@@ -568,6 +856,7 @@ class Browser extends EventEmitter {
     watchSession(session.sessionSignal(), browserRef);
     pageBindings.watch(session, browserRef);
     pageRoutes.watch(session, browserRef);
+    serviceWorkerEvents.watch(session, browserRef);
     if (!requestEvents.watchCombined(session, browserRef, responseEvents.dispatch)) {
       requestEvents.watch(session, browserRef);
       responseEvents.watch(session, browserRef);
@@ -586,6 +875,8 @@ class Browser extends EventEmitter {
         for (const [id, context] of this._contexts) {
           if (active.has(id)) continue;
           context._retireAllCdpSessions();
+          context._retireNetworkRequestCache();
+          serviceWorkerEvents.retire(context);
           for (const page of context._pages.values()) page._retireNetworkRequestCache();
           this._contexts.delete(id);
         }
@@ -598,6 +889,8 @@ class Browser extends EventEmitter {
     for (const [id, context] of this._contexts) {
       if (active.has(id)) continue;
       context._retireAllCdpSessions();
+      context._retireNetworkRequestCache();
+      serviceWorkerEvents.retire(context);
       for (const page of context._pages.values()) page._retireNetworkRequestCache();
       this._contexts.delete(id);
     }
@@ -609,7 +902,9 @@ class Browser extends EventEmitter {
   }
 
   async close(options = {}) {
-    validateOptions(options, [], 'browser.close');
+    validateOptions(options, ['reason'], 'browser.close');
+    if (options.reason !== undefined && typeof options.reason !== 'string')
+      throw new TypeError('browser.close: reason must be a string');
     this._cdpClosePending = (this._cdpClosePending ?? 0) + 1;
     cdpSessions.pauseBrowser(this);
     // Native shutdown can retire Context notices before JS observes them.
@@ -636,6 +931,8 @@ class Browser extends EventEmitter {
         context._ownedCloseCleanupDone = true;
         try {
           context._retireAllCdpSessions();
+          context._retireNetworkRequestCache();
+          serviceWorkerEvents.retire(context);
           for (const page of context._pages.values()) page._retireNetworkRequestCache();
           context._request?._disposeFromOwner('Browser closed');
         } catch (error) { notificationErrors.push(error); }
@@ -676,6 +973,8 @@ class Browser extends EventEmitter {
     this._disconnected = true;
     for (const context of this._contexts.values()) {
       context._retireAllCdpSessions();
+      context._retireNetworkRequestCache();
+      serviceWorkerEvents.retire(context);
       for (const page of context._pages.values()) page._retireNetworkRequestCache();
     }
     this._contexts.clear();
@@ -739,13 +1038,35 @@ class Browser extends EventEmitter {
     validateOptions(options, [
       'baseURL', 'extraHTTPHeaders', 'proxy',
       'acceptDownloads', 'bypassCSP', 'colorScheme', 'hasTouch',
-      'ignoreHTTPSErrors', 'isMobile', 'javaScriptEnabled', 'locale',
-      'offline', 'serviceWorkers', 'viewport', 'noViewport', 'deviceScaleFactor',
+      'geolocation', 'permissions', 'httpCredentials', 'ignoreHTTPSErrors', 'isMobile', 'javaScriptEnabled', 'locale',
+      'offline', 'serviceWorkers', 'timezoneId', 'userAgent', 'viewport', 'screen', 'noViewport', 'deviceScaleFactor',
+      'storageState',
+      'defaultBrowserType',
+      'recordHar', 'recordVideo', 'videosPath', 'videoSize',
     ], 'browser.newContext');
+    const harPlan = harRecording.prepare(options.recordHar);
+    const videoPlan = videoRecording.prepare(
+      options.recordVideo,
+      options.viewport,
+      'browser.newContext',
+      options.videosPath,
+      options.videoSize,
+    );
+    if (options.viewport === null) {
+      options.noViewport = true;
+      delete options.viewport;
+    }
     contextNullViewport.validate(options);
     validateDefaultContextOptions(options);
     contextPolicies.validate(options);
     contextDevice.validate(options);
+    if (options.storageState !== undefined
+        && (typeof options.storageState !== 'string'
+          && (!options.storageState || typeof options.storageState !== 'object'
+            || Array.isArray(options.storageState))))
+      throw new TypeError('browser.newContext: storageState must be an object or path');
+    if (options.storageState !== undefined && !contextStorageStateSelected)
+      throw new UnsupportedOperationError('browser.newContext storageState (select context-storage-state native profile)');
     if (options.baseURL !== undefined && typeof options.baseURL !== 'string')
       throw new TypeError('browser.newContext: baseURL must be a string');
     if (options.baseURL !== undefined && !this._session.contextSnapshot)
@@ -755,15 +1076,23 @@ class Browser extends EventEmitter {
     if (options.proxy !== undefined) request._validateProxy(options.proxy, 'browser.newContext');
     if (options.proxy !== undefined && !this._session.newContextWithProxy)
       throw new UnsupportedOperationError('browser.newContext proxy (select context-proxy native profile)');
-    if (options.proxy !== undefined && options.extraHTTPHeaders !== undefined)
-      throw new UnsupportedOperationError('browser.newContext proxy with extraHTTPHeaders');
+    const storageState = typeof options.storageState === 'string'
+      ? JSON.parse(await readFile(options.storageState, 'utf8'))
+      : options.storageState;
     // Do not map arbitrary synchronous user getter/conversion exceptions.
-    const devicePending = contextDevice.create(this._session, options, options.baseURL);
-    const policyPending = contextPolicies.create(this._session, options, options.baseURL);
-    const pending = devicePending !== undefined
-      ? devicePending
-      : policyPending !== undefined
-        ? policyPending
+    const policyPending = contextPolicies.create(
+      this._session,
+      options,
+      options.baseURL,
+      headerChannelError,
+    );
+    const devicePending = policyPending === undefined
+      ? contextDevice.create(this._session, options, options.baseURL)
+      : undefined;
+    const pending = policyPending !== undefined
+      ? policyPending
+      : devicePending !== undefined
+        ? devicePending
         : options.proxy !== undefined
           ? this._session.newContextWithProxy(options.baseURL, options.proxy)
           : options.extraHTTPHeaders
@@ -772,13 +1101,56 @@ class Browser extends EventEmitter {
     try {
       const context = this._wrapContext(await pending);
       frameUrlExpectation.setContextBaseURL(context, options.baseURL);
+      context._recordVideo = videoPlan;
+      if (storageState !== undefined) {
+        try {
+          await this._session.contextSetStorageState(context._id, JSON.stringify(storageState));
+        } catch (error) {
+          try { await context.close(); }
+          catch (cleanup) {
+            throw new AggregateError(
+              [error, cleanup],
+              'browser.newContext storageState initialization and cleanup failed',
+              { cause: error },
+            );
+          }
+          throw error;
+        }
+      }
+      try {
+        await videoRecording.initialize(this._session, context._id, videoPlan);
+      } catch (error) {
+        try { await context.close(); }
+        catch (cleanup) {
+          throw new AggregateError(
+            [error, cleanup],
+            'browser.newContext Video initialization and cleanup failed',
+            { cause: error },
+          );
+        }
+        throw error;
+      }
+      try {
+        await harRecording.initialize(this._session, context._id, harPlan);
+      } catch (error) {
+        try { await context.close(); }
+        catch (cleanup) {
+          throw new AggregateError(
+            [error, cleanup],
+            'browser.newContext HAR initialization and cleanup failed',
+            { cause: error },
+          );
+        }
+        throw error;
+      }
       return context;
     }
     catch (error) { throw mapError(error, 'browser.newContext'); }
   }
   async newPage(options = {}) {
     options = { ...options };
-    validateOptions(options, ['baseURL', 'acceptDownloads'], 'browser.newPage');
+    validateOptions(options, ['baseURL', 'acceptDownloads', 'recordVideo'], 'browser.newPage');
+    const videoPlan = videoRecording.prepare(options.recordVideo, undefined, 'browser.newPage');
     if (options.baseURL !== undefined && typeof options.baseURL !== 'string')
       throw new TypeError('browser.newPage: baseURL must be a string');
     if (options.acceptDownloads !== undefined && typeof options.acceptDownloads !== 'boolean')
@@ -788,9 +1160,12 @@ class Browser extends EventEmitter {
     if (!this._session.newBrowserPage)
       throw new UnsupportedOperationError('browser.newPage (rebuild native addon)');
     try {
-      const value = await this._session.newBrowserPage(options.baseURL, false);
+      const value = videoPlan === undefined
+        ? await this._session.newBrowserPage(options.baseURL, false)
+        : await videoRecording.newBrowserPage(this._session, options.baseURL, false, videoPlan);
       const context = this._wrapContext(value.context);
       frameUrlExpectation.setContextBaseURL(context, options.baseURL);
+      context._recordVideo = videoPlan;
       const page = context._wrapPage(value.page);
       await flushBrowserAfterPageCreation(this, context, 'browser.newPage', 'Context');
       return page;
@@ -802,8 +1177,6 @@ function validateDefaultContextOptions(options) {
   const api = 'browser.newContext';
   for (const [name, expected] of [
     ['acceptDownloads', true],
-    ['ignoreHTTPSErrors', false],
-    ['isMobile', false],
     ['javaScriptEnabled', true],
   ]) {
     const value = options[name];
@@ -813,7 +1186,6 @@ function validateDefaultContextOptions(options) {
   }
   for (const [name, expected] of [
     ['colorScheme', 'light'],
-    ['locale', 'en-US'],
     ['serviceWorkers', 'allow'],
   ]) {
     const value = options[name];
@@ -821,12 +1193,99 @@ function validateDefaultContextOptions(options) {
     if (typeof value !== 'string') throw new TypeError(`${api}: ${name} must be a string`);
     if (value !== expected) throw new UnsupportedOperationError(`${api} ${name}=${value}`);
   }
-  if (options.viewport !== undefined) {
-    const viewport = options.viewport;
-    if (!viewport || typeof viewport !== 'object' || Array.isArray(viewport))
-      throw new TypeError(`${api}: viewport must be an object`);
-    if (viewport.width !== 1280 || viewport.height !== 720 || Object.keys(viewport).some(key => !['width', 'height'].includes(key)))
-      throw new UnsupportedOperationError(`${api} viewport`);
+}
+
+class Tracing {
+  constructor(context) {
+    this._context = context;
+  }
+
+  async start(options = {}) {
+    validateOptions(options, ['screenshots', 'snapshots', 'sources', 'name', 'title'], 'browserContext.tracing.start');
+    for (const name of ['screenshots', 'snapshots', 'sources']) {
+      if (options[name] !== undefined && typeof options[name] !== 'boolean')
+        throw new TypeError(`browserContext.tracing.start: ${name} must be a boolean`);
+    }
+    if (options.title !== undefined && typeof options.title !== 'string')
+      throw new TypeError('browserContext.tracing.start: title must be a string');
+    if (options.name !== undefined && typeof options.name !== 'string')
+      throw new TypeError('browserContext.tracing.start: name must be a string');
+    if (options.snapshots === true && !contextTracingSnapshotsSelected)
+      throw new UnsupportedOperationError('browserContext.tracing.start snapshots (select context-tracing-snapshots native profile)');
+    const session = this._context._browser._session;
+    if (!contextTracingScreenshotsSelected || !session.contextTracingStart)
+      throw new UnsupportedOperationError('browserContext.tracing.start (select context-tracing-screenshots native profile)');
+    try {
+      session.contextTracingStart(
+        this._context._id,
+        options.screenshots === true,
+        options.snapshots === true,
+        options.sources === true,
+        options.name,
+        options.title,
+      );
+      this._context._traceSources = options.sources === true;
+    }
+    catch (error) { throw mapError(error, 'browserContext.tracing.start'); }
+  }
+
+  async stop(options = {}) {
+    validateOptions(options, ['path'], 'browserContext.tracing.stop');
+    if (options.path !== undefined && (typeof options.path !== 'string' || options.path.length === 0))
+      throw new TypeError('browserContext.tracing.stop: path must be a nonempty string');
+    const session = this._context._browser._session;
+    if (!contextTracingScreenshotsSelected || !session.contextTracingStop)
+      throw new UnsupportedOperationError('browserContext.tracing.stop (select context-tracing-screenshots native profile)');
+    const path = options.path === undefined ? undefined : resolve(options.path);
+    try { await session.contextTracingStop(this._context._id, path); }
+    catch (error) { throw mapError(error, 'browserContext.tracing.stop'); }
+    finally { this._context._traceSources = false; }
+  }
+
+  async startChunk(options = {}) {
+    validateOptions(options, ['name', 'title'], 'browserContext.tracing.startChunk');
+    if (options.name !== undefined && typeof options.name !== 'string')
+      throw new TypeError('browserContext.tracing.startChunk: name must be a string');
+    if (options.title !== undefined && typeof options.title !== 'string')
+      throw new TypeError('browserContext.tracing.startChunk: title must be a string');
+    const session = this._context._browser._session;
+    if (!contextTracingChunksSelected || !session.contextTracingStartChunk)
+      throw new UnsupportedOperationError('browserContext.tracing.startChunk (select context-tracing-chunks native profile)');
+    try { session.contextTracingStartChunk(this._context._id, options.name, options.title); }
+    catch (error) { throw mapError(error, 'browserContext.tracing.startChunk'); }
+  }
+
+  async stopChunk(options = {}) {
+    validateOptions(options, ['path'], 'browserContext.tracing.stopChunk');
+    if (options.path !== undefined && (typeof options.path !== 'string' || options.path.length === 0))
+      throw new TypeError('browserContext.tracing.stopChunk: path must be a nonempty string');
+    const session = this._context._browser._session;
+    if (!contextTracingChunksSelected || !session.contextTracingStopChunk)
+      throw new UnsupportedOperationError('browserContext.tracing.stopChunk (select context-tracing-chunks native profile)');
+    const path = options.path === undefined ? undefined : resolve(options.path);
+    try { await session.contextTracingStopChunk(this._context._id, path); }
+    catch (error) { throw mapError(error, 'browserContext.tracing.stopChunk'); }
+  }
+
+  async group(name, options = {}) {
+    if (typeof name !== 'string')
+      throw new TypeError('browserContext.tracing.group: name must be a string');
+    validateOptions(options, ['location'], 'browserContext.tracing.group');
+    if (options.location !== undefined)
+      throw new UnsupportedOperationError('browserContext.tracing.group location');
+    const session = this._context._browser._session;
+    if (!contextTracingChunksSelected || !session.contextTracingGroup)
+      throw new UnsupportedOperationError('browserContext.tracing.group (select context-tracing-chunks native profile)');
+    try { session.contextTracingGroup(this._context._id, name); }
+    catch (error) { throw mapError(error, 'browserContext.tracing.group'); }
+  }
+
+  async groupEnd() {
+    const session = this._context._browser._session;
+    if (!contextTracingChunksSelected || !session.contextTracingGroupEnd)
+      throw new UnsupportedOperationError('browserContext.tracing.groupEnd (select context-tracing-chunks native profile)');
+    try { session.contextTracingGroupEnd(this._context._id); }
+    catch (error) { throw mapError(error, 'browserContext.tracing.groupEnd'); }
   }
 }
 
@@ -837,8 +1296,13 @@ class BrowserContext extends NativeConsoleEventEmitter {
     this._id = id;
     this._settings = settings;
     this._pages = new Map();
+    this._serviceWorkers = new Map();
+    this._bindings = new Map();
+    this._routes = new Map();
+    this._networkRequests = new Map();
     this._cdpSessions = new Map();
     this._request = undefined;
+    this.tracing = new Tracing(this);
     frameUrlExpectation.setContextBaseURL(this, undefined);
     this._closeNotified = false;
     this._ownedCloseCleanupDone = false;
@@ -850,13 +1314,19 @@ class BrowserContext extends NativeConsoleEventEmitter {
     return true;
   }
   browser() { return this._browser; }
+  serviceWorkers() { return serviceWorkerEvents.snapshot(this); }
+  _wrapServiceWorker(value) { return serviceWorkerEvents.wrap(this, value); }
+  _retireNetworkRequestCache() {
+    this._networkRequests.clear();
+    this._networkRequestRefs?.clear();
+  }
   get request() {
     if (this._request) return this._request;
     const session = this._browser._session;
     if (!session.contextRequest)
       throw new UnsupportedOperationError('browserContext.request (select context-api-request native profile)');
     try {
-      this._request = request._fromNative(session.contextRequest(this._id), this._baseURL);
+      this._request = request._fromNative(session.contextRequest(this._id), this._baseURL, this);
       return this._request;
     } catch (error) { throw mapError(error, 'browserContext.request'); }
   }
@@ -895,12 +1365,107 @@ class BrowserContext extends NativeConsoleEventEmitter {
     try { await session.setContextOffline(this._id, offline); }
     catch (error) { throw mapError(error, 'browserContext.setOffline'); }
   }
+  async setHTTPCredentials(httpCredentials) {
+    const normalized = contextPolicies.normalizeRuntimeHttpCredentials(
+      httpCredentials,
+      'browserContext.setHTTPCredentials',
+    );
+    const session = this._browser._session;
+    if (!session.setContextHttpCredentials)
+      throw new UnsupportedOperationError('browserContext.setHTTPCredentials (select context-http-credentials native profile)');
+    try { await session.setContextHttpCredentials(this._id, normalized); }
+    catch (error) { throw mapError(error, 'browserContext.setHTTPCredentials'); }
+  }
+  async setGeolocation(geolocation = null) {
+    const normalized = contextPolicies.normalizeGeolocation(
+      geolocation,
+      'browserContext.setGeolocation',
+      true,
+    );
+    const session = this._browser._session;
+    if (!session.setContextGeolocation)
+      throw new UnsupportedOperationError('browserContext.setGeolocation (select context-geolocation native profile)');
+    try { await session.setContextGeolocation(this._id, normalized); }
+    catch (error) { throw mapError(error, 'browserContext.setGeolocation'); }
+  }
+  async grantPermissions(permissions, options = {}) {
+    permissions = contextPolicies.normalizePermissions(permissions, 'browserContext.grantPermissions');
+    if (options === null || typeof options !== 'object' || Array.isArray(options))
+      throw new TypeError('browserContext.grantPermissions: options must be an object');
+    options = { ...options };
+    validateOptions(options, ['origin'], 'browserContext.grantPermissions');
+    if (options.origin !== undefined && typeof options.origin !== 'string')
+      throw new TypeError('browserContext.grantPermissions: origin must be a string');
+    const session = this._browser._session;
+    if (!session.grantContextPermissions)
+      throw new UnsupportedOperationError('browserContext.grantPermissions (select context-permissions native profile)');
+    try { await session.grantContextPermissions(this._id, permissions, options.origin); }
+    catch (error) { throw mapError(error, 'browserContext.grantPermissions'); }
+  }
+  async clearPermissions() {
+    const session = this._browser._session;
+    if (!session.clearContextPermissions)
+      throw new UnsupportedOperationError('browserContext.clearPermissions (select context-permissions native profile)');
+    try { await session.clearContextPermissions(this._id); }
+    catch (error) { throw mapError(error, 'browserContext.clearPermissions'); }
+  }
   addCookies(cookies) {
     return contextCookies.add(this, cookies);
+  }
+  cookies(urls) {
+    return contextCookies.cookies(this, urls);
+  }
+  clearCookies(options = {}) {
+    return contextCookies.clear(this, options);
+  }
+  async storageState(options = {}) {
+    validateOptions(options, ['indexedDB', 'path'], 'browserContext.storageState');
+    if (options.indexedDB !== undefined && typeof options.indexedDB !== 'boolean')
+      throw new TypeError('browserContext.storageState: indexedDB must be a boolean');
+    if (options.path !== undefined) {
+      if (typeof options.path !== 'string')
+        throw new TypeError('browserContext.storageState: path must be a string');
+    }
+    const session = this._browser._session;
+    if (!contextStorageStateSelected || typeof session.contextStorageState !== 'function')
+      throw new UnsupportedOperationError('browserContext.storageState (select context-storage-state native profile)');
+    return runTracingAction(this, 'browser-context-storage-state', undefined, async () => {
+      try {
+        const state = JSON.parse(await session.contextStorageState(this._id, options.indexedDB === true));
+        if (options.path !== undefined)
+          await writeFile(options.path, JSON.stringify(state, undefined, 2));
+        return state;
+      } catch (error) { throw mapError(error, 'browserContext.storageState'); }
+    });
   }
   addInitScript(script, arg) {
     return initScripts.addContext(this, script, arguments.length > 1, arg);
   }
+  async exposeBinding(name, callback, options = {}) {
+    validateOptions(options, ['handle'], 'browserContext.exposeBinding');
+    if (typeof name !== 'string' || !name)
+      throw new TypeError('browserContext.exposeBinding: name must be a non-empty string');
+    if (typeof callback !== 'function')
+      throw new TypeError('browserContext.exposeBinding: callback must be a function');
+    if (options.handle !== undefined && typeof options.handle !== 'boolean')
+      throw new TypeError('browserContext.exposeBinding: options.handle must be a boolean');
+    return pageBindings.exposeContext(
+      this, name, callback, 'browserContext.exposeBinding', options.handle === true,
+    );
+  }
+  exposeFunction(name, callback) {
+    if (typeof name !== 'string' || !name)
+      throw new TypeError('browserContext.exposeFunction: name must be a non-empty string');
+    if (typeof callback !== 'function')
+      throw new TypeError('browserContext.exposeFunction: callback must be a function');
+    return pageBindings.exposeContext(
+      this, name, (_source, ...args) => callback(...args), 'browserContext.exposeFunction', false,
+    );
+  }
+  route(url, handler, options = {}) { return pageRoutes.route(this, url, handler, options); }
+  routeFromHAR(har, options = {}) { return pageRoutes.routeFromHAR(this, har, options); }
+  unroute(url, handler) { return pageRoutes.unroute(this, url, handler); }
+  unrouteAll(options = {}) { return pageRoutes.unrouteAll(this, options); }
   pages() {
     if (this._browser._session.pageSnapshot) {
       try {
@@ -963,6 +1528,8 @@ class BrowserContext extends NativeConsoleEventEmitter {
       await this._browser._session.closeContext(this._id);
       this._cdpClosed = true;
       this._retireAllCdpSessions();
+      this._retireNetworkRequestCache();
+      serviceWorkerEvents.retire(this);
       for (const page of this._pages.values()) page._retireNetworkRequestCache();
       this._request?._disposeFromOwner(options.reason ?? 'Browser context closed');
       this._pages.clear();
@@ -982,8 +1549,8 @@ class Page extends NativeConsoleEventEmitter {
     this._mainFrame = new Frame(this, descriptor.mainFrameId, metadata, null);
     this._frameCache = descriptor.frameTree ? new FrameCache(descriptor.frameTree, this._mainFrame,
       (id, node, parent) => new Frame(this, id, node, parent)) : null;
-    this.keyboard = new Keyboard(context._browser._session, this._id);
-    this.mouse = new Mouse(context._browser._session, this._id);
+    this.keyboard = new Keyboard(context._browser._session, this);
+    this.mouse = new Mouse(context._browser._session, this);
     this.touchscreen = new Touchscreen(context._browser._session, this._id);
     this._opener = null;
     this._consoleMessages = [];
@@ -1007,6 +1574,10 @@ class Page extends NativeConsoleEventEmitter {
     timeoutSettings.setPage(this, timeout, true, 'page.setDefaultNavigationTimeout');
   }
   opener() { return Promise.resolve(this._opener); }
+  video() {
+    if (this._context._recordVideo === undefined) return null;
+    return this._video ??= videoRecording.create(this);
+  }
   waitForEvent(event, optionsOrPredicate = {}) {
     const apiStack = {};
     Error.captureStackTrace?.(apiStack, Page.prototype.waitForEvent);
@@ -1014,14 +1585,15 @@ class Page extends NativeConsoleEventEmitter {
     const timeout = typeof session.pageDefaultTimeout === 'function'
       ? session.pageDefaultTimeout(this._id, false)
       : 30_000;
-    return waitForEvent(
-      this,
-      event,
-      optionsOrPredicate,
-      'page.waitForEvent',
-      timeout,
-      { apiStack },
-    );
+    return runTracingAction(this, 'page-wait-for-event', event, () =>
+      waitForEvent(
+        this,
+        event,
+        optionsOrPredicate,
+        'page.waitForEvent',
+        timeout,
+        { apiStack },
+      ));
   }
   waitForRequest(urlOrPredicate, options = {}) {
     const apiStack = {};
@@ -1070,8 +1642,13 @@ class Page extends NativeConsoleEventEmitter {
     if (typeof callback !== 'function') throw new TypeError('page.exposeFunction: callback must be a function');
     return pageBindings.expose(this, name, (_source, ...args) => callback(...args), 'page.exposeFunction', false);
   }
-  route(url, handler, options = {}) { return pageRoutes.route(this, url, handler, options); }
+  route(url, handler, options = {}) {
+    return runTracingAction(this, 'page-route', undefined,
+      () => pageRoutes.route(this, url, handler, options));
+  }
+  routeFromHAR(har, options = {}) { return pageRoutes.routeFromHAR(this, har, options); }
   unroute(url, handler) { return pageRoutes.unroute(this, url, handler); }
+  unrouteAll(options = {}) { return pageRoutes.unrouteAll(this, options); }
   addInitScript(script, arg) {
     return initScripts.add(this, script, arguments.length > 1, arg);
   }
@@ -1092,7 +1669,10 @@ class Page extends NativeConsoleEventEmitter {
   isEnabled(selector, options = {}) { return this.locator(selector).isEnabled(options); }
   isVisible(selector, options = {}) { return this.locator(selector).isVisible(options); }
   isHidden(selector, options = {}) { return this.locator(selector).isHidden(options); }
-  waitForTimeout(timeout) { return waitForTimeout.wait(this._mainFrame, timeout, 'page.waitForTimeout'); }
+  waitForTimeout(timeout) {
+    return runTracingAction(this, 'page-wait-for-timeout', undefined,
+      () => waitForTimeout.wait(this._mainFrame, timeout, 'page.waitForTimeout'));
+  }
   waitForFunction(pageFunction, arg, options = {}) {
     return waitForFunction.wait(this._mainFrame, pageFunction, arg, options, 'page.waitForFunction');
   }
@@ -1131,9 +1711,13 @@ class Page extends NativeConsoleEventEmitter {
   }
   async screenshot(options = {}) {
     const params = screenshotOptions(options);
-    try { return await this._context._browser._session.pageScreenshot(this._id, params); }
+    try {
+      return await runTracingAction(this, 'page-screenshot', undefined,
+        () => this._context._browser._session.pageScreenshot(this._id, params));
+    }
     catch (error) { throw mapError(error, 'page.screenshot'); }
   }
+  pdf(options = {}) { return pagePdf(this._context._browser._session, this._id, options); }
   async goto(url, options = {}) {
     validateOptions(options, ['waitUntil', 'timeout', 'referer'], 'page.goto');
     if (typeof url !== 'string') throw new TypeError('page.goto: url must be a string');
@@ -1147,9 +1731,10 @@ class Page extends NativeConsoleEventEmitter {
       if (!Number.isInteger(timeout) || timeout < 0 || timeout > 0xffff_ffff)
         throw new TypeError('page.goto: timeout must be an integer in [0, 4294967295]');
       if (this._context._settings) url = this._context._settings.resolveUrl(url);
-      const result = typeof session.frameGoto === 'function'
-        ? await session.frameGoto([this._id, this._mainFrame._id], url, waitUntil, timeout, options.referer)
-        : await session.pageGoto(this._id, url, waitUntil, timeout, options.referer);
+      const result = await runTracingAction(this, 'page-goto', url, () =>
+        typeof session.frameGoto === 'function'
+          ? session.frameGoto([this._id, this._mainFrame._id], url, waitUntil, timeout, options.referer)
+          : session.pageGoto(this._id, url, waitUntil, timeout, options.referer));
       response = result.response ? createResponse(this, result.response) : null;
     } catch (error) { throw mapNavigationError(error, 'page.goto', url, waitUntil); }
     await this._context._flushCdpSessions(this._id);
@@ -1164,7 +1749,8 @@ class Page extends NativeConsoleEventEmitter {
       const timeout = navigationTimeout(session, this._id, options.timeout);
       if (!Number.isInteger(timeout) || timeout < 0 || timeout > 0xffff_ffff)
         throw new TypeError('page.reload: timeout must be an integer in [0, 4294967295]');
-      const result = await session.pageReload(this._id, waitUntil, timeout);
+      const result = await runTracingAction(this, 'page-reload', undefined,
+        () => session.pageReload(this._id, waitUntil, timeout));
       return result.response ? createResponse(this, result.response) : null;
     } catch (error) { throw mapError(error, 'page.reload'); }
   }
@@ -1199,7 +1785,8 @@ class Page extends NativeConsoleEventEmitter {
   }
   async content() { return this._mainFrame._read('frameContent', 'page.content'); }
   setContent(html, options = {}) {
-    return pageActions.setContent(this._context._browser._session, this._id, html, options);
+    return runTracingAction(this, 'page-set-content', undefined,
+      () => pageActions.setContent(this._context._browser._session, this._id, html, options));
   }
   emulateMedia(options = {}) {
     return emulateMedia(this._context._browser._session, this._id, options);
@@ -1211,8 +1798,18 @@ class Page extends NativeConsoleEventEmitter {
   press(selector, key, options = {}) { return pageActions.press(this._mainFrame, selector, key, options, 'page.press'); }
   type(selector, text, options = {}) { return pageActions.type(this._mainFrame, selector, text, options, 'page.type'); }
   focus(selector, options = {}) { return pageActions.focus(this._mainFrame, selector, options, 'page.focus'); }
-  click(selector, options = {}) { return pageActions.click(this._mainFrame, selector, options, 'page.click'); }
-  dblclick(selector, options = {}) { return pageActions.dblclick(this._mainFrame, selector, options, 'page.dblclick'); }
+  click(selector, options = {}) {
+    return runTracingAction(this, 'page-click', undefined,
+      () => pageActions.click(this._mainFrame, selector, options, 'page.click'));
+  }
+  dblclick(selector, options = {}) {
+    return runTracingAction(this, 'page-dblclick', undefined,
+      () => pageActions.dblclick(this._mainFrame, selector, options, 'page.dblclick'));
+  }
+  hover(selector, options = {}) {
+    return runTracingAction(this, 'page-hover', undefined,
+      () => pageActions.hover(this._mainFrame, selector, options, 'page.hover'));
+  }
   tap(selector, options = {}) { return pageActions.tap(this._mainFrame, selector, options, 'page.tap'); }
   check(selector, options = {}) { return pageActions.check(this._mainFrame, selector, options, 'page.check'); }
   uncheck(selector, options = {}) { return pageActions.uncheck(this._mainFrame, selector, options, 'page.uncheck'); }
@@ -1225,11 +1822,13 @@ class Page extends NativeConsoleEventEmitter {
   url() { return this._mainFrame.url(); }
   async evaluate(pageFunction, arg) {
     if (arguments.length > 2) throw new Error('Too many arguments. If you need to pass more than 1 argument to the function wrap them in an object.');
-    return this._mainFrame._evaluate(pageFunction, arg, 'page.evaluate');
+    return runTracingAction(this, 'page-evaluate', undefined,
+      () => this._mainFrame._evaluate(pageFunction, arg, 'page.evaluate'));
   }
   async evaluateHandle(pageFunction, arg) {
     if (arguments.length > 2) throw new Error('Too many arguments. If you need to pass more than 1 argument to the function wrap them in an object.');
-    return this._mainFrame._evaluateHandle(pageFunction, arg, 'page.evaluateHandle');
+    return runTracingAction(this, 'page-evaluate-handle', undefined,
+      () => this._mainFrame._evaluateHandle(pageFunction, arg, 'page.evaluateHandle'));
   }
   async _evaluateFunction(functionDeclaration) {
     return this._mainFrame._evaluate(functionDeclaration, undefined, 'page._evaluateFunction', true);
@@ -1247,15 +1846,17 @@ class Page extends NativeConsoleEventEmitter {
     if (options.runBeforeUnload !== undefined && typeof options.runBeforeUnload !== 'boolean')
       throw new TypeError('page.close: runBeforeUnload must be a boolean');
     if (options.runBeforeUnload) throw new UnsupportedOperationError('page.close runBeforeUnload');
-    this._cdpClosePending = (this._cdpClosePending ?? 0) + 1;
-    try {
-      await this._context._browser._session.closePage(this._id);
-      this._cdpClosed = true;
-      this._context._retireCdpSessions(this._id);
-      this._retireNetworkRequestCache();
-      this._context._pages.delete(this._id);
-    } catch (error) { throw mapError(error, 'page.close'); }
-    finally { this._cdpClosePending -= 1; }
+    return runTracingAction(this, 'page-close', undefined, async () => {
+      this._cdpClosePending = (this._cdpClosePending ?? 0) + 1;
+      try {
+        await this._context._browser._session.closePage(this._id);
+        this._cdpClosed = true;
+        this._context._retireCdpSessions(this._id);
+        this._retireNetworkRequestCache();
+        this._context._pages.delete(this._id);
+      } catch (error) { throw mapError(error, 'page.close'); }
+      finally { this._cdpClosePending -= 1; }
+    });
   }
   locator(selector, options = {}) { return this._mainFrame.locator(selector, options); }
   frameLocator(selector) { return this._mainFrame.frameLocator(selector); }
@@ -1363,6 +1964,7 @@ class Frame {
   focus(selector, options = {}) { return pageActions.focus(this, selector, options, 'frame.focus'); }
   click(selector, options = {}) { return pageActions.click(this, selector, options, 'frame.click'); }
   dblclick(selector, options = {}) { return pageActions.dblclick(this, selector, options, 'frame.dblclick'); }
+  hover(selector, options = {}) { return pageActions.hover(this, selector, options, 'frame.hover'); }
   tap(selector, options = {}) { return pageActions.tap(this, selector, options, 'frame.tap'); }
   fill(selector, value, options = {}) { return this.locator(selector).fill(value, options); }
   selectOption(selector, values, options = {}) { return this.locator(selector).selectOption(values, options); }
@@ -1431,32 +2033,39 @@ class Frame {
   }
 }
 
-function createResponse(page, metadata, frame, requestOverride) {
-  const request = requestOverride ?? responseRequests.create(page, metadata.request, metadata.historyOwner);
+function createResponse(owner, metadata, frame, requestOverride) {
+  const page = owner._context ? owner : null;
+  const context = page?._context ?? owner;
+  const request = requestOverride ?? responseRequests.create(owner, metadata.request, metadata.historyOwner);
   if (request?._response) return request._response;
-  frame ??= request?.frame() ?? page.mainFrame();
-  const response = new Response(page, metadata, frame, request);
+  if (frame === undefined && page) frame = request?.frame() ?? page.mainFrame();
+  const response = new Response(context, page, metadata, frame ?? null, request);
   request?._setResponse(response);
   return response;
 }
 
 class Response {
-  constructor(page, metadata, frame, request) {
+  constructor(context, page, metadata, frame, request) {
+    this._context = context;
     this._page = page;
     this._metadata = metadata;
     this._frame = frame;
     this._request = request;
     this._finished = responseFinished.create(
-      page._context._browser._session,
+      context._browser._session,
       metadata.finishedOwner,
     );
-    this._body = responseBodies.create(
-      page._context._browser._session,
+    this._body = page && frame ? responseBodies.create(
+      context._browser._session,
       page._id,
       frame._id,
       metadata.nativeRequestId ?? metadata.requestId,
       this._finished.beforeBody,
-    );
+    ) : {
+      body: () => Promise.reject(new UnsupportedOperationError('response.body for a Service Worker request')),
+      text: () => Promise.reject(new UnsupportedOperationError('response.text for a Service Worker request')),
+      json: () => Promise.reject(new UnsupportedOperationError('response.json for a Service Worker request')),
+    };
   }
   url() { return this._metadata.url; }
   status() { return this._metadata.status; }
@@ -1464,23 +2073,22 @@ class Response {
   ok() { return this._metadata.ok; }
   headers() { return { ...this._metadata.headers }; }
   allHeaders() {
-    return responseHeaders.all(this._page._context._browser._session, this._metadata.historyOwner);
+    return responseHeaders.all(this._context._browser._session, this._metadata.historyOwner);
   }
   headerValue(name) {
-    return responseHeaders.value(this._page._context._browser._session, this._metadata.historyOwner, name);
+    return responseHeaders.value(this._context._browser._session, this._metadata.historyOwner, name);
   }
   request() { return responseRequests.get(this._request); }
-  frame() { return this._frame; }
+  frame() { return this._frame ?? this._request?.frame() ?? null; }
+  fromServiceWorker() { return this._metadata.fromServiceWorker === true; }
   body() { return this._body.body(); }
   text() { return this._body.text(); }
   json() { return this._body.json(); }
   finished() { return this._finished.finished(); }
 }
 
-const chromium = new BrowserType('chromium');
-const firefox = new BrowserType('firefox');
-const webkit = new BrowserType('webkit');
-const implementation = { chromium, firefox, webkit, request, selectors, devices, errors: Object.freeze({ TimeoutError, UnsupportedOperationError }), compatibility };
+const chromium = new BrowserType();
+const implementation = { chromium, request, selectors, devices, errors: Object.freeze({ TimeoutError, UnsupportedOperationError }), compatibility };
 // The official Playwright fixture writes this on Object.create(implementation).
 // An inherited setter keeps its defaults scoped to this module and off the
 // public enumerable API; the fixture clears them after each worker scope.

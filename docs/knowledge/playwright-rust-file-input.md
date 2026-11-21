@@ -1,4 +1,4 @@
-<!-- agent-updated: 2026-11-14T05:28:56Z -->
+<!-- agent-updated: 2026-11-20T01:14:01Z -->
 
 NODE-191: The selected internal path now continues `PayloadImported -> Mutated`
 and then terminally removes the preparation. Rust validates the exact
@@ -132,9 +132,9 @@ uses the retained original node without a selector, forwards the caller's
 call ID, and settles the temporary target group. No fresh timeout or runtime
 command-ID substitution is added; this phase does not itself perform upload.
 
-The host now caches persistent marker state for 64 current/creating exact
-Page/Frame/client/utility-world keys, with eight retiring predecessors and eight
-lookup/call leases. Each persistent entry owns a separately admitted utility-only
+The host now caches persistent marker state in allocator-backed exact
+Page/Frame/client/utility-world entries, with dynamically owned retiring
+predecessors and lookup/call waiters. Each persistent entry owns a utility-only
 snapshot/receipt, never the source Handle or operation token. Shared creation,
 late-result compensation, topology-driven pruning, generation-protected reuse
 and fail-closed cleanup preserve ownership through cancellation and close.

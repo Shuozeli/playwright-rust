@@ -13,31 +13,6 @@ const testModeSource = path.join(path.resolve(upstream), 'tests', 'config', 'tes
 const originalLoad = Module._load;
 let adaptedCandidate;
 
-function publishOfficialBuiltins() {
-  const global = globalThis;
-  global.builtins = {
-    setTimeout: global.setTimeout?.bind(global),
-    clearTimeout: global.clearTimeout?.bind(global),
-    setInterval: global.setInterval?.bind(global),
-    clearInterval: global.clearInterval?.bind(global),
-    requestAnimationFrame: global.requestAnimationFrame?.bind(global),
-    cancelAnimationFrame: global.cancelAnimationFrame?.bind(global),
-    requestIdleCallback: global.requestIdleCallback?.bind(global),
-    cancelIdleCallback: global.cancelIdleCallback?.bind(global),
-    performance: global.performance,
-    Intl: global.Intl,
-    Date: global.Date,
-  };
-}
-
-async function installOfficialBuiltins(page) {
-  // Playwright's own UtilityScript exposes these only while its upstream test
-  // build isUnderTest. Reproduce that fixture input here; it is not a Playwright Rust
-  // public API and is never installed outside this official-test preload.
-  await page.evaluate(publishOfficialBuiltins);
-  return page;
-}
-
 function candidateForOfficialFixtures(parent, isMain) {
   if (adaptedCandidate) return adaptedCandidate;
   const implementation = originalLoad(candidateEntry, parent, isMain);
@@ -89,45 +64,78 @@ function candidateForOfficialFixtures(parent, isMain) {
       return context;
     },
   });
+  const adaptedContexts = new WeakSet();
+  const adaptContext = async context => {
+    if (adaptedContexts.has(context)) return context;
+    adaptedContexts.add(context);
+    contexts.add(context);
+    context._wrapApiCall ??= async callback => callback();
+    context.tracing ??= {
+      async start() { throw new implementation.errors.UnsupportedOperationError('browserContext.tracing.start'); },
+      async startChunk() { throw new implementation.errors.UnsupportedOperationError('browserContext.tracing.startChunk'); },
+      async stop() { throw new implementation.errors.UnsupportedOperationError('browserContext.tracing.stop'); },
+      async stopChunk() { throw new implementation.errors.UnsupportedOperationError('browserContext.tracing.stopChunk'); },
+    };
+    context._tracing ??= context.tracing;
+    const closeContext = context.close.bind(context);
+    context.close = async (...args) => {
+      try {
+        await instrumentation.runBeforeCloseBrowserContext(context);
+        return await closeContext(...args);
+      } finally {
+        contexts.delete(context);
+      }
+    };
+    return context;
+  };
+  const adaptBrowser = browser => {
+    browser._connection = { headers: [] };
+    browser._wrapApiCall ??= async callback => callback();
+    if (typeof browser._session?.killOwnedBrowserForTests === 'function') {
+      browser._channel = {
+        killForTests: () => browser._session.killOwnedBrowserForTests(),
+      };
+    }
+    const newContext = browser.newContext.bind(browser);
+    browser.newContext = async options => {
+      // @playwright/test applies per-test context options through this
+      // client-instrumentation hook before Browser.newContext. The candidate
+      // has no upstream ChannelOwner, so the official adapter drives the same
+      // already-registered fixture hook explicitly.
+      const preparedOptions = { ...(options ?? {}) };
+      await instrumentation.runBeforeCreateBrowserContext(preparedOptions);
+      return adaptContext(await newContext(preparedOptions));
+    };
+    return browser;
+  };
   const endpoint = process.env.PLAYWRIGHT_RUST_CANDIDATE_CDP_ENDPOINT;
+  const ownedLaunch = process.env.PLAYWRIGHT_RUST_CANDIDATE_OWNED_LAUNCH === '1';
+  if (endpoint && ownedLaunch)
+    throw new Error('Playwright Rust candidate cannot select CDP and owned launch together');
   const chromium = Object.create(implementation.chromium);
-  if (endpoint) {
+  if (ownedLaunch) {
+    const launch = implementation.chromium.launch.bind(implementation.chromium);
+    chromium.launch = async options => adaptBrowser(await launch(options));
+    const launchPersistentContext = implementation.chromium.launchPersistentContext
+      .bind(implementation.chromium);
+    chromium.launchPersistentContext = async (userDataDir, options) => {
+      const preparedOptions = { ...(options ?? {}) };
+      await instrumentation.runBeforeCreateBrowserContext(preparedOptions);
+      return adaptContext(await launchPersistentContext(userDataDir, preparedOptions));
+    };
+  } else if (endpoint) {
     chromium.launch = async () => {
       process.stderr.write(
         `[playwright-rust-candidate] browserType.launch fixture adapter -> connectOverCDP(${endpoint})\n`,
       );
-      const browser = await implementation.chromium.connectOverCDP(endpoint);
-      browser._connection = { headers: [] };
-      const closeBrowser = browser.close.bind(browser);
-      browser.close = () => closeBrowser();
-      const newContext = browser.newContext.bind(browser);
-      browser.newContext = async options => {
-        // @playwright/test applies per-test context options through this
-        // client-instrumentation hook before Browser.newContext. The candidate
-        // has no upstream ChannelOwner, so the official adapter must drive the
-        // same already-registered fixture hook explicitly.
-        const preparedOptions = { ...(options ?? {}) };
-        await instrumentation.runBeforeCreateBrowserContext(preparedOptions);
-        const context = await newContext(preparedOptions);
-        contexts.add(context);
-        // UtilityScript creates this test-only global for every document. An
-        // initial Page evaluation alone is lost on navigation, so register the
-        // same fixture input through the candidate's normal init-script API.
-        await context.addInitScript(publishOfficialBuiltins);
-        const newPage = context.newPage.bind(context);
-        context.newPage = async (...args) =>
-          installOfficialBuiltins(await newPage(...args));
-        const closeContext = context.close.bind(context);
-        context.close = async () => {
-          try {
-            return await closeContext();
-          } finally {
-            contexts.delete(context);
-          }
-        };
-        return context;
-      };
-      return browser;
+      return adaptBrowser(await implementation.chromium.connectOverCDP(endpoint));
+    };
+    const launchPersistentContext = implementation.chromium.launchPersistentContext
+      .bind(implementation.chromium);
+    chromium.launchPersistentContext = async (userDataDir, options) => {
+      const preparedOptions = { ...(options ?? {}) };
+      await instrumentation.runBeforeCreateBrowserContext(preparedOptions);
+      return adaptContext(await launchPersistentContext(userDataDir, preparedOptions));
     };
   }
   adaptedCandidate = Object.assign(Object.create(implementation), implementation, {

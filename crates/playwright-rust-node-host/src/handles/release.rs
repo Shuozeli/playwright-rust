@@ -80,6 +80,14 @@ pub(super) fn requirements(objects: NonZeroUsize) -> Result<ResourceRequirements
 fn failed(error: impl std::fmt::Display) -> CleanupFailure {
     CleanupFailure::new(format!("pending Handle release failed: {error}"))
 }
+
+const fn retirement_evidence_can_supersede(kind: FailureKind) -> bool {
+    matches!(
+        kind,
+        FailureKind::TargetClosed | FailureKind::TransportClosed
+    )
+}
+
 impl Releases {
     pub fn new(
         service: ChromiumHandleDisposeCommandService,
@@ -114,17 +122,23 @@ impl Releases {
     ) -> Result<(), CleanupFailure> {
         let _slot = self.slots.acquire().await.map_err(failed)?;
         let capacity = self.capacity.reserve().map_err(failed)?;
-        let Some(request) = self
-            .service
-            .prepare_native_release(object, capacity)
-            .map_err(failed)?
-        else {
-            return Ok(());
-        };
-        let outcome = match request.release().await {
-            Ok(receipt) => ReleaseOutcome::Released(receipt),
+        let outcome = match self.service.prepare_native_release(object, capacity) {
+            Ok(Some(request)) => match request.release().await {
+                Ok(receipt) => ReleaseOutcome::Released(receipt),
+                Err(error) => match lifetime {
+                    Some(lifetime) if retirement_evidence_can_supersede(error.kind()) => {
+                        ReleaseOutcome::ParentClosing {
+                            object: Some(object),
+                            lifetime,
+                            error,
+                        }
+                    }
+                    _ => return Err(failed(error)),
+                },
+            },
+            Ok(None) => return Ok(()),
             Err(error) => match lifetime {
-                Some(lifetime) if error.kind() == FailureKind::TargetClosed => {
+                Some(lifetime) if retirement_evidence_can_supersede(error.kind()) => {
                     ReleaseOutcome::ParentClosing {
                         object: Some(object),
                         lifetime,
@@ -147,7 +161,8 @@ impl Releases {
         lifetime: Option<ChromiumNativeWorldLifetime>,
     ) -> Result<(), CleanupFailure> {
         let Err(error) = outcome else { return Ok(()) };
-        let Some(lifetime) = lifetime.filter(|_| error.kind() == FailureKind::TargetClosed) else {
+        let Some(lifetime) = lifetime.filter(|_| retirement_evidence_can_supersede(error.kind()))
+        else {
             return Err(failed(error));
         };
         let _slot = self.slots.acquire().await.map_err(failed)?;
@@ -269,9 +284,7 @@ impl Releases {
     pub async fn changed(&self) {
         self.changed.notified().await;
     }
-    /// Handle creation publishes synchronously within a native future poll.
-    /// Signal after that poll releases its short transaction, including the
-    /// abandoned-creation continuation path, so a deferred receipt cannot stall.
+    #[cfg(test)]
     pub fn creation_polled(&self) {
         self.changed.notify_one();
     }

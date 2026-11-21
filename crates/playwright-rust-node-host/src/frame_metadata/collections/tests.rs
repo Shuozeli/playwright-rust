@@ -347,26 +347,23 @@ fn invalid_identity_and_missing_parent_do_not_mutate_an_admitted_projection() {
 }
 
 #[test]
-fn context_capacity_is_rejected_without_growing_the_admitted_vector() {
+fn context_collection_grows_past_the_legacy_capacity() {
     // Arrange
     let (book, _trees, tree, context) = fixture(3);
     let mut reserved = book
         .publications()
         .reserve_collection(tree.lookup_resources())
         .unwrap();
-    for id in 1000..1016 {
+    for id in 1000..1129 {
         reserved
             .add_context(ObjectId::new(id), context.clone())
             .unwrap();
     }
-    let before = tree.lookup_resources().metrics().unwrap();
     // Act
-    let result = reserved.add_context(ObjectId::new(1016), context);
+    let result = reserved.add_context(ObjectId::new(1129), context);
     // Assert
-    assert!(matches!(result, Err(HostError::ResourceExhausted(_))));
-    assert_eq!(reserved.revision.contexts().len(), CONTEXTS);
-    assert_eq!(reserved.revision.0.contexts.capacity(), CONTEXTS);
-    assert_eq!(tree.lookup_resources().metrics().unwrap(), before);
+    assert!(result.is_ok());
+    assert_eq!(reserved.revision.contexts().len(), 130);
 }
 
 #[test]
@@ -393,12 +390,12 @@ fn a_reservation_cannot_be_staged_after_terminal_shutdown() {
 }
 
 #[test]
-fn page_capacity_is_rejected_without_growing_the_admitted_vector() {
+fn page_collection_grows_past_the_legacy_capacity() {
     // Arrange
     let (book, _trees, tree, context) = fixture(3);
     let factory = tree.lookup_resources();
     let mut reserved = populated(&book, &tree, context);
-    for id in 10..25 {
+    for id in 10..74 {
         let root = factory
             .frame(
                 ObjectId::new(id + 100),
@@ -413,20 +410,17 @@ fn page_capacity_is_rejected_without_growing_the_admitted_vector() {
     }
     let root = factory
         .frame(
-            ObjectId::new(125),
+            ObjectId::new(10_000),
             None,
             book.get(ObjectId::new(2)).unwrap(),
         )
         .unwrap();
-    let overflow = factory.page(root).unwrap();
-    let before = factory.metrics().unwrap();
+    let additional = factory.page(root).unwrap();
     // Act
-    let result = reserved.add_page(ObjectId::new(25), ObjectId::new(1000), overflow.clone());
+    let result = reserved.add_page(ObjectId::new(74), ObjectId::new(1000), additional);
     // Assert
-    assert!(matches!(result, Err(HostError::ResourceExhausted(_))));
-    assert_eq!(reserved.revision.pages().len(), PAGES);
-    assert_eq!(reserved.revision.0.pages.capacity(), PAGES);
-    assert_eq!(factory.metrics().unwrap(), before);
+    assert!(result.is_ok());
+    assert_eq!(reserved.revision.pages().len(), 66);
 }
 
 #[test]
@@ -505,8 +499,8 @@ fn selected_storage_layout_has_exact_logical_count_and_byte_deltas() {
     assert_eq!(after.states, before.states);
     assert_eq!(after.revisions, before.revisions + 1);
     assert_eq!(after.bytes, before.bytes + STORAGE_BYTES as u64);
-    assert_eq!(reserved.revision.0.contexts.capacity(), CONTEXTS);
-    assert_eq!(reserved.revision.0.pages.capacity(), PAGES);
+    assert!(reserved.revision.0.contexts.capacity() >= 1);
+    assert!(reserved.revision.0.pages.capacity() >= 1);
     drop(reserved);
     trees.clear();
     book.clear();

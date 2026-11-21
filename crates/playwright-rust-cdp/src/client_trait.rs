@@ -18,6 +18,32 @@ use crate::domains::network::{Cookie, ResponseBody};
 use crate::domains::target::TargetInfo;
 use crate::generated::{page, target};
 
+/// One ordered CDP command that must be admitted while a newly attached
+/// Service Worker is still paused, before `Runtime.runIfWaitingForDebugger`.
+///
+/// Policy leaves compose these commands without owning the target session or
+/// its resume fence. The concrete CDP session queues every command before it
+/// returns to Chromium's attachment event loop.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ServiceWorkerInitializationCommand {
+    method: &'static str,
+    params: Value,
+}
+
+impl ServiceWorkerInitializationCommand {
+    pub fn new(method: &'static str, params: Value) -> Self {
+        Self { method, params }
+    }
+
+    pub const fn method(&self) -> &'static str {
+        self.method
+    }
+
+    pub const fn params(&self) -> &Value {
+        &self.params
+    }
+}
+
 /// Factory for creating per-tab CDP sessions from an attached session ID.
 ///
 /// The real impl wraps `CdpConnection`; test fakes return mock clients.
@@ -571,6 +597,35 @@ pub trait CdpClient: Send + Sync {
             "Runtime.runIfWaitingForDebugger is not implemented by this CDP client".to_string(),
         ))
     }
+    /// Admit service-worker initialization commands before waiting for any
+    /// acknowledgement. Chromium may hold Runtime/Network acknowledgements
+    /// while the target remains paused, so sequential request/response calls
+    /// can deadlock before the resume command reaches the wire.
+    async fn service_worker_initialize(&self, enable_network: bool) -> Result<()> {
+        self.runtime_enable().await?;
+        if enable_network {
+            self.network_enable().await?;
+        }
+        self.runtime_run_if_waiting_for_debugger().await
+    }
+
+    /// Initialize a paused Service Worker with additional ordered policy
+    /// commands. Implementations that cannot provide the pre-resume admission
+    /// fence may still use the legacy empty-command path, but must reject a
+    /// non-empty policy set instead of applying it after resume.
+    async fn service_worker_initialize_with_commands(
+        &self,
+        enable_network: bool,
+        commands: &[ServiceWorkerInitializationCommand],
+    ) -> Result<()> {
+        if commands.is_empty() {
+            return self.service_worker_initialize(enable_network).await;
+        }
+        Err(crate::connection::CdpError::Other(
+            "pre-resume Service Worker policy commands are not implemented by this CDP client"
+                .to_owned(),
+        ))
+    }
 
     // ── Accessibility domain ──
     async fn accessibility_enable(&self) -> Result<()>;
@@ -579,6 +634,12 @@ pub trait CdpClient: Send + Sync {
     // ── Network domain ──
     async fn network_enable(&self) -> Result<()>;
     async fn network_disable(&self) -> Result<()>;
+    async fn network_emulate_network_conditions(&self, params: Value) -> Result<()> {
+        let _ = params;
+        Err(crate::connection::CdpError::Other(
+            "Network.emulateNetworkConditions is not implemented by this CDP client".to_owned(),
+        ))
+    }
     async fn network_set_blocked_urls(&self, patterns: &[String]) -> Result<()>;
     async fn network_get_cookies(&self) -> Result<Vec<Cookie>>;
     async fn network_set_cookies(&self, cookies: &[Cookie]) -> Result<()>;
@@ -794,10 +855,13 @@ cdp_delegate_impl! {
     async fn runtime_release_object_group_to_settlement(&self, object_group: &str) -> Result<()>;
     async fn runtime_enable(&self) -> Result<()>;
     async fn runtime_run_if_waiting_for_debugger(&self) -> Result<()>;
+    async fn service_worker_initialize(&self, enable_network: bool) -> Result<()>;
+    async fn service_worker_initialize_with_commands(&self, enable_network: bool, commands: &[ServiceWorkerInitializationCommand]) -> Result<()>;
     async fn accessibility_enable(&self) -> Result<()>;
     async fn accessibility_get_full_tree(&self) -> Result<Vec<RawAXNode>>;
     async fn network_enable(&self) -> Result<()>;
     async fn network_disable(&self) -> Result<()>;
+    async fn network_emulate_network_conditions(&self, params: Value) -> Result<()>;
     async fn network_set_blocked_urls(&self, patterns: &[String]) -> Result<()>;
     async fn network_get_cookies(&self) -> Result<Vec<Cookie>>;
     async fn network_set_cookies(&self, cookies: &[Cookie]) -> Result<()>;

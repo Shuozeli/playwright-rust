@@ -1,6 +1,10 @@
-<!-- agent-updated: 2026-11-14T05:28:56Z -->
+<!-- agent-updated: 2026-11-19T12:10:39Z -->
 
 # Official Playwright Python conformance
+
+> Scope correction (2026-11-15): the conformance denominator is Chromium
+> only. Historical references to Firefox/WebKit "provider gaps" mean
+> out-of-scope non-applicable rows and are not implementation backlog.
 
 Status: full source inventory and both 6,526-test collections are established;
 full-corpus execution remains incomplete. The newest immutable
@@ -16,12 +20,89 @@ cumulative totals are candidate **1,651 passed / 124 failed / three errors /
 security-details failures are candidate-only; three HTTP fixture cases fail
 in both lanes. The archived candidate/harness bytes still depend on the
 external hash-verified Oracle package and pinned upstream checkout. A
-separate source-pinned trusted-HTTPS Service Worker diagnostic runs the same
-two official IDs: [candidate](../.work/official-conformance/results/python-sync-network-sw2-secure-paired-candidate-20261021-v1.xml)
-1/2 versus [Oracle](../.work/official-conformance/results/python-sync-network-sw2-secure-paired-oracle-20261021-v1.xml)
-2/2, with both provenance sidecars independently verified. Candidate now
-passes `Response.from_service_worker`; BrowserContext `serviceworker` event
-remains unimplemented. This does not revise the original HTTP v10 ledger.
+new current-module Service Worker checkpoint supersedes the old 1/2 candidate
+diagnostic without rewriting the immutable HTTP ledger. The current candidate
+and official Playwright 1.58.0 Oracle each pass all seven already-manifested
+Chromium rows: sync network 2/2, async/sync policy 4/4, and Page-route
+precedence 1/1. The source-bound reports are
+[network candidate](../.work/official-conformance/results/python-sync-network-sw2-secure-current-candidate-20261119-v2.xml)
+SHA-256 `91a3018f7b613cc47ad770fd5ecaa1292c16bf954e664c428dd27abbd3a42c73`
+and [Oracle](../.work/official-conformance/results/python-sync-network-sw2-secure-current-oracle-20261119-v1.xml)
+`f3face94c29ac1f48d7c8b88f4441ff5f8a9049086fcf1fa68c590af127c5f2c`;
+policy candidate async/sync are `da4cc860...229129f` / `7c58bd19...34171eb`
+and Oracle async/sync are `f3e75f8a...80d745e` / `e81b0e5b...9556f086`;
+route candidate/Oracle are `23a74619...21445811` / `b6120310...4838c02`.
+Every row ran in an isolated process under the trusted Tailscale HTTPS fixture,
+and all eight provenance sidecars verify independently. A second unchanged
+three-case slice covers the previously open navigation and two async-network
+rows. Its [candidate report](../.work/official-conformance/results/python-sw-remaining3-current-candidate-20261119-v2.xml)
+(SHA-256 `200c2165680a9a0ae5d05dc7c323fd35dc53fedf688114a7321681ad0e16cd40`)
+and [Oracle report](../.work/official-conformance/results/python-sw-remaining3-current-oracle-20261119-v1.xml)
+(`351afec599dc0bcbaab0f175ed336c88dfbfe29907b3dc781c13602941ef200e`)
+each pass 3/3 with independently verified provenance. The candidate originally
+failed while reading the body of a Page response fulfilled by a Service Worker:
+the native request ID existed in Rust but was omitted from the Python response
+notice. ABI140 now crosses that exact ID through FFI and derives the body route
+from the Page/Frame-owned Request; a true Service-Worker-owned response with no
+Page/Frame owner remains unsupported. The two non-video extension rows now
+also pass in both lanes: the
+[candidate report](../.work/official-conformance/results/python-sw-extension2-owned-current-candidate-20261119-v4.xml)
+(SHA-256 `0c2ee3c0805ee7613fe534210f8b3aa3e57c693054eae35029802ee78aafe0f3`)
+and [Oracle report](../.work/official-conformance/results/python-sw-extension2-owned-current-oracle-20261119-v1.xml)
+(`c7aeb5f07af25404834191eefcf938de482fb666f441e0b54e49e9c47d7adce5`)
+each pass 2/2 with independently verified provenance. The candidate now maps
+the explicit `chromium` channel to the bundled executable, suppresses provider
+component-extension background workers with the same Chromium launch switch
+as upstream, closes a persistent Context through its owned Browser, and treats
+only the expected post-shutdown network-stream termination as successful
+owned teardown. Pinned Playwright 1.58.0's deprecated `background_pages`
+property returns an empty list and no longer emits its event; the Python
+facades match that exact contract rather than inventing background-page
+ownership.
+
+The canonical Python inventory is therefore 14/14 green in both lanes. The
+final async/sync `record_video_dir` rows now pass in the corrected
+[candidate report](../.work/official-conformance/results/python-sw-extension-video2-owned-current-candidate-20261119-v3.xml)
+(2/2, SHA-256
+`81d49330f6abdd7f58a59cfc0cbb3fca5e8646c5be351ad4913e4bd498418dfc`)
+with independently verified schema-5 provenance. The matching
+[Oracle report](../.work/official-conformance/results/python-sw-extension-video2-owned-current-oracle-20261119-v1.xml)
+also passes 2/2 (SHA-256
+`de821844edbc3d08724709b9c7fc2d2de4bf4ba38825a87ea2f6105bd079af49`).
+The default-off Rust `video-recording` composition starts CDP screencast
+capture before Page resume, acknowledges frames, owns Playwright 1.58.0's
+pinned `ffmpeg-1011`, and finalizes VP8 WebM output before browser shutdown.
+The repository live E2E verifies real nonempty copied 12,415-byte async and
+14,118-byte sync 640x360 WebM files, plus immediate path publication, async
+copy waiting across close, exact sync pre-close rejection, post-close copy,
+and idempotent source deletion.
+
+ABI141 extends the Rust artifact lifecycle to ordinary owned Contexts and the
+implicit Context created by `Browser.new_page()`. Lazy Python `Page.video` and
+async/sync `Video.path()`, `save_as()`, and `delete()` still delegate
+completion, copy, delete, and post-close lifetime to Rust. Exact per-Context
+registration prevents a persistent launch default from leaking to another
+owned Context, and Context close finalizes only its own recorders. The complete
+unchanged async/sync upstream video selection passes 11/11 in the installed
+candidate. The independently verified
+[candidate report](../.work/official-conformance/results/python-video-full11-owned-current-candidate-20261119-v2.xml)
+has SHA-256
+`3298de552a9011b3c3c6d3345a7f72d49f84c1675be0b333d550e9d014b0e934`.
+The independently verified Playwright 1.58.0
+[Oracle report](../.work/official-conformance/results/python-video-full11-owned-current-oracle-20261119-v1.xml)
+passes 9/11 (SHA-256
+`302a5dbce7d4d9e42d26b679d6a54b3f01410f994011ef36e6edc98cacec3569`)
+on bundled Chromium 145.0.7632.6. Both Oracle failures are official
+`Video.save_as()` calls whose artifact future rejects `Page closed` after Page
+close; they are retained as Oracle REDs rather than attributed to the
+candidate. The ABI141 native module is SHA-256
+`78a68df32ab6493b240574d6848bf3ee32ad4145f7ec76a90bf775014328cd7c`;
+706 package tests pass with 14 skipped, plus Ruff, strict Pyright, four focused
+release recorder tests, formatting, and full-feature release Clippy. Remote
+artifact transfer, Node persistent-context recording, the remaining Core video
+rows, and Core Chromium Service Worker inventory/execution remain open. The
+later local Node facade covers ordinary owned and implicit
+`Browser.newPage()` Contexts only. This is not a full-corpus claim.
 
 A separate all-capability release wheel with the source-only, default-off
 `navigation-response-finished` join was built without replacing the ABI131
@@ -52,6 +133,25 @@ the HTTPS pair additionally set `ignore_https_errors=True` and call
 that means `ignore-https-errors` plus `navigation-response-finished` (which
 selects `response-finished`) alongside `response-security-details`. This is
 an explicit prerequisite inventory, not proof of a minimal dependency closure.
+
+## Creation-time HAR fixed slice (2026-11-19)
+
+The new schema-1 manifest
+`packages/playwright-rust-python/tests/official/browser-record-har-manifest.json`
+(SHA-256 `88ec3aa0a772c1a9654d871ab723527667649c8a62c8ad6e6edb06a3c418d6ce`)
+pins both upstream HAR source files and 19 unchanged Chromium IDs: 10 async and
+9 sync. The official Playwright Oracle passes 19/19. The installed ABI140
+candidate also passes 19/19 after correcting full-mode no-POST request
+`bodySize` from `-1` to `0` and adding the independently selectable
+`har-recording-regexp` capability. The current candidate reports are
+`.work/har-full-live.psmZdi/official-candidate-har-creation-async-abi140-current.xml`
+and `official-candidate-har-creation-sync-abi140-current.xml`; their generated
+provenance sidecars bind the pinned commit, source manifest, candidate package,
+native artifact, dedicated loopback CDP endpoint, and Tailscale-only fixture.
+The local wheel SHA-256 is
+`edaac5d49c0f7c4512b8613a2aaac1038e50322efbaa9dceec4ba84cb9a5f085`.
+These raw focused reports have not been promoted into an immutable ledger and
+do not revise cumulative totals or establish the remaining 6,507 rows.
 
 The new independent default-off `response-security-details` source slice
 retains only five bounded CDP TLS fields, correlates the exact Rust
@@ -3980,7 +4080,7 @@ core rows with Python 3.12.14, Playwright 1.58.0 and pytest 8.4.1, plus 25
 example rows with Python 3.10.21, Playwright 1.58.0, pytest 8.4.1 and the frozen
 `pytest-playwright==0.7.2` release reconstruction. The generated hashed lock
 has SHA-256
-`28a04972055dcaedcc64fa5b23d7bf0b31544cbb2bd79fccae388636fa866594`.
+`21e32b57e3d18046a7d6c67c930bb5881aae351f3367e9c674048984e51f5761`.
 
 Exactly 25 unsuffixed TodoMVC IDs from the obsolete root-only collection are
 replaced by their official `[chromium]` IDs; the other 6,501 IDs and the total
@@ -8279,7 +8379,9 @@ the popup's first navigation request must reject `Request.frame`, while the
 form-urlencoded row verifies decoded `post_data_json`. The four Firefox/WebKit
 rows remain explicit provider-gap `not-run` outcomes.
 
-ABI 53 exposes thin Context request-wait and Request frame/post-data/response
+Historical ABI 53 evidence: this bounded profile preceded ABI133's
+allocator-backed active-request ownership. ABI 53 exposed thin Context
+request-wait and Request frame/post-data/response
 facades. Rust owns the fixed waiter queues and the exact shared request-history
 owner, so `Request.response()` observes the response published after the
 request event. The optional `request-frame` backend observes `Page.frame*` and

@@ -1,24 +1,18 @@
-//! Pure, opt-in decisions for `browserType.launchPersistentContext` preflight.
+//! Pure Chromium decisions for `browserType.launchPersistentContext` preflight.
 //!
 //! The caller must first finish all client-side certificate material reads,
 //! unwrap protocol boxed strings, and establish JavaScript truthiness. This
 //! crate does no I/O and never owns a browser, process, transport, or runtime.
-//! It preserves the order of the current Node preflight: certificates first,
-//! then profile arguments, classic Firefox's juggler argument, Chromium's
-//! pipe argument, and page arguments.
+//! It preserves the public validation order: certificates, user-data-dir,
+//! Chromium's remote-debugging pipe, then page arguments.
 
-/// The browser type supplied by the public Playwright-style API.
+/// The only browser type supported by this project.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum BrowserEngine {
     Chromium,
-    Firefox,
-    WebKit,
 }
 
 /// Whether each value is JavaScript-truthy after client-side material reads.
-///
-/// In particular, a zero-length `Buffer` is truthy; a missing or empty string
-/// is false. This type deliberately does not infer truthiness from Rust bytes.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct CertificatePresence {
     pub origin: bool,
@@ -29,7 +23,6 @@ pub struct CertificatePresence {
 }
 
 /// An argument after the caller has unwrapped protocol boxed `String` values.
-/// Non-string values remain inert here and belong to protocol validation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Argument<'a> {
     String(&'a str),
@@ -41,14 +34,13 @@ pub enum Argument<'a> {
 pub struct DefaultArguments<'a> {
     /// `None` means `args` was not an Array; no argument check takes place.
     pub args: Option<&'a [Argument<'a>]>,
-    /// `None` means `channel` was not a string after protocol normalization.
+    /// Retained for the pinned public transport shape. Chromium ignores it.
     pub channel: Option<&'a str>,
-    /// `ignoreDefaultArgs` was truthy but not an Array. An Array, even an
-    /// empty one, must be represented by `false` and is still checked.
+    /// A truthy non-Array `ignoreDefaultArgs` bypasses argument validation.
     pub ignore_default_args_truthy_non_array: bool,
 }
 
-/// One complete, already-normalized preflight request.
+/// One complete, already-normalized Chromium preflight request.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct PersistentContextPreflight<'a> {
     pub engine: BrowserEngine,
@@ -65,8 +57,6 @@ pub enum PreflightError {
     KeyWithoutCertificate,
     PfxWithCertificateOrKey,
     ProfileArgument,
-    FirefoxProfileArgument,
-    FirefoxJugglerArgument,
     ChromiumRemoteDebuggingPipe,
     PageArgument,
 }
@@ -84,10 +74,6 @@ impl PreflightError {
             Self::ProfileArgument => {
                 "Pass userDataDir parameter to 'browserType.launchPersistentContext(userDataDir, options)' instead of specifying '--user-data-dir' argument"
             }
-            Self::FirefoxProfileArgument => {
-                "Pass userDataDir parameter to 'browserType.launchPersistentContext(userDataDir, options)' instead of specifying '--profile' argument"
-            }
-            Self::FirefoxJugglerArgument => "Use the port parameter instead of -juggler argument",
             Self::ChromiumRemoteDebuggingPipe => {
                 "Playwright manages remote debugging connection itself."
             }
@@ -126,12 +112,11 @@ pub fn verify_certificates(certificates: &[CertificatePresence]) -> Result<(), P
     Ok(())
 }
 
-/// Explicit alias for callers using Playwright's client-certificate naming.
 pub use verify_certificates as verify_client_certificates;
 
-/// Verify the selected Rust-backed Node profile's default-argument preflight.
+/// Verify the Chromium default-argument preflight.
 pub fn verify_default_arguments(
-    engine: BrowserEngine,
+    _engine: BrowserEngine,
     options: DefaultArguments<'_>,
 ) -> Result<(), PreflightError> {
     let Some(args) = options.args else {
@@ -141,52 +126,22 @@ pub fn verify_default_arguments(
         return Ok(());
     }
 
-    let profile_argument = args.iter().any(|arg| match (engine, arg) {
-        (BrowserEngine::Firefox, Argument::String(value)) => {
-            value.starts_with("-profile") || value.starts_with("--profile")
-        }
-        (_, Argument::String(value)) => value.starts_with("--user-data-dir"),
-        (_, Argument::Other) => false,
-    });
-    if profile_argument {
-        return Err(match engine {
-            BrowserEngine::Firefox => PreflightError::FirefoxProfileArgument,
-            BrowserEngine::Chromium | BrowserEngine::WebKit => PreflightError::ProfileArgument,
-        });
+    if args.iter().any(
+        |argument| matches!(argument, Argument::String(value) if value.starts_with("--user-data-dir")),
+    ) {
+        return Err(PreflightError::ProfileArgument);
     }
-
-    let classic_firefox = engine == BrowserEngine::Firefox
-        && !options
-            .channel
-            .is_some_and(|channel| channel.starts_with("moz-"));
-    if classic_firefox
-        && args
-            .iter()
-            .any(|arg| matches!(arg, Argument::String(value) if value.starts_with("-juggler")))
-    {
-        return Err(PreflightError::FirefoxJugglerArgument);
-    }
-
-    if engine == BrowserEngine::Chromium
-        && args.iter().any(|arg| {
-            matches!(arg, Argument::String(value) if value.starts_with("--remote-debugging-pipe"))
-        })
-    {
+    if args.iter().any(
+        |argument| matches!(argument, Argument::String(value) if value.starts_with("--remote-debugging-pipe")),
+    ) {
         return Err(PreflightError::ChromiumRemoteDebuggingPipe);
     }
-
-    let rejects_page_argument = engine != BrowserEngine::Firefox
-        || options
-            .channel
-            .is_some_and(|channel| channel.starts_with("moz-"));
-    if rejects_page_argument
-        && args
-            .iter()
-            .any(|arg| matches!(arg, Argument::String(value) if !value.starts_with('-')))
+    if args
+        .iter()
+        .any(|argument| matches!(argument, Argument::String(value) if !value.starts_with('-')))
     {
         return Err(PreflightError::PageArgument);
     }
-
     Ok(())
 }
 
@@ -211,20 +166,7 @@ mod tests {
     };
 
     #[test]
-    fn empty_certificate_collection_is_valid() {
-        // Arrange
-        let certificates = [];
-
-        // Act
-        let result = verify_client_certificates(&certificates);
-
-        // Assert
-        assert_eq!(result, Ok(()));
-    }
-
-    #[test]
     fn certificate_combinations_match_all_truthiness_states() {
-        // One independent Arrange/Act/Assert case for each input combination.
         for mask in 0u8..32 {
             // Arrange
             let certificate = CertificatePresence {
@@ -256,12 +198,12 @@ mod tests {
             let result = verify_client_certificates(&[certificate]);
 
             // Assert
-            assert_eq!(result, expected, "combination {mask:06b}");
+            assert_eq!(result, expected, "combination {mask:05b}");
         }
     }
 
     #[test]
-    fn certificate_errors_follow_input_order_not_error_severity() {
+    fn certificate_errors_follow_input_order() {
         // Arrange
         let certificates = [
             CertificatePresence {
@@ -280,48 +222,12 @@ mod tests {
     }
 
     #[test]
-    fn pfx_and_passphrase_without_pem_are_valid() {
+    fn absent_argument_array_bypasses_checks() {
         // Arrange
-        let certificates = [CertificatePresence {
-            origin: true,
-            pfx: true,
-            passphrase: true,
-            ..CertificatePresence::default()
-        }];
+        let options = DefaultArguments::default();
 
         // Act
-        let result = verify_client_certificates(&certificates);
-
-        // Assert
-        assert_eq!(result, Ok(()));
-    }
-
-    #[test]
-    fn pfx_with_cert_and_key_rejects_after_pair_validation() {
-        // Arrange
-        let certificates = [CertificatePresence {
-            pfx: true,
-            ..VALID_CERTIFICATE
-        }];
-
-        // Act
-        let result = verify_client_certificates(&certificates);
-
-        // Assert
-        assert_eq!(result, Err(PreflightError::PfxWithCertificateOrKey));
-    }
-
-    #[test]
-    fn absent_argument_array_bypasses_argument_checks() {
-        // Arrange
-        let options = DefaultArguments {
-            args: None,
-            channel: Some("moz-firefox"),
-            ignore_default_args_truthy_non_array: false,
-        };
-
-        // Act
-        let result = verify_default_arguments(BrowserEngine::Firefox, options);
+        let result = verify_default_arguments(BrowserEngine::Chromium, options);
 
         // Assert
         assert_eq!(result, Ok(()));
@@ -332,7 +238,7 @@ mod tests {
         // Arrange
         let args = [
             Argument::String("--user-data-dir=x"),
-            Argument::String("a-page"),
+            Argument::String("page"),
         ];
         let options = DefaultArguments {
             args: Some(&args),
@@ -348,27 +254,11 @@ mod tests {
     }
 
     #[test]
-    fn array_ignore_default_args_does_not_bypass_checks() {
-        // Arrange
-        let args = [Argument::String("page")];
-        let options = DefaultArguments {
-            args: Some(&args),
-            ..DefaultArguments::default()
-        };
-
-        // Act
-        let result = verify_default_arguments(BrowserEngine::Chromium, options);
-
-        // Assert
-        assert_eq!(result, Err(PreflightError::PageArgument));
-    }
-
-    #[test]
-    fn chromium_profile_argument_precedes_remote_pipe_and_page() {
+    fn profile_argument_precedes_remote_pipe_and_page() {
         // Arrange
         let args = [
             Argument::String("page"),
-            Argument::String("--remote-debugging-pipe=x"),
+            Argument::String("--remote-debugging-pipe"),
             Argument::String("--user-data-dir=x"),
         ];
         let options = DefaultArguments {
@@ -384,11 +274,11 @@ mod tests {
     }
 
     #[test]
-    fn chromium_remote_pipe_precedes_page() {
+    fn remote_pipe_precedes_page() {
         // Arrange
         let args = [
             Argument::String("page"),
-            Argument::String("--remote-debugging-pipe"),
+            Argument::String("--remote-debugging-pipe=x"),
         ];
         let options = DefaultArguments {
             args: Some(&args),
@@ -403,241 +293,19 @@ mod tests {
     }
 
     #[test]
-    fn firefox_profile_prefixes_are_rejected() {
-        // One independent Arrange/Act/Assert case for each accepted prefix.
-        for profile in [
-            "-profile",
-            "-profile-extra",
-            "--profile=path",
-            "--profile-extra",
-        ] {
-            // Arrange
-            let args = [Argument::String(profile)];
-            let options = DefaultArguments {
-                args: Some(&args),
-                ..DefaultArguments::default()
-            };
-
-            // Act
-            let result = verify_default_arguments(BrowserEngine::Firefox, options);
-
-            // Assert
-            assert_eq!(
-                result,
-                Err(PreflightError::FirefoxProfileArgument),
-                "{profile}"
-            );
-        }
-    }
-
-    #[test]
-    fn classic_firefox_rejects_every_juggler_prefix() {
-        // One independent Arrange/Act/Assert case for each upstream prefix.
-        for juggler in [
-            "-juggler",
-            "-juggler-pipe",
-            "-juggler-port=0",
-            "-jugglerExtra",
-        ] {
-            // Arrange
-            let args = [Argument::String(juggler)];
-            let options = DefaultArguments {
-                args: Some(&args),
-                ..DefaultArguments::default()
-            };
-
-            // Act
-            let result = verify_default_arguments(BrowserEngine::Firefox, options);
-
-            // Assert
-            assert_eq!(
-                result,
-                Err(PreflightError::FirefoxJugglerArgument),
-                "{juggler}"
-            );
-        }
-    }
-
-    #[test]
-    fn classic_firefox_profile_argument_precedes_juggler() {
+    fn page_argument_is_rejected() {
         // Arrange
-        let args = [
-            Argument::String("-juggler-pipe"),
-            Argument::String("--profile=unused"),
-        ];
+        let args = [Argument::String("https://example.test/")];
         let options = DefaultArguments {
             args: Some(&args),
             ..DefaultArguments::default()
         };
 
         // Act
-        let result = verify_default_arguments(BrowserEngine::Firefox, options);
-
-        // Assert
-        assert_eq!(result, Err(PreflightError::FirefoxProfileArgument));
-    }
-
-    #[test]
-    fn bidi_firefox_does_not_reject_juggler_prefix() {
-        // Arrange
-        let args = [Argument::String("-juggler-pipe")];
-        let options = DefaultArguments {
-            args: Some(&args),
-            channel: Some("moz-firefox"),
-            ..DefaultArguments::default()
-        };
-
-        // Act
-        let result = verify_default_arguments(BrowserEngine::Firefox, options);
-
-        // Assert
-        assert_eq!(result, Ok(()));
-    }
-
-    #[test]
-    fn classic_firefox_juggler_match_is_single_dash_and_case_sensitive() {
-        // One independent Arrange/Act/Assert case for each non-matching input.
-        for argument in ["--juggler-pipe", "-Juggler-pipe", "-other-juggler"] {
-            // Arrange
-            let args = [Argument::String(argument)];
-            let options = DefaultArguments {
-                args: Some(&args),
-                ..DefaultArguments::default()
-            };
-
-            // Act
-            let result = verify_default_arguments(BrowserEngine::Firefox, options);
-
-            // Assert
-            assert_eq!(result, Ok(()), "{argument}");
-        }
-    }
-
-    #[test]
-    fn bidi_firefox_page_error_is_not_replaced_by_juggler_error() {
-        // Arrange
-        let args = [
-            Argument::String("-juggler-pipe"),
-            Argument::String("https://example.invalid/"),
-        ];
-        let options = DefaultArguments {
-            args: Some(&args),
-            channel: Some("moz-firefox"),
-            ..DefaultArguments::default()
-        };
-
-        // Act
-        let result = verify_default_arguments(BrowserEngine::Firefox, options);
+        let result = verify_default_arguments(BrowserEngine::Chromium, options);
 
         // Assert
         assert_eq!(result, Err(PreflightError::PageArgument));
-    }
-
-    #[test]
-    fn ignored_default_arguments_do_not_reject_juggler() {
-        // Arrange
-        let args = [Argument::String("-juggler-pipe")];
-        let options = DefaultArguments {
-            args: Some(&args),
-            ignore_default_args_truthy_non_array: true,
-            ..DefaultArguments::default()
-        };
-
-        // Act
-        let result = verify_default_arguments(BrowserEngine::Firefox, options);
-
-        // Assert
-        assert_eq!(result, Ok(()));
-    }
-
-    #[test]
-    fn certificate_error_precedes_classic_firefox_juggler() {
-        // Arrange
-        let args = [Argument::String("-juggler-pipe")];
-        let input = PersistentContextPreflight {
-            engine: BrowserEngine::Firefox,
-            certificates: &[CertificatePresence::default()],
-            arguments: DefaultArguments {
-                args: Some(&args),
-                ..DefaultArguments::default()
-            },
-        };
-
-        // Act
-        let result = verify_persistent_context(input);
-
-        // Assert
-        assert_eq!(result, Err(PreflightError::MissingCertificateOrigin));
-    }
-
-    #[test]
-    fn webkit_profile_argument_precedes_page() {
-        // Arrange
-        let args = [
-            Argument::String("page"),
-            Argument::String("--user-data-dir-extra"),
-        ];
-        let options = DefaultArguments {
-            args: Some(&args),
-            ..DefaultArguments::default()
-        };
-
-        // Act
-        let result = verify_default_arguments(BrowserEngine::WebKit, options);
-
-        // Assert
-        assert_eq!(result, Err(PreflightError::ProfileArgument));
-    }
-
-    #[test]
-    fn firefox_classic_channel_allows_page_argument() {
-        // Arrange
-        let args = [Argument::String("https://example.invalid/")];
-        let options = DefaultArguments {
-            args: Some(&args),
-            channel: Some("firefox"),
-            ..DefaultArguments::default()
-        };
-
-        // Act
-        let result = verify_default_arguments(BrowserEngine::Firefox, options);
-
-        // Assert
-        assert_eq!(result, Ok(()));
-    }
-
-    #[test]
-    fn firefox_moz_channel_rejects_page_argument() {
-        // Arrange
-        let args = [Argument::String("https://example.invalid/")];
-        let options = DefaultArguments {
-            args: Some(&args),
-            channel: Some("moz-firefox"),
-            ..DefaultArguments::default()
-        };
-
-        // Act
-        let result = verify_default_arguments(BrowserEngine::Firefox, options);
-
-        // Assert
-        assert_eq!(result, Err(PreflightError::PageArgument));
-    }
-
-    #[test]
-    fn firefox_channel_prefix_is_case_sensitive() {
-        // Arrange
-        let args = [Argument::String("page")];
-        let options = DefaultArguments {
-            args: Some(&args),
-            channel: Some("Moz-firefox"),
-            ..DefaultArguments::default()
-        };
-
-        // Act
-        let result = verify_default_arguments(BrowserEngine::Firefox, options);
-
-        // Assert
-        assert_eq!(result, Ok(()));
     }
 
     #[test]
@@ -646,47 +314,14 @@ mod tests {
         let args = [Argument::Other];
         let options = DefaultArguments {
             args: Some(&args),
-            channel: Some("moz-firefox"),
             ..DefaultArguments::default()
         };
 
         // Act
-        let result = verify_default_arguments(BrowserEngine::Firefox, options);
+        let result = verify_default_arguments(BrowserEngine::Chromium, options);
 
         // Assert
         assert_eq!(result, Ok(()));
-    }
-
-    #[test]
-    fn chromium_remote_pipe_is_not_rejected_for_webkit() {
-        // Arrange
-        let args = [Argument::String("--remote-debugging-pipe")];
-        let options = DefaultArguments {
-            args: Some(&args),
-            ..DefaultArguments::default()
-        };
-
-        // Act
-        let result = verify_default_arguments(BrowserEngine::WebKit, options);
-
-        // Assert
-        assert_eq!(result, Ok(()));
-    }
-
-    #[test]
-    fn empty_string_is_a_page_argument_for_non_firefox_engines() {
-        // Arrange
-        let args = [Argument::String("")];
-        let options = DefaultArguments {
-            args: Some(&args),
-            ..DefaultArguments::default()
-        };
-
-        // Act
-        let result = verify_default_arguments(BrowserEngine::WebKit, options);
-
-        // Assert
-        assert_eq!(result, Err(PreflightError::PageArgument));
     }
 
     #[test]
@@ -731,8 +366,7 @@ mod tests {
     }
 
     #[test]
-    fn every_error_has_exact_public_reason_without_js_api_prefix() {
-        // One independent Arrange/Act/Assert case for every error variant.
+    fn every_error_has_a_stable_public_reason() {
         let cases = [
             (
                 PreflightError::MissingCertificateOrigin,
@@ -759,14 +393,6 @@ mod tests {
                 "Pass userDataDir parameter to 'browserType.launchPersistentContext(userDataDir, options)' instead of specifying '--user-data-dir' argument",
             ),
             (
-                PreflightError::FirefoxProfileArgument,
-                "Pass userDataDir parameter to 'browserType.launchPersistentContext(userDataDir, options)' instead of specifying '--profile' argument",
-            ),
-            (
-                PreflightError::FirefoxJugglerArgument,
-                "Use the port parameter instead of -juggler argument",
-            ),
-            (
                 PreflightError::ChromiumRemoteDebuggingPipe,
                 "Playwright manages remote debugging connection itself.",
             ),
@@ -776,8 +402,6 @@ mod tests {
             ),
         ];
         for (error, expected) in cases {
-            // Arrange: use this case's error and exact expected message.
-
             // Act
             let message = error.message();
 

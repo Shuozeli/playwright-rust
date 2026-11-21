@@ -94,6 +94,44 @@ fn pending_creations_share_the_active_registry_limit() {
 }
 
 #[test]
+fn allocator_backed_metadata_grows_past_legacy_context_and_state_limits() {
+    // Arrange
+    let book = ContextMetadata::new_allocator_backed(128).unwrap();
+    let pending = (0..129)
+        .map(|_| book.reserve_creation(Some("https://example.test/root/")))
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+    let pending_metrics = book.metrics().unwrap();
+    assert_eq!(pending_metrics.pending_creations, 129);
+    assert_eq!(pending_metrics.conversions, 129);
+    assert_eq!(pending_metrics.states, 258);
+
+    // Act
+    let created = pending
+        .into_iter()
+        .enumerate()
+        .map(|(index, reservation)| {
+            reservation.commit(ObjectId::new(u64::try_from(index + 1).unwrap()))
+        })
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+
+    // Assert
+    let active = book.metrics().unwrap();
+    assert_eq!(active.active_contexts, 129);
+    assert_eq!(active.pending_creations, 0);
+    assert_eq!(active.conversions, 0);
+    assert_eq!(active.states, 258);
+    let resources = created[0].snapshot.resources.clone();
+    book.clear();
+    drop(book);
+    assert_eq!(resources.metrics().unwrap().0, 258);
+    drop(created);
+    assert_eq!(resources.metrics().unwrap().0, 0);
+    assert_eq!(resources.metrics().unwrap().2, 0);
+}
+
+#[test]
 fn retained_binding_survives_registry_and_connection_owner_drop() {
     // Arrange
     let book = ContextMetadata::new(limits()).unwrap();
@@ -112,31 +150,10 @@ fn retained_binding_survives_registry_and_connection_owner_drop() {
         created.binding.snapshot().base_url(),
         Some("https://a.test/")
     );
-    assert_eq!(
-        resources
-            .metrics()
-            .unwrap()
-            .class(ResourceClass::LiveObject)
-            .current,
-        2
-    );
+    assert_eq!(resources.metrics().unwrap().0, 2);
     drop(created.binding);
-    assert_eq!(
-        resources
-            .metrics()
-            .unwrap()
-            .class(ResourceClass::LiveObject)
-            .current,
-        0
-    );
-    assert_eq!(
-        resources
-            .metrics()
-            .unwrap()
-            .class(ResourceClass::BackendStateBytes)
-            .current,
-        0
-    );
+    assert_eq!(resources.metrics().unwrap().0, 0);
+    assert_eq!(resources.metrics().unwrap().2, 0);
 }
 
 #[test]

@@ -31,6 +31,7 @@ fn one_shot_fixture_address() -> (Ipv4Addr, String) {
 }
 
 #[tokio::test]
+#[allow(clippy::result_large_err)] // tungstenite fixes the handshake callback error type.
 async fn malformed_text_fails_cdp_attach_promptly_and_preserves_upgrade_header() {
     // Arrange
     let (bind_ip, client_host) = one_shot_fixture_address();

@@ -1,4 +1,4 @@
-//! Bounded per-invocation navigation matching and response retention.
+//! Per-invocation navigation matching and response retention.
 //!
 //! Install before native dispatch. The owner supplies the ordered Page notices,
 //! the selected Frame's lifecycle snapshot and monotonic time. This component
@@ -44,8 +44,9 @@ impl fmt::Display for NavigationWaitError {
 impl std::error::Error for NavigationWaitError {}
 type Result<T> = std::result::Result<T, NavigationWaitError>;
 
-/// Limits apply to one invocation, including events received before the native
-/// reply. Completed document requests remain retained until this owner drops.
+/// Field limits apply to one invocation, including events received before the
+/// native reply. Finite profiles also cap row counts; allocator-backed profiles
+/// use `events` and `requests` only as initial capacities and grow observed rows.
 #[derive(Clone, Copy, Debug)]
 pub struct FrameNavigationWaitProfile {
     scope: ResourceScope,
@@ -57,6 +58,7 @@ pub struct FrameNavigationWaitProfile {
     response_bytes: usize,
     arena_bytes: usize,
     bytes: u64,
+    allocator_backed: bool,
 }
 impl FrameNavigationWaitProfile {
     pub fn new(
@@ -99,7 +101,27 @@ impl FrameNavigationWaitProfile {
             response_bytes,
             arena_bytes,
             bytes,
+            allocator_backed: false,
         })
+    }
+    pub fn new_allocator_backed(
+        scope: ResourceScope,
+        events: usize,
+        requests: usize,
+        id_bytes: usize,
+        error_bytes: usize,
+        response_bytes: usize,
+    ) -> Result<Self> {
+        let mut profile = Self::new(
+            scope,
+            events,
+            requests,
+            id_bytes,
+            error_bytes,
+            response_bytes,
+        )?;
+        profile.allocator_backed = true;
+        Ok(profile)
     }
     /// URL retention is optional; ordinary navigation receipts pay no URL cost.
     pub fn with_url_bytes(mut self, url_bytes: usize) -> Result<Self> {
@@ -122,6 +144,9 @@ impl FrameNavigationWaitProfile {
         Ok(self)
     }
     pub const fn requirements(self) -> ResourceRequirements {
+        if self.allocator_backed {
+            return ResourceRequirements::none();
+        }
         ResourceRequirements::none()
             .with_class(ResourceClass::BackendStateBytes, self.bytes, self.bytes)
             .with_metadata(1, 1)
@@ -138,6 +163,11 @@ struct Navigation {
     failure: Option<bool>,
     error_len: usize,
     url_len: usize,
+}
+struct OwnedNavigation {
+    loader: Option<Box<str>>,
+    error: Option<Box<str>>,
+    url: Option<Box<str>>,
 }
 /// One bounded navigation candidate copied out before invoking a predicate.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -157,6 +187,10 @@ struct Request {
     loader_len: usize,
     response: Response,
 }
+struct OwnedRequest {
+    loader: Box<str>,
+    response_json: Option<Box<[u8]>>,
+}
 #[derive(Clone, Copy)]
 enum State {
     Receipt,
@@ -170,8 +204,8 @@ enum State {
 #[derive(Debug, Eq, PartialEq)]
 pub enum NavigationPoll<'a> {
     Pending,
-    /// JSON is borrowed from this invocation's admitted fixed arena, not from
-    /// a CDP envelope. A caller retaining/decoding it must admit its own copy.
+    /// JSON is borrowed from this invocation's owned storage, not from a CDP
+    /// envelope. A caller retaining/decoding it must admit its own copy.
     Complete {
         frame: ObjectId,
         response_json: Option<&'a [u8]>,
@@ -182,7 +216,9 @@ pub enum NavigationPoll<'a> {
 /// This is not yet the public Frame.goto command or an asynchronous executor.
 pub struct FrameNavigationWait {
     events: Vec<Option<Navigation>>,
+    owned_events: Vec<Option<OwnedNavigation>>,
     requests: Vec<Option<Request>>,
+    owned_requests: Vec<Option<OwnedRequest>>,
     arena: Vec<u8>,
     profile: FrameNavigationWaitProfile,
     frame: ObjectId,
@@ -190,12 +226,13 @@ pub struct FrameNavigationWait {
     deadline: Option<Duration>,
     now: Duration,
     receipt_len: Option<usize>,
+    receipt: Option<Box<str>>,
     accept_any_navigation: bool,
     event_count: usize,
     pending_document: Option<usize>,
     failure_event: Option<usize>,
     state: State,
-    _lease: ResourceLease,
+    _lease: Option<ResourceLease>,
 }
 impl FrameNavigationWait {
     pub fn new(
@@ -208,27 +245,52 @@ impl FrameNavigationWait {
         if frame == ObjectId::new(0) {
             return Err(NavigationWaitError::InvalidIdentity);
         }
-        let ledger = resources
-            .claim(profile.requirements())
-            .map_err(|_| NavigationWaitError::Resources)?;
-        let lease = ledger
-            .reserve(
-                profile.scope,
-                ResourceClass::BackendStateBytes,
-                profile.bytes,
+        let lease = if profile.allocator_backed {
+            None
+        } else {
+            let ledger = resources
+                .claim(profile.requirements())
+                .map_err(|_| NavigationWaitError::Resources)?;
+            Some(
+                ledger
+                    .reserve(
+                        profile.scope,
+                        ResourceClass::BackendStateBytes,
+                        profile.bytes,
+                    )
+                    .map_err(|_| NavigationWaitError::Resources)?,
             )
-            .map_err(|_| NavigationWaitError::Resources)?;
-        let mut arena = Vec::new();
-        arena
-            .try_reserve_exact(profile.arena_bytes)
-            .map_err(|_| NavigationWaitError::Allocation)?;
-        if arena.capacity() != profile.arena_bytes {
-            return Err(NavigationWaitError::Allocation);
-        }
-        arena.resize(profile.arena_bytes, 0);
+        };
+        let (events, requests, arena) = if profile.allocator_backed {
+            let mut events = Vec::new();
+            events
+                .try_reserve(profile.events)
+                .map_err(|_| NavigationWaitError::Allocation)?;
+            let mut requests = Vec::new();
+            requests
+                .try_reserve(profile.requests)
+                .map_err(|_| NavigationWaitError::Allocation)?;
+            (events, requests, Vec::new())
+        } else {
+            let mut arena = Vec::new();
+            arena
+                .try_reserve_exact(profile.arena_bytes)
+                .map_err(|_| NavigationWaitError::Allocation)?;
+            if arena.capacity() != profile.arena_bytes {
+                return Err(NavigationWaitError::Allocation);
+            }
+            arena.resize(profile.arena_bytes, 0);
+            (
+                slots(profile.events).map_err(|_| NavigationWaitError::Allocation)?,
+                slots(profile.requests).map_err(|_| NavigationWaitError::Allocation)?,
+                arena,
+            )
+        };
         Ok(Self {
-            events: slots(profile.events).map_err(|_| NavigationWaitError::Allocation)?,
-            requests: slots(profile.requests).map_err(|_| NavigationWaitError::Allocation)?,
+            events,
+            owned_events: Vec::new(),
+            requests,
+            owned_requests: Vec::new(),
             arena,
             profile,
             frame,
@@ -236,6 +298,7 @@ impl FrameNavigationWait {
             deadline,
             now: Duration::ZERO,
             receipt_len: None,
+            receipt: None,
             accept_any_navigation: false,
             event_count: 0,
             pending_document: None,
@@ -253,11 +316,23 @@ impl FrameNavigationWait {
             if !matches!(self.state, State::Receipt) {
                 return Err(NavigationWaitError::InvalidState);
             }
-            if let Some(loader) = loader {
-                self.validate_id(loader)?;
+            let owned = loader
+                .map(|loader| {
+                    self.validate_id(loader)?;
+                    self.profile
+                        .allocator_backed
+                        .then(|| owned_text(loader))
+                        .transpose()
+                })
+                .transpose()?
+                .flatten();
+            if let Some(loader) = loader
+                && !self.profile.allocator_backed
+            {
                 self.arena[..loader.len()].copy_from_slice(loader.as_bytes());
             }
             self.receipt_len = loader.map(str::len);
+            self.receipt = owned;
             self.accept_any_navigation = false;
             self.state = State::Navigation;
             self.match_navigation()
@@ -293,9 +368,7 @@ impl FrameNavigationWait {
         if event.failure.is_some() {
             return Ok(Some(NavigationCandidate::Failed));
         }
-        let offset = self.event_offset(index) + self.profile.id_bytes + self.profile.error_bytes;
-        let url = std::str::from_utf8(&self.arena[offset..offset + event.url_len])
-            .map_err(|_| NavigationWaitError::InvalidIdentity)?;
+        let url = self.event_url(index, event)?;
         Ok(Some(NavigationCandidate::Url(url)))
     }
 
@@ -368,13 +441,7 @@ impl FrameNavigationWait {
     pub fn outcome(&self) -> Option<Result<NavigationPoll<'_>>> {
         match self.state {
             State::Complete(request) => {
-                let response_json =
-                    request.and_then(|i| match self.requests[i].unwrap().response {
-                        Response::Json(len) => Some(
-                            &self.arena[self.request_offset(i) + self.profile.id_bytes..][..len],
-                        ),
-                        Response::Pending | Response::Null => None,
-                    });
+                let response_json = request.and_then(|i| self.request_response(i));
                 Some(Ok(NavigationPoll::Complete {
                     frame: self.frame,
                     response_json,
@@ -387,13 +454,13 @@ impl FrameNavigationWait {
 
     /// Borrow the completed document's native loader/request identity.
     /// Chromium uses this value as the `Network.getResponseBody` request ID
-    /// for a document response. It remains owned by this wait's fixed arena.
+    /// for a document response. It remains owned by this wait.
     pub fn response_request_id(&self) -> Option<&str> {
         let State::Complete(Some(index)) = self.state else {
             return None;
         };
         let request = self.requests[index]?;
-        std::str::from_utf8(&self.arena[self.request_offset(index)..][..request.loader_len]).ok()
+        self.request_loader(index, request).ok()
     }
 
     /// The embedding scheduler combines this with the Page's idle deadline.
@@ -414,10 +481,9 @@ impl FrameNavigationWait {
         }
     }
     pub fn failure_text(&self) -> Option<&str> {
-        self.failure_event.map(|i| {
-            let event = self.events[i].unwrap();
-            let start = self.event_offset(i) + self.profile.id_bytes;
-            std::str::from_utf8(&self.arena[start..start + event.error_len]).unwrap()
+        self.failure_event.and_then(|i| {
+            let event = self.events[i]?;
+            self.event_error(i, event).ok()
         })
     }
     fn tick(&mut self, now: Duration) -> Result<()> {
@@ -463,7 +529,114 @@ impl FrameNavigationWait {
     }
     fn loader_matches(&self, i: usize, loader: &str) -> bool {
         let request = self.requests[i].unwrap();
-        &self.arena[self.request_offset(i)..][..request.loader_len] == loader.as_bytes()
+        self.request_loader(i, request)
+            .is_ok_and(|candidate| candidate == loader)
+    }
+
+    fn event_loader(&self, i: usize, event: Navigation) -> Result<Option<&str>> {
+        if self.profile.allocator_backed {
+            return self
+                .owned_events
+                .get(i)
+                .and_then(Option::as_ref)
+                .map(|event| event.loader.as_deref())
+                .ok_or(NavigationWaitError::InvalidState);
+        }
+        event
+            .loader_len
+            .map(|len| {
+                std::str::from_utf8(&self.arena[self.event_offset(i)..][..len])
+                    .map_err(|_| NavigationWaitError::InvalidIdentity)
+            })
+            .transpose()
+    }
+
+    fn event_error(&self, i: usize, event: Navigation) -> Result<&str> {
+        if self.profile.allocator_backed {
+            return self
+                .owned_events
+                .get(i)
+                .and_then(Option::as_ref)
+                .and_then(|event| event.error.as_deref())
+                .ok_or(NavigationWaitError::InvalidState);
+        }
+        let start = self.event_offset(i) + self.profile.id_bytes;
+        std::str::from_utf8(&self.arena[start..start + event.error_len])
+            .map_err(|_| NavigationWaitError::InvalidIdentity)
+    }
+
+    fn event_url(&self, i: usize, event: Navigation) -> Result<&str> {
+        if self.profile.allocator_backed {
+            return self
+                .owned_events
+                .get(i)
+                .and_then(Option::as_ref)
+                .and_then(|event| event.url.as_deref())
+                .ok_or(NavigationWaitError::InvalidState);
+        }
+        let offset = self.event_offset(i) + self.profile.id_bytes + self.profile.error_bytes;
+        std::str::from_utf8(&self.arena[offset..offset + event.url_len])
+            .map_err(|_| NavigationWaitError::InvalidIdentity)
+    }
+
+    fn request_loader(&self, i: usize, request: Request) -> Result<&str> {
+        if self.profile.allocator_backed {
+            return self
+                .owned_requests
+                .get(i)
+                .and_then(Option::as_ref)
+                .map(|request| request.loader.as_ref())
+                .ok_or(NavigationWaitError::InvalidState);
+        }
+        std::str::from_utf8(&self.arena[self.request_offset(i)..][..request.loader_len])
+            .map_err(|_| NavigationWaitError::InvalidIdentity)
+    }
+
+    fn request_response(&self, i: usize) -> Option<&[u8]> {
+        let request = self.requests[i]?;
+        match request.response {
+            Response::Json(len) if self.profile.allocator_backed => self
+                .owned_requests
+                .get(i)
+                .and_then(Option::as_ref)
+                .and_then(|request| request.response_json.as_deref())
+                .filter(|bytes| bytes.len() == len),
+            Response::Json(len) => {
+                Some(&self.arena[self.request_offset(i) + self.profile.id_bytes..][..len])
+            }
+            Response::Pending | Response::Null => None,
+        }
+    }
+
+    fn receipt_loader(&self) -> Result<Option<&str>> {
+        if self.profile.allocator_backed {
+            return Ok(self.receipt.as_deref());
+        }
+        self.receipt_len
+            .map(|len| {
+                std::str::from_utf8(&self.arena[..len])
+                    .map_err(|_| NavigationWaitError::InvalidIdentity)
+            })
+            .transpose()
+    }
+
+    fn next_event_slot(&mut self) -> Result<usize> {
+        let index = self.event_count;
+        if index < self.events.len() {
+            return Ok(index);
+        }
+        if !self.profile.allocator_backed {
+            return Err(NavigationWaitError::Capacity);
+        }
+        self.events
+            .try_reserve(1)
+            .map_err(|_| NavigationWaitError::Allocation)?;
+        self.owned_events
+            .try_reserve(1)
+            .map_err(|_| NavigationWaitError::Allocation)?;
+        self.events.push(None);
+        self.owned_events.push(None);
+        Ok(index)
     }
 
     fn observe_inner(&mut self, notice: &NativeLifecycleNotice<'_>) -> Result<()> {
@@ -479,19 +652,44 @@ impl FrameNavigationWait {
                     return Err(NavigationWaitError::InvalidIdentity);
                 }
                 let previous = redirected_from.and_then(|id| self.request_index(id));
-                let index = previous
-                    .or_else(|| self.requests.iter().position(Option::is_none))
-                    .ok_or(NavigationWaitError::Capacity)?;
+                let index = if let Some(index) =
+                    previous.or_else(|| self.requests.iter().position(Option::is_none))
+                {
+                    index
+                } else if self.profile.allocator_backed {
+                    self.requests
+                        .try_reserve(1)
+                        .map_err(|_| NavigationWaitError::Allocation)?;
+                    self.owned_requests
+                        .try_reserve(1)
+                        .map_err(|_| NavigationWaitError::Allocation)?;
+                    self.requests.push(None);
+                    self.owned_requests.push(None);
+                    self.requests.len() - 1
+                } else {
+                    return Err(NavigationWaitError::Capacity);
+                };
                 if previous.is_some() && !self.loader_matches(index, loader) {
                     return Err(NavigationWaitError::InvalidIdentity);
                 }
-                let offset = self.request_offset(index);
-                self.arena[offset..offset + loader.len()].copy_from_slice(loader.as_bytes());
+                let owned = if self.profile.allocator_backed {
+                    Some(OwnedRequest {
+                        loader: owned_text(loader)?,
+                        response_json: None,
+                    })
+                } else {
+                    let offset = self.request_offset(index);
+                    self.arena[offset..offset + loader.len()].copy_from_slice(loader.as_bytes());
+                    None
+                };
                 self.requests[index] = Some(Request {
                     id: *request,
                     loader_len: loader.len(),
                     response: Response::Pending,
                 });
+                if self.profile.allocator_backed {
+                    self.owned_requests[index] = owned;
+                }
                 self.pending_document = Some(index);
             }
             NativeLifecycleNotice::Committed {
@@ -517,13 +715,24 @@ impl FrameNavigationWait {
                     if !matches!(self.requests[i].unwrap().response, Response::Pending) {
                         return Ok(());
                     }
-                    let offset = self.request_offset(i) + self.profile.id_bytes;
-                    let mut writer =
-                        Cursor::new(&mut self.arena[offset..offset + self.profile.response_bytes]);
-                    serde_json::to_writer(&mut writer, response)
-                        .map_err(|_| NavigationWaitError::Capacity)?;
-                    self.requests[i].as_mut().unwrap().response =
-                        Response::Json(writer.position() as usize);
+                    if self.profile.allocator_backed {
+                        let encoded = bounded_json(response, self.profile.response_bytes)?;
+                        let len = encoded.len();
+                        self.owned_requests[i]
+                            .as_mut()
+                            .ok_or(NavigationWaitError::InvalidState)?
+                            .response_json = Some(encoded);
+                        self.requests[i].as_mut().unwrap().response = Response::Json(len);
+                    } else {
+                        let offset = self.request_offset(i) + self.profile.id_bytes;
+                        let mut writer = Cursor::new(
+                            &mut self.arena[offset..offset + self.profile.response_bytes],
+                        );
+                        serde_json::to_writer(&mut writer, response)
+                            .map_err(|_| NavigationWaitError::Capacity)?;
+                        self.requests[i].as_mut().unwrap().response =
+                            Response::Json(writer.position() as usize);
+                    }
                 }
             }
             NativeLifecycleNotice::RequestFailed {
@@ -559,24 +768,39 @@ impl FrameNavigationWait {
         if let Some(loader) = loader {
             self.validate_id(loader)?;
         }
-        let i = self.event_count;
-        if i == self.events.len() {
-            return Err(NavigationWaitError::Capacity);
-        }
-        if let Some(loader) = loader {
-            let offset = self.event_offset(i);
-            self.arena[offset..offset + loader.len()].copy_from_slice(loader.as_bytes());
-        }
-        let url_len = if self.profile.url_bytes > 0 {
+        let (url_len, owned_url) = if self.profile.url_bytes > 0 {
             let url = url.ok_or(NavigationWaitError::InvalidIdentity)?;
             if url.is_empty() || url.len() > self.profile.url_bytes {
                 return Err(NavigationWaitError::Capacity);
             }
-            let offset = self.event_offset(i) + self.profile.id_bytes + self.profile.error_bytes;
-            self.arena[offset..offset + url.len()].copy_from_slice(url.as_bytes());
-            url.len()
+            (
+                url.len(),
+                self.profile
+                    .allocator_backed
+                    .then(|| owned_text(url))
+                    .transpose()?,
+            )
         } else {
-            0
+            (0, None)
+        };
+        let owned_loader = if self.profile.allocator_backed {
+            loader.map(owned_text).transpose()?
+        } else {
+            None
+        };
+        let i = self.next_event_slot()?;
+        if !self.profile.allocator_backed {
+            if let Some(loader) = loader {
+                let offset = self.event_offset(i);
+                self.arena[offset..offset + loader.len()].copy_from_slice(loader.as_bytes());
+            }
+            if let Some(url) = url
+                && self.profile.url_bytes > 0
+            {
+                let offset =
+                    self.event_offset(i) + self.profile.id_bytes + self.profile.error_bytes;
+                self.arena[offset..offset + url.len()].copy_from_slice(url.as_bytes());
+            }
         };
         self.events[i] = Some(Navigation {
             loader_len: loader.map(str::len),
@@ -585,6 +809,13 @@ impl FrameNavigationWait {
             error_len: 0,
             url_len,
         });
+        if self.profile.allocator_backed {
+            self.owned_events[i] = Some(OwnedNavigation {
+                loader: owned_loader,
+                error: None,
+                url: owned_url,
+            });
+        }
         self.event_count += 1;
         self.match_navigation()
     }
@@ -592,17 +823,28 @@ impl FrameNavigationWait {
         if !matches!(self.state, State::Receipt | State::Navigation) {
             return Ok(());
         }
-        let i = self.event_count;
-        if i == self.events.len() || text.len() > self.profile.error_bytes {
+        if text.len() > self.profile.error_bytes {
             return Err(NavigationWaitError::Capacity);
         }
         let row = self.requests[request].unwrap();
-        let source = self.request_offset(request);
-        let offset = self.event_offset(i);
-        self.arena
-            .copy_within(source..source + row.loader_len, offset);
-        let error_offset = offset + self.profile.id_bytes;
-        self.arena[error_offset..error_offset + text.len()].copy_from_slice(text.as_bytes());
+        let owned = if self.profile.allocator_backed {
+            Some(OwnedNavigation {
+                loader: Some(owned_text(self.request_loader(request, row)?)?),
+                error: Some(owned_text(text)?),
+                url: None,
+            })
+        } else {
+            None
+        };
+        let i = self.next_event_slot()?;
+        if !self.profile.allocator_backed {
+            let source = self.request_offset(request);
+            let offset = self.event_offset(i);
+            self.arena
+                .copy_within(source..source + row.loader_len, offset);
+            let error_offset = offset + self.profile.id_bytes;
+            self.arena[error_offset..error_offset + text.len()].copy_from_slice(text.as_bytes());
+        }
         self.events[i] = Some(Navigation {
             loader_len: Some(row.loader_len),
             request: Some(request),
@@ -610,6 +852,9 @@ impl FrameNavigationWait {
             error_len: text.len(),
             url_len: 0,
         });
+        if self.profile.allocator_backed {
+            self.owned_events[i] = owned;
+        }
         self.event_count += 1;
         self.match_navigation()
     }
@@ -619,10 +864,10 @@ impl FrameNavigationWait {
         }
         for i in 0..self.event_count {
             let event = self.events[i].unwrap();
-            let same_loader = event
-                .loader_len
-                .zip(self.receipt_len)
-                .is_some_and(|(a, b)| self.arena[self.event_offset(i)..][..a] == self.arena[..b]);
+            let same_loader = self
+                .event_loader(i, event)?
+                .zip(self.receipt_loader()?)
+                .is_some_and(|(event, receipt)| event == receipt);
             let accepted = if self.accept_any_navigation {
                 true
             } else {
@@ -648,4 +893,26 @@ impl FrameNavigationWait {
         }
         Ok(())
     }
+}
+
+fn owned_text(value: &str) -> Result<Box<str>> {
+    let mut owned = String::new();
+    owned
+        .try_reserve_exact(value.len())
+        .map_err(|_| NavigationWaitError::Allocation)?;
+    owned.push_str(value);
+    Ok(owned.into_boxed_str())
+}
+
+fn bounded_json(value: &serde_json::Value, capacity: usize) -> Result<Box<[u8]>> {
+    let mut bytes = Vec::new();
+    bytes
+        .try_reserve_exact(capacity)
+        .map_err(|_| NavigationWaitError::Allocation)?;
+    bytes.resize(capacity, 0);
+    let mut writer = Cursor::new(bytes.as_mut_slice());
+    serde_json::to_writer(&mut writer, value).map_err(|_| NavigationWaitError::Capacity)?;
+    let len = usize::try_from(writer.position()).map_err(|_| NavigationWaitError::SizeOverflow)?;
+    bytes.truncate(len);
+    Ok(bytes.into_boxed_slice())
 }

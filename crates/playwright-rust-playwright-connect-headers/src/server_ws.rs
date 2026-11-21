@@ -62,7 +62,7 @@ fn append_defaults<T: HeaderTarget>(
     browser_name: &str,
     default_user_agent: &str,
 ) -> Result<(), WsError> {
-    if !matches!(browser_name, "chromium" | "firefox" | "webkit") {
+    if browser_name != "chromium" {
         return Err(WsError::InvalidHeader("unsupported browser name"));
     }
     if !has_header(target, "user-agent") {
@@ -98,7 +98,7 @@ mod tests {
         let mut request = request();
         request.add_header("uSeR-aGeNt", "Playwright").unwrap();
         request
-            .add_header("X-Playwright-Browser", "firefox")
+            .add_header("X-Playwright-Browser", "custom")
             .unwrap();
         request.add_header("foo", "bar").unwrap();
 
@@ -112,7 +112,7 @@ mod tests {
             .map(|header| (header.name(), header.value()))
             .collect::<Vec<_>>();
         assert!(headers.contains(&("uSeR-aGeNt", "Playwright")));
-        assert!(headers.contains(&("X-Playwright-Browser", "firefox")));
+        assert!(headers.contains(&("X-Playwright-Browser", "custom")));
         assert!(headers.contains(&("foo", "bar")));
         assert_eq!(headers.len(), 4);
         assert!(!needs_default_user_agent(&request));
@@ -137,6 +137,29 @@ mod tests {
         assert!(headers.contains(&("x-playwright-browser", "chromium")));
         assert!(headers.contains(&("x-playwright-proxy", "")));
         assert!(headers.contains(&("foo", "bar")));
+    }
+
+    #[test]
+    fn defaults_reject_non_chromium_browser_names() {
+        // Arrange
+        let mut firefox_request = request();
+        let mut webkit_request = request();
+
+        // Act
+        let firefox =
+            append_server_connect_defaults(&mut firefox_request, "firefox", "Playwright/1.58.0");
+        let webkit =
+            append_server_connect_defaults(&mut webkit_request, "webkit", "Playwright/1.58.0");
+
+        // Assert
+        assert!(matches!(
+            firefox,
+            Err(WsError::InvalidHeader("unsupported browser name"))
+        ));
+        assert!(matches!(
+            webkit,
+            Err(WsError::InvalidHeader("unsupported browser name"))
+        ));
     }
 
     #[test]

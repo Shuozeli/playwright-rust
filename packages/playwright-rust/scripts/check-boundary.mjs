@@ -23,6 +23,10 @@ function effectiveSelection(feature) {
   if (selected.has('response-events')) selected.add('url-glob');
   if (selected.has('touchscreen-input')) selected.add('device-emulation');
   if (selected.has('element-handle-dom')) selected.add('handles');
+  if (selected.has('context-bindings')) {
+    selected.add('page-bindings');
+    selected.add('handles');
+  }
   if (selected.has('retained-serialized-payload-mutation')) selected.add('retained-serialized-payload-import');
   if (selected.has('retained-serialized-payload-import')) selected.add('retained-call-argument-serialization');
   if (selected.has('retained-call-argument-serialization')) selected.add('retained-input-instrumentation');
@@ -670,6 +674,11 @@ assert.ok(bidiStartupFailureAddonFeature, 'the addon BiDi startup-failure featur
 assert.deepEqual([...bidiStartupFailureAddonFeature[1].matchAll(/"([^"]+)"/g)].map(match => match[1]).sort(),
   ['playwright-trace', 'dep:playwright-rust-owned-process-startup'].sort(),
   'BiDi startup failure must select only the existing trace profile and neutral process-startup leaf');
+const contextBindingsAddonFeature = /^context-bindings\s*=\s*\[([^\]]*)\]/m.exec(addonManifest);
+assert.ok(contextBindingsAddonFeature, 'the addon context-bindings feature must be declared explicitly');
+assert.deepEqual([...contextBindingsAddonFeature[1].matchAll(/"([^"]+)"/g)].map(match => match[1]).sort(),
+  ['page-bindings', 'playwright-rust-node-host/context-bindings'].sort(),
+  'addon context bindings must extend only the Page transport and Rust Context owner');
 const ownedProcessStartupManifest = readFileSync(new URL('../../../crates/playwright-rust-owned-process-startup/Cargo.toml', import.meta.url), 'utf8');
 let inStartupDependencySection = false;
 const ownedProcessStartupDependencies = [];
@@ -689,6 +698,11 @@ assert.ok(responseRequestHostFeature, 'the host response-request feature must be
 assert.deepEqual([...responseRequestHostFeature[1].matchAll(/"([^"]+)"/g)].map(match => match[1]),
   ['frame-navigation', 'request-history'],
   'host response-request must select only navigation and bounded request history');
+const contextBindingsHostFeature = /^context-bindings\s*=\s*\[([^\]]*)\]/m.exec(hostManifest);
+assert.ok(contextBindingsHostFeature, 'the host context-bindings feature must be declared explicitly');
+assert.deepEqual([...contextBindingsHostFeature[1].matchAll(/"([^"]+)"/g)].map(match => match[1]),
+  ['page-bindings'],
+  'host context bindings must extend only the Page binding transport');
 const requestEventsHostFeature = /^request-events\s*=\s*\[([^\]]*)\]/m.exec(hostManifest);
 assert.ok(requestEventsHostFeature, 'the host request-events feature must be declared explicitly');
 assert.deepEqual([...requestEventsHostFeature[1].matchAll(/"([^"]+)"/g)].map(match => match[1]),
@@ -737,7 +751,7 @@ assert.deepEqual([...mutationHostFeature[1].matchAll(/"([^"]+)"/g)].map(match =>
   ['playwright-rust-composition-chromium-file-input/retained-serialized-payload-mutation',
     'retained-serialized-payload-import'].sort(),
   'host retained-serialized-payload-mutation must select only import and the composition mutation leaf');
-for (const feature of ['', 'bypass-csp', 'device-emulation', 'touchscreen-input', 'element-handle-dom,touchscreen-input', 'selector-registration', 'request-events', 'response-events', 'response-finished', 'request-post-data-json', 'handles', 'drag-runtime', 'frame-navigation', 'history-navigation', 'frame-navigation,history-navigation', 'drag-runtime,frame-navigation',
+for (const feature of ['', 'bypass-csp', 'device-emulation', 'touchscreen-input', 'element-handle-dom,touchscreen-input', 'selector-registration', 'request-events', 'response-events', 'response-finished', 'request-post-data-json', 'handles', 'context-bindings', 'drag-runtime', 'frame-navigation', 'history-navigation', 'frame-navigation,history-navigation', 'drag-runtime,frame-navigation',
   'extra-headers', 'drag-runtime,extra-headers', 'frame-navigation,extra-headers', 'drag-runtime,frame-navigation,extra-headers', 'concurrent-close', 'concurrent-close,drag-runtime,frame-navigation,extra-headers', 'file-input', 'file-input,concurrent-close,drag-runtime,frame-navigation,extra-headers', 'handles,file-input', 'handles,file-input,concurrent-close,drag-runtime,frame-navigation,extra-headers', 'retained-file-input', 'retained-file-input,concurrent-close,drag-runtime,frame-navigation,extra-headers', 'retained-target-marking', 'retained-target-marking,concurrent-close,drag-runtime,frame-navigation,extra-headers', 'retained-target-prevalidation', 'retained-target-prevalidation,concurrent-close,drag-runtime,frame-navigation,extra-headers', 'retained-input-instrumentation', 'retained-input-instrumentation,concurrent-close,drag-runtime,frame-navigation,extra-headers', 'retained-call-argument-serialization', 'retained-call-argument-serialization,concurrent-close,drag-runtime,frame-navigation,extra-headers', 'retained-serialized-payload-import', 'retained-serialized-payload-import,concurrent-close,drag-runtime,frame-navigation,extra-headers', 'retained-serialized-payload-mutation', 'retained-serialized-payload-mutation,concurrent-close,drag-runtime,frame-navigation,extra-headers']) {
   const selected = effectiveSelection(feature);
   const lines = tree(feature, 'playwright-rust-node-addon').trim().split('\n');
@@ -753,6 +767,10 @@ for (const feature of ['', 'bypass-csp', 'device-emulation', 'touchscreen-input'
     'Node Touchscreen input requires explicit touchscreen-input selection');
   assert.equal(host.split(' features:')[1].split(' ')[0].split(',').includes('selector-registration'), selected.includes('selector-registration'),
     'Node selector registry requires explicit selector-registration selection');
+  assert.equal(host.split(' features:')[1].split(' ')[0].split(',').includes('page-bindings'), selected.includes('page-bindings'),
+    'Node Page binding transport requires explicit Page or Context binding selection');
+  assert.equal(host.split(' features:')[1].split(' ')[0].split(',').includes('context-bindings'), selected.includes('context-bindings'),
+    'Node Context binding ownership requires explicit context-bindings selection');
   checkCloseCoordinator(lines, selected);
   checkNativeHandleRelease(lines, selected);
   checkRetainedReference(lines, selected.includes('retained-file-input'),

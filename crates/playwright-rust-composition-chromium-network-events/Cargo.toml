@@ -9,6 +9,7 @@ homepage.workspace = true
 
 [features]
 default = []
+response-connection-details = ["playwright-rust-backend-cdp-network-events/response-connection-details"]
 response-security-details = ["playwright-rust-backend-cdp-network-events/response-security-details"]
 request-timing = [
     "playwright-rust-backend-cdp-network-events/request-timing",

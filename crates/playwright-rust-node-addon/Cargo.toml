@@ -27,7 +27,24 @@ playwright-server-connect-session = ["dep:playwright-rust-playwright-server-conn
 playwright-server-connect-page-events = ["playwright-server-connect-session", "playwright-rust-playwright-server-browser-ops/page-events", "dep:playwright-rust-playwright-server-page-events", "playwright-rust-node-host/url-glob", "dep:url"]
 persistent-context-preflight = ["dep:playwright-rust-persistent-context-preflight"]
 owned-launch = ["playwright-rust-node-host/owned-launch", "dep:tempfile"]
+persistent-context-ignore-https-errors = ["owned-launch", "playwright-rust-node-host/persistent-context-ignore-https-errors"]
+persistent-context-locale = ["owned-launch", "playwright-rust-node-host/persistent-context-locale"]
+persistent-context-timezone = ["owned-launch", "playwright-rust-node-host/persistent-context-timezone"]
+persistent-context-geolocation = ["owned-launch", "context-geolocation", "playwright-rust-node-host/persistent-context-geolocation"]
+persistent-context-geolocation-permission = ["owned-launch", "context-geolocation-permission", "playwright-rust-node-host/persistent-context-geolocation-permission"]
+persistent-context-http-credentials = ["owned-launch", "context-http-credentials", "playwright-rust-node-host/persistent-context-http-credentials"]
+persistent-context-offline = ["owned-launch", "playwright-rust-node-host/persistent-context-offline"]
+persistent-context-bypass-csp = ["owned-launch", "playwright-rust-node-host/persistent-context-bypass-csp"]
+persistent-context-javascript-disabled = ["owned-launch", "playwright-rust-node-host/persistent-context-javascript-disabled"]
+official-test-browser-kill = ["owned-launch", "playwright-rust-node-host/official-test-browser-kill"]
 playwright-trace = ["owned-launch", "playwright-rust-node-host/playwright-trace", "dep:playwright-rust-trace-playwright-v8"]
+context-tracing-screenshots = ["playwright-trace", "playwright-rust-node-host/context-tracing-screenshots"]
+context-tracing-chunks = ["context-tracing-screenshots", "playwright-rust-node-host/context-tracing-chunks"]
+context-tracing-actions = ["context-tracing-chunks", "playwright-rust-node-host/context-tracing-actions"]
+context-tracing-snapshots = ["context-tracing-actions", "playwright-rust-node-host/context-tracing-snapshots"]
+context-tracing-console = ["context-tracing-screenshots", "console-events", "playwright-rust-node-host/context-tracing-console"]
+context-tracing-network = ["context-tracing-screenshots", "playwright-rust-node-host/context-tracing-network"]
+context-storage-state = ["context-cookies", "playwright-rust-node-host/context-storage-state", "dep:serde", "dep:serde_json"]
 bidi-startup-failure = ["playwright-trace", "dep:playwright-rust-owned-process-startup"]
 retained-file-input = ["handles", "file-input", "playwright-rust-node-host/retained-file-input"]
 retained-target-marking = ["retained-file-input", "playwright-rust-node-host/retained-target-marking"]
@@ -54,10 +71,18 @@ frame-navigation = ["playwright-rust-node-host/frame-navigation", "dep:playwrigh
 frame-navigation-burst-20 = ["frame-navigation", "playwright-rust-node-host/frame-navigation-burst-20"]
 history-navigation = ["playwright-rust-node-host/history-navigation"]
 page-events = ["playwright-rust-node-host/page-events"]
+worker-events = ["page-events", "playwright-rust-node-host/worker-events"]
+service-worker-events = ["worker-events", "playwright-rust-node-host/service-worker-events"]
+context-network-events = ["playwright-rust-node-host/context-network-events"]
+worker-network-events = ["service-worker-events", "context-network-events", "request-history", "request-events", "response-events", "playwright-rust-node-host/worker-network-events"]
 frame-events = ["page-events", "playwright-rust-node-host/frame-events"]
 frame-detach-events = ["page-events", "playwright-rust-node-host/frame-detach-events"]
 page-dialogs = ["page-events", "playwright-rust-node-host/page-dialogs"]
 page-routes = ["playwright-rust-node-host/page-routes"]
+har-replay = ["page-routes", "playwright-rust-node-host/har-replay"]
+har-recording = ["har-replay", "playwright-rust-node-host/har-recording"]
+har-recording-regexp = ["har-recording", "playwright-rust-node-host/har-recording-regexp"]
+video-recording = ["browser-registry", "playwright-rust-node-host/video-recording"]
 route-request-history = ["page-routes", "request-history", "playwright-rust-node-host/route-request-history"]
 route-regexp = ["page-routes", "playwright-rust-node-host/route-regexp"]
 page-unroute = ["page-routes"]
@@ -65,14 +90,17 @@ route-header-url-overrides = ["page-routes", "playwright-rust-node-host/route-re
 route-fulfill-cors = ["page-routes", "playwright-rust-node-host/route-fulfill-cors"]
 console-events = ["playwright-rust-node-host/console-events"]
 page-bindings = ["handles", "playwright-rust-node-host/page-bindings", "dep:serde_json"]
+context-bindings = ["page-bindings", "playwright-rust-node-host/context-bindings"]
 init-scripts = ["playwright-rust-node-host/init-scripts"]
 wait-for-function = ["handles", "timeout-settings", "playwright-rust-node-host/wait-for-function"]
 url-glob = ["playwright-rust-node-host/url-glob"]
 wait-for-url = ["url-glob", "playwright-rust-node-host/url-wait"]
+frame-expect-title = ["wait-for-url", "playwright-rust-node-host/frame-expect-title"]
 wait-for-timeout = ["playwright-rust-node-host/wait-for-timeout"]
 timeout-settings = ["playwright-rust-node-host/timeout-settings"]
 emulate-media = ["playwright-rust-node-host/emulate-media"]
 request-gc = ["playwright-rust-node-host/request-gc"]
+page-pdf = ["playwright-rust-node-host/page-pdf"]
 response-body = ["frame-navigation", "playwright-rust-node-host/response-body"]
 request-history = ["playwright-rust-node-host/request-history"]
 response-request = ["frame-navigation", "request-history", "playwright-rust-node-host/response-request"]
@@ -93,6 +121,10 @@ api-request = [
     "dep:playwright-rust-api-request-cookie",
     "dep:playwright-rust-api-request-decompress",
     "dep:playwright-rust-api-request-transport",
+]
+api-request-tracing = [
+    "api-request",
+    "dep:playwright-rust-api-request-tracing",
 ]
 api-request-client-certificates = [
     "api-request",
@@ -122,6 +154,12 @@ device-emulation = ["playwright-rust-node-host/device-emulation"]
 touchscreen-input = ["device-emulation", "playwright-rust-node-host/touchscreen-input"]
 context-proxy = ["playwright-rust-node-host/context-proxy"]
 context-offline = ["playwright-rust-node-host/context-offline"]
+context-locale = ["playwright-rust-node-host/context-locale"]
+context-timezone = ["playwright-rust-node-host/context-timezone"]
+context-geolocation = ["playwright-rust-node-host/context-geolocation"]
+context-geolocation-permission = ["playwright-rust-node-host/context-geolocation-permission"]
+context-http-credentials = ["playwright-rust-node-host/context-http-credentials"]
+ignore-https-errors = ["playwright-rust-node-host/ignore-https-errors"]
 bypass-csp = ["playwright-rust-node-host/bypass-csp"]
 locator-bounding-box = ["playwright-rust-node-host/locator-bounding-box"]
 locator-highlight = ["locator-bounding-box", "playwright-rust-node-host/locator-highlight"]
@@ -155,9 +193,11 @@ playwright-rust-cap-navigation = { workspace = true, optional = true, features =
 tokio-util = { workspace = true }
 tokio = { workspace = true }
 serde_json = { workspace = true, optional = true }
+serde = { workspace = true, optional = true }
 tracing = { workspace = true, optional = true }
 playwright-rust-api-request = { workspace = true, optional = true }
 playwright-rust-api-request-auth-basic = { workspace = true, optional = true }
+playwright-rust-api-request-tracing = { workspace = true, optional = true }
 playwright-rust-api-request-client-certificates = { workspace = true, optional = true }
 playwright-rust-api-request-connector-rustls = { workspace = true, optional = true }
 playwright-rust-api-request-connector-http-proxy = { workspace = true, optional = true }

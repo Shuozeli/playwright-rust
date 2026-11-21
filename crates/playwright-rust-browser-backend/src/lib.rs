@@ -77,8 +77,6 @@ impl Display for BackendFeatureId {
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum BrowserEngine {
     Chromium,
-    Firefox,
-    WebKit,
 }
 
 /// Whether an adapter maps a command directly or implements it by composition.
@@ -875,14 +873,14 @@ mod tests {
         let duplicate = BackendDescriptor::new(
             BackendId::new("test.duplicate"),
             "Duplicate",
-            BrowserEngine::Firefox,
+            BrowserEngine::Chromium,
             BackendProtocolId::new("test.protocol"),
             DUPLICATES,
         );
         let mismatch = BackendDescriptor::new(
             BackendId::new("test.mismatch"),
             "Mismatch",
-            BrowserEngine::WebKit,
+            BrowserEngine::Chromium,
             BackendProtocolId::new("test.protocol"),
             MISMATCH,
         );

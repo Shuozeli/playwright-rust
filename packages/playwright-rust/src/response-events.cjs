@@ -5,6 +5,7 @@
 // JavaScript matchers on the Page EventEmitter.
 module.exports = function responseEvents({
   createResponse,
+  canonicalizeRequest,
   mapError,
   validateOptions,
   UnsupportedOperationError,
@@ -69,8 +70,10 @@ module.exports = function responseEvents({
     }
   }
 
-  function fromNotice(page, notice, request) {
-    return createResponse(page, {
+  function fromNotice(owner, notice, request) {
+    if (request == null && notice.response.request != null && typeof canonicalizeRequest === 'function')
+      request = canonicalizeRequest(owner, notice.response.request, notice.historyOwner);
+    return createResponse(owner, {
       ...notice.response,
       nativeRequestId: notice.nativeRequestId,
       finishedOwner: notice.finishedOwner,
@@ -79,13 +82,16 @@ module.exports = function responseEvents({
   }
 
   function dispatch(browser, notice) {
-    const page = [...browser._contexts.values()]
-      .map(context => context._pages.get(notice.pageId))
-      .find(Boolean);
-    if (!page) return;
-    const response = fromNotice(page, notice);
-    page._context.emit('response', response);
-    page.emit('response', response);
+    const serviceWorkerId = notice.serviceWorkerId ?? notice.response.serviceWorkerId;
+    const contextId = notice.contextId ?? notice.response.contextId;
+    const page = serviceWorkerId == null ? [...browser._contexts.values()]
+      .map(candidate => candidate._pages.get(notice.pageId))
+      .find(Boolean) : null;
+    const context = page?._context ?? browser._contexts.get(contextId);
+    if (!context) return;
+    const response = fromNotice(page ?? context, notice);
+    context.emit('response', response);
+    page?.emit('response', response);
   }
 
   function watch(session, browserRef) {

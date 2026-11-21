@@ -168,22 +168,27 @@ impl RuntimeLimits {
     /// Declares the maximum count and metadata capacity this runtime profile
     /// needs from a production resource plan.
     pub fn resource_requirements(self) -> ResourceRequirements {
-        let live_objects = u64::try_from(self.live_objects).unwrap_or(u64::MAX);
-        let pending_calls = u64::try_from(self.pending_calls).unwrap_or(u64::MAX);
-        let active_commands =
-            u64::try_from(self.active_commands.min(self.pending_calls)).unwrap_or(u64::MAX);
+        let finite = |value: usize| {
+            if value != usize::MAX { value } else { 0 }
+        };
+        let live_object_count = finite(self.live_objects);
+        let pending_call_count = finite(self.pending_calls);
+        let active_command_count = finite(self.active_commands.min(self.pending_calls));
+        let live_objects = u64::try_from(live_object_count).unwrap_or(u64::MAX);
+        let pending_calls = u64::try_from(pending_call_count).unwrap_or(u64::MAX);
+        let active_commands = u64::try_from(active_command_count).unwrap_or(u64::MAX);
         let control_messages = self.control_messages.unwrap_or(0);
         let control_units = u64::try_from(control_messages).unwrap_or(u64::MAX);
         let requirements = ResourceRequirements::none()
             .with_class(
                 ResourceClass::LiveObject,
                 live_objects,
-                u64::from(self.live_objects != 0),
+                u64::from(live_object_count != 0),
             )
             .with_class(
                 ResourceClass::PendingCall,
                 pending_calls,
-                u64::from(self.pending_calls != 0),
+                u64::from(pending_call_count != 0),
             )
             .with_class(
                 ResourceClass::ActiveCommand,
@@ -192,15 +197,15 @@ impl RuntimeLimits {
             )
             .with_class(ResourceClass::EventItem, control_units, control_units)
             .with_metadata(
-                self.live_objects
-                    .saturating_add(self.pending_calls)
+                live_object_count
+                    .saturating_add(pending_call_count.max(active_command_count))
                     .saturating_add(control_messages),
-                self.live_objects
-                    .saturating_add(self.pending_calls)
-                    .saturating_add(usize::try_from(active_commands).unwrap_or(usize::MAX))
+                live_object_count
+                    .saturating_add(pending_call_count)
+                    .saturating_add(active_command_count)
                     .saturating_add(control_messages)
                     .saturating_add(if cfg!(feature = "lifetime-handoff") {
-                        self.pending_calls
+                        pending_call_count
                     } else {
                         0
                     }),
@@ -209,7 +214,7 @@ impl RuntimeLimits {
         let requirements = requirements.with_class(
             ResourceClass::BackendStateBytes,
             pending_calls.saturating_mul(lifetime_handoff::SIGNAL_BYTES),
-            if self.pending_calls == 0 {
+            if pending_call_count == 0 {
                 0
             } else {
                 lifetime_handoff::SIGNAL_BYTES
@@ -1005,6 +1010,8 @@ struct RuntimeState {
     call_resources: BTreeMap<CallId, ResourceLease>,
     control_resources: VecDeque<ResourceLease>,
     resource_ledger: Option<ResourceLedger>,
+    budget_live_objects: bool,
+    budget_pending_calls: bool,
     control_messages: Option<BoundedQueue<ControlMessage>>,
     control_message_claimed: bool,
     #[cfg(feature = "disposal-reservations")]
@@ -1022,6 +1029,22 @@ struct RuntimeState {
 }
 
 impl RuntimeState {
+    fn live_object_ledger(&self) -> Option<&ResourceLedger> {
+        if self.budget_live_objects {
+            self.resource_ledger.as_ref()
+        } else {
+            None
+        }
+    }
+
+    fn pending_call_ledger(&self) -> Option<&ResourceLedger> {
+        if self.budget_pending_calls {
+            self.resource_ledger.as_ref()
+        } else {
+            None
+        }
+    }
+
     fn call_lifecycle_owner(&self, call: &playwright_rust_core::PendingCall) -> ObjectId {
         #[cfg(feature = "lifetime-handoff")]
         if let Some(owner) = self
@@ -1041,6 +1064,8 @@ impl RuntimeState {
             call_resources: BTreeMap::new(),
             control_resources: VecDeque::new(),
             resource_ledger: None,
+            budget_live_objects: limits.live_objects != usize::MAX,
+            budget_pending_calls: limits.pending_calls != usize::MAX,
             control_messages: limits
                 .control_messages
                 .map(|capacity| BoundedQueue::new(capacity, OverflowPolicy::RejectNewest)),
@@ -1148,7 +1173,7 @@ impl RuntimeState {
     }
 
     fn release_object_resources(&mut self, removed: &[ObjectRecord<ObjectKindTag>]) {
-        if self.resource_ledger.is_none() {
+        if self.resource_ledger.is_none() || !self.budget_live_objects {
             debug_assert!(self.object_resources.is_empty());
             return;
         }
@@ -1162,7 +1187,7 @@ impl RuntimeState {
     }
 
     fn release_call_resource(&mut self, call_id: CallId) {
-        if self.resource_ledger.is_some() {
+        if self.resource_ledger.is_some() && self.budget_pending_calls {
             let resource = self
                 .call_resources
                 .remove(&call_id)
@@ -1228,8 +1253,7 @@ impl RuntimeStore {
         state.ensure_control_capacity(1)?;
         state.objects.validate_insert(object_id, parent)?;
         let object_resource = state
-            .resource_ledger
-            .as_ref()
+            .live_object_ledger()
             .map(|ledger| {
                 ledger.reserve(
                     ResourceScope::Object(object_id),
@@ -1281,8 +1305,7 @@ impl RuntimeStore {
         state.objects.validate_insert(object_id, parent)?;
         state.ensure_control_capacity(1)?;
         let object_resource = state
-            .resource_ledger
-            .as_ref()
+            .live_object_ledger()
             .map(|ledger| {
                 ledger.reserve(
                     ResourceScope::Object(object_id),
@@ -1356,7 +1379,7 @@ impl RuntimeStore {
         state.ensure_control_capacity(objects.len())?;
 
         let mut object_resources = Vec::with_capacity(objects.len());
-        if let Some(ledger) = state.resource_ledger.as_ref() {
+        if let Some(ledger) = state.live_object_ledger() {
             for object in objects {
                 object_resources.push(ledger.reserve(
                     ResourceScope::Object(object.object_id),
@@ -1483,7 +1506,7 @@ impl RuntimeStore {
             };
 
         let mut created_resources = BTreeMap::new();
-        if let Some(ledger) = &state.resource_ledger {
+        if let Some(ledger) = state.live_object_ledger() {
             for object_id in &created_live {
                 created_resources.insert(
                     *object_id,
@@ -1498,7 +1521,7 @@ impl RuntimeStore {
         let mut control_resources = state.reserve_control_messages(&expanded)?;
 
         state.objects = next_objects;
-        if state.resource_ledger.is_some() {
+        if state.live_object_ledger().is_some() {
             for object_id in removed_existing {
                 let resource = state
                     .object_resources
@@ -1984,8 +2007,7 @@ impl RuntimeStore {
             .validate_insert(call_id)
             .map_err(map_pending_call_error)?;
         let resource = state
-            .resource_ledger
-            .as_ref()
+            .pending_call_ledger()
             .map(|ledger| {
                 ledger.reserve(ResourceScope::Call(call_id), ResourceClass::PendingCall, 1)
             })
@@ -1993,8 +2015,7 @@ impl RuntimeStore {
             .map_err(map_resource_error)?;
         #[cfg(feature = "lifetime-handoff")]
         let lifetime_storage = state
-            .resource_ledger
-            .as_ref()
+            .pending_call_ledger()
             .map(|ledger| {
                 ledger.reserve(
                     ResourceScope::Call(call_id),
@@ -4798,6 +4819,38 @@ mod tests {
         assert_eq!(after_call.class(ResourceClass::ActiveCommand).current, 0);
         assert_eq!(released.class(ResourceClass::EventItem).current, 0);
         assert_eq!(released.class(ResourceClass::LiveObject).current, 1);
+    }
+
+    #[test]
+    fn allocator_backed_runtime_tracks_only_finite_active_commands() {
+        // Arrange
+        let runtime_limits = RuntimeLimits::new(usize::MAX, usize::MAX).with_active_commands(1);
+        let requirements = runtime_limits.resource_requirements();
+        let production =
+            ProductionResourceLedger::new(limits_for_requirements(requirements), requirements)
+                .expect("allocator-backed counts must not become maximum byte reservations");
+        let dispatcher = DirectDispatcher::new(PendingService, runtime_limits)
+            .with_production_resources(&production)
+            .expect("allocator-backed runtime should compose with production resources");
+        dispatcher
+            .register_object(ObjectId::new(2), None, ObjectKindTag::new(3))
+            .expect("allocator-backed object ownership should accept the Page");
+
+        // Act
+        let mut call = Box::pin(dispatcher.call(command(5, 2, 41, CallMetadata::default())));
+        assert!(poll_once(call.as_mut()).is_pending());
+        let active = production.metrics().expect("resource metrics should load");
+
+        // Assert
+        assert_eq!(requirements.class(ResourceClass::LiveObject).global, 0);
+        assert_eq!(requirements.class(ResourceClass::PendingCall).global, 0);
+        assert_eq!(
+            requirements.class(ResourceClass::BackendStateBytes).global,
+            0
+        );
+        assert_eq!(active.class(ResourceClass::LiveObject).current, 0);
+        assert_eq!(active.class(ResourceClass::PendingCall).current, 0);
+        assert_eq!(active.class(ResourceClass::ActiveCommand).current, 1);
     }
 
     #[test]

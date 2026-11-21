@@ -6,7 +6,7 @@ use napi::JsString;
 use napi_derive::napi;
 use playwright_rust_browser_registry::{
     BrowserEngine, RegistryDirectoryInputs, ShortPlatform, executable_path_v1_58_0,
-    registry_directory,
+    ffmpeg_executable_path_v1_58_0, registry_directory,
 };
 use playwright_rust_node_host::HostError;
 
@@ -33,8 +33,6 @@ pub fn browser_executable_path_snapshot(
     let engine = boundary::bounded_string(engine, 16, "browser engine")?;
     let engine = match engine.as_str() {
         "chromium" => BrowserEngine::Chromium,
-        "firefox" => BrowserEngine::Firefox,
-        "webkit" => BrowserEngine::WebKit,
         _ => {
             return Err(binding_error(HostError::InvalidArgument(
                 "unknown browser engine".into(),
@@ -71,6 +69,42 @@ pub fn browser_executable_path_snapshot(
         .map_err(|_| {
             binding_error(HostError::InvalidArgument(
                 "browser executable path is not UTF-8".into(),
+            ))
+        })
+}
+
+/// Return official v1.58.0 FFmpeg metadata, not proof that it is installed.
+#[napi]
+pub fn ffmpeg_executable_path_snapshot(
+    package_root: JsString<'_>,
+    snapshot: BrowserRegistrySnapshot,
+) -> napi::Result<String> {
+    let package_root = PathBuf::from(boundary::bounded_string(
+        package_root,
+        8192,
+        "package root",
+    )?);
+    validate_snapshot(&snapshot)?;
+    let platform = current_platform()?;
+    let inputs = RegistryDirectoryInputs {
+        platform,
+        browsers_path: snapshot.browsers_path.as_deref().map(Path::new),
+        package_root: package_root.as_path(),
+        home: Some(Path::new(&snapshot.home)),
+        xdg_cache_home: snapshot.xdg_cache_home.as_deref().map(Path::new),
+        local_app_data: snapshot.local_app_data.as_deref().map(Path::new),
+        init_cwd: snapshot.init_cwd.as_deref().map(Path::new),
+        cwd: Path::new(&snapshot.cwd),
+    };
+    let directory = registry_directory(&inputs)
+        .map_err(|error| binding_error(HostError::InvalidArgument(error.to_string())))?;
+    ffmpeg_executable_path_v1_58_0(&directory, platform)
+        .map_err(|error| binding_error(HostError::InvalidArgument(error.to_string())))?
+        .into_os_string()
+        .into_string()
+        .map_err(|_| {
+            binding_error(HostError::InvalidArgument(
+                "FFmpeg executable path is not UTF-8".into(),
             ))
         })
 }

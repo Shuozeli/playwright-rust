@@ -516,6 +516,82 @@ impl CdpSession {
             .await?;
         Ok(())
     }
+
+    /// Queue every paused service-worker initialization command before
+    /// returning to the topology loop. Chromium may not acknowledge
+    /// `Runtime.enable` until after the target resumes, so the response owners
+    /// must settle outside the attach-event critical path.
+    pub async fn service_worker_initialize(&self, enable_network: bool) -> Result<()> {
+        self.service_worker_initialize_with_commands(enable_network, &[])
+            .await
+    }
+
+    /// Queue Runtime, optional Network, every composed Context policy, and the
+    /// resume command in that exact order before releasing response ownership
+    /// back to the connection.
+    pub async fn service_worker_initialize_with_commands(
+        &self,
+        enable_network: bool,
+        commands: &[crate::ServiceWorkerInitializationCommand],
+    ) -> Result<()> {
+        let runtime = self
+            .connection()
+            .enqueue_command_with_session(
+                "Runtime.enable",
+                serde_json::json!({}),
+                self.session_id(),
+            )
+            .await?;
+        let network = if enable_network {
+            Some(
+                self.connection()
+                    .enqueue_command_with_session(
+                        "Network.enable",
+                        serde_json::json!({}),
+                        self.session_id(),
+                    )
+                    .await?,
+            )
+        } else {
+            None
+        };
+        let mut policies = Vec::new();
+        policies
+            .try_reserve_exact(commands.len())
+            .map_err(|error| {
+                crate::connection::CdpError::Other(format!(
+                    "Service Worker initialization command allocation failed: {error}"
+                ))
+            })?;
+        for command in commands {
+            policies.push(
+                self.connection()
+                    .enqueue_command_with_session(
+                        command.method(),
+                        command.params().clone(),
+                        self.session_id(),
+                    )
+                    .await?,
+            );
+        }
+        let resume = self
+            .connection()
+            .enqueue_command_with_session(
+                "Runtime.runIfWaitingForDebugger",
+                serde_json::json!({}),
+                self.session_id(),
+            )
+            .await?;
+        runtime.leave_response_pending();
+        if let Some(network) = network {
+            network.leave_response_pending();
+        }
+        for policy in policies {
+            policy.leave_response_pending();
+        }
+        resume.leave_response_pending();
+        Ok(())
+    }
 }
 
 fn evaluate_params(expression: &str, unique_context_id: Option<&str>) -> cdp_gen::EvaluateParams {

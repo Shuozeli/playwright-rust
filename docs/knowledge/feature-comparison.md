@@ -1,6 +1,140 @@
-<!-- agent-updated: 2026-11-14T05:28:56Z -->
+<!-- agent-updated: 2026-11-21T03:41:33Z -->
 
 # Feature Comparison: Playwright vs PinchTab vs playwright-rust
+
+> Current scope correction (2026-11-15): Playwright Rust targets Chromium over
+> CDP only. Firefox and WebKit are intentional non-goals. This document contains
+> an older coarse comparison below; its checkmarks, binary-size claims, CLI/gRPC
+> descriptions, and “all gaps complete” language are not current conformance
+> evidence. The authoritative ordered gap list is
+> [`../tasks.md`](../tasks.md), and no full Playwright parity is claimed.
+
+> Public package boundary: the Node CJS, ESM, and TypeScript surfaces export
+> only `chromium`. Firefox/WebKit names in historical receipts or device
+> metadata are not executable providers and are excluded from the denominator.
+> Python exposes the same single provider. Shared registry/install/backend,
+> startup, preflight, and connect-admission code is also Chromium-only; the
+> official Server initializer's three-engine object graph remains wire data.
+
+## Measured Chromium-only v1.58.0 baseline
+
+The repository now has a reproducible static comparison:
+
+```bash
+uv run --no-project python scripts/compare_playwright_public_api.py \
+  /Users/cyuan/projects/thirdparty/playwright-v1.58.0 \
+  /Users/cyuan/projects/thirdparty/playwright-python \
+  --output .work/official-conformance/playwright-public-api-comparison-v1.58.0.json
+```
+
+Both upstream checkouts must be clean and at the exact pinned commits. The
+comparison counts unique public member names per object; overloads do not add
+credit. Generic Node `EventEmitter` methods are removed from the method count,
+and declared event names are measured separately. Firefox and WebKit provider
+properties are removed from the Python denominator.
+
+| Surface | Upstream names | Local overlap | Static overlap |
+| --- | ---: | ---: | ---: |
+| Node object members | 479 | 382 | 79.7% |
+| Node declared event names | 37 | 12 | 32.4% |
+| Node sampled option fields | 62 | 32 | 51.6% |
+| Python async object members | 493 | 399 | 80.9% |
+| Python sync object members | 493 | 399 | 80.9% |
+
+The sampled Node option denominator covers `BrowserContextOptions`,
+`ConnectOverCDPOptions`, `PageScreenshotOptions`, and
+`LocatorScreenshotOptions`. It is deliberately reported separately because a
+method-name match can conceal an incompatible or incomplete option surface.
+
+The pinned Core inventory was also regenerated from source. It contains 558
+tracked specs and 48,477 expanded invocations, with SHA-256
+`2f7fe371e87267225d195ce537db18621728902ebb5e343ab98c2bc8144b8c30`. The
+in-scope `library` Chromium public-API slice is 3,199 expanded invocations from
+225 source files: 1,209 `chromium-library` and 1,990 `chromium-page` rows.
+There is no fresh complete candidate execution for those 3,199 rows, so this
+snapshot does **not** report a behavioral compatibility percentage.
+
+The latest focused closures expose Node
+`BrowserContext.setHTTPCredentials()`, `exposeBinding()`, and
+`exposeFunction()` through existing Rust owners. Credential update and clear
+mutate retained Context state before refreshing current Page/OOPIF and Service
+Worker Fetch sessions. Context bindings compose the Page binding transport,
+install in current and future Page/OOPIF sessions, and keep duplicate/conflict
+rules in Rust; Node retains only the user callback. The two binding methods
+raise BrowserContext overlap to 27/31 and total Node overlap to 382/479. A real
+Chrome 157 run covers existing/future Pages, source identity, and both
+Context/Page conflict directions. Static overlap is not behavioral
+conformance. Separately, the unchanged pinned Playwright 1.58.0
+`browsercontext-expose-function.spec.ts` now passes all 6/6 cases through the
+rebuilt full official candidate profile. No new live-Chromium Node
+authentication run was performed for the credential setter.
+
+The largest current static gaps are:
+
+1. Remaining Node event declarations and event-producing facades, especially
+   Page lifecycle, Worker console, Download, FileChooser, and WebSocket ownership.
+2. Node `BrowserContext` methods and options: WebSocket/HAR routing,
+   background pages, Clock, and the remaining option edges. Separately
+   selectable tracing
+   leaves now write one real screenshot resource, implement Rust-owned chunks
+   plus nested `group`/`groupEnd` events, and bracket Page route/navigation/
+   set-content/click/double-click/evaluation/reload/close, Route continue,
+   Dialog accept, and BrowserContext
+   storage-state calls with Rust-owned action IDs/titles. The storage-state
+   leaf supports `indexedDB` but not path persistence. A separate Rust console
+   leaf writes Page console events into the exported trace at stop. The
+   separate global-request leaf spools Playwright `trace.network` events and
+   resources per request context in Rust. A separate BrowserContext network
+   composition now records failures and resources, while named live trace files
+   honor launch `tracesDir`, overwrite, console flush ordering, pending actions,
+   and concurrent export. External callsites cross the Node boundary only when
+   requested; Rust owns per-chunk source deduplication, reads, hashes and ZIP
+   resources. Mouse, keyboard, file-input, timeout, and hover actions are now
+   bracketed; Context-owned API requests reuse the active Rust trace HAR
+   recorder; and `trace.stacks` maps ordinary action IDs to the first external
+   callsite. DOM/action frame snapshots, Page screenshot result tracing, and
+   expect-title execution/tracing are now implemented as composable leaves.
+   The complete pinned Core tracing file is 32 passed / three upstream fixmes
+   skipped / zero failed in two consecutive runs. This is a green source-bound
+   Chromium slice, not full-corpus parity. Creation-time `recordHar` now supports a separately
+   selectable Rust RegExp matcher and passes the fixed 19-case upstream Python
+   HAR manifest in both candidate and Oracle. HAR, route, and cookie filters
+   now share an optional Rust-native ECMAScript matcher with lookaround,
+   backreferences, UTF-16 indexing, Unicode sets, and all current flags;
+   route matching keeps the upstream server/client state split. A source-pinned
+   Test262/Node 24.12 corpus passes 5,135 static patterns and 97,198
+   `test()`/`lastIndex` steps with Unicode 16.0 data. Dynamically constructed
+   Test262 programs and a live upstream route oracle remain open.
+3. Missing auxiliary objects in Node: Download, FileChooser,
+   WebSocket/WebSocketRoute, Clock, Coverage, WebError, and BrowserServer;
+   dedicated-Worker publication and Worker console remain open. Local Video
+   artifacts are implemented for ordinary owned Contexts and the complete
+   pinned Core video file is 24 passed / five upstream-declared fixmes skipped /
+   zero failed, while remote Video transfer and Node persistent-context recording
+   remain open.
+4. Frame and ElementHandle parity. Node statically overlaps 51/60 Frame and
+   25/44 ElementHandle members; Python overlaps 27/60 and 31/44.
+5. Request/Response API and lifecycle fidelity. Full HAR recording now consumes
+   raw extra-info headers, timing/sizes, protocol, server address, TLS details,
+   Page lifecycle metadata, and Context-owned Service Worker bodies. Remaining
+   Python and Node creation-time HAR now use the official option defaults;
+   the unchanged 10 async plus 9 sync Python HAR cases pass 19/19 on the
+   installed ABI140 candidate and 19/19 on the Oracle. Remaining gaps include
+   exposing all metadata consistently through public Request/Response methods,
+   top-level Service Worker script/import capture, the remaining dynamic/live
+   ECMAScript RegExp proof, and broad upstream HAR/network execution beyond this
+   fixed slice.
+
+These are scheduling signals, not proof that every overlapping name behaves
+like Playwright. Behavioral closure still requires the Rust owner, binding
+profile, focused regression, and unchanged source-bound upstream test.
+
+The fixed BrowserContext cookie slice supplies that narrower behavioral
+evidence. Four complete, unchanged Chromium library files pinned to Playwright
+v1.58.0 contain 56 tests: 55 pass in the Rust candidate, one is skipped by
+upstream, and none is unexpected. The slice includes a real Rust-owned
+persistent Chromium profile and third-party cookie cases. It does not convert
+the static overlap table into a whole-library pass rate.
 
 > playwright-rust is a **Playwright-compatible** Rust CDP bridge. It covers the core browser control surface and exposes it as both a Rust library (with a Playwright-style Page/Locator API), a gRPC service, and a CLI. PinchTab is a full browser control plane with orchestration, profiles, security, and a dashboard. Playwright is the original, full-featured Microsoft framework handling everything from browser installation to high-level test assertions.
 
@@ -66,7 +200,7 @@
 | Accessibility snapshot | ✅ | ✅ | ✅ | |
 | Screenshot (PNG/JPEG) | ✅ | ✅ | ✅ | `page.screenshot()` |
 | Full-page screenshot | ✅ | ✅ | ✅ | |
-| PDF export | ✅ | ✅ | ✅ | `page.pdf()` |
+| PDF export | ✅ | ✅ | ✅ | Chromium `page.pdf()` options match pinned 1.58.0; source-bound CDP E2E covers save and outline |
 | Text extraction | ✅ | ✅ | ✅ | `page.body_text()` |
 | Page title | ✅ | ❌ | ✅ | `page.title()` |
 | Page content (HTML) | ✅ | ❌ | ✅ | `page.content()` |
@@ -209,7 +343,9 @@
 
 ## Playwright Parity Gaps
 
-All previously identified parity gaps have been **implemented and verified**:
+The following narrow historical list was implemented at the time, but it was
+never a complete Playwright Chromium gap inventory and must not be read as a
+current parity claim:
 
 | # | Feature | Status | Golden Tests |
 |---|---------|:------:|:------------:|
@@ -225,6 +361,7 @@ All previously identified parity gaps have been **implemented and verified**:
 
 These are features from PinchTab or Playwright that playwright-rust will **not** implement, as they fall outside playwright-rust's role as a thin, embeddable browser bridge:
 
+- **Firefox and WebKit providers** — Chromium/CDP is the explicit product scope
 - **Human-like click/type** — PinchTab stealth concern (Bezier curves, variable delays)
 - **Tab locking / mutex** — orchestration-layer concern
 - **Tab screencast** — operational dashboard feature

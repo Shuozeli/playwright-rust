@@ -3,7 +3,10 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import unittest
+from pathlib import Path
 
 from inventory_playwright_python_official_tests import (
     CollectionProfile,
@@ -11,6 +14,9 @@ from inventory_playwright_python_official_tests import (
     _collection_node_ids,
     _verify_profile_runtime,
 )
+
+
+ROOT = Path(__file__).parents[1]
 
 
 class CollectionOutputTests(unittest.TestCase):
@@ -38,6 +44,23 @@ class CollectionOutputTests(unittest.TestCase):
 
 
 class RuntimeVerificationTests(unittest.TestCase):
+    def test_canonical_examples_dependency_lock_matches_manifest(self) -> None:
+        # Arrange
+        manifest_path = ROOT / "packages/playwright-rust-python/tests/official/manifest.json"
+        manifest = json.loads(manifest_path.read_text())
+        examples = next(
+            profile
+            for profile in manifest["corpus"]["collectionProfiles"]
+            if profile["name"] == "examples"
+        )
+        requirements = ROOT / examples["requirements"]
+
+        # Act
+        digest = hashlib.sha256(requirements.read_bytes()).hexdigest()
+
+        # Assert
+        self.assertEqual(digest, examples["requirementsSha256"])
+
     def test_examples_runtime_must_match_all_pins(self) -> None:
         # Arrange
         profile: CollectionProfile = {

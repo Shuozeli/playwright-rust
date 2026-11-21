@@ -1,0 +1,27 @@
+{
+  "schema": 1,
+  "repository": "https://github.com/microsoft/playwright.git",
+  "tag": "v1.58.0",
+  "commit": "961381ec73a9fa2661d92504eab1a6bd6eaffc75",
+  "suites": [
+    {
+      "id": "library-video-chromium-v1",
+      "role": "browser-backed-official-file",
+      "runner": "packages/playwright/cli.js",
+      "config": "tests/library/playwright.config.ts",
+      "args": [
+        "tests/library/video.spec.ts"
+      ],
+      "candidateAdapter": "test-mode-playwright-core",
+      "oracleAdapter": "test-mode-playwright-core-cdp",
+      "project": "chromium-library",
+      "channel": "chromium",
+      "requiresBrowser": true,
+      "crossOriginForward": true,
+      "expectedTestsPerProject": 29,
+      "expectedFiles": 1,
+      "upstreamTestSourceSha256": "49b54ed870daa4066972cbec9c61b0a715692f593fe43f0df7d620999506867c",
+      "expectedSpecIdsSha256": "da6b947bae93ed72aeff68f94e7599dde5e11a587940034472ecfc6ba21ec6d7"
+    }
+  ]
+}

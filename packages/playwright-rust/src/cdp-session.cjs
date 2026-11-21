@@ -5,12 +5,8 @@
 
 const { EventEmitter } = require('node:events');
 
-const MAX_SESSIONS = 8;
-const MAX_LISTENERS = 64;
-const MAX_PENDING_DELIVERIES = 32;
 const BATCH_SIZE = 64;
 const MAX_BATCHES_PER_FLUSH = 8;
-const MAX_PARAMS_BYTES = 1024 * 1024;
 const TARGET_CLOSED = 'Target page, context or browser has been closed';
 const CHILD_FRAME_MESSAGE = 'This frame does not have a separate CDP session, it is a part of the parent frame\'s session';
 
@@ -138,7 +134,6 @@ module.exports = ({ mapError, UnsupportedOperationError }) => {
     #pageId;
     #closed = false;
     #detaching = false;
-    #pending = 0;
     #tail = Promise.resolve();
 
     constructor(browser, sessions, pageId, token) {
@@ -148,7 +143,9 @@ module.exports = ({ mapError, UnsupportedOperationError }) => {
       this.#native = browser._session;
       this.#pageId = pageId;
       this.#token = token;
-      this.setMaxListeners(MAX_LISTENERS);
+      // Playwright never rejects a listener registration at a fabricated
+      // count. This owner retires its complete listener table with the session.
+      this.setMaxListeners(0);
     }
 
     get _pageId() { return this.#pageId; }
@@ -162,31 +159,10 @@ module.exports = ({ mapError, UnsupportedOperationError }) => {
       }
     }
 
-    #checkListenerCapacity() {
-      const count = this.eventNames().reduce((total, name) => total + this.listenerCount(name), 0);
-      if (count >= MAX_LISTENERS)
-        throw new Error(`CDPSession event handler limit exceeded (${MAX_LISTENERS})`);
-    }
-
-    on(event, listener) {
-      this.#checkListenerCapacity();
-      return super.on(event, listener);
-    }
-
-    addListener(event, listener) { return this.on(event, listener); }
-
-    prependListener(event, listener) {
-      this.#checkListenerCapacity();
-      return super.prependListener(event, listener);
-    }
-
     #serialize(operation) {
-      if (this.#pending >= MAX_PENDING_DELIVERIES)
-        throw new Error(`CDPSession pending delivery capacity exceeded (${MAX_PENDING_DELIVERIES})`);
-      this.#pending += 1;
       const result = this.#tail.then(operation);
       this.#tail = result.catch(() => {});
-      return result.finally(() => { this.#pending -= 1; });
+      return result;
     }
 
     async _flush() {
@@ -208,8 +184,7 @@ module.exports = ({ mapError, UnsupportedOperationError }) => {
               if (this.#closed) return;
               const event = batch.peek();
               if (event === null) break;
-              if (!Array.isArray(event) || event.length !== 2 || typeof event[0] !== 'string'
-                  || !event[1] || typeof event[1] !== 'object' || Array.isArray(event[1]))
+              if (!Array.isArray(event) || event.length !== 2 || typeof event[0] !== 'string')
                 throw new TypeError('CDPSession native event is invalid');
               const [method, params] = event;
               this.#emitListenerEvent(method, params);
@@ -225,19 +200,11 @@ module.exports = ({ mapError, UnsupportedOperationError }) => {
 
     async send(method, params = {}) {
       if (this.#closed || this.#detaching) throw new Error(TARGET_CLOSED);
-      if (typeof method !== 'string' || !method)
-        throw new TypeError('cdpSession.send: method must be a nonempty string');
-      if (!params || typeof params !== 'object' || Array.isArray(params))
-        throw new TypeError('cdpSession.send: params must be an object');
-      const paramsJson = JSON.stringify(params, (_key, value) => {
-        if (typeof value === 'number' && !Number.isFinite(value))
-          throw new TypeError('cdpSession.send: params must contain finite numbers');
-        return value;
-      });
+      if (typeof method !== 'string')
+        throw new TypeError('cdpSession.send: method must be a string');
+      const paramsJson = JSON.stringify(params);
       if (typeof paramsJson !== 'string')
         throw new TypeError('cdpSession.send: params must be JSON-serializable');
-      if (Buffer.byteLength(paramsJson, 'utf8') > MAX_PARAMS_BYTES)
-        throw new TypeError('cdpSession.send: params exceed 1 MiB');
       let result;
       try { result = await this.#native.cdpSessionSend(this.#token, method, paramsJson); }
       catch (error) { throw mapError(error, 'cdpSession.send'); }
@@ -293,8 +260,6 @@ module.exports = ({ mapError, UnsupportedOperationError }) => {
       .some(method => typeof native[method] !== 'function'))
       throw new UnsupportedOperationError('browserContext.newCDPSession (select cdp-session native profile)');
     const sessions = context._cdpSessions ??= new Map();
-    if (sessions.size >= MAX_SESSIONS)
-      throw new Error(`CDPSession capacity exceeded (${MAX_SESSIONS})`);
     let lease;
     try { lease = await native.cdpSessionCreate(context._id, page._id, frameId); }
     catch (error) { throw mapError(error, 'browserContext.newCDPSession'); }
@@ -342,8 +307,6 @@ module.exports = ({ mapError, UnsupportedOperationError }) => {
       .some(method => typeof native[method] !== 'function'))
       throw new UnsupportedOperationError(`${api} (select browser-cdp-session native profile)`);
     const sessions = browser._browserCdpSessions;
-    if (sessions.size >= MAX_SESSIONS)
-      throw new Error(`CDPSession capacity exceeded (${MAX_SESSIONS})`);
     let lease;
     try { lease = await native.cdpBrowserSessionCreate(); }
     catch (error) { throw mapError(error, api); }

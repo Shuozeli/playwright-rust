@@ -636,3 +636,46 @@ fn unrepresentable_route_capacity_rejects_before_allocation() {
         Err(ChromiumMouseInstallError::CapacityOverflow)
     ));
 }
+
+#[test]
+fn page_route_owns_an_independent_resource_ledger_from_backend_factory() {
+    // Arrange
+    let client = Arc::new(FakeCdpClient::from_html(""));
+    let input = CdpInputCoordinator::with_policy(CdpInputPolicy::Interleaved);
+    let operation_bytes =
+        CdpMouseServices::required_operation_bytes(client.clone(), &input).unwrap();
+    let backend = CdpMouseProductionProfile::new(
+        ResourceScope::extension(14, 44),
+        operation_bytes,
+        NonZeroUsize::new(1).unwrap(),
+    )
+    .unwrap();
+    let backend_resources = resources(backend.requirements());
+    let factory = CdpMouseServiceFactory::new_with_production_resources(
+        backend,
+        &backend_resources,
+        Arc::new(Delay),
+    )
+    .unwrap();
+    let route_requirements =
+        ChromiumMousePage::route_requirements(NonZeroUsize::new(1).unwrap()).unwrap();
+    let route_resources = resources(route_requirements);
+
+    // Act
+    let (page, driver) = ChromiumMousePage::bind(
+        ObjectId::new(7),
+        client,
+        input,
+        &factory,
+        NonZeroUsize::new(1).unwrap(),
+        &route_resources,
+    )
+    .unwrap();
+
+    // Assert
+    assert_eq!(backend_resources.metrics().unwrap().active_leases, 0);
+    assert_eq!(route_resources.metrics().unwrap().active_leases, 1);
+    drop(page);
+    drop(driver);
+    assert_eq!(route_resources.metrics().unwrap().active_leases, 0);
+}

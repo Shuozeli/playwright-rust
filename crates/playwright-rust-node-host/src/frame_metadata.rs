@@ -79,7 +79,7 @@ struct BudgetedUrl {
 struct FrameUrlState {
     url: Mutex<UrlViews>,
     names_enabled: bool,
-    _entry: ResourceLease,
+    _entry: Option<ResourceLease>,
 }
 
 struct UrlViews {
@@ -153,7 +153,7 @@ enum FrameChangeValue {
 struct FrameChange {
     sequence: u64,
     value: FrameChangeValue,
-    _event: ResourceLease,
+    _event: Option<ResourceLease>,
 }
 
 struct MetadataState {
@@ -236,6 +236,7 @@ pub(crate) struct FrameMetadata {
     state: Mutex<MetadataState>,
     resources: ResourceLedger,
     limits: FrameMetadataLimits,
+    allocator_backed: bool,
     names: Option<NameResources>,
     changed: Notify,
 }
@@ -253,7 +254,7 @@ pub struct FramePublicationFence {
 #[cfg(feature = "frame-detach-events")]
 pub(crate) struct TreeDetachReservation {
     book: std::sync::Weak<FrameMetadata>,
-    event: ResourceLease,
+    event: Option<ResourceLease>,
     revision: Storage,
 }
 
@@ -286,11 +287,7 @@ impl FramePublications {
                 "Frame detach requires a pre-admitted publication queue".into(),
             ));
         }
-        let event = self
-            .0
-            .resources
-            .reserve(SCOPE, ResourceClass::EventItem, 1)
-            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
+        let event = self.0.reserve_event()?;
         let revision = factory.reserve_detach_revision()?;
         Ok(TreeDetachReservation {
             book: Arc::downgrade(&self.0),
@@ -363,11 +360,7 @@ impl FramePublications {
             return Err(HostError::TargetClosed);
         }
         let sequence = state.next_sequence()?;
-        let event = self
-            .0
-            .resources
-            .reserve(SCOPE, ResourceClass::EventItem, 1)
-            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
+        let event = self.0.reserve_event()?;
         let publication = tree.stage(frames)?;
         state.pending.push_back(FrameChange {
             sequence,
@@ -491,13 +484,50 @@ impl FrameMetadata {
             }),
             resources,
             limits,
+            allocator_backed: false,
             names: None,
             changed: Notify::new(),
         })
     }
 
+    pub fn new_allocator_backed(url_bytes: usize) -> Result<Self, HostError> {
+        let mut metadata = Self::new(FrameMetadataLimits {
+            entries: 0,
+            url_bytes,
+            total_bytes: 0,
+            publications: 0,
+        })?;
+        let requirements = ResourceRequirements::none();
+        let resources = ProductionResourceLedger::new(ResourceLimits::deny_all(0, 0), requirements)
+            .and_then(|ledger| ledger.claim(requirements))
+            .map_err(HostError::backend)?;
+        metadata.resources = resources;
+        metadata.limits.entries = usize::MAX;
+        metadata.limits.publications = usize::MAX;
+        metadata.allocator_backed = true;
+        Ok(metadata)
+    }
+
+    fn reserve_count(&self, class: ResourceClass) -> Result<Option<ResourceLease>, HostError> {
+        if self.allocator_backed {
+            return Ok(None);
+        }
+        self.resources
+            .reserve(SCOPE, class, 1)
+            .map(Some)
+            .map_err(|error| HostError::ResourceExhausted(error.to_string()))
+    }
+
+    fn reserve_event(&self) -> Result<Option<ResourceLease>, HostError> {
+        self.reserve_count(ResourceClass::EventItem)
+    }
+
     pub fn with_names(mut self, limits: FrameNameLimits) -> Result<Self, HostError> {
-        self.names = Some(NameResources::new(self.limits, limits)?);
+        self.names = Some(if self.allocator_backed {
+            NameResources::new_allocator_backed(limits)?
+        } else {
+            NameResources::new(self.limits, limits)?
+        });
         Ok(self)
     }
 
@@ -565,10 +595,7 @@ impl FrameMetadata {
         fragment: Option<&str>,
         name: &str,
     ) -> Result<FrameUrlSnapshot, HostError> {
-        let entry = self
-            .resources
-            .reserve(SCOPE, ResourceClass::LiveObject, 1)
-            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
+        let entry = self.reserve_count(ResourceClass::LiveObject)?;
         let name = self
             .names
             .as_ref()
@@ -629,7 +656,7 @@ impl FrameMetadata {
             })?;
         // Reserve the new allocation before copying. The previous value stays
         // charged until replacement succeeds, including transient overlap.
-        let lease = if bytes == 0 {
+        let lease = if bytes == 0 || self.allocator_backed {
             None
         } else {
             Some(
@@ -689,10 +716,7 @@ impl FrameMetadata {
                 return Ok(());
             }
             let sequence = state.next_sequence()?;
-            let event = self
-                .resources
-                .reserve(SCOPE, ResourceClass::EventItem, 1)
-                .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
+            let event = self.reserve_event()?;
             let value = make_value()?;
             state.pending.push_back(FrameChange {
                 sequence,
@@ -762,6 +786,7 @@ mod name_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::frame_tree::FrameTreeFactory;
 
     fn publication_book(publications: usize, total_bytes: u64) -> Arc<FrameMetadata> {
         Arc::new(
@@ -936,6 +961,79 @@ mod tests {
             publications: 0,
         })
         .unwrap()
+    }
+
+    #[test]
+    fn allocator_backed_metadata_grows_past_legacy_entry_and_publication_counts() {
+        // Arrange
+        let factory = FrameTreeFactory::new_allocator_backed().unwrap();
+        let book = Arc::new(
+            FrameMetadata::new_allocator_backed(64)
+                .unwrap()
+                .with_names(FrameNameLimits {
+                    name_bytes: 64,
+                    total_bytes: 0,
+                })
+                .unwrap(),
+        );
+        let storage = Arc::new(
+            factory
+                .reserve_index(book.publication_storage_bytes().unwrap())
+                .unwrap(),
+        );
+        book.admit_page_closure(storage).unwrap();
+
+        // Act
+        for id in 1..=130 {
+            book.update_navigation(
+                ObjectId::new(id),
+                &format!("https://fixture.test/{id}"),
+                None,
+                &format!("frame-{id}"),
+            )
+            .unwrap();
+        }
+        for revision in 0..129 {
+            book.update(
+                ObjectId::new(1),
+                &format!("https://fixture.test/revision-{revision}"),
+                None,
+            )
+            .unwrap();
+        }
+        let close_permits: Vec<_> = (0..129)
+            .map(|_| book.publications().reserve_close().unwrap())
+            .collect();
+
+        // Assert
+        assert!(book.allocator_backed);
+        assert_eq!(close_permits.len(), 129);
+        assert_eq!(book.metrics().unwrap().active_frames, 130);
+        assert_eq!(book.metrics().unwrap().pending_publications, 129);
+        assert_eq!(book.metrics().unwrap().entries, 0);
+        assert_eq!(book.metrics().unwrap().url_bytes, 0);
+        assert_eq!(book.metrics().unwrap().name_bytes, 0);
+    }
+
+    #[test]
+    fn allocator_backed_metadata_preserves_per_value_byte_limits() {
+        // Arrange
+        let book = FrameMetadata::new_allocator_backed(5)
+            .unwrap()
+            .with_names(FrameNameLimits {
+                name_bytes: 4,
+                total_bytes: 0,
+            })
+            .unwrap();
+
+        // Act
+        let url_result = book.update_metadata(ObjectId::new(1), "123456", None, None);
+        let name_result = book.update_metadata(ObjectId::new(2), "url", None, Some("12345"));
+
+        // Assert
+        assert!(matches!(url_result, Err(HostError::ResourceExhausted(_))));
+        assert!(matches!(name_result, Err(HostError::ResourceExhausted(_))));
+        assert_eq!(book.metrics().unwrap().active_frames, 0);
     }
 
     #[test]

@@ -33,6 +33,10 @@ use std::{
 };
 use tokio::sync::Notify;
 
+const LEGACY_CURRENT_WORLDS: usize = 64;
+const LEGACY_RETIRING_WORLDS: usize = 8;
+const LEGACY_CALLS: usize = 8;
+
 struct Route {
     current: AtomicBool,
 }
@@ -70,13 +74,13 @@ struct Fixture {
 
 impl Fixture {
     fn new() -> Self {
-        let backend =
-            TargetMarkingProfile::new(ResourceScope::extension(183, 91), WORLD_SLOTS, CALLS)
-                .unwrap();
+        let backend = TargetMarkingProfile::new_allocator_backed(ResourceScope::extension(183, 91));
         let states =
-            UploadProfile::new(ResourceScope::extension(183, 92), WORLD_SLOTS, 16 * 1024).unwrap();
+            UploadProfile::new_allocator_backed(ResourceScope::extension(183, 92), 16 * 1024)
+                .unwrap();
         let calls =
-            UploadProfile::new(ResourceScope::extension(183, 93), CALLS, 16 * 1024).unwrap();
+            UploadProfile::new_allocator_backed(ResourceScope::extension(183, 93), 16 * 1024)
+                .unwrap();
         let resources = production(
             MarkerCache::requirements()
                 .combine_concurrent(backend.requirements())
@@ -91,8 +95,8 @@ impl Fixture {
             )
             .unwrap(),
         );
-        let cleanup = TokioCleanupExecutor::new(WORLD_SLOTS + CALLS);
-        let creation = TokioCleanupExecutor::new(WORLD_SLOTS);
+        let cleanup = TokioCleanupExecutor::new_allocator_backed();
+        let creation = TokioCleanupExecutor::new_allocator_backed();
         let service = Arc::new(
             TargetMarkingOperationService::new(states, calls, &resources, raw, cleanup.clone())
                 .unwrap(),
@@ -332,34 +336,42 @@ async fn seal_rejects_new_acquisition_and_close_compensates_late_initialization(
 }
 
 #[tokio::test]
-async fn current_world_capacity_refuses_before_factory_or_native_io() {
+async fn world_cache_grows_past_the_legacy_current_world_count() {
     // Arrange
     let fixture = Fixture::new();
-    for index in 0..CURRENT_WORLDS {
+    for index in 0..LEGACY_CURRENT_WORLDS {
         drop(
             bounded(fixture.acquire(4 + index as u64, "utility-a").unwrap())
                 .await
                 .unwrap(),
         );
     }
-    let before_calls = fixture.client.calls().len();
     let before_factories = fixture.factories.load(Ordering::Acquire);
 
     // Act
-    let refused = fixture.acquire(4 + CURRENT_WORLDS as u64, "utility-a");
+    drop(
+        bounded(
+            fixture
+                .acquire(4 + LEGACY_CURRENT_WORLDS as u64, "utility-a")
+                .unwrap(),
+        )
+        .await
+        .unwrap(),
+    );
 
     // Assert
-    assert!(refused.is_err());
-    assert_eq!(fixture.factories.load(Ordering::Acquire), before_factories);
-    assert_eq!(fixture.client.calls().len(), before_calls);
-    assert_eq!(fixture.cache.metrics().current, CURRENT_WORLDS);
+    assert_eq!(
+        fixture.factories.load(Ordering::Acquire),
+        before_factories + 1
+    );
+    assert_eq!(fixture.cache.metrics().current, LEGACY_CURRENT_WORLDS + 1);
     assert_eq!(fixture.cache.metrics().retiring, 0);
-    assert_eq!(fixture.service.active_states(), CURRENT_WORLDS);
+    assert_eq!(fixture.service.active_states(), LEGACY_CURRENT_WORLDS + 1);
     fixture.finish().await;
 }
 
 #[tokio::test]
-async fn same_world_lookup_and_lease_capacity_is_bounded_independently_of_world_slots() {
+async fn same_world_lookups_grow_past_the_legacy_call_count() {
     // Arrange
     let fixture = Fixture::new();
     drop(
@@ -368,7 +380,7 @@ async fn same_world_lookup_and_lease_capacity_is_bounded_independently_of_world_
             .unwrap(),
     );
     let mut leases = Vec::new();
-    for _ in 0..CALLS {
+    for _ in 0..LEGACY_CALLS {
         leases.push(
             bounded(fixture.acquire(4, "utility-a").unwrap())
                 .await
@@ -377,24 +389,20 @@ async fn same_world_lookup_and_lease_capacity_is_bounded_independently_of_world_
     }
 
     // Act
-    let refused = fixture.acquire(4, "utility-a");
-
-    // Assert
-    assert!(refused.is_err());
-    assert_eq!(fixture.factories.load(Ordering::Acquire), 1);
-    assert_eq!(fixture.creations(), 1);
-    assert_eq!(fixture.cache.metrics().waiters, CALLS);
-    leases.pop();
-    let reused = bounded(fixture.acquire(4, "utility-a").unwrap())
+    let additional = bounded(fixture.acquire(4, "utility-a").unwrap())
         .await
         .unwrap();
+
+    // Assert
     assert_eq!(fixture.factories.load(Ordering::Acquire), 1);
-    drop((leases, reused));
+    assert_eq!(fixture.creations(), 1);
+    assert_eq!(fixture.cache.metrics().waiters, LEGACY_CALLS + 1);
+    drop((leases, additional));
     fixture.finish().await;
 }
 
 #[tokio::test]
-async fn repeated_world_replacement_cannot_overflow_retiring_capacity() {
+async fn repeated_world_replacement_grows_past_legacy_retiring_count() {
     // Arrange
     let fixture = Fixture::new();
     drop(
@@ -406,7 +414,7 @@ async fn repeated_world_replacement_cannot_overflow_retiring_capacity() {
     fixture
         .client
         .set_release_object_group_gate(Some(gate.clone()));
-    for generation in 1..=RETIRING_WORLDS {
+    for generation in 1..=LEGACY_RETIRING_WORLDS {
         drop(
             bounded(
                 fixture
@@ -417,19 +425,23 @@ async fn repeated_world_replacement_cannot_overflow_retiring_capacity() {
             .unwrap(),
         );
     }
-    settle_until(|| fixture.releases().len() == RETIRING_WORLDS).await;
+    settle_until(|| fixture.releases().len() == LEGACY_RETIRING_WORLDS).await;
     let before_factories = fixture.factories.load(Ordering::Acquire);
-    let before_calls = fixture.client.calls().len();
 
     // Act
-    let refused = fixture.acquire(4, "utility-overflow");
+    drop(
+        bounded(fixture.acquire(4, "utility-overflow").unwrap())
+            .await
+            .unwrap(),
+    );
 
     // Assert
-    assert!(refused.is_err());
-    assert_eq!(fixture.factories.load(Ordering::Acquire), before_factories);
-    assert_eq!(fixture.client.calls().len(), before_calls);
+    assert_eq!(
+        fixture.factories.load(Ordering::Acquire),
+        before_factories + 1
+    );
     assert_eq!(fixture.cache.metrics().current, 1);
-    assert_eq!(fixture.cache.metrics().retiring, RETIRING_WORLDS);
+    assert_eq!(fixture.cache.metrics().retiring, LEGACY_RETIRING_WORLDS + 1);
     fixture.client.set_release_object_group_gate(None);
     gate.notify_waiters();
     settle_until(|| fixture.cache.metrics().retiring == 0).await;
@@ -711,8 +723,8 @@ async fn failed_group_cleanup_closes_future_admission_even_after_capacity_return
     assert!(refused.is_err());
     assert!(!fixture.cache.is_cleanup_healthy());
     assert!(!fixture.service.is_cleanup_healthy());
-    // Failed ownership allowance A has returned, but that is not a native ACK
-    // and cannot reopen admission. Only current owner B still holds two units.
+    // Allocator-backed compatibility mode carries no synthetic native-unit
+    // lease. Failed cleanup still poisons admission while owner B remains live.
     assert_eq!(fixture.service.active_states(), 1);
     assert_eq!(
         fixture
@@ -721,7 +733,7 @@ async fn failed_group_cleanup_closes_future_admission_even_after_capacity_return
             .unwrap()
             .class(ResourceClass::RemoteHandle)
             .current,
-        2
+        0
     );
     assert_eq!(fixture.factories.load(Ordering::Acquire), before_factories);
     assert_eq!(fixture.client.calls().len(), before_calls);
@@ -840,7 +852,7 @@ async fn same_world_text_in_distinct_frames_keeps_separate_current_entries() {
 async fn sequential_distinct_frame_retirement_reclaims_historical_current_capacity() {
     // Arrange: this is the route-liveness port, not fabricated DOM topology.
     let fixture = Fixture::new();
-    let iterations = CURRENT_WORLDS + RETIRING_WORLDS + 1;
+    let iterations = LEGACY_CURRENT_WORLDS + LEGACY_RETIRING_WORLDS + 1;
     let mut previous: Option<std::sync::Weak<Route>> = None;
 
     // Act: more than a full cache's history, but only one current Frame at a time.

@@ -6,7 +6,7 @@ use pyo3::prelude::*;
 #[cfg(feature = "browser-registry")]
 use playwright_rust_browser_registry::{
     BrowserEngine, RegistryDirectoryInputs, ShortPlatform, executable_path_v1_58_0,
-    registry_directory,
+    ffmpeg_executable_path_v1_58_0, registry_directory,
 };
 #[cfg(feature = "browser-registry")]
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
@@ -20,8 +20,6 @@ pub fn browser_executable_path(engine: &str, package_root: &str) -> PyResult<Str
     {
         let engine = match engine {
             "chromium" => BrowserEngine::Chromium,
-            "firefox" => BrowserEngine::Firefox,
-            "webkit" => BrowserEngine::WebKit,
             _ => return Err(PyValueError::new_err("unknown browser engine")),
         };
         let cache_platform = current_platform()?;
@@ -67,6 +65,56 @@ pub fn browser_executable_path(engine: &str, package_root: &str) -> PyResult<Str
             "browser executable metadata requires the browser-registry feature",
         ))
     }
+}
+
+/// Return official v1.58.0 FFmpeg metadata, not proof that it is installed.
+#[pyfunction]
+pub fn ffmpeg_executable_path(package_root: &str) -> PyResult<String> {
+    #[cfg(feature = "browser-registry")]
+    {
+        let cache_platform = current_platform()?;
+        let directory = current_registry_directory(package_root, cache_platform)?;
+        ffmpeg_executable_path_v1_58_0(&directory, cache_platform)
+            .map_err(|error| PyValueError::new_err(error.to_string()))?
+            .into_os_string()
+            .into_string()
+            .map_err(|_| PyValueError::new_err("FFmpeg executable path is not UTF-8"))
+    }
+    #[cfg(not(feature = "browser-registry"))]
+    {
+        let _ = package_root;
+        Err(PyNotImplementedError::new_err(
+            "FFmpeg executable metadata requires the browser-registry feature",
+        ))
+    }
+}
+
+#[cfg(feature = "browser-registry")]
+fn current_registry_directory(
+    package_root: &str,
+    cache_platform: ShortPlatform,
+) -> PyResult<PathBuf> {
+    let browsers_path = std::env::var_os("PLAYWRIGHT_BROWSERS_PATH").map(PathBuf::from);
+    let home = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" })
+        .or_else(|| std::env::var_os("HOME"))
+        .map(PathBuf::from);
+    let xdg_cache_home = std::env::var_os("XDG_CACHE_HOME").map(PathBuf::from);
+    let local_app_data = std::env::var_os("LOCALAPPDATA").map(PathBuf::from);
+    let init_cwd = std::env::var_os("INIT_CWD").map(PathBuf::from);
+    let cwd = std::env::current_dir().map_err(|error| {
+        PyRuntimeError::new_err(format!("could not inspect current directory: {error}"))
+    })?;
+    registry_directory(&RegistryDirectoryInputs {
+        platform: cache_platform,
+        browsers_path: browsers_path.as_deref(),
+        package_root: Path::new(package_root),
+        home: home.as_deref(),
+        xdg_cache_home: xdg_cache_home.as_deref(),
+        local_app_data: local_app_data.as_deref(),
+        init_cwd: init_cwd.as_deref(),
+        cwd: &cwd,
+    })
+    .map_err(|error| PyValueError::new_err(error.to_string()))
 }
 
 #[cfg(feature = "browser-registry")]
@@ -171,7 +219,7 @@ mod tests {
     use playwright_rust_browser_registry::ShortPlatform;
 
     #[test]
-    fn linux_os_release_selects_pinned_old_webkit_revision_tags() {
+    fn linux_os_release_selects_host_platform_tags() {
         // Arrange
         let debian = "ID=debian\nVERSION_ID=\"11\"\n";
         let ubuntu = "ID=ubuntu\nVERSION_ID=\"20.04\"\n";

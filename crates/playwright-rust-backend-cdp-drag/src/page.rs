@@ -89,7 +89,7 @@ struct Page {
     state: Mutex<State>,
     ledger: ResourceLedger,
     scope: ResourceScope,
-    capacity: usize,
+    capacity: Option<usize>,
     _storage: ResourceLease,
 }
 /// One shared instance per native Page. This owns persistent drag data, not the
@@ -121,11 +121,39 @@ impl DragPage {
             .with_class(ResourceClass::BackendStateBytes, bytes, bytes)
             .with_metadata(1, capacity + 1))
     }
+    /// Fixed Page state only. Command owners grow through the allocator rather
+    /// than imposing a Playwright-visible command-count limit.
+    pub fn allocator_backed_requirements() -> ResourceRequirements {
+        ResourceRequirements::none()
+            .with_class(
+                ResourceClass::BackendStateBytes,
+                page_bytes() as u64,
+                page_bytes() as u64,
+            )
+            .with_metadata(1, 1)
+    }
     pub fn new(
         client: Arc<dyn DragEventClient>,
         captures: DragCaptureFactory,
         scope: ResourceScope,
         capacity: usize,
+        resources: &ProductionResourceLedger,
+    ) -> Result<Self> {
+        Self::new_inner(client, captures, scope, Some(capacity), resources)
+    }
+    pub fn new_allocator_backed(
+        client: Arc<dyn DragEventClient>,
+        captures: DragCaptureFactory,
+        scope: ResourceScope,
+        resources: &ProductionResourceLedger,
+    ) -> Result<Self> {
+        Self::new_inner(client, captures, scope, None, resources)
+    }
+    fn new_inner(
+        client: Arc<dyn DragEventClient>,
+        captures: DragCaptureFactory,
+        scope: ResourceScope,
+        capacity: Option<usize>,
         resources: &ProductionResourceLedger,
     ) -> Result<Self> {
         let binding: Arc<dyn DragInterceptionClient> = client.clone();
@@ -134,8 +162,12 @@ impl DragPage {
                 "drag Page and capture require identical native binding",
             ));
         }
+        let requirements = match capacity {
+            Some(capacity) => Self::requirements(capacity)?,
+            None => Self::allocator_backed_requirements(),
+        };
         let ledger = resources
-            .claim(Self::requirements(capacity)?)
+            .claim(requirements)
             .map_err(|_| error("drag Page resource claim failed"))?;
         let storage = ledger
             .reserve(scope, ResourceClass::BackendStateBytes, page_bytes() as u64)
@@ -212,19 +244,30 @@ impl DragPage {
         if state.poisoned {
             return Err(error("drag Page lost an undrained native command"));
         }
-        if state.operations == self.0.capacity {
+        if self
+            .0
+            .capacity
+            .is_some_and(|capacity| state.operations == capacity)
+        {
             return Err(error("drag Page command capacity exceeded"));
         }
+        let operations = state
+            .operations
+            .checked_add(1)
+            .ok_or_else(|| error("drag Page command count overflow"))?;
         let storage = self
             .0
-            .ledger
-            .reserve(
-                self.0.scope,
-                ResourceClass::BackendStateBytes,
-                std::mem::size_of::<DragPageOperation>() as u64,
-            )
+            .capacity
+            .map(|_| {
+                self.0.ledger.reserve(
+                    self.0.scope,
+                    ResourceClass::BackendStateBytes,
+                    std::mem::size_of::<DragPageOperation>() as u64,
+                )
+            })
+            .transpose()
             .map_err(|_| error("drag Page command admission failed"))?;
-        state.operations += 1;
+        state.operations = operations;
         Ok(DragPageOperation {
             page: self.clone(),
             plan: Some(plan),
@@ -261,7 +304,7 @@ pub struct DragPageOperation {
     kind: Option<DragEventKind>,
     observed: bool,
     retiring: bool,
-    _storage: ResourceLease,
+    _storage: Option<ResourceLease>,
 }
 impl DragPageOperation {
     pub fn is_retired(&self) -> bool {

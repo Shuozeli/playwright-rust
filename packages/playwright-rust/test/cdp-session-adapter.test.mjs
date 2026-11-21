@@ -44,6 +44,7 @@ function fixture() {
     listenerErrors: [],
     watchers: [],
     onLeaseClaim: undefined,
+    sendResult: { result: { value: 3 } },
     isConnected: () => true,
     sessionSignal: () => ({ wait: () => new Promise(() => {}) }),
     reportCallbackException(error) { this.listenerErrors.push(error); },
@@ -80,7 +81,7 @@ function fixture() {
       calls.push(['send', token, method, JSON.parse(paramsJson)]);
       if (method === 'Runtime.evaluate')
         this.events.push(['Runtime.consoleAPICalled', { value: 'log' }]);
-      return { result: { value: 3 } };
+      return this.sendResult;
     },
     async cdpSessionClaim(token, maxEvents) {
       calls.push(['claim', token, maxEvents]);
@@ -256,6 +257,43 @@ test('send and Page.goto deliver ordered method and generic events before return
   assert.ok(value.calls.some(call => call[0] === 'claim' && call[2] === 64));
 });
 
+test('CDPSession forwards event payloads beyond the retired connection byte limit', async () => {
+  // Arrange
+  const value = fixture();
+  const { context, page } = await openPage(value);
+  const session = await context.newCDPSession(page);
+  const payload = 'x'.repeat(512 * 1024);
+  let delivered;
+  session.on('Runtime.largeEvent', params => { delivered = params.payload; });
+  value.native.events.push(['Runtime.largeEvent', { payload }]);
+
+  // Act
+  await session.send('Runtime.getHeapUsage');
+
+  // Assert
+  assert.equal(delivered, payload);
+  assert.deepEqual(value.native.acked, [['Runtime.largeEvent', { payload }]]);
+  assert.equal(value.native.events.length, 0);
+});
+
+test('CDPSession preserves non-object event params declared by the upstream channel', async () => {
+  // Arrange
+  const value = fixture();
+  const { context, page } = await openPage(value);
+  const session = await context.newCDPSession(page);
+  const params = ['value', 7, null];
+  let delivered;
+  session.on('Runtime.customEvent', value => { delivered = value; });
+  value.native.events.push(['Runtime.customEvent', params]);
+
+  // Act
+  await session.send('Runtime.getHeapUsage');
+
+  // Assert
+  assert.deepEqual(delivered, params);
+  assert.deepEqual(value.native.acked, [['Runtime.customEvent', params]]);
+});
+
 test('CDP event listener exceptions are reported and acknowledged without failing send', async () => {
   // Arrange
   const value = fixture();
@@ -324,16 +362,87 @@ test('detach and Page.close emit close once and reject later protocol calls', as
   await assert.rejects(second.detach(), /Target page, context or browser has been closed/);
 });
 
-test('CDPSession rejects non-finite or oversized params before native send', async () => {
+test('CDPSession applies the official JSON null projection to non-finite params', async () => {
   // Arrange
   const value = fixture();
   const { context, page } = await openPage(value);
   const session = await context.newCDPSession(page);
 
-  // Act / Assert
-  await assert.rejects(session.send('Runtime.evaluate', { value: Number.NaN }), /finite numbers/);
-  await assert.rejects(session.send('Runtime.evaluate', { value: 'x'.repeat(1024 * 1024) }), /1 MiB/);
-  assert.equal(value.calls.some(call => call[0] === 'send'), false);
+  // Act
+  await session.send('Runtime.evaluate', {
+    nan: Number.NaN,
+    positive: Number.POSITIVE_INFINITY,
+    negative: Number.NEGATIVE_INFINITY,
+  });
+
+  // Assert
+  const send = value.calls.find(call => call[0] === 'send');
+  assert.deepEqual(send, [
+    'send',
+    7n,
+    'Runtime.evaluate',
+    { nan: null, positive: null, negative: null },
+  ]);
+});
+
+test('CDPSession forwards params beyond the retired one-megabyte limit', async () => {
+  // Arrange
+  const value = fixture();
+  const { context, page } = await openPage(value);
+  const session = await context.newCDPSession(page);
+  const payload = 'x'.repeat(2 * 1024 * 1024);
+
+  // Act
+  await session.send('Runtime.evaluate', { payload });
+
+  // Assert
+  const send = value.calls.find(call => call[0] === 'send');
+  assert.equal(send[3].payload.length, payload.length);
+});
+
+test('CDPSession forwards method names beyond the retired 256-byte limit', async () => {
+  // Arrange
+  const value = fixture();
+  const { context, page } = await openPage(value);
+  const session = await context.newCDPSession(page);
+  const method = `${'CustomDomain'.repeat(32)}.command`;
+
+  // Act
+  await session.send(method, {});
+
+  // Assert
+  assert.ok(method.length > 256);
+  const send = value.calls.find(call => call[0] === 'send');
+  assert.deepEqual(send, ['send', 7n, method, {}]);
+});
+
+test('CDPSession leaves empty methods and non-object JSON params to Chromium', async () => {
+  // Arrange
+  const value = fixture();
+  const { context, page } = await openPage(value);
+  const session = await context.newCDPSession(page);
+  const params = ['value', 7, null];
+
+  // Act
+  await session.send('', params);
+
+  // Assert
+  const send = value.calls.find(call => call[0] === 'send');
+  assert.deepEqual(send, ['send', 7n, '', params]);
+});
+
+test('CDPSession returns results beyond the retired four-megabyte limit', async () => {
+  // Arrange
+  const value = fixture();
+  const { context, page } = await openPage(value);
+  const session = await context.newCDPSession(page);
+  value.native.sendResult = { payload: 'x'.repeat(5 * 1024 * 1024) };
+
+  // Act
+  const result = await session.send('Runtime.getHeapUsage');
+
+  // Assert
+  assert.equal(result.payload.length, 5 * 1024 * 1024);
 });
 
 test('concurrent send fences serialize claims without copying events into a JS queue', async () => {
@@ -365,16 +474,72 @@ test('concurrent send fences serialize claims without copying events into a JS q
   assert.equal(value.native.events.length, 0);
 });
 
-test('CDPSession listener registrations have a fixed capacity', async () => {
+test('pending CDP delivery fences queue past the retired fixed capacity', async () => {
   // Arrange
   const value = fixture();
   const { context, page } = await openPage(value);
   const session = await context.newCDPSession(page);
-  for (let index = 0; index < 64; index += 1)
-    session.on(`Runtime.event${index}`, () => {});
+  const originalClaim = value.native.cdpSessionClaim;
+  const firstClaim = deferred();
+  let claims = 0;
+  value.native.cdpSessionClaim = async function (...args) {
+    claims += 1;
+    if (claims === 1) await firstClaim.promise;
+    return originalClaim.apply(this, args);
+  };
 
-  // Act / Assert
-  assert.throws(() => session.once('Runtime.overflow', () => {}), /handler limit exceeded \(64\)/);
+  // Act
+  const deliveries = Promise.all(Array.from(
+    { length: 129 },
+    (_value, index) => session.send(`Runtime.command${index}`),
+  ));
+  await settle();
+  firstClaim.resolve();
+  const results = await deliveries;
+
+  // Assert
+  assert.equal(results.length, 129);
+  assert.equal(value.calls.filter(call => call[0] === 'send').length, 129);
+  assert.equal(claims, 129);
+});
+
+test('CDPSession listener registrations grow past the retired fixed capacity', async () => {
+  // Arrange
+  const value = fixture();
+  const { context, page } = await openPage(value);
+  const session = await context.newCDPSession(page);
+  const observed = [];
+  for (let index = 0; index < 129; index += 1)
+    session.on('Runtime.consoleAPICalled', () => observed.push(index));
+
+  // Act
+  await session.send('Runtime.evaluate');
+
+  // Assert
+  assert.deepEqual(observed, Array.from({ length: 129 }, (_value, index) => index));
+  assert.equal(session.listenerCount('Runtime.consoleAPICalled'), 129);
+});
+
+test('Page CDP session ownership grows past the retired eight-session limit', async () => {
+  // Arrange
+  const value = fixture();
+  const { context, page } = await openPage(value);
+  let nextToken = 7n;
+  value.native.cdpSessionCreate = async () => {
+    const token = nextToken++;
+    return { token: () => token, claim: () => token, abort: () => {} };
+  };
+  const sessions = [];
+
+  // Act
+  for (let index = 0; index < 129; index += 1)
+    sessions.push(await context.newCDPSession(page));
+
+  // Assert
+  assert.equal(sessions.length, 129);
+  assert.equal(context._cdpSessions.size, 129);
+  await Promise.all(sessions.map(session => session.detach()));
+  assert.equal(context._cdpSessions.size, 0);
 });
 
 test('a lazy Browser watch delivers idle CDP events and re-arms once per generation', async () => {
@@ -478,12 +643,12 @@ test('native child retirement closes only its CDP wrapper when an idle watch wak
   assert.equal(value.native.watchers.length, 1);
 });
 
-test('malformed native CDP events remain fail-closed instead of using the listener exception channel', async () => {
+test('malformed native CDP event tuples remain fail-closed instead of using the listener exception channel', async () => {
   // Arrange
   const value = fixture();
   const { browser, context, page } = await openPage(value);
   await context.newCDPSession(page);
-  value.native.events.push(['Runtime.invalid', []]);
+  value.native.events.push([7, {}]);
 
   // Act
   value.native.watchers[0].resolve(1n);

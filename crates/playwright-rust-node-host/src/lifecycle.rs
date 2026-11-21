@@ -586,7 +586,16 @@ impl HostSession {
             internal,
             reply,
         })?;
-        self.await_driver_reply(completion).await
+        let page = self.await_driver_reply(completion).await?;
+        if let Err(primary) = self.session_owned.record_page(&page.id, &page.context_id) {
+            return Err(match self.close_page_inner(&page.id).await {
+                Ok(()) | Err(HostError::TargetClosed) => primary,
+                Err(cleanup) => HostError::Backend(format!(
+                    "Page ownership recording failed: {primary}; Page cleanup failed: {cleanup}"
+                )),
+            });
+        }
+        Ok(page)
     }
 
     pub async fn close_page(&self, page_id: &str) -> Result<(), HostError> {
@@ -611,6 +620,7 @@ impl HostSession {
         ))?;
         #[cfg(feature = "context-forced-colors")]
         self.retire_forced_colors_page(page_id)?;
+        self.session_owned.remove_page(page_id)?;
         Ok(ClosePageDisposition::Page)
     }
 
@@ -623,6 +633,91 @@ impl HostSession {
             reply,
         })?;
         self.await_driver_reply(completion).await
+    }
+
+    fn shutdown_call_id(&self) -> Result<CallId, HostError> {
+        self.next_call
+            .fetch_update(
+                std::sync::atomic::Ordering::Relaxed,
+                std::sync::atomic::Ordering::Relaxed,
+                |id| id.checked_add(1),
+            )
+            .map(CallId::new)
+            .map_err(|_| HostError::ResourceExhausted("call ID space exhausted".into()))
+    }
+
+    async fn close_page_during_shutdown(&self, page_id: &str) -> Result<(), HostError> {
+        let page = page_id
+            .parse::<u64>()
+            .ok()
+            .filter(|id| *id != 0)
+            .map(ObjectId::new)
+            .ok_or_else(|| HostError::InvalidArgument("invalid portable Page ID".into()))?;
+        let (reply, completion) = oneshot::channel();
+        self.send_driver_request_unchecked(DriverRequest::ClosePage {
+            call_id: self.shutdown_call_id()?,
+            page,
+            reply,
+        })?;
+        complete_driver_reply(completion.await, &self.stop)
+    }
+
+    async fn close_context_during_shutdown(&self, context_id: &str) -> Result<(), HostError> {
+        let context = context_id
+            .parse::<u64>()
+            .ok()
+            .filter(|id| *id != 0)
+            .map(ObjectId::new)
+            .ok_or_else(|| {
+                HostError::InvalidArgument("invalid portable BrowserContext ID".into())
+            })?;
+        let (reply, completion) = oneshot::channel();
+        self.send_driver_request_unchecked(DriverRequest::CloseContext {
+            call_id: self.shutdown_call_id()?,
+            context,
+            reply,
+        })?;
+        complete_driver_reply(completion.await, &self.stop)
+    }
+
+    pub(crate) async fn close_created_resources(&self, timeout: Duration) -> Result<(), HostError> {
+        let snapshot = self.session_owned.shutdown_snapshot()?;
+        let deadline = tokio::time::Instant::now() + timeout;
+        let mut failures = Vec::new();
+        for page in snapshot.pages_outside_owned_contexts {
+            match tokio::time::timeout_at(deadline, self.close_page_during_shutdown(&page)).await {
+                Ok(Ok(())) | Ok(Err(HostError::TargetClosed)) => {
+                    self.session_owned.remove_page(&page)?;
+                }
+                Ok(Err(error)) => failures.push(format!("Page {page}: {error}")),
+                Err(_) => {
+                    failures.push(format!("Page {page}: cleanup exceeded {timeout:?}"));
+                    break;
+                }
+            }
+        }
+        for context in snapshot.contexts {
+            match tokio::time::timeout_at(deadline, self.close_context_during_shutdown(&context))
+                .await
+            {
+                Ok(Ok(())) | Ok(Err(HostError::TargetClosed)) => {
+                    self.session_owned.remove_context(&context)?;
+                }
+                Ok(Err(error)) => failures.push(format!("Context {context}: {error}")),
+                Err(_) => {
+                    failures.push(format!("Context {context}: cleanup exceeded {timeout:?}"));
+                    break;
+                }
+            }
+        }
+        if failures.is_empty() {
+            Ok(())
+        } else {
+            Err(HostError::Backend(format!(
+                "session-owned target cleanup failed: {}",
+                failures.join("; ")
+            )))
+        }
     }
 
     #[cfg(feature = "page-dialogs")]
@@ -649,27 +744,27 @@ impl HostSession {
     }
 
     pub(crate) fn send_driver_request(&self, request: DriverRequest) -> Result<(), HostError> {
+        if !self.is_connected() {
+            return Err(HostError::TargetClosed);
+        }
+        self.send_driver_request_unchecked(request)
+    }
+
+    fn send_driver_request_unchecked(&self, request: DriverRequest) -> Result<(), HostError> {
         self.topology_barriers
-            .try_send(request)
+            .send(request)
             .map_err(|error| failed_driver_admission(error, &self.stop))
     }
 }
 
 fn failed_driver_admission(
-    error: tokio::sync::mpsc::error::TrySendError<DriverRequest>,
+    _error: tokio::sync::mpsc::error::SendError<DriverRequest>,
     stop: &tokio_util::sync::CancellationToken,
 ) -> HostError {
-    match error {
-        tokio::sync::mpsc::error::TrySendError::Full(_) => {
-            HostError::ResourceExhausted("topology/lifecycle request capacity exceeded (8)".into())
-        }
-        tokio::sync::mpsc::error::TrySendError::Closed(_) => {
-            // The queue may close before the driver's normal stop block, just
-            // like an already-admitted reply producer can disappear first.
-            stop.cancel();
-            HostError::TargetClosed
-        }
-    }
+    // The allocator-backed queue has no fabricated public concurrency count.
+    // A send failure therefore means only that the driver receiver is closed.
+    stop.cancel();
+    HostError::TargetClosed
 }
 
 fn complete_driver_reply<T>(
@@ -824,25 +919,12 @@ mod tests {
         // Arrange
         let stop = tokio_util::sync::CancellationToken::new();
         let (reply, _completion) = oneshot::channel();
-        let error = tokio::sync::mpsc::error::TrySendError::Closed(DriverRequest::Fence(reply));
+        let error = tokio::sync::mpsc::error::SendError(DriverRequest::Fence(reply));
         // Act
         let result = failed_driver_admission(error, &stop);
         // Assert
         assert!(matches!(result, HostError::TargetClosed));
         assert!(stop.is_cancelled());
-    }
-
-    #[test]
-    fn full_driver_queue_preserves_backpressure_without_stopping_the_connection() {
-        // Arrange
-        let stop = tokio_util::sync::CancellationToken::new();
-        let (reply, _completion) = oneshot::channel();
-        let error = tokio::sync::mpsc::error::TrySendError::Full(DriverRequest::Fence(reply));
-        // Act
-        let result = failed_driver_admission(error, &stop);
-        // Assert
-        assert!(matches!(result, HostError::ResourceExhausted(_)));
-        assert!(!stop.is_cancelled());
     }
 
     #[tokio::test]

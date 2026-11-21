@@ -194,7 +194,9 @@ mod tests {
 
     fn plan(source: &str) -> ElementHandleQueryPlan {
         QueryBudget::new(QueryLimits {
-            recipes: 1,
+            // The borrowed input draft and the compiled selector tree overlap
+            // briefly while the parser transfers ownership.
+            recipes: 2,
             bytes: 128 * 1024,
         })
         .unwrap()

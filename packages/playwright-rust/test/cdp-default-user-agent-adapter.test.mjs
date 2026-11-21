@@ -67,6 +67,7 @@ test('default User-Agent profile has an independent native marker and port', () 
     NativeSession: class {},
     cdpHandshakeHeadersEnabled: () => true,
     cdpDefaultUserAgentEnabled: () => true,
+    cdpDefaultUserAgentAbiShape: () => 2,
   };
 
   // Act
@@ -78,6 +79,7 @@ test('default User-Agent profile has an independent native marker and port', () 
   assert.deepEqual(nativeFeatures('official-conformance-page-cdp-default-user-agent').slice(-2), features);
   assert.doesNotThrow(() => verifyNativeArtifact(binary, profile));
   assert.throws(() => verifyNativeArtifact({ ...binary, cdpDefaultUserAgentEnabled: () => false }, profile), /profile mismatch/);
+  assert.throws(() => verifyNativeArtifact({ ...binary, cdpDefaultUserAgentAbiShape: () => 1 }, profile), /profile mismatch/);
   assert.throws(() => verifyNativeArtifact({ ...binary, NativeEnvironment: class { connectOverCDPWithHeaders() {} } }, profile), /profile mismatch/);
   assert.throws(() => verifyNativeArtifact(binary, resolveNativeArtifact('cdp-handshake-headers')), /profile mismatch/);
 });
@@ -89,7 +91,7 @@ test('selected default User-Agent profile routes no-options attach through Rust'
   await api.chromium.connectOverCDP('ws://example.invalid/ws');
   // Assert
   assert.deepEqual(calls, [[
-    'default-ua', 'ws://example.invalid/ws', 30_000, [], 'darwin', 'arm64', '25.0.0',
+    'default-ua', 'ws://example.invalid/ws', 30_000, [], ['darwin', 'arm64', '25.0.0'],
   ]]);
 });
 
@@ -100,7 +102,7 @@ test('combined Page and default User-Agent profile keeps the selected Rust port'
   await api.chromium.connectOverCDP('ws://example.invalid/ws');
   // Assert
   assert.deepEqual(calls, [[
-    'default-ua', 'ws://example.invalid/ws', 30_000, [], 'darwin', 'arm64', '25.0.0',
+    'default-ua', 'ws://example.invalid/ws', 30_000, [], ['darwin', 'arm64', '25.0.0'],
   ]]);
 });
 
@@ -116,7 +118,7 @@ test('selected default User-Agent profile forwards explicit headers as raw pairs
   // Assert
   assert.deepEqual(calls, [[
     'default-ua', 'ws://example.invalid/ws', 100,
-    [['uSeR-aGeNt', ''], ['foo', 'bar']], 'darwin', 'arm64', '25.0.0',
+    [['uSeR-aGeNt', ''], ['foo', 'bar']], ['darwin', 'arm64', '25.0.0'],
   ]]);
 });
 

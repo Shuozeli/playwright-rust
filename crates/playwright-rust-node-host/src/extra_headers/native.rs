@@ -1,6 +1,8 @@
-use super::{DispatchPlan, ID_BYTES, Installation, MAX_APPLIED};
+use super::{DispatchPlan, Installation};
 use crate::HostError;
 use playwright_rust_backend_cdp_topology::CdpContextOwnership;
+use playwright_rust_cdp::ServiceWorkerInitializationCommand;
+use playwright_rust_core::ObjectId;
 use playwright_rust_network_model::extra_headers::EffectiveHeaders;
 use playwright_rust_plugin_chromium_session_initialization::{
     ChromiumSessionInitializationFuture, ChromiumSessionInitializationTarget,
@@ -8,9 +10,6 @@ use playwright_rust_plugin_chromium_session_initialization::{
 };
 use serde::{Serialize, Serializer, ser::SerializeMap};
 use std::sync::Arc;
-use std::time::Duration;
-
-const HEADER_ENQUEUE_TIMEOUT: Duration = Duration::from_secs(30);
 
 // One effective owner is shared by all sessions of a Page. Later Page groups
 // materialize this once when their first native future is polled.
@@ -24,12 +23,19 @@ impl PageSnapshot {
         let mut snapshot = self.0.lock().map_err(HostError::backend)?;
         if snapshot.is_none() {
             *snapshot = Some(
-                installation
-                    .settings
-                    .lock()
-                    .map_err(HostError::backend)?
-                    .effective(route.context, route.page)
-                    .map_err(super::settings_error)?,
+                match route.page {
+                    Some(page) => installation
+                        .settings
+                        .lock()
+                        .map_err(HostError::backend)?
+                        .effective(route.context, page),
+                    None => installation
+                        .settings
+                        .lock()
+                        .map_err(HostError::backend)?
+                        .effective_context(route.context),
+                }
+                .map_err(super::settings_error)?,
             );
         }
         snapshot
@@ -39,12 +45,6 @@ impl PageSnapshot {
     }
 }
 
-pub(super) fn plan_scratch_bytes() -> usize {
-    // Two fanouts, each with one snapshot cell/Arc allocation per Page and one
-    // group-size queue entry per route. Payloads retain separate pool leases.
-    2 * (super::MAX_FAILED_PAGES * (std::mem::size_of::<PageSnapshot>() + 32)
-        + super::MAX_ROUTES * std::mem::size_of::<usize>())
-}
 #[derive(Serialize)]
 struct Parameters<'a> {
     headers: Headers<'a>,
@@ -60,6 +60,32 @@ impl Serialize for Headers<'_> {
     }
 }
 impl Installation {
+    pub(super) fn service_worker_initialization_command(
+        &self,
+        context: ObjectId,
+        ownership: CdpContextOwnership,
+    ) -> Result<Option<ServiceWorkerInitializationCommand>, HostError> {
+        self.persistent_default
+            .seed(&self.settings, context, ownership)?;
+        let headers = self
+            .settings
+            .lock()
+            .map_err(HostError::backend)?
+            .effective_context(context)
+            .map_err(super::settings_error)?;
+        if headers.iter().len() == 0 || headers.validate_http_syntax().is_err() {
+            return Ok(None);
+        }
+        let params = serde_json::to_value(Parameters {
+            headers: Headers(&headers),
+        })
+        .map_err(HostError::backend)?;
+        Ok(Some(ServiceWorkerInitializationCommand::new(
+            "Network.setExtraHTTPHeaders",
+            params,
+        )))
+    }
+
     async fn initialize_headers(
         &self,
         target: ChromiumSessionInitializationTarget<'_>,
@@ -99,7 +125,6 @@ impl Installation {
             fence.require_enqueue();
         }
         let admission = async {
-            let permit = self.native.acquire().await.map_err(HostError::backend)?;
             let enable = self
                 .connection
                 .enqueue_command_with_session(
@@ -116,14 +141,11 @@ impl Installation {
                     Some(target.session_id),
                 )
                 .await?;
-            Ok::<_, Box<dyn std::error::Error + Send + Sync>>((permit, enable, apply))
+            Ok::<_, Box<dyn std::error::Error + Send + Sync>>((enable, apply))
         };
-        // Native slots and the write channel are both bounded. If all slots
-        // are held by acknowledgements from paused targets, fail this Page
-        // instead of waiting forever while its debugger is still paused.
-        let (_permit, enable, apply) = tokio::time::timeout(HEADER_ENQUEUE_TIMEOUT, admission)
-            .await
-            .map_err(|_| playwright_rust_cdp::connection::CdpError::Timeout)??;
+        // The bounded CDP write channel supplies natural backpressure. Do not
+        // turn a busy connection into a fabricated public timeout.
+        let (enable, apply) = admission.await?;
         if let Some(fence) = target.resume_fence {
             fence.command_enqueued();
         }
@@ -138,11 +160,9 @@ impl Installation {
         if applied.iter().any(|entry| entry == session) {
             return Ok(());
         }
-        if applied.len() == MAX_APPLIED || session.len() > ID_BYTES {
-            return Err(HostError::ResourceExhausted(
-                "applied header session capacity exceeded".into(),
-            ));
-        }
+        applied
+            .try_reserve(1)
+            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
         applied.push(session.to_owned());
         Ok(())
     }
@@ -154,7 +174,6 @@ impl Installation {
         Ok(())
     }
     pub(super) async fn clear_obsolete(&self, session: &str) -> Result<(), HostError> {
-        let _permit = self.native.acquire().await.map_err(HostError::backend)?;
         #[derive(Serialize)]
         struct Empty {
             headers: serde_json::Map<String, serde_json::Value>,
@@ -178,7 +197,6 @@ impl Installation {
         self.forget(session)
     }
     async fn enable(&self, session: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let _permit = self.native.acquire().await.map_err(HostError::backend)?;
         self.connection
             .send_command_with_session(
                 "Network.enable",
@@ -201,7 +219,6 @@ impl Installation {
         headers
             .validate_http_syntax()
             .map_err(super::syntax_error)?;
-        let _permit = self.native.acquire().await.map_err(HostError::backend)?;
         self.remember(session)?;
         // Typed borrowed serialization: only the admitted JSON Map/string copy
         // exists, not a second temporary owned HashMap of headers.
@@ -228,7 +245,7 @@ impl Installation {
         // levels for primary writes and compensation; failure skips later Pages.
         for (page, headers) in &plan.pages {
             let snapshot = Arc::new(PageSnapshot(std::sync::Mutex::new(headers.clone())));
-            for route in plan.routes.iter().filter(|route| route.page == *page) {
+            for route in plan.routes.iter().filter(|route| route.page == Some(*page)) {
                 let snapshot = snapshot.clone();
                 fanout.push(async move {
                     let headers = snapshot.resolve(self, route)?;
@@ -250,6 +267,36 @@ impl Installation {
                     }
                 })?;
             }
+            fanout.end_group()?;
+        }
+        // Chromium updates Service Workers after Pages and awaits each
+        // Context-owned network manager in sequence. Each worker resolves the
+        // latest proposed Context headers when its group starts, matching an
+        // overlapping BrowserContext setter without introducing Page headers.
+        for (route_index, headers) in &plan.service_workers {
+            let route = plan.routes.get(*route_index).ok_or_else(|| {
+                HostError::Backend("header Service Worker route is unavailable".into())
+            })?;
+            let snapshot = Arc::new(PageSnapshot(std::sync::Mutex::new(headers.clone())));
+            fanout.push(async move {
+                let headers = snapshot.resolve(self, route)?;
+                tokio::select! {
+                    biased;
+                    () = route.watch.wait(compensation) => {
+                        self.forget(&route.watch.session)?;
+                        Err(HostError::TargetClosed)
+                    }
+                    result = self.apply(&route.watch.session, &headers) => match result {
+                        Ok(()) => Ok(()),
+                        Err(error) if matches!(error.downcast_ref::<playwright_rust_cdp::connection::CdpError>(),
+                            Some(playwright_rust_cdp::connection::CdpError::SessionDetached)) => {
+                            self.forget(&route.watch.session)?;
+                            Err(HostError::TargetClosed)
+                        }
+                        Err(error) => Err(header_apply_error(error)),
+                    },
+                }
+            })?;
             fanout.end_group()?;
         }
         Ok(fanout)

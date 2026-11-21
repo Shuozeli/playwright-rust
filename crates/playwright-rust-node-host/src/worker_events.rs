@@ -1,9 +1,11 @@
-//! Optional bounded dedicated-worker publication and evaluation.
+//! Optional bounded dedicated- and service-worker publication and evaluation.
 //!
 //! Chromium child-session ownership, readiness, Page correlation and value
 //! evaluation stay in Rust. Language bindings receive retained Worker owners;
 //! they never subscribe to CDP or evaluate through JavaScript glue.
 
+#[cfg(feature = "worker-network-events")]
+use std::collections::BTreeSet;
 use std::collections::{BTreeMap, VecDeque};
 use std::error::Error;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -12,10 +14,14 @@ use std::sync::{Arc, Mutex};
 use playwright_rust_backend_cdp_evaluation::{CdpEvaluationLimits, CdpEvaluationService};
 use playwright_rust_backend_cdp_topology::{CdpContextOwnership, CdpTopology};
 use playwright_rust_cdp::generated::{page, runtime, target};
-use playwright_rust_cdp::{CdpClient, CdpEvent, SessionFactory};
+use playwright_rust_cdp::{
+    CdpClient, CdpEvent, ServiceWorkerInitializationCommand, SessionFactory,
+};
+#[cfg(feature = "worker-network-events")]
+use playwright_rust_composition_chromium::ChromiumNetworkPageRegistrationHandle;
 use playwright_rust_core::{
-    ObjectId, ProductionResourceLedger, ResourceClass, ResourceLease, ResourceRequest,
-    ResourceRequirements, ResourceScope, Service,
+    ObjectId, ProductionResourceLedger, ResourceClass, ResourceLease, ResourceRequirements,
+    ResourceScope, Service,
 };
 use playwright_rust_plugin_chromium_frame_observer::{
     ChromiumFrameEventObserver, FrameObservationResult,
@@ -27,28 +33,33 @@ use crate::evaluation::{
 };
 use crate::{HostError, HostSession, context_metadata::ContextMetadata, frame_trees::FrameTrees};
 
-pub const MAX_WORKERS: usize = 64;
-pub const MAX_WORKER_NOTICES: usize = MAX_WORKERS * 2;
+pub const MAX_WORKER_NOTICES: usize = 128;
 pub const MAX_WORKER_URL_BYTES: usize = 1024 * 1024;
 pub const MAX_WORKER_ID_BYTES: usize = 256;
 pub const MAX_CONCURRENT_WORKER_EVALUATIONS: usize = 8;
 const INSTALLATION_BYTES: u64 = 4096;
-const OWNER_BYTES: u64 = 4096;
 const INSTALLATION_SCOPE: ResourceScope = ResourceScope::extension(182, 1);
 const EVALUATION_SCOPE: ResourceScope = ResourceScope::extension(182, 2);
+
+#[cfg(feature = "worker-network-events")]
+trait ServiceWorkerNetworkRegistration: Send + Sync {
+    fn register(&self, context: ObjectId, session_id: &str) -> Result<(), HostError>;
+}
+
+#[cfg(feature = "worker-network-events")]
+impl ServiceWorkerNetworkRegistration for ChromiumNetworkPageRegistrationHandle {
+    fn register(&self, context: ObjectId, session_id: &str) -> Result<(), HostError> {
+        self.register_service_worker(context, session_id)
+            .map(|_| ())
+            .map_err(HostError::backend)
+    }
+}
 
 pub(crate) const fn requirements() -> ResourceRequirements {
     ResourceRequirements::none()
         .with_class(
-            ResourceClass::LiveObject,
-            MAX_WORKERS as u64,
-            MAX_WORKERS as u64,
-        )
-        .with_class(
             ResourceClass::BackendStateBytes,
-            INSTALLATION_BYTES
-                + MAX_WORKERS as u64 * OWNER_BYTES
-                + MAX_CONCURRENT_WORKER_EVALUATIONS as u64 * FFI_ALLOWANCE,
+            INSTALLATION_BYTES + MAX_CONCURRENT_WORKER_EVALUATIONS as u64 * FFI_ALLOWANCE,
             MAX_CONCURRENT_WORKER_EVALUATIONS as u64 * FFI_ALLOWANCE,
         )
         .with_class(
@@ -57,8 +68,8 @@ pub(crate) const fn requirements() -> ResourceRequirements {
             MAX_WORKER_NOTICES as u64,
         )
         .with_metadata(
-            MAX_WORKERS + 2,
-            MAX_WORKERS + MAX_WORKER_NOTICES + MAX_CONCURRENT_WORKER_EVALUATIONS + 1,
+            2,
+            MAX_WORKER_NOTICES + MAX_CONCURRENT_WORKER_EVALUATIONS + 1,
         )
 }
 
@@ -75,6 +86,19 @@ pub struct WorkerNotice {
     _notice: ResourceLease,
 }
 
+pub struct ServiceWorkerNotice {
+    pub kind: WorkerNoticeKind,
+    pub context: ObjectId,
+    pub owner: Arc<WorkerOwner>,
+    _notice: ResourceLease,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum WorkerOwnerKind {
+    Dedicated,
+    Service,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct WorkerReadiness {
     unique_context_id: Option<Box<str>>,
@@ -83,16 +107,17 @@ struct WorkerReadiness {
 }
 
 pub struct WorkerOwner {
-    page: ObjectId,
+    kind: WorkerOwnerKind,
+    page: Option<ObjectId>,
     context: ObjectId,
     context_owned: bool,
     sequence: u64,
     session_id: Box<str>,
+    target_id: Box<str>,
     url: Box<str>,
     client: Arc<dyn CdpClient>,
     readiness: Mutex<WorkerReadiness>,
     notify: Notify,
-    _owner: ResourceLease,
 }
 
 impl std::fmt::Debug for WorkerOwner {
@@ -101,18 +126,32 @@ impl std::fmt::Debug for WorkerOwner {
             .debug_struct("WorkerOwner")
             .field("page", &self.page)
             .field("session_id", &self.session_id)
+            .field("target_id", &self.target_id)
             .field("url", &self.url)
             .finish_non_exhaustive()
     }
 }
 
 impl WorkerOwner {
-    pub fn page(&self) -> ObjectId {
+    pub fn page(&self) -> Option<ObjectId> {
         self.page
+    }
+
+    pub fn context(&self) -> ObjectId {
+        self.context
+    }
+
+    pub fn is_service_worker(&self) -> bool {
+        self.kind == WorkerOwnerKind::Service
     }
 
     pub fn id(&self) -> &str {
         &self.session_id
+    }
+
+    #[cfg(feature = "extra-headers")]
+    pub(crate) fn target_id(&self) -> &str {
+        &self.target_id
     }
 
     pub fn url(&self) -> &str {
@@ -121,7 +160,8 @@ impl WorkerOwner {
 
     #[cfg(any(
         feature = "worker-console-events",
-        feature = "worker-handle-evaluation"
+        feature = "worker-handle-evaluation",
+        feature = "context-offline"
     ))]
     pub(crate) fn client(&self) -> Arc<dyn CdpClient> {
         Arc::clone(&self.client)
@@ -131,37 +171,19 @@ impl WorkerOwner {
         test,
         any(
             feature = "worker-console-events",
-            feature = "worker-handle-evaluation"
+            feature = "worker-handle-evaluation",
+            feature = "context-offline"
         )
     ))]
     pub(crate) fn for_test(page: ObjectId, client: Arc<dyn CdpClient>) -> Arc<Self> {
-        let resources = {
-            let required = requirements();
-            let mut limits =
-                playwright_rust_core::ResourceLimits::deny_all(required.scopes, required.leases);
-            for class in ResourceClass::ALL {
-                let bound = required.class(class);
-                limits = limits.with_class(class, bound.global, bound.per_scope);
-            }
-            ProductionResourceLedger::new(limits, required).expect("Worker test resources")
-        };
-        let owner = resources
-            .claim(requirements())
-            .expect("Worker test profile")
-            .reserve_many(
-                ResourceScope::Object(page),
-                &[
-                    ResourceRequest::new(ResourceClass::LiveObject, 1),
-                    ResourceRequest::new(ResourceClass::BackendStateBytes, OWNER_BYTES),
-                ],
-            )
-            .expect("Worker test owner");
         Arc::new(Self {
-            page,
+            kind: WorkerOwnerKind::Dedicated,
+            page: Some(page),
             context: page,
             context_owned: true,
             sequence: 0,
             session_id: "worker-test".into(),
+            target_id: "worker-target-test".into(),
             url: "https://example.test/worker.js".into(),
             client,
             readiness: Mutex::new(WorkerReadiness {
@@ -170,7 +192,37 @@ impl WorkerOwner {
                 closed: false,
             }),
             notify: Notify::new(),
-            _owner: owner,
+        })
+    }
+
+    #[cfg(all(
+        test,
+        any(
+            feature = "worker-console-events",
+            feature = "worker-handle-evaluation",
+            feature = "context-offline"
+        )
+    ))]
+    pub(crate) fn for_service_worker_test(
+        context: ObjectId,
+        client: Arc<dyn CdpClient>,
+    ) -> Arc<Self> {
+        Arc::new(Self {
+            kind: WorkerOwnerKind::Service,
+            page: None,
+            context,
+            context_owned: true,
+            sequence: 0,
+            session_id: "service-worker-test".into(),
+            target_id: "service-worker-target-test".into(),
+            url: "https://example.test/scope/sw.js".into(),
+            client,
+            readiness: Mutex::new(WorkerReadiness {
+                unique_context_id: Some("service-worker-test-world".into()),
+                script_loaded: true,
+                closed: false,
+            }),
+            notify: Notify::new(),
         })
     }
 
@@ -210,7 +262,9 @@ impl WorkerOwner {
             if readiness.closed {
                 return Err(HostError::TargetClosed);
             }
-            if readiness.unique_context_id.is_some() && readiness.script_loaded {
+            if readiness.unique_context_id.is_some()
+                && (self.kind == WorkerOwnerKind::Service || readiness.script_loaded)
+            {
                 return Ok(());
             }
             notified.await;
@@ -251,6 +305,7 @@ impl Drop for EvaluationSlot<'_> {
 struct State {
     workers: BTreeMap<Box<str>, Arc<WorkerOwner>>,
     notices: VecDeque<WorkerNotice>,
+    service_worker_notices: VecDeque<ServiceWorkerNotice>,
     next_sequence: u64,
     closed: bool,
 }
@@ -262,7 +317,14 @@ pub(crate) struct Installation {
     frame_trees: Arc<FrameTrees>,
     state: Mutex<State>,
     notify: Notify,
+    service_worker_notify: Notify,
     active_evaluations: AtomicUsize,
+    #[cfg(feature = "worker-network-events")]
+    network_registration: Mutex<Option<Arc<dyn ServiceWorkerNetworkRegistration>>>,
+    #[cfg(feature = "worker-network-events")]
+    prepared_service_worker_network: Mutex<BTreeSet<Box<str>>>,
+    #[cfg(all(feature = "service-worker-events", feature = "context-offline"))]
+    context_offline: Mutex<Option<Arc<crate::context_offline::Installation>>>,
     _storage: ResourceLease,
 }
 
@@ -290,13 +352,54 @@ impl Installation {
             state: Mutex::new(State {
                 workers: BTreeMap::new(),
                 notices: VecDeque::new(),
+                service_worker_notices: VecDeque::new(),
                 next_sequence: 0,
                 closed: false,
             }),
             notify: Notify::new(),
+            service_worker_notify: Notify::new(),
             active_evaluations: AtomicUsize::new(0),
+            #[cfg(feature = "worker-network-events")]
+            network_registration: Mutex::new(None),
+            #[cfg(feature = "worker-network-events")]
+            prepared_service_worker_network: Mutex::new(BTreeSet::new()),
+            #[cfg(all(feature = "service-worker-events", feature = "context-offline"))]
+            context_offline: Mutex::new(None),
             _storage: storage,
         }))
+    }
+
+    #[cfg(all(feature = "service-worker-events", feature = "context-offline"))]
+    pub(crate) fn set_context_offline(
+        &self,
+        installation: Arc<crate::context_offline::Installation>,
+    ) -> Result<(), HostError> {
+        let mut selected = self.context_offline.lock().map_err(HostError::backend)?;
+        if selected.is_some() {
+            return Err(HostError::Backend(
+                "Service Worker offline policy is already installed".into(),
+            ));
+        }
+        *selected = Some(installation);
+        Ok(())
+    }
+
+    #[cfg(feature = "worker-network-events")]
+    pub(crate) fn set_network_registration(
+        &self,
+        registration: ChromiumNetworkPageRegistrationHandle,
+    ) -> Result<(), HostError> {
+        let mut selected = self
+            .network_registration
+            .lock()
+            .map_err(HostError::backend)?;
+        if selected.is_some() {
+            return Err(HostError::Backend(
+                "Service Worker network registration is already installed".into(),
+            ));
+        }
+        *selected = Some(Arc::new(registration));
+        Ok(())
     }
 
     fn notice_lease(&self, page: ObjectId) -> Result<ResourceLease, HostError> {
@@ -311,12 +414,27 @@ impl Installation {
             })
     }
 
+    fn context_notice_lease(&self, context: ObjectId) -> Result<ResourceLease, HostError> {
+        self.resources
+            .claim(requirements())
+            .map_err(HostError::backend)?
+            .reserve(ResourceScope::Object(context), ResourceClass::EventItem, 1)
+            .map_err(|error| {
+                HostError::ResourceExhausted(format!(
+                    "Service Worker notice capacity exceeded ({MAX_WORKER_NOTICES}): {error}"
+                ))
+            })
+    }
+
     fn attach(
         &self,
         topology: &CdpTopology,
         event_session: Option<&str>,
         params: target::AttachedToTargetEvent,
     ) -> Result<(), HostError> {
+        if params.target_info.r#type == "service_worker" {
+            return self.attach_service_worker(topology, event_session, params);
+        }
         if params.target_info.r#type != "worker" {
             return Ok(());
         }
@@ -339,7 +457,7 @@ impl Installation {
                     .ok()?
                     .workers
                     .get(parent_session)
-                    .map(|owner| owner.page())
+                    .and_then(|owner| owner.page())
             });
         let Some(page) = page else {
             return Ok(());
@@ -364,46 +482,28 @@ impl Installation {
         if state.closed || state.workers.contains_key(params.session_id.as_str()) {
             return Ok(());
         }
-        if state.workers.len() >= MAX_WORKERS {
-            return Err(HostError::ResourceExhausted(format!(
-                "Worker owner capacity exceeded ({MAX_WORKERS})"
-            )));
-        }
         if state.notices.len() >= MAX_WORKER_NOTICES {
             return Err(HostError::ResourceExhausted(format!(
                 "Worker notice capacity exceeded ({MAX_WORKER_NOTICES})"
             )));
         }
-        let owner_lease = self
-            .resources
-            .claim(requirements())
-            .map_err(HostError::backend)?
-            .reserve_many(
-                ResourceScope::Object(page),
-                &[
-                    ResourceRequest::new(ResourceClass::LiveObject, 1),
-                    ResourceRequest::new(ResourceClass::BackendStateBytes, OWNER_BYTES),
-                ],
-            )
-            .map_err(|error| {
-                HostError::ResourceExhausted(format!(
-                    "Worker owner capacity exceeded ({MAX_WORKERS}): {error}"
-                ))
-            })?;
         let sequence = state.next_sequence;
         state.next_sequence = sequence.checked_add(1).ok_or_else(|| {
             HostError::ResourceExhausted("Worker creation sequence exhausted".into())
         })?;
         let session_id: Box<str> = params.session_id.into_boxed_str();
+        let target_id: Box<str> = params.target_info.target_id.into_boxed_str();
         let owner = Arc::new(WorkerOwner {
-            page,
+            kind: WorkerOwnerKind::Dedicated,
+            page: Some(page),
             context,
             context_owned,
             sequence,
             client: self
                 .sessions
-                .create_session(session_id.to_string(), params.target_info.target_id),
+                .create_session(session_id.to_string(), target_id.to_string()),
             session_id: session_id.clone(),
+            target_id,
             url: params.target_info.url.into_boxed_str(),
             readiness: Mutex::new(WorkerReadiness {
                 unique_context_id: None,
@@ -411,7 +511,6 @@ impl Installation {
                 closed: false,
             }),
             notify: Notify::new(),
-            _owner: owner_lease,
         });
         let notice = WorkerNotice {
             kind: WorkerNoticeKind::Created,
@@ -426,7 +525,224 @@ impl Installation {
         Ok(())
     }
 
+    fn attach_service_worker(
+        &self,
+        topology: &CdpTopology,
+        _event_session: Option<&str>,
+        params: target::AttachedToTargetEvent,
+    ) -> Result<(), HostError> {
+        self.validate_service_worker_target(&params)?;
+        let Some((context, context_owned)) =
+            self.visible_service_worker_context(topology, &params)?
+        else {
+            return Ok(());
+        };
+        {
+            let state = self.state.lock().map_err(HostError::backend)?;
+            if state.closed || state.workers.contains_key(params.session_id.as_str()) {
+                return Ok(());
+            }
+        }
+        #[cfg(feature = "worker-network-events")]
+        self.claim_service_worker_network(context, &params.session_id)?;
+        let mut state = self.state.lock().map_err(HostError::backend)?;
+        if state.closed || state.workers.contains_key(params.session_id.as_str()) {
+            return Ok(());
+        }
+        if state.service_worker_notices.len() >= MAX_WORKER_NOTICES {
+            return Err(HostError::ResourceExhausted(format!(
+                "Service Worker notice capacity exceeded ({MAX_WORKER_NOTICES})"
+            )));
+        }
+        let sequence = state.next_sequence;
+        state.next_sequence = sequence.checked_add(1).ok_or_else(|| {
+            HostError::ResourceExhausted("Worker creation sequence exhausted".into())
+        })?;
+        let session_id: Box<str> = params.session_id.into_boxed_str();
+        let target_id: Box<str> = params.target_info.target_id.into_boxed_str();
+        let owner = Arc::new(WorkerOwner {
+            kind: WorkerOwnerKind::Service,
+            page: None,
+            context,
+            context_owned,
+            sequence,
+            client: self
+                .sessions
+                .create_session(session_id.to_string(), target_id.to_string()),
+            session_id: session_id.clone(),
+            target_id,
+            url: params.target_info.url.into_boxed_str(),
+            readiness: Mutex::new(WorkerReadiness {
+                unique_context_id: None,
+                script_loaded: false,
+                closed: false,
+            }),
+            notify: Notify::new(),
+        });
+        let notice = ServiceWorkerNotice {
+            kind: WorkerNoticeKind::Created,
+            context,
+            owner: Arc::clone(&owner),
+            _notice: self.context_notice_lease(context)?,
+        };
+        state.workers.insert(session_id, owner);
+        state.service_worker_notices.push_back(notice);
+        drop(state);
+        self.service_worker_notify.notify_one();
+        Ok(())
+    }
+
+    fn validate_service_worker_target(
+        &self,
+        params: &target::AttachedToTargetEvent,
+    ) -> Result<(), HostError> {
+        bounded(
+            &params.session_id,
+            MAX_WORKER_ID_BYTES,
+            "Service Worker session ID",
+        )?;
+        bounded(
+            &params.target_info.target_id,
+            MAX_WORKER_ID_BYTES,
+            "Service Worker target ID",
+        )?;
+        bounded(
+            &params.target_info.url,
+            MAX_WORKER_URL_BYTES,
+            "Service Worker URL",
+        )?;
+        Ok(())
+    }
+
+    fn visible_service_worker_context(
+        &self,
+        topology: &CdpTopology,
+        params: &target::AttachedToTargetEvent,
+    ) -> Result<Option<(ObjectId, bool)>, HostError> {
+        let native_context = params
+            .target_info
+            .browser_context_id
+            .as_deref()
+            .unwrap_or("");
+        let context = if native_context.is_empty() {
+            topology
+                .default_context_route()
+                .map(|route| route.object_id())
+        } else {
+            topology.context_object_id(native_context).or_else(|| {
+                // The Node host installs Playwright-style context fallback:
+                // an unknown native context is projected through the default
+                // context. Chromium may still report a native ID for that
+                // default context on service-worker targets even though the
+                // portable topology intentionally stores its route under the
+                // empty key.
+                topology
+                    .default_context_route()
+                    .map(|route| route.object_id())
+            })
+        };
+        let Some(context) = context else {
+            return Ok(None);
+        };
+        let Some(context_route) = topology.browser_context_route(context) else {
+            return Ok(None);
+        };
+        let context_owned = context_route.ownership() == CdpContextOwnership::Owned;
+        if self
+            .context_metadata
+            .visible(context, context_owned)?
+            .is_none()
+        {
+            return Ok(None);
+        }
+        Ok(Some((context, context_owned)))
+    }
+
+    #[cfg(feature = "worker-network-events")]
+    fn register_service_worker_network(
+        &self,
+        context: ObjectId,
+        session_id: &str,
+    ) -> Result<(), HostError> {
+        self.network_registration
+            .lock()
+            .map_err(HostError::backend)?
+            .as_ref()
+            .ok_or_else(|| {
+                HostError::Backend("Service Worker network registration is not installed".into())
+            })?
+            .register(context, session_id)?;
+        Ok(())
+    }
+
+    #[cfg(feature = "worker-network-events")]
+    fn claim_service_worker_network(
+        &self,
+        context: ObjectId,
+        session_id: &str,
+    ) -> Result<(), HostError> {
+        if self
+            .prepared_service_worker_network
+            .lock()
+            .map_err(HostError::backend)?
+            .remove(session_id)
+        {
+            return Ok(());
+        }
+        self.register_service_worker_network(context, session_id)
+    }
+
+    fn prepare_service_worker_network(
+        &self,
+        topology: &CdpTopology,
+        params: &target::AttachedToTargetEvent,
+    ) -> Result<(), HostError> {
+        #[cfg(feature = "worker-network-events")]
+        {
+            self.validate_service_worker_target(params)?;
+            if let Some((context, _)) = self.visible_service_worker_context(topology, params)? {
+                self.register_service_worker_network(context, &params.session_id)?;
+                self.prepared_service_worker_network
+                    .lock()
+                    .map_err(HostError::backend)?
+                    .insert(params.session_id.clone().into_boxed_str());
+            }
+        }
+        #[cfg(not(feature = "worker-network-events"))]
+        let _ = (topology, params);
+        Ok(())
+    }
+
+    #[cfg(all(feature = "service-worker-events", feature = "context-offline"))]
+    fn service_worker_offline_commands(
+        &self,
+        topology: &CdpTopology,
+        params: &target::AttachedToTargetEvent,
+    ) -> Result<Option<[ServiceWorkerInitializationCommand; 1]>, HostError> {
+        self.validate_service_worker_target(params)?;
+        let Some((context, _)) = self.visible_service_worker_context(topology, params)? else {
+            return Ok(None);
+        };
+        let ownership = topology
+            .browser_context_route(context)
+            .ok_or(HostError::TargetClosed)?
+            .ownership();
+        self.context_offline
+            .lock()
+            .map_err(HostError::backend)?
+            .as_ref()
+            .ok_or_else(|| {
+                HostError::Backend("Service Worker offline policy is not installed".into())
+            })?
+            .service_worker_initialization_commands(context, ownership)
+    }
+
     fn close_worker(&self, session_id: &str) -> Result<(), HostError> {
+        #[cfg(feature = "worker-network-events")]
+        self.prepared_service_worker_network
+            .lock()
+            .map_err(HostError::backend)?
+            .remove(session_id);
         let owner = {
             let mut state = self.state.lock().map_err(HostError::backend)?;
             let Some(owner) = state.workers.remove(session_id) else {
@@ -440,19 +756,36 @@ impl Installation {
         }
         let mut state = self.state.lock().map_err(HostError::backend)?;
         if !state.closed {
-            if state.notices.len() >= MAX_WORKER_NOTICES {
-                return Err(HostError::ResourceExhausted(format!(
-                    "Worker notice capacity exceeded ({MAX_WORKER_NOTICES})"
-                )));
+            if let Some(page) = owner.page() {
+                if state.notices.len() >= MAX_WORKER_NOTICES {
+                    return Err(HostError::ResourceExhausted(format!(
+                        "Worker notice capacity exceeded ({MAX_WORKER_NOTICES})"
+                    )));
+                }
+                state.notices.push_back(WorkerNotice {
+                    kind: WorkerNoticeKind::Closed,
+                    page,
+                    _notice: self.notice_lease(page)?,
+                    owner,
+                });
+                drop(state);
+                self.notify.notify_one();
+            } else {
+                if state.service_worker_notices.len() >= MAX_WORKER_NOTICES {
+                    return Err(HostError::ResourceExhausted(format!(
+                        "Service Worker notice capacity exceeded ({MAX_WORKER_NOTICES})"
+                    )));
+                }
+                let context = owner.context();
+                state.service_worker_notices.push_back(ServiceWorkerNotice {
+                    kind: WorkerNoticeKind::Closed,
+                    context,
+                    _notice: self.context_notice_lease(context)?,
+                    owner,
+                });
+                drop(state);
+                self.service_worker_notify.notify_one();
             }
-            state.notices.push_back(WorkerNotice {
-                kind: WorkerNoticeKind::Closed,
-                page: owner.page(),
-                _notice: self.notice_lease(owner.page())?,
-                owner,
-            });
-            drop(state);
-            self.notify.notify_one();
         }
         Ok(())
     }
@@ -515,11 +848,40 @@ impl Installation {
         let mut workers = state
             .workers
             .values()
-            .filter(|owner| owner.page() == page)
+            .filter(|owner| owner.page() == Some(page))
             .cloned()
             .collect::<Vec<_>>();
         workers.sort_unstable_by_key(|owner| owner.sequence);
         Ok(workers)
+    }
+
+    pub(crate) fn service_worker_snapshot(
+        &self,
+        context: ObjectId,
+    ) -> Result<Vec<Arc<WorkerOwner>>, HostError> {
+        let state = self.state.lock().map_err(HostError::backend)?;
+        if state.closed {
+            return Err(HostError::TargetClosed);
+        }
+        let mut workers = state
+            .workers
+            .values()
+            .filter(|owner| owner.is_service_worker() && owner.context() == context)
+            .cloned()
+            .collect::<Vec<_>>();
+        workers.sort_unstable_by_key(|owner| owner.sequence);
+        Ok(workers)
+    }
+
+    #[cfg(feature = "extra-headers")]
+    pub(crate) fn contains_service_worker(&self, session_id: &str) -> Result<bool, HostError> {
+        Ok(self
+            .state
+            .lock()
+            .map_err(HostError::backend)?
+            .workers
+            .get(session_id)
+            .is_some_and(|owner| owner.is_service_worker()))
     }
 
     fn page_visible(
@@ -546,7 +908,13 @@ impl Installation {
     }
 
     pub(crate) fn notice_visible(&self, owner: &WorkerOwner) -> Result<bool, HostError> {
-        self.page_visible(owner.page, owner.context, owner.context_owned)
+        match owner.page {
+            Some(page) => self.page_visible(page, owner.context, owner.context_owned),
+            None => Ok(self
+                .context_metadata
+                .visible(owner.context, owner.context_owned)?
+                .is_some()),
+        }
     }
 
     pub(crate) fn require_current_owner(&self, owner: &Arc<WorkerOwner>) -> Result<(), HostError> {
@@ -568,6 +936,24 @@ impl Installation {
             {
                 let mut state = self.state.lock().map_err(HostError::backend)?;
                 if let Some(notice) = state.notices.pop_front() {
+                    return Ok(notice);
+                }
+                if state.closed {
+                    return Err(HostError::TargetClosed);
+                }
+            }
+            notified.await;
+        }
+    }
+
+    pub(crate) async fn next_service_worker_notice(
+        &self,
+    ) -> Result<ServiceWorkerNotice, HostError> {
+        loop {
+            let notified = self.service_worker_notify.notified();
+            {
+                let mut state = self.state.lock().map_err(HostError::backend)?;
+                if let Some(notice) = state.service_worker_notices.pop_front() {
                     return Ok(notice);
                 }
                 if state.closed {
@@ -653,12 +1039,19 @@ impl Installation {
             }
             state.closed = true;
             state.notices.clear();
+            state.service_worker_notices.clear();
             std::mem::take(&mut state.workers)
         };
+        #[cfg(feature = "worker-network-events")]
+        self.prepared_service_worker_network
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clear();
         for owner in workers.into_values() {
             let _ = owner.close();
         }
         self.notify.notify_waiters();
+        self.service_worker_notify.notify_waiters();
     }
 }
 
@@ -688,12 +1081,63 @@ impl ChromiumFrameEventObserver for Observer {
         true
     }
 
+    fn retains_service_worker_targets(&self) -> bool {
+        cfg!(feature = "service-worker-events")
+    }
+
     fn retains_worker_session(&self, session: &str) -> bool {
         self.installation.contains(session)
     }
 
     fn enables_worker_network(&self) -> bool {
         cfg!(feature = "worker-network-events")
+    }
+
+    fn enables_service_worker_network(&self) -> bool {
+        cfg!(feature = "worker-network-events")
+            || cfg!(all(
+                feature = "service-worker-events",
+                feature = "context-offline"
+            ))
+    }
+
+    fn prepare_service_worker(
+        &self,
+        topology: &CdpTopology,
+        event: &CdpEvent,
+    ) -> FrameObservationResult {
+        self.downstream.prepare_service_worker(topology, event)?;
+        let params = serde_json::from_value(event.params.clone())?;
+        self.installation
+            .prepare_service_worker_network(topology, &params)
+            .map_err(|error| Box::new(error) as Box<dyn Error + Send + Sync>)
+    }
+
+    fn service_worker_initialization_commands(
+        &self,
+        topology: &CdpTopology,
+        event: &CdpEvent,
+        commands: &mut Vec<ServiceWorkerInitializationCommand>,
+    ) -> FrameObservationResult {
+        self.downstream
+            .service_worker_initialization_commands(topology, event, commands)?;
+        #[cfg(all(feature = "service-worker-events", feature = "context-offline"))]
+        {
+            let params = serde_json::from_value(event.params.clone())?;
+            if let Some(offline_commands) = self
+                .installation
+                .service_worker_offline_commands(topology, &params)
+                .map_err(|error| Box::new(error) as Box<dyn Error + Send + Sync>)?
+            {
+                commands
+                    .try_reserve(offline_commands.len())
+                    .map_err(|error| Box::new(error) as Box<dyn Error + Send + Sync>)?;
+                commands.extend(offline_commands);
+            }
+        }
+        #[cfg(not(all(feature = "service-worker-events", feature = "context-offline")))]
+        let _ = (topology, event, commands);
+        Ok(())
     }
 
     fn prepare_page(&self, topology: &CdpTopology, page: ObjectId) -> FrameObservationResult {
@@ -783,12 +1227,41 @@ impl HostSession {
         self.worker_events()?.snapshot(page)
     }
 
+    #[cfg(feature = "service-worker-events")]
+    pub async fn next_service_worker_notice(&self) -> Result<ServiceWorkerNotice, HostError> {
+        let installation = self.worker_events()?;
+        loop {
+            let notice = tokio::select! {
+                result = installation.next_service_worker_notice() => result,
+                () = self.stop.cancelled() => Err(HostError::TargetClosed),
+                () = self.disconnected.cancelled() => Err(HostError::TargetClosed),
+            }?;
+            if installation.notice_visible(&notice.owner)? {
+                return Ok(notice);
+            }
+        }
+    }
+
+    #[cfg(feature = "service-worker-events")]
+    pub fn context_service_workers(
+        &self,
+        context_id: &str,
+    ) -> Result<Vec<Arc<WorkerOwner>>, HostError> {
+        let context = parse_object_id(context_id, "BrowserContext")?;
+        self.require_visible_context_id(context)?;
+        self.worker_events()?.service_worker_snapshot(context)
+    }
+
     pub async fn worker_evaluate(
         &self,
         owner: Arc<WorkerOwner>,
         params: crate::evaluation::EvaluateParams,
     ) -> Result<crate::evaluation::EvaluationValue, HostError> {
-        self.require_visible_page_id(owner.page())?;
+        if let Some(page) = owner.page() {
+            self.require_visible_page_id(page)?;
+        } else {
+            self.require_visible_context_id(owner.context())?;
+        }
         let installation = self.worker_events()?;
         installation.require_current_owner(&owner)?;
         tokio::select! {
@@ -843,6 +1316,35 @@ mod tests {
         fn create_session(&self, _session_id: String, _target_id: String) -> Arc<dyn CdpClient> {
             self.0.clone()
         }
+    }
+
+    #[cfg(feature = "worker-network-events")]
+    #[derive(Default)]
+    struct RecordingNetworkRegistration {
+        registrations: Mutex<Vec<(ObjectId, String)>>,
+    }
+
+    #[cfg(feature = "worker-network-events")]
+    impl ServiceWorkerNetworkRegistration for RecordingNetworkRegistration {
+        fn register(&self, context: ObjectId, session_id: &str) -> Result<(), HostError> {
+            self.registrations
+                .lock()
+                .map_err(HostError::backend)?
+                .push((context, session_id.to_owned()));
+            Ok(())
+        }
+    }
+
+    #[cfg(feature = "worker-network-events")]
+    fn install_test_network_registration(
+        installation: &Installation,
+    ) -> Arc<RecordingNetworkRegistration> {
+        let registration = Arc::new(RecordingNetworkRegistration::default());
+        *installation
+            .network_registration
+            .lock()
+            .expect("test network registration should be available") = Some(registration.clone());
+        registration
     }
 
     fn resources() -> ProductionResourceLedger {
@@ -979,35 +1481,46 @@ mod tests {
         .unwrap()
     }
 
+    fn service_worker_event(id: &str, context: &str) -> target::AttachedToTargetEvent {
+        serde_json::from_value(json!({
+            "sessionId": id,
+            "waitingForDebugger": true,
+            "targetInfo": {
+                "targetId": id,
+                "type": "service_worker",
+                "title": "",
+                "url": "https://example.test/service-worker.js",
+                "attached": true,
+                "canAccessOpener": false,
+                "browserContextId": context
+            }
+        }))
+        .unwrap()
+    }
+
     fn installation() -> Arc<Installation> {
-        Installation::new(
+        let installation = Installation::new(
             &resources(),
             Arc::new(FakeSessions(Arc::new(FakeCdpClient::from_html("")))),
             context_metadata(false),
             empty_frame_trees(),
         )
-        .unwrap()
+        .unwrap();
+        #[cfg(feature = "worker-network-events")]
+        install_test_network_registration(&installation);
+        installation
     }
 
     fn owner(installation: &Installation) -> Arc<WorkerOwner> {
-        let lease = installation
-            .resources
-            .claim(requirements())
-            .unwrap()
-            .reserve_many(
-                ResourceScope::Object(ObjectId::new(7)),
-                &[
-                    ResourceRequest::new(ResourceClass::LiveObject, 1),
-                    ResourceRequest::new(ResourceClass::BackendStateBytes, OWNER_BYTES),
-                ],
-            )
-            .unwrap();
+        let _ = installation;
         Arc::new(WorkerOwner {
-            page: ObjectId::new(7),
+            kind: WorkerOwnerKind::Dedicated,
+            page: Some(ObjectId::new(7)),
             context: ObjectId::new(7),
             context_owned: true,
             sequence: 0,
             session_id: "worker-1".into(),
+            target_id: "worker-target-1".into(),
             url: "https://example.test/worker.js".into(),
             client: Arc::new(FakeCdpClient::from_html("")),
             readiness: Mutex::new(WorkerReadiness {
@@ -1016,8 +1529,169 @@ mod tests {
                 closed: false,
             }),
             notify: Notify::new(),
-            _owner: lease,
         })
+    }
+
+    #[cfg(feature = "worker-network-events")]
+    #[test]
+    fn service_worker_preparation_registers_network_without_publishing_worker() {
+        // Arrange
+        let topology = topology_with_default_and_owned_pages();
+        let metadata = context_metadata(true);
+        let (_urls, trees) = published_owned_page_trees(&metadata);
+        let resources = resources();
+        let installation = Installation::new(
+            &resources,
+            Arc::new(FakeSessions(Arc::new(FakeCdpClient::from_html("")))),
+            metadata,
+            trees,
+        )
+        .unwrap();
+        let registration = install_test_network_registration(&installation);
+        let event = service_worker_event("service-worker-root", "owned-context");
+
+        // Act
+        installation
+            .prepare_service_worker_network(&topology, &event)
+            .expect("pre-resume network lane should register");
+
+        // Assert
+        assert_eq!(
+            *registration.registrations.lock().unwrap(),
+            vec![(ObjectId::new(5), "service-worker-root".to_owned())]
+        );
+        let state = installation.state.lock().unwrap();
+        assert!(state.workers.is_empty());
+        assert!(state.service_worker_notices.is_empty());
+    }
+
+    #[tokio::test]
+    async fn root_and_parent_scoped_service_workers_are_owned_by_their_browser_context() {
+        // Arrange
+        let topology = topology_with_default_and_owned_pages();
+        let metadata = context_metadata(true);
+        let (_urls, trees) = published_owned_page_trees(&metadata);
+        let resources = resources();
+        let installation = Installation::new(
+            &resources,
+            Arc::new(FakeSessions(Arc::new(FakeCdpClient::from_html("")))),
+            metadata,
+            trees,
+        )
+        .unwrap();
+        #[cfg(feature = "worker-network-events")]
+        install_test_network_registration(&installation);
+
+        // Act
+        for (parent, id) in [
+            (None, "service-worker-root"),
+            (Some("page-session"), "service-worker-parent"),
+        ] {
+            installation
+                .attach(&topology, parent, service_worker_event(id, "owned-context"))
+                .unwrap();
+        }
+        let notices = [
+            installation.next_service_worker_notice().await.unwrap(),
+            installation.next_service_worker_notice().await.unwrap(),
+        ];
+        let snapshot = installation
+            .service_worker_snapshot(ObjectId::new(5))
+            .unwrap();
+
+        // Assert
+        for notice in notices {
+            assert_eq!(notice.kind, WorkerNoticeKind::Created);
+            assert_eq!(notice.context, ObjectId::new(5));
+            assert!(notice.owner.is_service_worker());
+            assert_eq!(notice.owner.page(), None);
+        }
+        assert_eq!(snapshot.len(), 2);
+        #[cfg(feature = "extra-headers")]
+        {
+            assert!(
+                installation
+                    .contains_service_worker("service-worker-root")
+                    .unwrap()
+            );
+            assert!(
+                installation
+                    .contains_service_worker("service-worker-parent")
+                    .unwrap()
+            );
+            assert!(!installation.contains_service_worker("missing").unwrap());
+        }
+    }
+
+    #[tokio::test]
+    async fn hidden_default_service_worker_does_not_consume_public_notice_capacity() {
+        // Arrange
+        let topology = topology_with_default_and_owned_pages();
+        let metadata = context_metadata(true);
+        let (_urls, trees) = published_owned_page_trees(&metadata);
+        let resources = resources();
+        let installation = Installation::new(
+            &resources,
+            Arc::new(FakeSessions(Arc::new(FakeCdpClient::from_html("")))),
+            metadata,
+            trees,
+        )
+        .unwrap();
+        #[cfg(feature = "worker-network-events")]
+        install_test_network_registration(&installation);
+
+        // Act
+        installation
+            .attach(
+                &topology,
+                None,
+                service_worker_event("hidden-service-worker", ""),
+            )
+            .unwrap();
+
+        // Assert
+        assert!(
+            installation
+                .service_worker_snapshot(ObjectId::new(2))
+                .unwrap()
+                .is_empty()
+        );
+        assert_eq!(
+            resources
+                .metrics()
+                .unwrap()
+                .class(ResourceClass::EventItem)
+                .current,
+            0
+        );
+    }
+
+    #[tokio::test]
+    async fn unknown_native_service_worker_context_falls_back_to_default_context() {
+        // Arrange
+        let topology = topology_with_default_and_owned_pages();
+        let installation = installation();
+
+        // Act
+        installation
+            .attach(
+                &topology,
+                None,
+                service_worker_event("default-worker", "native-default-context"),
+            )
+            .unwrap();
+        let notice = installation.next_service_worker_notice().await.unwrap();
+
+        // Assert
+        assert_eq!(notice.context, ObjectId::new(2));
+        assert_eq!(notice.owner.context(), ObjectId::new(2));
+        assert_eq!(
+            installation
+                .service_worker_snapshot(ObjectId::new(2))
+                .unwrap()
+                .len(),
+            1
+        );
     }
 
     #[tokio::test]
@@ -1060,7 +1734,7 @@ mod tests {
         drop(notice);
         let metrics = resources.metrics().unwrap();
         assert_eq!(metrics.class(ResourceClass::EventItem).current, 0);
-        assert_eq!(metrics.class(ResourceClass::LiveObject).current, 1);
+        assert_eq!(metrics.class(ResourceClass::LiveObject).current, 0);
     }
 
     #[tokio::test]
@@ -1117,7 +1791,37 @@ mod tests {
         drop(notice);
         let metrics = resources.metrics().unwrap();
         assert_eq!(metrics.class(ResourceClass::EventItem).current, 0);
-        assert_eq!(metrics.class(ResourceClass::LiveObject).current, 1);
+        assert_eq!(metrics.class(ResourceClass::LiveObject).current, 0);
+    }
+
+    #[tokio::test]
+    async fn worker_owner_registry_grows_past_the_legacy_count() {
+        // Arrange
+        let topology = topology_with_default_and_owned_pages();
+        let metadata = context_metadata(true);
+        let (_urls, trees) = published_owned_page_trees(&metadata);
+        let installation = Installation::new(
+            &resources(),
+            Arc::new(FakeSessions(Arc::new(FakeCdpClient::from_html("")))),
+            metadata,
+            trees,
+        )
+        .unwrap();
+
+        // Act
+        for value in 1..=129 {
+            installation
+                .attach(
+                    &topology,
+                    Some("owned-session"),
+                    worker_event(&format!("worker-{value}")),
+                )
+                .expect("Worker ownership should not have a fixed count limit");
+            drop(installation.next_notice().await.unwrap());
+        }
+
+        // Assert
+        assert_eq!(installation.snapshot(ObjectId::new(6)).unwrap().len(), 129);
     }
 
     #[tokio::test]
@@ -1283,7 +1987,7 @@ mod tests {
     }
 
     #[test]
-    fn resource_profile_bounds_workers_notices_and_concurrent_evaluations() {
+    fn resource_profile_bounds_notices_and_concurrent_evaluations_not_worker_count() {
         // Arrange
         let required = requirements();
 
@@ -1293,7 +1997,7 @@ mod tests {
         let bytes = required.class(ResourceClass::BackendStateBytes);
 
         // Assert
-        assert_eq!(objects.global, MAX_WORKERS as u64);
+        assert_eq!(objects.global, 0);
         assert_eq!(events.global, MAX_WORKER_NOTICES as u64);
         assert!(bytes.global >= MAX_CONCURRENT_WORKER_EVALUATIONS as u64 * FFI_ALLOWANCE);
         assert_eq!(

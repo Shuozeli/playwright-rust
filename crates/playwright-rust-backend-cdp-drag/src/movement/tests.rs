@@ -134,6 +134,78 @@ struct WorldProof {
     client: Arc<dyn CdpClient>,
     destroyed: std::sync::atomic::AtomicBool,
 }
+
+#[test]
+fn allocator_backed_move_owns_more_than_legacy_world_count() {
+    // Arrange
+    let profile = DragDataProfile::new(
+        ResourceScope::extension(14, 61),
+        DragDataLimits {
+            items: 2,
+            files: 0,
+            text_bytes: 128,
+        },
+        NonZeroUsize::new(1).unwrap(),
+    )
+    .unwrap();
+    let required = profile
+        .requirements()
+        .combine_concurrent(DragListenerFactory::allocator_backed_requirements())
+        .combine_concurrent(DragCaptureFactory::requirements())
+        .combine_concurrent(DragMove::allocator_backed_requirements());
+    let bytes = required.class(ResourceClass::BackendStateBytes);
+    let resources = ProductionResourceLedger::new(
+        ResourceLimits::deny_all(required.scopes, required.leases).with_class(
+            ResourceClass::BackendStateBytes,
+            bytes.global,
+            bytes.per_scope,
+        ),
+        required,
+    )
+    .unwrap();
+    let session = Arc::new(Session {
+        events: ReclaimingEventFanout::new(8, 1).unwrap(),
+        toggles: Mutex::new(Vec::new()),
+    });
+    let store = DragDataStore::new(profile, &resources).unwrap();
+    let captures =
+        DragCaptureFactory::new(session, store, ResourceScope::extension(14, 62), &resources)
+            .unwrap();
+    let listeners = DragListenerFactory::new_allocator_backed(
+        "dynamic_composition",
+        ResourceScope::extension(14, 60),
+        &resources,
+    )
+    .unwrap();
+    let clients = (0..130)
+        .map(|_| Arc::new(FakeCdpClient::from_html("")))
+        .collect::<Vec<_>>();
+    let worlds = clients
+        .iter()
+        .enumerate()
+        .map(|(index, client)| DragWorld {
+            client: client.clone(),
+            unique_context: if index == 0 { "first" } else { "next" },
+        })
+        .collect::<Vec<_>>();
+
+    // Act
+    let movement = DragMove::start_with_world_lifetime_allocator_backed(
+        ResourceScope::extension(14, 63),
+        &resources,
+        &listeners,
+        &captures,
+        &worlds,
+        Box::pin(async { Ok(()) }),
+        None,
+    )
+    .unwrap();
+
+    // Assert
+    assert_eq!(listeners.active_listeners(), 130);
+    drop(movement);
+    assert_eq!(listeners.active_listeners(), 0);
+}
 impl DragWorldLifetime for WorldProof {
     fn world_destroyed(&self, client: &Arc<dyn CdpClient>, unique: &str) -> bool {
         unique == "world"

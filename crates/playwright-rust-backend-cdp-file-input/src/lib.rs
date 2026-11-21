@@ -87,6 +87,7 @@ impl std::error::Error for PayloadError {}
 pub struct PayloadProfile {
     scope: ResourceScope,
     calls: usize,
+    allocator_backed: bool,
     items: usize,
     base64_bytes: u64,
     metadata_bytes: usize,
@@ -116,6 +117,7 @@ impl PayloadProfile {
             large_commands: false,
             scope,
             calls,
+            allocator_backed: false,
             items,
             base64_bytes,
             metadata_bytes,
@@ -124,6 +126,16 @@ impl PayloadProfile {
         result.requirements()?;
         Ok(result)
     }
+    pub fn new_allocator_backed(
+        scope: ResourceScope,
+        items: usize,
+        base64_bytes: u64,
+        metadata_bytes: usize,
+    ) -> Result<Self, PayloadError> {
+        let mut profile = Self::new(scope, 1, items, base64_bytes, metadata_bytes)?;
+        profile.allocator_backed = true;
+        Ok(profile)
+    }
     /// Select the independently admitted large-command connection pool.
     #[cfg(feature = "large-commands")]
     pub fn with_large_commands(mut self) -> Self {
@@ -131,6 +143,9 @@ impl PayloadProfile {
         self
     }
     pub fn requirements(self) -> Result<ResourceRequirements, PayloadError> {
+        if self.allocator_backed {
+            return Ok(ResourceRequirements::none());
+        }
         let count = u64::try_from(self.calls).map_err(|_| PayloadError::InvalidProfile)?;
         let bytes = self
             .operation_bytes
@@ -250,19 +265,27 @@ impl CdpFilePayloadService {
         }) {
             return Err(PayloadError::InvalidModifiedTime);
         }
-        let _lease = self
-            .ledger
-            .reserve_many(
-                self.profile.scope,
-                &[
-                    playwright_rust_core::ResourceRequest::new(ResourceClass::ActiveCommand, 1),
-                    playwright_rust_core::ResourceRequest::new(
-                        ResourceClass::BackendStateBytes,
-                        self.profile.operation_bytes,
-                    ),
-                ],
+        let _lease = if self.profile.allocator_backed {
+            None
+        } else {
+            Some(
+                self.ledger
+                    .reserve_many(
+                        self.profile.scope,
+                        &[
+                            playwright_rust_core::ResourceRequest::new(
+                                ResourceClass::ActiveCommand,
+                                1,
+                            ),
+                            playwright_rust_core::ResourceRequest::new(
+                                ResourceClass::BackendStateBytes,
+                                self.profile.operation_bytes,
+                            ),
+                        ],
+                    )
+                    .map_err(PayloadError::Budget)?,
             )
-            .map_err(PayloadError::Budget)?;
+        };
         let arguments = arguments(target.object_id, payloads)?;
         let client = target.client;
         let response = if self.profile.large_commands {

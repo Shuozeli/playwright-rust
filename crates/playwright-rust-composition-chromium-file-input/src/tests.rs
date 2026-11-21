@@ -516,6 +516,54 @@ fn profile_rejects_zero_and_overflowing_storage() {
     assert!(invalid.iter().all(Result::is_err));
 }
 
+#[test]
+fn allocator_backed_profile_keeps_only_fixed_service_state_admission() {
+    // Arrange
+    let profile = UploadProfile::new_allocator_backed(ResourceScope::Connection, 4096).unwrap();
+
+    // Act
+    let requirements = profile.requirements();
+
+    // Assert
+    assert_eq!(profile.capacity(), usize::MAX);
+    assert!(profile.allocator_backed());
+    assert_eq!(requirements.class(ResourceClass::LiveObject).global, 0);
+    assert!(requirements.class(ResourceClass::BackendStateBytes).global > 0);
+    assert_eq!(requirements.leases, 1);
+}
+
+#[test]
+fn allocator_backed_service_holds_more_than_the_legacy_owner_count() {
+    // Arrange
+    let fixture = Fixture::new(1, 4096);
+    let profile =
+        UploadProfile::new_allocator_backed(ResourceScope::extension(146, 30), 4096).unwrap();
+    let owners = production(profile.requirements());
+    let service = FilePayloadOperationService::new(
+        profile,
+        &owners,
+        fixture.service.backend.clone(),
+        fixture.queue.clone(),
+    )
+    .unwrap();
+
+    // Act
+    let admitted: Vec<_> = (0..129).map(|_| service.admit_owner().unwrap()).collect();
+
+    // Assert
+    assert_eq!(service.active_operations(), 129);
+    assert_eq!(
+        owners
+            .metrics()
+            .unwrap()
+            .class(ResourceClass::LiveObject)
+            .current,
+        0
+    );
+    drop(admitted);
+    assert_eq!(service.active_operations(), 0);
+}
+
 #[tokio::test]
 async fn exhausted_owner_backing_rolls_back_the_admission_count_before_dispatch() {
     // Arrange

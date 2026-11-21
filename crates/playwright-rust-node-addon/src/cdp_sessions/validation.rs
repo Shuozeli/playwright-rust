@@ -1,25 +1,12 @@
-//! Bounded serialized CDP input accepted by the opt-in Node boundary.
+//! Serialized CDP input validation and measured output ownership.
 
 use playwright_rust_node_host::HostError;
 use serde_json::Value;
 
-pub const MAX_CDP_PARAMS_JSON_BYTES: usize = 1024 * 1024;
-pub const MAX_CDP_RESULT_JSON_BYTES: usize = 4 * 1024 * 1024;
-
 pub fn parse_params_json(source: &str) -> Result<Value, HostError> {
-    if source.len() > MAX_CDP_PARAMS_JSON_BYTES {
-        return Err(HostError::InvalidArgument(format!(
-            "CDP params JSON exceeds {MAX_CDP_PARAMS_JSON_BYTES} UTF-8 bytes"
-        )));
-    }
     let params = serde_json::from_str::<Value>(source).map_err(|error| {
         HostError::InvalidArgument(format!("CDP params are not valid JSON: {error}"))
     })?;
-    if !params.is_object() {
-        return Err(HostError::InvalidArgument(
-            "CDP params must be a JSON object".into(),
-        ));
-    }
     Ok(params)
 }
 
@@ -32,10 +19,36 @@ pub fn measured_result(value: Value) -> Result<(Value, u64), HostError> {
     let bytes = serde_json::to_vec(&value)
         .map_err(|error| HostError::Backend(error.to_string()))?
         .len();
-    if bytes > MAX_CDP_RESULT_JSON_BYTES {
-        return Err(HostError::ResourceExhausted(format!(
-            "CDP result exceeds {MAX_CDP_RESULT_JSON_BYTES} bytes"
-        )));
+    let bytes = u64::try_from(bytes)
+        .map_err(|_| HostError::ResourceExhausted("CDP result byte length overflow".into()))?;
+    Ok((value, bytes))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn params_parser_accepts_input_beyond_the_retired_one_megabyte_limit() {
+        // Arrange
+        let source = format!(r#"{{"value":"{}"}}"#, "x".repeat(2 * 1024 * 1024));
+
+        // Act
+        let parsed = parse_params_json(&source).unwrap();
+
+        // Assert
+        assert_eq!(parsed["value"].as_str().unwrap().len(), 2 * 1024 * 1024);
     }
-    Ok((value, bytes as u64))
+
+    #[test]
+    fn params_parser_preserves_non_object_json_for_chromium_validation() {
+        // Arrange
+        let source = r#"["value", 7, null]"#;
+
+        // Act
+        let parsed = parse_params_json(source).unwrap();
+
+        // Assert
+        assert_eq!(parsed, serde_json::json!(["value", 7, null]));
+    }
 }

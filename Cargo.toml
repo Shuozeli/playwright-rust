@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 exclude = [
+    "third_party/regress",
     "vendor/playwright-rust-tungstenite",
     "vendor/playwright-rust-tokio-tungstenite",
 ]
@@ -37,8 +38,11 @@ members = [
     "crates/playwright-rust-persistent-context-preflight",
     "crates/playwright-rust-browser-model",
     "crates/playwright-rust-network-model",
+    "crates/playwright-rust-ecmascript-regexp",
+    "crates/playwright-rust-har-recording",
     "crates/playwright-rust-har-replay",
     "crates/playwright-rust-api-request",
+    "crates/playwright-rust-api-request-tracing",
     "crates/playwright-rust-api-request-http1",
     "crates/playwright-rust-api-request-transport",
     "crates/playwright-rust-api-request-connector-tokio",
@@ -80,6 +84,7 @@ members = [
     "crates/playwright-rust-browser-registry",
     "crates/playwright-rust-browser-backend",
     "crates/playwright-rust-provider-cdp",
+    "crates/playwright-rust-remote-cdp",
     "crates/playwright-rust-provider-chromium",
     "crates/playwright-rust-composition-chromium-content",
     "crates/playwright-rust-composition-chromium-context-creation",
@@ -259,6 +264,10 @@ rand = "0.9"
 ring = "0.17"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 mime_guess = "2"
+sha1 = "0.10"
+zip = { version = "9", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+tempfile = "3.24"
+time = { version = "0.3.44", features = ["formatting"] }
 httparse = "1"
 webpki-roots = "1"
 brotli = { version = "9", features = ["disallow_large_window_size"] }
@@ -272,6 +281,7 @@ pyo3-async-runtimes = { version = "=0.29.0", features = ["tokio-runtime"] }
 
 # Internal crate dependencies
 playwright-rust-backend-cdp-keyboard = { path = "crates/playwright-rust-backend-cdp-keyboard" }
+playwright-rust-har-recording = { path = "crates/playwright-rust-har-recording" }
 playwright-rust-backend-cdp-touchscreen = { path = "crates/playwright-rust-backend-cdp-touchscreen" }
 playwright-rust-composition-chromium-keyboard = { path = "crates/playwright-rust-composition-chromium-keyboard" }
 playwright-rust-composition-chromium-touchscreen = { path = "crates/playwright-rust-composition-chromium-touchscreen" }
@@ -294,6 +304,7 @@ playwright-rust-process-metrics = { path = "crates/playwright-rust-process-metri
 playwright-rust-persistent-context-preflight = { path = "crates/playwright-rust-persistent-context-preflight" }
 playwright-rust-browser-model = { path = "crates/playwright-rust-browser-model" }
 playwright-rust-network-model = { path = "crates/playwright-rust-network-model" }
+playwright-rust-ecmascript-regexp = { path = "crates/playwright-rust-ecmascript-regexp" }
 playwright-rust-har-replay = { path = "crates/playwright-rust-har-replay" }
 playwright-rust-api-request = { path = "crates/playwright-rust-api-request" }
 playwright-rust-api-request-http1 = { path = "crates/playwright-rust-api-request-http1" }
@@ -307,6 +318,7 @@ playwright-rust-api-request-client-certificates = { path = "crates/playwright-ru
 playwright-rust-api-request-decompress = { path = "crates/playwright-rust-api-request-decompress" }
 playwright-rust-api-request-cookie = { path = "crates/playwright-rust-api-request-cookie" }
 playwright-rust-api-request-auth-basic = { path = "crates/playwright-rust-api-request-auth-basic" }
+playwright-rust-api-request-tracing = { path = "crates/playwright-rust-api-request-tracing" }
 playwright-rust-file-input-model = { path = "crates/playwright-rust-file-input-model" }
 playwright-rust-file-input-source = { path = "crates/playwright-rust-file-input-source" }
 playwright-rust-file-input-fs = { path = "crates/playwright-rust-file-input-fs" }
@@ -366,6 +378,8 @@ playwright-rust-browser-install = { path = "crates/playwright-rust-browser-insta
 playwright-rust-browser-registry = { path = "crates/playwright-rust-browser-registry" }
 playwright-rust-browser-backend = { path = "crates/playwright-rust-browser-backend" }
 playwright-rust-provider-cdp = { path = "crates/playwright-rust-provider-cdp" }
+playwright-rust-remote-cdp = { path = "crates/playwright-rust-remote-cdp" }
+playwright-rust-node-host = { path = "crates/playwright-rust-node-host" }
 playwright-rust-provider-chromium = { path = "crates/playwright-rust-provider-chromium" }
 playwright-rust-composition-chromium-content = { path = "crates/playwright-rust-composition-chromium-content" }
 playwright-rust-composition-chromium-context-creation = { path = "crates/playwright-rust-composition-chromium-context-creation" }

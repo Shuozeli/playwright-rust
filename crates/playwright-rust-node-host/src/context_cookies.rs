@@ -4,11 +4,13 @@
 //! Storage-domain commands stay in Rust. The capability retains no cookie
 //! mirror: Chromium remains the sole source of truth.
 
+use std::sync::Arc;
+
 use playwright_rust_cdp::CdpSession;
 use playwright_rust_cdp::domains::storage::StorageCookie as CdpCookie;
 use playwright_rust_cdp::generated::network::{CookieParam, CookiePartitionKey, CookieSameSite};
 use playwright_rust_core::ObjectId;
-use regex::{Regex, RegexBuilder};
+use playwright_rust_ecmascript_regexp::EcmaScriptRegex;
 use url::Url;
 
 use crate::{HostError, HostSession};
@@ -19,7 +21,6 @@ pub const MAX_COOKIE_BATCH_BYTES: usize = 4 * 1024 * 1024;
 pub const MAX_COOKIE_URLS: usize = 256;
 pub const MAX_COOKIE_URL_BYTES: usize = 64 * 1024;
 pub const MAX_COOKIE_URL_BATCH_BYTES: usize = 1024 * 1024;
-pub const MAX_FILTER_PATTERN_BYTES: usize = 16 * 1024;
 pub const FFI_ALLOWANCE: u64 = 2 * MAX_COOKIE_BATCH_BYTES as u64 + 2 * 1024 * 1024;
 const MAX_EXPIRES: f64 = 253_402_300_799.0;
 
@@ -55,53 +56,19 @@ pub struct BrowserContextCookieInput {
 #[derive(Clone, Debug)]
 pub enum CookieStringMatcher {
     Exact(String),
-    Regex(Regex),
+    Regex(Arc<EcmaScriptRegex>),
 }
 
 impl CookieStringMatcher {
     pub fn exact(value: String) -> Result<Self, HostError> {
-        bounded_field(&value, MAX_COOKIE_FIELD_BYTES, "cookie clear filter")?;
         Ok(Self::Exact(value))
     }
 
     pub fn regex(source: String, flags: &str) -> Result<Self, HostError> {
-        bounded_field(&source, MAX_FILTER_PATTERN_BYTES, "cookie clear regex")?;
-        if flags.len() > 16 {
-            return Err(HostError::InvalidArgument(
-                "cookie clear regex flags exceed 16 UTF-8 bytes".into(),
-            ));
-        }
-        let mut builder = RegexBuilder::new(&source);
-        for flag in flags.chars() {
-            match flag {
-                'i' => {
-                    builder.case_insensitive(true);
-                }
-                'm' => {
-                    builder.multi_line(true);
-                }
-                's' => {
-                    builder.dot_matches_new_line(true);
-                }
-                'x' => {
-                    builder.ignore_whitespace(true);
-                }
-                // Python's ASCII/Unicode markers do not change ordinary
-                // literal cookie filters.
-                'a' | 'u' => {}
-                _ => {
-                    return Err(HostError::InvalidArgument(
-                        "unsupported cookie clear regex flag".into(),
-                    ));
-                }
-            }
-        }
-        builder
-            .size_limit(MAX_COOKIE_BATCH_BYTES)
-            .build()
-            .map(Self::Regex)
+        EcmaScriptRegex::compile(source, flags.to_owned())
+            .map(|pattern| Self::Regex(Arc::new(pattern)))
             .map_err(|error| {
-                HostError::InvalidArgument(format!("invalid cookie clear regex: {error}"))
+                HostError::InvalidArgument(format!("invalid cookie clear RegExp: {error}"))
             })
     }
 
@@ -111,7 +78,7 @@ impl CookieStringMatcher {
             // omitted matcher, while a RegExp with an empty source remains a
             // real matcher. Preserve that public edge exactly.
             Self::Exact(expected) => expected.is_empty() || value == expected,
-            Self::Regex(pattern) => pattern.is_match(value),
+            Self::Regex(pattern) => pattern.test(value),
         }
     }
 }
@@ -320,7 +287,7 @@ fn validate_expiry(value: Option<f64>) -> Result<(), HostError> {
     };
     if !value.is_finite() || (value < 0.0 && value != -1.0) || value > MAX_EXPIRES {
         return Err(HostError::InvalidArgument(
-            "cookie expires must be -1 or a non-negative Unix timestamp no greater than 253402300799"
+            "Cookie should have a valid expires, only -1 or a positive number for the unix timestamp in seconds is allowed"
                 .into(),
         ));
     }
@@ -616,6 +583,27 @@ mod tests {
     }
 
     #[test]
+    fn cookie_input_uses_the_playwright_expiration_error() {
+        // Arrange
+        let input = BrowserContextCookieInput {
+            name: "session".into(),
+            value: "value".into(),
+            url: Some("https://example.test/".into()),
+            expires: Some(MAX_EXPIRES + 1.0),
+            ..Default::default()
+        };
+
+        // Act
+        let error = input_to_cdp(input).unwrap_err();
+
+        // Assert
+        assert_eq!(
+            error.to_string(),
+            "Cookie should have a valid expires, only -1 or a positive number for the unix timestamp in seconds is allowed"
+        );
+    }
+
+    #[test]
     fn cookie_input_preserves_url_for_chromium_defaulting() {
         // Arrange
         let input = BrowserContextCookieInput {
@@ -662,10 +650,10 @@ mod tests {
     }
 
     #[test]
-    fn clear_filter_supports_exact_and_bounded_regex_matchers() {
+    fn clear_filter_supports_exact_and_ecmascript_regex_matchers() {
         // Arrange
         let filter = BrowserContextCookieClearFilter {
-            name: Some(CookieStringMatcher::regex("^sess".into(), "i").unwrap()),
+            name: Some(CookieStringMatcher::regex("(?<=s)ess".into(), "i").unwrap()),
             domain: Some(CookieStringMatcher::exact("example.test".into()).unwrap()),
             path: None,
         };
@@ -676,6 +664,42 @@ mod tests {
 
         // Assert
         assert!(matches);
+    }
+
+    #[test]
+    fn global_cookie_clear_regex_preserves_javascript_last_index_state() {
+        // Arrange
+        let filter = BrowserContextCookieClearFilter {
+            name: Some(CookieStringMatcher::regex("sess".into(), "g").unwrap()),
+            domain: None,
+            path: None,
+        };
+        let value = cookie("example.test", "/", false);
+
+        // Act
+        let first = filter.matches(&value);
+        let second = filter.matches(&value);
+        let third = filter.matches(&value);
+
+        // Assert
+        assert!(first);
+        assert!(!second);
+        assert!(third);
+    }
+
+    #[test]
+    fn cookie_clear_matchers_do_not_impose_non_playwright_size_caps() {
+        // Arrange
+        let exact = "x".repeat(MAX_COOKIE_FIELD_BYTES + 1);
+        let regex = "x".repeat(16 * 1024 + 1);
+
+        // Act
+        let exact_result = CookieStringMatcher::exact(exact);
+        let regex_result = CookieStringMatcher::regex(regex, "");
+
+        // Assert
+        assert!(exact_result.is_ok());
+        assert!(regex_result.is_ok());
     }
 
     #[test]

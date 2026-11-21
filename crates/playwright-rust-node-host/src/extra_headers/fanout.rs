@@ -8,9 +8,6 @@ use std::{
     task::{Context, Poll},
 };
 
-pub(super) const FUTURE_BYTES: usize = 4096;
-pub(super) const NODE_BYTES: usize = 1024;
-
 pub(super) struct Fanout<'a> {
     unstarted: Vec<BoxFuture<'a, Result<(), HostError>>>,
     pending: FuturesUnordered<BoxFuture<'a, Result<(), HostError>>>,
@@ -23,11 +20,11 @@ pub(super) struct Fanout<'a> {
 impl<'a> Fanout<'a> {
     pub(super) fn new() -> Self {
         Self {
-            unstarted: Vec::with_capacity(super::MAX_ROUTES),
+            unstarted: Vec::new(),
             pending: FuturesUnordered::new(),
             immediate_error: None,
             started: false,
-            group_sizes: VecDeque::with_capacity(super::MAX_ROUTES),
+            group_sizes: VecDeque::new(),
             grouped: 0,
         }
     }
@@ -40,13 +37,9 @@ impl<'a> Fanout<'a> {
                 "header fanout is already started".into(),
             ));
         }
-        if self.unstarted.len() == super::MAX_ROUTES
-            || std::mem::size_of_val(&future) > FUTURE_BYTES
-        {
-            return Err(HostError::ResourceExhausted(
-                "header native fanout storage exhausted".into(),
-            ));
-        }
+        self.unstarted
+            .try_reserve(1)
+            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
         self.unstarted.push(future.boxed());
         Ok(())
     }
@@ -56,6 +49,9 @@ impl<'a> Fanout<'a> {
         if self.started || self.grouped == self.unstarted.len() {
             return Err(HostError::Backend("invalid header fanout group".into()));
         }
+        self.group_sizes
+            .try_reserve(1)
+            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
         self.group_sizes
             .push_back(self.unstarted.len() - self.grouped);
         self.grouped = self.unstarted.len();

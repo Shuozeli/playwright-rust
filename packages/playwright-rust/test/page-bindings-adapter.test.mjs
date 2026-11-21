@@ -226,3 +226,69 @@ test('duplicate registration keeps the calling Playwright API name', async () =>
   // Assert
   assert.equal(error.message, 'page.exposeFunction: Function "foo" has been already registered');
 });
+
+test('context binding dispatch falls back to the BrowserContext callback registry', async () => {
+  // Arrange
+  const delivered = [];
+  const session = {
+    acknowledgePageBindingCall() {},
+    async deliverPageBindingResult(...args) { delivered.push(args); },
+  };
+  const context = {
+    _browser: { _session: session },
+    _bindings: new Map([['shared', {
+      needsHandle: false,
+      callback(source, value) { return `${source.frame.id}:${value}`; },
+    }]]),
+  };
+  const page = { _context: context, _bindings: new Map(), context: () => context };
+  const frame = { id: 'child-frame' };
+
+  // Act
+  await adapter().dispatch(page, frame, {
+    callId: '15', name: 'shared', argumentsJson: '["value"]',
+  });
+
+  // Assert
+  assert.deepEqual(delivered, [['15', { result: 'child-frame:value' }]]);
+});
+
+test('context registration delegates to Rust and retains only the language callback', async () => {
+  // Arrange
+  const calls = [];
+  const session = {
+    async contextExposeBinding(...args) { calls.push(args); },
+  };
+  const context = {
+    _id: '8', _browser: { _session: session }, _bindings: new Map(),
+  };
+  const callback = () => 17;
+
+  // Act
+  await adapter().exposeContext(
+    context, 'shared', callback, 'browserContext.exposeBinding', true,
+  );
+
+  // Assert
+  assert.deepEqual(calls, [['8', 'shared', true]]);
+  assert.deepEqual(context._bindings.get('shared'), { callback, needsHandle: true });
+});
+
+test('failed context registration rolls back callback identity', async () => {
+  // Arrange
+  const session = {
+    async contextExposeBinding() { throw new Error('native registration failed'); },
+  };
+  const context = {
+    _id: '8', _browser: { _session: session }, _bindings: new Map(),
+  };
+
+  // Act
+  const error = await adapter().exposeContext(
+    context, 'shared', () => 17, 'browserContext.exposeFunction', false,
+  ).catch(error => error);
+
+  // Assert
+  assert.equal(error.message, 'browserContext.exposeFunction: native registration failed');
+  assert.equal(context._bindings.has('shared'), false);
+});

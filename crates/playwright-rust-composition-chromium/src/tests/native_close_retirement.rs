@@ -103,6 +103,7 @@ impl Fixture {
             subscriptions: routes.services.network_subscription_registry().unwrap(),
             object_ids: Arc::new(AtomicObjectIdSource::new(20).unwrap()),
             adapter_profile: selected.adapter(),
+            allocator_backed_adapters: false,
             resources: routes.resources.clone(),
             max_page_lanes: 2,
             max_related_sessions: 0,
@@ -144,7 +145,7 @@ impl Fixture {
         &mut self,
         capacity: ChromiumCloseCapacityBundle,
         native: NativeCloseCommitTarget<'_>,
-        scratch: &mut [ObjectId],
+        scratch: &mut Vec<ObjectId>,
     ) -> Result<(), OperationError<()>> {
         let registration = ChromiumNetworkPageRegistrationHandle {
             shared: Arc::downgrade(&self.network),
@@ -207,7 +208,7 @@ fn page_commit_retires_topology_runtime_routes_and_exact_network_adapter() {
     let survivor = f.routes.services.routes.lock().unwrap().pages[&ObjectId::new(8)].clone();
     let created = f.routes.factory.created.lock().unwrap().len();
     // Act
-    f.commit(capacity, page(), &mut [ObjectId::new(1); 64])
+    f.commit(capacity, page(), &mut vec![ObjectId::new(1); 64])
         .unwrap();
     // Assert
     assert_eq!(f.routes.topology.page_object_id("pa"), None);
@@ -230,11 +231,11 @@ fn parent_first_commit_allows_an_already_admitted_child_without_duplicate_dispos
     let mut f = Fixture::new();
     let child = f.reserve(PAGE);
     let parent = f.reserve(CONTEXT);
-    f.commit(parent, context(), &mut [ObjectId::new(1); 64])
+    f.commit(parent, context(), &mut vec![ObjectId::new(1); 64])
         .unwrap();
     while f.runtime.pop_control_message().unwrap().is_some() {}
     // Act
-    f.commit(child, page(), &mut [ObjectId::new(1); 64])
+    f.commit(child, page(), &mut vec![ObjectId::new(1); 64])
         .unwrap();
     // Assert
     assert_eq!(f.runtime.pop_control_message().unwrap(), None);
@@ -251,7 +252,7 @@ fn committed_notification_owner_leaves_outer_session_lock_before_publication() {
     let capacity = f.reserve(PAGE);
     let outer_session = Mutex::new(());
     let guard = outer_session.lock().unwrap();
-    let mut scratch = [ObjectId::new(1); 64];
+    let mut scratch = vec![ObjectId::new(1); 64];
     let registration = ChromiumNetworkPageRegistrationHandle {
         shared: Arc::downgrade(&f.network),
     };
@@ -281,20 +282,21 @@ fn committed_notification_owner_leaves_outer_session_lock_before_publication() {
 }
 
 #[test]
-fn undersized_scratch_preserves_all_local_state_and_returns_capacity() {
+fn allocator_backed_scratch_grows_for_the_latest_runtime_subtree() {
     // Arrange
     let mut f = Fixture::new();
     let capacity = f.reserve(CONTEXT);
+    let mut scratch = Vec::new();
+
     // Act
-    let result = f.commit(capacity, context(), &mut []);
+    let result = f.commit(capacity, context(), &mut scratch);
+
     // Assert
-    assert_eq!(result.unwrap_err().kind(), FailureKind::ResourceExhausted);
-    assert_eq!(
-        f.routes.topology.page_object_id("pa"),
-        Some(ObjectId::new(3))
-    );
-    assert_eq!(f.runtime.is_object_live(ObjectId::new(5)), Ok(true));
-    assert_eq!(f.network.state.lock().unwrap().adapters.len(), 2);
+    assert!(result.is_ok());
+    assert!(!scratch.is_empty());
+    assert_eq!(f.routes.topology.page_object_id("pa"), None);
+    assert_eq!(f.runtime.is_object_live(ObjectId::new(5)), Ok(false));
+    assert_eq!(f.network.state.lock().unwrap().adapters.len(), 1);
     assert_eq!(f.runtime.lifecycle_transaction_active(), Ok(false));
     f.finish();
 }
@@ -305,7 +307,7 @@ fn wrong_native_target_does_not_prepare_or_retire_the_admitted_intent() {
     let mut f = Fixture::new();
     let capacity = f.reserve(CONTEXT);
     // Act
-    let result = f.commit(capacity, page(), &mut [ObjectId::new(1); 64]);
+    let result = f.commit(capacity, page(), &mut vec![ObjectId::new(1); 64]);
     // Assert
     assert_eq!(result.unwrap_err().kind(), FailureKind::ProtocolViolation);
     assert_eq!(f.observer.0.prepared.load(Ordering::Acquire), 0);
@@ -320,7 +322,7 @@ fn publication_preflight_failure_preserves_routes_and_network_adapters() {
     let capacity = f.reserve(PAGE);
     f.observer.0.reject_prepare.store(true, Ordering::Release);
     // Act
-    let result = f.commit(capacity, page(), &mut [ObjectId::new(1); 64]);
+    let result = f.commit(capacity, page(), &mut vec![ObjectId::new(1); 64]);
     // Assert
     assert!(result.is_err());
     assert_eq!(
@@ -339,7 +341,7 @@ fn unpublished_network_batch_rejects_before_local_preparation() {
     let capacity = f.reserve(PAGE);
     f.network.state.lock().unwrap().unpublished_batch = Some(ObjectId::new(3));
     // Act
-    let result = f.commit(capacity, page(), &mut [ObjectId::new(1); 64]);
+    let result = f.commit(capacity, page(), &mut vec![ObjectId::new(1); 64]);
     // Assert
     assert!(result.is_err());
     assert_eq!(f.observer.0.prepared.load(Ordering::Acquire), 0);
@@ -355,7 +357,7 @@ fn closed_runtime_preserves_transport_failure_kind_without_local_publication() {
     let capacity = f.reserve(CONTEXT);
     f.runtime.close_transport().unwrap();
     // Act
-    let result = f.commit(capacity, context(), &mut [ObjectId::new(1); 64]);
+    let result = f.commit(capacity, context(), &mut vec![ObjectId::new(1); 64]);
     // Assert
     assert_eq!(result.unwrap_err().kind(), FailureKind::TransportClosed);
     assert_eq!(
@@ -416,7 +418,7 @@ fn active_network_request_is_disposed_once_by_runtime_before_adapter_removal() {
     while f.runtime.pop_control_message().unwrap().is_some() {}
     let capacity = f.reserve(PAGE);
     // Act
-    f.commit(capacity, page(), &mut [ObjectId::new(1); 64])
+    f.commit(capacity, page(), &mut vec![ObjectId::new(1); 64])
         .unwrap();
     // Assert
     assert_eq!(f.runtime.is_object_live(ObjectId::new(20)), Ok(false));
@@ -475,7 +477,7 @@ fn borrowed_handle_leaf_retirement_reclaims_only_handles_in_the_runtime_subtree(
         .with_handle_leaf_routes(handles.clone());
     let capacity = f.reserve(PAGE);
     // Act
-    f.commit(capacity, page(), &mut [ObjectId::new(1); 64])
+    f.commit(capacity, page(), &mut vec![ObjectId::new(1); 64])
         .unwrap();
     // Assert
     assert!(!handles.contains(ObjectId::new(10)).unwrap());
@@ -499,7 +501,7 @@ async fn native_context_proof_marks_retained_worlds_and_revokes_navigation() {
     let survivor = f.routes.navigation.snapshot(ObjectId::new(9)).unwrap();
     let capacity = f.reserve(CONTEXT);
     // Act
-    f.commit(capacity, context(), &mut [ObjectId::new(1); 64])
+    f.commit(capacity, context(), &mut vec![ObjectId::new(1); 64])
         .unwrap();
     // Assert
     assert!(worlds.native_lifetime().unwrap().both_worlds_destroyed());

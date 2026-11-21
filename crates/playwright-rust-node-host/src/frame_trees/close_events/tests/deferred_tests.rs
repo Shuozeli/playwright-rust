@@ -121,7 +121,10 @@ fn deferred_context_includes_page_that_becomes_visible_after_admission() {
 fn deferred_capacity_accounts_exact_maximum_groups() {
     for (target, maximum) in [
         (ChromiumCloseTarget::Page(FIRST), 1),
-        (ChromiumCloseTarget::BrowserContext(CONTEXT), 17),
+        (
+            ChromiumCloseTarget::BrowserContext(CONTEXT),
+            super::super::super::FRAMES + 1,
+        ),
     ] {
         // Arrange
         let fixture = Fixture::new();
@@ -130,7 +133,10 @@ fn deferred_capacity_accounts_exact_maximum_groups() {
         let capacity = deferred::Capacity::new(fixture.owner.clone(), target).unwrap();
         // Assert: one envelope plus one factory storage reservation per group.
         let admitted = fixture.owner.factory.metrics().unwrap();
-        assert_eq!(admitted.revisions - before.revisions, maximum + 1);
+        assert_eq!(
+            admitted.revisions - before.revisions,
+            u64::try_from(maximum + 1).unwrap()
+        );
         assert_eq!(admitted.states, before.states);
         assert!(admitted.bytes > before.bytes);
         drop(capacity);

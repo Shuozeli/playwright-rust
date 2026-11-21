@@ -1,6 +1,6 @@
 //! Optional Context-scoped JavaScript disabling policy.
 //!
-//! Rust retains a fixed Context registry and applies the Chromium Emulation
+//! Rust retains an allocator-backed Context registry and applies the Chromium Emulation
 //! policy to every newly initialized Page or out-of-process Frame session
 //! before it is resumed or published.
 
@@ -20,7 +20,6 @@ use playwright_rust_plugin_chromium_session_initialization::{
 
 use crate::HostError;
 
-pub(crate) const MAX_CONTEXTS: usize = 16;
 const SCOPE: ResourceScope = ResourceScope::extension(186, 0);
 
 struct State {
@@ -30,9 +29,7 @@ struct State {
 }
 
 pub(crate) const fn requirements() -> ResourceRequirements {
-    let storage_bytes = (std::mem::size_of::<Installation>()
-        + std::mem::size_of::<State>()
-        + MAX_CONTEXTS * std::mem::size_of::<ObjectId>()) as u64;
+    let storage_bytes = (std::mem::size_of::<Installation>() + std::mem::size_of::<State>()) as u64;
     ResourceRequirements::none()
         .with_class(
             ResourceClass::BackendStateBytes,
@@ -62,14 +59,10 @@ impl Installation {
                 plan.class(ResourceClass::BackendStateBytes).global,
             )
             .map_err(HostError::backend)?;
-        let mut contexts = Vec::new();
-        contexts
-            .try_reserve_exact(MAX_CONTEXTS)
-            .map_err(|error| HostError::ResourceExhausted(error.to_string()))?;
         Ok(Arc::new(Self {
             state: Mutex::new(State {
                 default_disabled,
-                contexts,
+                contexts: Vec::new(),
                 closed: false,
             }),
             _storage: storage,
@@ -86,11 +79,11 @@ impl Installation {
                 "JavaScript-disabled policy is already installed for this Context".into(),
             ));
         }
-        if state.contexts.len() + usize::from(state.default_disabled) == MAX_CONTEXTS {
-            return Err(HostError::ResourceExhausted(format!(
-                "JavaScript-disabled policy exceeds {MAX_CONTEXTS} live Contexts"
-            )));
-        }
+        state.contexts.try_reserve(1).map_err(|error| {
+            HostError::ResourceExhausted(format!(
+                "JavaScript-disabled policy allocation failed: {error}"
+            ))
+        })?;
         state.contexts.push(context);
         Ok(())
     }
@@ -237,20 +230,20 @@ mod tests {
     }
 
     #[test]
-    fn policy_rejects_more_than_the_fixed_context_capacity() {
+    fn policy_grows_past_the_legacy_context_capacity() {
         // Arrange
         let installation = Installation::new_with_default(&resources(), false).unwrap();
-        for value in 1..=MAX_CONTEXTS {
+        for value in 1..=129 {
             installation.install(ObjectId::new(value as u64)).unwrap();
         }
 
         // Act
-        let error = installation
-            .install(ObjectId::new((MAX_CONTEXTS + 1) as u64))
-            .unwrap_err();
+        let disabled = installation
+            .disabled(ObjectId::new(129), CdpContextOwnership::Owned)
+            .unwrap();
 
         // Assert
-        assert!(matches!(error, HostError::ResourceExhausted(_)));
+        assert!(disabled);
     }
 
     #[test]
@@ -277,19 +270,19 @@ mod tests {
     }
 
     #[test]
-    fn default_policy_consumes_one_fixed_context_slot() {
+    fn default_policy_does_not_reduce_dynamic_context_capacity() {
         // Arrange
         let installation = Installation::new_with_default(&resources(), true).unwrap();
-        for value in 1..MAX_CONTEXTS {
+        for value in 1..=129 {
             installation.install(ObjectId::new(value as u64)).unwrap();
         }
 
         // Act
-        let error = installation
-            .install(ObjectId::new(MAX_CONTEXTS as u64))
-            .unwrap_err();
+        let disabled = installation
+            .disabled(ObjectId::new(129), CdpContextOwnership::Owned)
+            .unwrap();
 
         // Assert
-        assert!(matches!(error, HostError::ResourceExhausted(_)));
+        assert!(disabled);
     }
 }

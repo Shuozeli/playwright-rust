@@ -15,7 +15,6 @@ use std::{
     },
     task::{Context, Poll},
 };
-use tokio::sync::Semaphore;
 
 type HitResult = Result<bool, OperationError<LocatorErrorDetails>>;
 type HitOperation = Pin<Box<dyn Future<Output = HitResult> + Send>>;
@@ -129,7 +128,6 @@ pub(super) async fn verify(
     y: f64,
     group: String,
     cleanup: &TokioCleanupExecutor,
-    slots: Arc<Semaphore>,
 ) -> HitResult {
     if route.child_frame_id.is_empty()
         || route.child_frame_id.len() > 1024
@@ -152,9 +150,6 @@ pub(super) async fn verify(
             "retained click iframe owner has an invalid backend node ID",
         ));
     }
-    let slot = slots
-        .try_acquire_owned()
-        .map_err(|_| resource("retained click parent-owner proof capacity was exhausted"))?;
     let reservation = cleanup.try_reserve().map_err(|error| {
         resource(&format!(
             "retained click native cleanup unavailable: {error}"
@@ -164,7 +159,6 @@ pub(super) async fn verify(
     let cancelled = Arc::new(AtomicBool::new(false));
     let cancellation = cancelled.clone();
     let operation = async move {
-        let _slot = slot;
         let primary = async {
             let resolved = client
                 .dom_resolve_node_in_group_to_settlement(
@@ -225,7 +219,7 @@ mod tests {
     use std::time::Duration;
     use tokio::sync::Notify;
 
-    fn fixture() -> (Arc<FakeCdpClient>, TokioCleanupExecutor, Arc<Semaphore>) {
+    fn fixture() -> (Arc<FakeCdpClient>, TokioCleanupExecutor) {
         let fake = Arc::new(FakeCdpClient::from_html("<iframe></iframe>"));
         fake.set_frame_owner("child-frame", 91);
         fake.set_adopted_node_response(
@@ -233,17 +227,13 @@ mod tests {
             42,
             json!({"object": {"type": "object", "subtype": "node", "objectId": "parent-owner"}}),
         );
-        (
-            fake,
-            TokioCleanupExecutor::new(1),
-            Arc::new(Semaphore::new(1)),
-        )
+        (fake, TokioCleanupExecutor::new(1))
     }
 
     #[tokio::test]
     async fn cross_origin_child_uses_exact_parent_utility_world_owner_identity() {
         // Arrange
-        let (fake, cleanup, slots) = fixture();
+        let (fake, cleanup) = fixture();
         fake.set_evaluate_response(json!({"result": {"value": true}}));
 
         // Act
@@ -258,7 +248,6 @@ mod tests {
             136.0,
             "playwright.rust.click.1.1".into(),
             &cleanup,
-            slots,
         )
         .await
         .unwrap();
@@ -286,7 +275,7 @@ mod tests {
     #[tokio::test]
     async fn open_shadow_iframe_walks_bounded_composed_hit_roots() {
         // Arrange
-        let (fake, cleanup, slots) = fixture();
+        let (fake, cleanup) = fixture();
         fake.set_evaluate_response(json!({"result": {"value": true}}));
 
         // Act
@@ -301,7 +290,6 @@ mod tests {
             136.0,
             "playwright.rust.click.2.1".into(),
             &cleanup,
-            slots,
         )
         .await
         .unwrap();
@@ -320,7 +308,7 @@ mod tests {
     #[tokio::test]
     async fn malformed_parent_owner_still_releases_unique_group() {
         // Arrange
-        let (fake, cleanup, slots) = fixture();
+        let (fake, cleanup) = fixture();
         fake.set_adopted_node_response(91, 42, json!({"object": {"type": "number", "value": 1}}));
 
         // Act
@@ -335,7 +323,6 @@ mod tests {
             136.0,
             "playwright.rust.click.3.1".into(),
             &cleanup,
-            slots,
         )
         .await;
 
@@ -355,7 +342,7 @@ mod tests {
     #[tokio::test]
     async fn cancelled_resolve_skips_new_js_and_releases_group() {
         // Arrange
-        let (fake, cleanup, slots) = fixture();
+        let (fake, cleanup) = fixture();
         fake.set_evaluate_response(json!({"result": {"value": true}}));
         let gate = Arc::new(Notify::new());
         fake.set_adoption_gate(Some(gate.clone()));
@@ -370,7 +357,6 @@ mod tests {
             136.0,
             "playwright.rust.click.4.1".into(),
             &cleanup,
-            slots,
         ));
 
         // Act
@@ -399,7 +385,7 @@ mod tests {
     #[tokio::test]
     async fn cancelled_started_hit_evaluation_settles_before_group_release() {
         // Arrange
-        let (fake, cleanup, slots) = fixture();
+        let (fake, cleanup) = fixture();
         fake.set_evaluate_response(json!({"result": {"value": true}}));
         let gate = Arc::new(Notify::new());
         fake.set_evaluate_gate(Some(gate.clone()));
@@ -414,7 +400,6 @@ mod tests {
             136.0,
             "playwright.rust.click.4.2".into(),
             &cleanup,
-            slots,
         ));
 
         // Act
@@ -461,7 +446,6 @@ mod tests {
             136.0,
             "playwright.rust.click.5.1".into(),
             &cleanup,
-            Arc::new(Semaphore::new(1)),
         ));
         assert!(
             check

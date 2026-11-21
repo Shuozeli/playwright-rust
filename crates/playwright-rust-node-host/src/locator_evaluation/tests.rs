@@ -2,50 +2,19 @@ use super::*;
 use playwright_rust_core::ResourceLimits;
 use std::task::{Context, Poll, Waker};
 
-#[cfg(feature = "retained-file-input")]
 #[test]
-fn retained_uploads_add_eight_independent_world_snapshot_and_retirement_slots() {
-    // Arrange: eight normal calls, one continuing upload, 64 Handle worlds,
-    // and eight independently abandoned retained acquisitions.
-    let capacity = 81
-        + MARKER_WORLDS
-        + if cfg!(feature = "drag-runtime") {
-            1024
-        } else {
-            0
-        };
-    let expected = ChromiumFrameWorldAccessProfile::new(
-        ResourceScope::extension(120, 14),
-        NonZeroUsize::new(capacity).unwrap(),
-    )
-    .unwrap()
-    .with_native_retirement()
-    .unwrap()
-    .requirements();
-    // Act
-    let actual = Profile::new().unwrap().access.requirements();
-    // Assert
-    assert_eq!(RETAINED_UPLOAD_WORLDS, 8);
-    assert_eq!(actual, expected);
-    assert_eq!(actual.leases, capacity + 1);
-}
-
-#[cfg(feature = "retained-target-marking")]
-#[test]
-fn marker_worlds_add_seventy_two_independent_persistent_snapshot_slots() {
+fn world_snapshot_admission_is_allocator_backed() {
     // Arrange
-    let baseline = 81
-        + if cfg!(feature = "drag-runtime") {
-            1024
-        } else {
-            0
-        };
+    let expected =
+        ChromiumFrameWorldAccessProfile::new_allocator_backed(ResourceScope::extension(120, 14))
+            .with_native_retirement()
+            .unwrap();
     // Act
-    let capacity = WORLD_SNAPSHOTS;
+    let actual = Profile::new().unwrap().access;
     // Assert
-    assert_eq!(MARKER_WORLDS, 72);
-    assert_eq!(capacity, baseline + 72);
-    assert_eq!(RETAINED_UPLOAD_WORLDS, 8);
+    assert!(actual.allocator_backed());
+    assert_eq!(actual.requirements(), expected.requirements());
+    assert_eq!(actual.requirements().leases, 1);
 }
 
 fn poll<F: Future>(future: Pin<&mut F>) -> Poll<F::Output> {
@@ -176,27 +145,35 @@ fn budget() -> (ProductionResourceLedger, ResourceLedger, Arc<Slots>) {
         ledger,
         Arc::new(Slots {
             active: AtomicUsize::new(0),
+            permits: Arc::new(tokio::sync::Semaphore::new(PENDING)),
             _state: lease,
         }),
     )
 }
 
-#[test]
-fn call_admission_is_bounded_across_clones_and_reclaimed_after_drop() {
+#[tokio::test]
+async fn call_admission_waits_across_clones_and_is_reclaimed_after_drop() {
     // Arrange
     let (resources, ledger, slots) = budget();
-    let mut calls: Vec<_> = (0..PENDING)
-        .map(|_| CallLease::admit(slots.clone(), &ledger).unwrap())
-        .collect();
+    let mut calls = Vec::new();
+    for _ in 0..PENDING {
+        calls.push(CallLease::admit(slots.clone(), &ledger).await.unwrap());
+    }
+    let queued_slots = slots.clone();
+    let queued_ledger = ledger.clone();
+    let queued = tokio::spawn(async move {
+        CallLease::admit(queued_slots, &queued_ledger)
+            .await
+            .map(drop)
+    });
+    tokio::task::yield_now().await;
     // Act
-    let full = CallLease::admit(slots.clone(), &ledger);
+    assert!(!queued.is_finished());
     calls.pop();
-    let next = CallLease::admit(slots.clone(), &ledger);
+    let next = queued.await.unwrap();
     // Assert
-    assert!(matches!(full, Err(HostError::ResourceExhausted(_))));
     assert!(next.is_ok());
-    assert_eq!(slots.active.load(Ordering::Acquire), PENDING);
-    drop(next);
+    assert_eq!(slots.active.load(Ordering::Acquire), PENDING - 1);
     drop(calls);
     assert_eq!(slots.active.load(Ordering::Acquire), 0);
     drop(slots);
@@ -204,8 +181,8 @@ fn call_admission_is_bounded_across_clones_and_reclaimed_after_drop() {
     assert_eq!(resources.metrics().unwrap().active_leases, 0);
 }
 
-#[test]
-fn failed_resource_reservation_rolls_back_the_call_counter() {
+#[tokio::test]
+async fn failed_resource_reservation_rolls_back_the_call_counter() {
     // Arrange
     let (_resources, ledger, slots) = budget();
     let retained = ledger
@@ -216,12 +193,12 @@ fn failed_resource_reservation_rolls_back_the_call_counter() {
         )
         .unwrap();
     // Act
-    let rejected = CallLease::admit(slots.clone(), &ledger);
+    let rejected = CallLease::admit(slots.clone(), &ledger).await;
     // Assert
     assert!(rejected.is_err());
     assert_eq!(slots.active.load(Ordering::Acquire), 0);
     drop(retained);
-    assert!(CallLease::admit(slots, &ledger).is_ok());
+    assert!(CallLease::admit(slots, &ledger).await.is_ok());
 }
 
 #[test]
@@ -359,7 +336,7 @@ fn registered_single_evaluation_uses_the_first_match_without_locator_strictness(
 }
 
 #[test]
-fn collection_evaluation_has_an_independent_bounded_backend_lane() {
+fn collection_evaluation_is_allocator_backed_independently() {
     // Arrange
     let profile = Profile::new().unwrap();
 
@@ -367,9 +344,9 @@ fn collection_evaluation_has_an_independent_bounded_backend_lane() {
     let collection = profile.collection;
 
     // Assert
-    assert_eq!(collection.max_concurrent_operations(), EXECUTING);
+    assert_eq!(collection.max_concurrent_operations(), usize::MAX);
     assert_eq!(collection.limits(), collection_limits());
-    assert_eq!(collection.requirements().leases, EXECUTING);
+    assert_eq!(collection.requirements().leases, 0);
     assert!(collection.uses_user_gesture());
     assert!(profile.adoption.uses_user_gesture());
 }

@@ -76,6 +76,46 @@ fn staged_attachment_is_invisible_until_publication() {
 }
 
 #[test]
+fn allocator_backed_factory_grows_past_the_legacy_frame_and_revision_counts() {
+    // Arrange
+    let factory = FrameTreeFactory::new_allocator_backed().unwrap();
+    let urls = FrameMetadata::new(FrameMetadataLimits {
+        entries: 1,
+        url_bytes: 64,
+        total_bytes: 1024,
+        publications: 0,
+    })
+    .unwrap();
+    urls.update(ObjectId::new(1), "https://fixture.test/", None)
+        .unwrap();
+    let url = urls.get(ObjectId::new(1)).unwrap();
+    let root = factory.frame(ObjectId::new(1), None, url.clone()).unwrap();
+    let tree = factory.page(root.clone()).unwrap();
+    let mut frames = vec![root];
+    for id in 2..=130 {
+        frames.push(
+            factory
+                .frame(ObjectId::new(id), Some(ObjectId::new(1)), url.clone())
+                .unwrap(),
+        );
+    }
+    tree.stage(&frames).unwrap().publish().unwrap();
+
+    // Act
+    let publications: Vec<_> = (0..129).map(|_| tree.stage(&frames).unwrap()).collect();
+    let read = tree.read(0).unwrap();
+    let binding = read.bind(ObjectId::new(130)).unwrap();
+
+    // Assert
+    assert!(factory.allocator_backed());
+    assert_eq!(frames.len(), 130);
+    assert_eq!(publications.len(), 129);
+    assert_eq!(binding.node().id(), ObjectId::new(130));
+    assert_eq!(factory.metrics().unwrap().states, 0);
+    assert_eq!(factory.metrics().unwrap().revisions, 0);
+}
+
+#[test]
 fn detach_publication_preserves_parent_identity_and_url() {
     // Arrange
     let fixture = Fixture::new(limits());

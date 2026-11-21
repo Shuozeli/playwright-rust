@@ -52,6 +52,9 @@ impl ChromiumExecutionWorldReadinessProfile {
 
     fn state_bytes(self) -> u64 {
         // Current and prepared bounded route arrays coexist until commit.
+        if self.max_frames == usize::MAX {
+            return FIXED_BYTES;
+        }
         FIXED_BYTES.saturating_add(
             u64::try_from(self.max_frames)
                 .unwrap_or(u64::MAX)
@@ -76,6 +79,7 @@ pub(crate) struct ExecutionWorldReadiness {
     pub(crate) profile: ChromiumExecutionWorldReadinessProfile,
     ledger: ResourceLedger,
     waiters: AtomicUsize,
+    waiter_slots: Arc<tokio::sync::Semaphore>,
     changed: Notify,
     _state: ResourceLease,
 }
@@ -95,6 +99,7 @@ impl ExecutionWorldReadiness {
             profile,
             ledger,
             waiters: AtomicUsize::new(0),
+            waiter_slots: Arc::new(tokio::sync::Semaphore::new(profile.max_waiters())),
             changed: Notify::new(),
             _state: state,
         })
@@ -104,14 +109,12 @@ impl ExecutionWorldReadiness {
         self.changed.notify_waiters();
     }
 
-    fn admit(&self) -> Result<WorldWaiter<'_>, CdpPageRouteError> {
-        self.waiters
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |count| {
-                (count < self.profile.max_waiters()).then(|| count + 1)
-            })
-            .map_err(|_| CdpPageRouteError::WorldReadinessCapacityExceeded {
-                limit: self.profile.max_waiters(),
-            })?;
+    async fn admit(&self) -> Result<WorldWaiter<'_>, CdpPageRouteError> {
+        let permit = Arc::clone(&self.waiter_slots)
+            .acquire_owned()
+            .await
+            .map_err(|_| CdpPageRouteError::StatePoisoned)?;
+        self.waiters.fetch_add(1, Ordering::AcqRel);
         match self.ledger.reserve(
             self.profile.scope,
             ResourceClass::BackendStateBytes,
@@ -119,6 +122,7 @@ impl ExecutionWorldReadiness {
         ) {
             Ok(lease) => Ok(WorldWaiter {
                 owner: self,
+                _permit: permit,
                 _lease: lease,
             }),
             Err(error) => {
@@ -135,7 +139,7 @@ impl ExecutionWorldReadiness {
         if let Some(value) = resolve()? {
             return Ok(value);
         }
-        let _waiter = self.admit()?;
+        let _waiter = self.admit().await?;
         loop {
             let changed = self.changed.notified();
             tokio::pin!(changed);
@@ -153,6 +157,7 @@ impl ExecutionWorldReadiness {
 
 struct WorldWaiter<'a> {
     owner: &'a ExecutionWorldReadiness,
+    _permit: tokio::sync::OwnedSemaphorePermit,
     _lease: ResourceLease,
 }
 

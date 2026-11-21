@@ -23,6 +23,7 @@ use napi::{
     bindgen_prelude::{Function, PromiseRaw},
 };
 #[cfg(any(
+    feature = "cdp-default-user-agent",
     feature = "cdp-handshake-headers",
     feature = "playwright-server-connect-ws-error",
     feature = "playwright-server-connect-close-error",
@@ -34,10 +35,44 @@ use napi::{
     bindgen_prelude::{JsObjectValue, Object},
 };
 use napi_derive::napi;
+#[cfg(all(feature = "owned-launch", feature = "persistent-context-geolocation"))]
+use playwright_rust_node_host::ContextGeolocation;
+#[cfg(all(
+    feature = "owned-launch",
+    feature = "persistent-context-http-credentials"
+))]
+use playwright_rust_node_host::ContextHttpCredentials;
+#[cfg(all(feature = "owned-launch", feature = "persistent-context-locale"))]
+use playwright_rust_node_host::ContextLocale;
+#[cfg(all(
+    feature = "owned-launch",
+    feature = "persistent-context-geolocation-permission"
+))]
+use playwright_rust_node_host::ContextPermissions;
+#[cfg(all(feature = "owned-launch", feature = "persistent-context-timezone"))]
+use playwright_rust_node_host::ContextTimezone;
+#[cfg(all(
+    feature = "owned-launch",
+    any(
+        feature = "video-recording",
+        feature = "persistent-context-ignore-https-errors",
+        feature = "persistent-context-locale",
+        feature = "persistent-context-timezone",
+        feature = "persistent-context-geolocation",
+        feature = "persistent-context-geolocation-permission",
+        feature = "persistent-context-http-credentials",
+        feature = "persistent-context-offline",
+        feature = "persistent-context-bypass-csp",
+        feature = "persistent-context-javascript-disabled"
+    )
+))]
+use playwright_rust_node_host::PersistentContextDefaults;
+#[cfg(all(feature = "owned-launch", feature = "video-recording"))]
+use playwright_rust_node_host::PersistentContextVideoOptions;
 use playwright_rust_node_host::ffi_budget::{FfiBudget, FfiLane, FfiLimits, FfiMetrics};
 use playwright_rust_node_host::locator_query::{QueryBudget, QueryLimits};
 #[cfg(feature = "owned-launch")]
-use playwright_rust_node_host::{ChromiumChannel, ChromiumExecutable};
+use playwright_rust_node_host::{ChromiumChannel, ChromiumExecutable, ChromiumPersistentProfile};
 use playwright_rust_node_host::{HostError, HostSession, SessionMetrics};
 #[cfg(feature = "bidi-startup-failure")]
 use playwright_rust_owned_process_startup::{
@@ -74,8 +109,6 @@ use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
 use crate::deferred_conversion::{ConversionMetrics, DeferredConversions};
 use crate::{NativeSession, binding_error, boundary};
-
-const MAX_SESSIONS: usize = 16;
 
 #[cfg(feature = "playwright-server-connect-session")]
 fn map_server_connect_error(
@@ -292,6 +325,7 @@ fn bounded_server_connect_headers_for_http_discovery(
 }
 
 #[cfg(any(
+    feature = "cdp-default-user-agent",
     feature = "playwright-server-connect-headers",
     feature = "playwright-server-connect-session"
 ))]
@@ -335,6 +369,136 @@ fn bounded_server_connect_runtime_identity<'env>(
 
 #[cfg(feature = "owned-launch")]
 pub(crate) type LaunchProfile = Arc<Mutex<Option<tempfile::TempDir>>>;
+
+#[cfg(feature = "owned-launch")]
+const PERSISTENT_CONTEXT_HEADLESS: u32 = 1 << 0;
+#[cfg(feature = "owned-launch")]
+const PERSISTENT_CONTEXT_IGNORE_HTTPS_ERRORS: u32 = 1 << 1;
+#[cfg(feature = "owned-launch")]
+const PERSISTENT_CONTEXT_KNOWN_POLICIES: u32 =
+    PERSISTENT_CONTEXT_HEADLESS | PERSISTENT_CONTEXT_IGNORE_HTTPS_ERRORS;
+
+#[cfg(any(
+    feature = "persistent-context-locale",
+    feature = "persistent-context-timezone",
+    feature = "persistent-context-geolocation-permission",
+    feature = "persistent-context-http-credentials"
+))]
+fn persistent_string_allowance(base: u64, length: usize, field: &str) -> napi::Result<u64> {
+    let length = u64::try_from(length).map_err(|_| {
+        binding_error(HostError::ResourceExhausted(format!(
+            "persistent Context {field} FFI byte length overflow"
+        )))
+    })?;
+    base.checked_add(length).ok_or_else(|| {
+        binding_error(HostError::ResourceExhausted(format!(
+            "persistent Context {field} FFI allowance overflow"
+        )))
+    })
+}
+
+#[cfg(feature = "persistent-context-geolocation-permission")]
+fn persistent_permissions_allowance(base: u64, permissions: &[String]) -> napi::Result<u64> {
+    permissions.iter().try_fold(base, |total, permission| {
+        persistent_string_allowance(total, permission.len(), "permission")
+    })
+}
+
+#[cfg(feature = "persistent-context-http-credentials")]
+fn persistent_credentials_allowance(
+    base: u64,
+    credentials: Option<&ContextHttpCredentials>,
+) -> napi::Result<u64> {
+    let Some(credentials) = credentials else {
+        return Ok(base);
+    };
+    let allowance =
+        persistent_string_allowance(base, credentials.username().len(), "HTTP username")?;
+    let allowance =
+        persistent_string_allowance(allowance, credentials.password().len(), "HTTP password")?;
+    persistent_string_allowance(
+        allowance,
+        credentials.origin().map_or(0, str::len),
+        "HTTP origin",
+    )
+}
+
+#[cfg(feature = "owned-launch")]
+enum ChromiumLaunchKind {
+    Ephemeral {
+        #[cfg(feature = "playwright-trace")]
+        trace_directory: Option<(String, String)>,
+    },
+    Persistent {
+        user_data_dir: String,
+        base_url: Option<String>,
+        ignore_https_errors: bool,
+        #[cfg(feature = "persistent-context-locale")]
+        locale: Option<String>,
+        #[cfg(feature = "persistent-context-timezone")]
+        timezone_id: Option<String>,
+        #[cfg(feature = "persistent-context-geolocation")]
+        geolocation: Option<ContextGeolocation>,
+        #[cfg(feature = "persistent-context-geolocation-permission")]
+        permissions: Vec<String>,
+        #[cfg(feature = "persistent-context-http-credentials")]
+        http_credentials: Option<ContextHttpCredentials>,
+        #[cfg(feature = "persistent-context-offline")]
+        offline: bool,
+        #[cfg(feature = "persistent-context-bypass-csp")]
+        bypass_csp: bool,
+        #[cfg(feature = "persistent-context-javascript-disabled")]
+        javascript_disabled: bool,
+    },
+    #[cfg(feature = "video-recording")]
+    PersistentVideo {
+        user_data_dir: String,
+        base_url: Option<String>,
+        ignore_https_errors: bool,
+        #[cfg(feature = "persistent-context-locale")]
+        locale: Option<String>,
+        #[cfg(feature = "persistent-context-timezone")]
+        timezone_id: Option<String>,
+        #[cfg(feature = "persistent-context-geolocation")]
+        geolocation: Option<ContextGeolocation>,
+        #[cfg(feature = "persistent-context-geolocation-permission")]
+        permissions: Vec<String>,
+        #[cfg(feature = "persistent-context-http-credentials")]
+        http_credentials: Option<ContextHttpCredentials>,
+        #[cfg(feature = "persistent-context-offline")]
+        offline: bool,
+        #[cfg(feature = "persistent-context-bypass-csp")]
+        bypass_csp: bool,
+        #[cfg(feature = "persistent-context-javascript-disabled")]
+        javascript_disabled: bool,
+        video: PersistentContextVideoOptions,
+    },
+}
+
+#[cfg(all(
+    feature = "owned-launch",
+    any(
+        feature = "persistent-context-locale",
+        feature = "persistent-context-timezone",
+        feature = "persistent-context-geolocation",
+        feature = "persistent-context-geolocation-permission",
+        feature = "persistent-context-http-credentials",
+        feature = "persistent-context-offline",
+        feature = "persistent-context-bypass-csp",
+        feature = "persistent-context-javascript-disabled"
+    )
+))]
+#[napi(object)]
+pub struct NativePersistentContextDefaults {
+    pub locale: Option<String>,
+    pub timezone_id: Option<String>,
+    pub geolocation: Option<crate::NativeContextGeolocation>,
+    pub permissions: Option<Vec<String>>,
+    pub http_credentials: Option<crate::NativeContextHttpCredentials>,
+    pub offline: Option<bool>,
+    pub bypass_csp: Option<bool>,
+    pub java_script_enabled: Option<bool>,
+}
 
 #[derive(Default)]
 struct OwnerState {
@@ -480,16 +644,7 @@ impl EnvironmentOwner {
                 .upgrade()
                 .is_some_and(|remote| remote.is_connected())
         });
-        #[cfg(feature = "playwright-server-connect-session")]
-        let remote_count = state.remote_sessions.len();
-        #[cfg(not(feature = "playwright-server-connect-session"))]
-        let remote_count = 0;
-        if state.sessions.len() + remote_count + state.pending >= MAX_SESSIONS {
-            return Err(HostError::ResourceExhausted(
-                "Node environment session capacity exceeded (16)".into(),
-            ));
-        }
-        state.pending += 1;
+        playwright_rust_node_host::session_admission::admit_pending(&mut state.pending, "Node")?;
         Ok(Admission {
             owner: Arc::clone(self),
             pending: true,
@@ -608,10 +763,7 @@ impl NativeEnvironment {
             admissions: TaskTracker::new(),
             ffi: FfiBudget::new(FfiLimits {
                 connects: 16,
-                #[cfg(feature = "handles")]
-                commands: crate::wait_admission::COMMAND_CAPACITY,
-                #[cfg(not(feature = "handles"))]
-                commands: 32,
+                commands: usize::MAX,
                 closes: 16,
                 watches: 16,
                 reserved_bytes: ffi_reserved_bytes,
@@ -784,16 +936,15 @@ impl NativeEnvironment {
         endpoint: JsString<'env>,
         timeout_ms: u32,
         headers: Unknown<'env>,
-        platform: JsString<'env>,
-        arch: JsString<'env>,
-        release: JsString<'env>,
+        runtime_identity: Unknown<'env>,
     ) -> napi::Result<PromiseRaw<'env, Unknown<'env>>> {
+        let runtime_identity = bounded_server_connect_runtime_identity(runtime_identity)?;
         self.connect_over_cdp_impl(
             env,
             endpoint,
             timeout_ms,
             Some(headers),
-            Some((platform, arch, release)),
+            Some(runtime_identity),
         )
     }
 }
@@ -1438,13 +1589,23 @@ impl NativeEnvironment {
             headless,
             timeout_ms,
             #[cfg(feature = "playwright-trace")]
-            None,
+            ChromiumLaunchKind::Ephemeral {
+                trace_directory: None,
+            },
+            #[cfg(not(feature = "playwright-trace"))]
+            ChromiumLaunchKind::Ephemeral {},
         )
     }
+}
 
+/// Trace-only export must gate the entire N-API impl. Gating an individual
+/// method leaves napi-rs registration code referring to a callback that was
+/// not compiled when `owned-launch` is selected without `playwright-trace`.
+#[cfg(feature = "playwright-trace")]
+#[napi]
+impl NativeEnvironment {
     /// Explicit caller directory capability. The legacy method never accepts
     /// or infers this path; no Context recording is installed by this port.
-    #[cfg(feature = "playwright-trace")]
     #[napi]
     pub fn launch_chromium_with_traces_dir<'env>(
         &self,
@@ -1463,7 +1624,311 @@ impl NativeEnvironment {
             executable_path,
             headless,
             timeout_ms,
-            Some((base_directory, traces_dir)),
+            ChromiumLaunchKind::Ephemeral {
+                trace_directory: Some((base_directory, traces_dir)),
+            },
+        )
+    }
+}
+
+#[cfg(all(feature = "owned-launch", feature = "video-recording"))]
+#[napi]
+impl NativeEnvironment {
+    #[allow(clippy::too_many_arguments)]
+    #[napi]
+    pub fn launch_persistent_chromium_with_video<'env>(
+        &self,
+        env: &'env Env,
+        executable_path: JsString<'env>,
+        user_data_dir: JsString<'env>,
+        policy_flags: u32,
+        timeout_ms: u32,
+        base_url: Option<JsString<'env>>,
+        directory: JsString<'env>,
+        ffmpeg: JsString<'env>,
+        width: u32,
+        height: u32,
+    ) -> napi::Result<PromiseRaw<'env, Unknown<'env>>> {
+        if policy_flags & !PERSISTENT_CONTEXT_KNOWN_POLICIES != 0 {
+            return Err(binding_error(HostError::InvalidArgument(
+                "persistent Context launch policy contains unknown bits".into(),
+            )));
+        }
+        let headless = policy_flags & PERSISTENT_CONTEXT_HEADLESS != 0;
+        let ignore_https_errors = policy_flags & PERSISTENT_CONTEXT_IGNORE_HTTPS_ERRORS != 0;
+        let user_data_dir = boundary::bounded_string(user_data_dir, 8192, "userDataDir")?;
+        let base_url = base_url
+            .map(|value| boundary::bounded_string(value, 16 * 1024, "baseURL"))
+            .transpose()?;
+        let directory = boundary::bounded_string(directory, 8192, "recordVideo.dir")?;
+        let ffmpeg = boundary::bounded_string(ffmpeg, 8192, "FFmpeg executable")?;
+        let video = PersistentContextVideoOptions::new(
+            PathBuf::from(directory),
+            PathBuf::from(ffmpeg),
+            width,
+            height,
+        )
+        .map_err(binding_error)?;
+        self.launch_chromium_impl(
+            env,
+            executable_path,
+            headless,
+            timeout_ms,
+            ChromiumLaunchKind::PersistentVideo {
+                user_data_dir,
+                base_url,
+                ignore_https_errors,
+                #[cfg(feature = "persistent-context-locale")]
+                locale: None,
+                #[cfg(feature = "persistent-context-timezone")]
+                timezone_id: None,
+                #[cfg(feature = "persistent-context-geolocation")]
+                geolocation: None,
+                #[cfg(feature = "persistent-context-geolocation-permission")]
+                permissions: Vec::new(),
+                #[cfg(feature = "persistent-context-http-credentials")]
+                http_credentials: None,
+                #[cfg(feature = "persistent-context-offline")]
+                offline: false,
+                #[cfg(feature = "persistent-context-bypass-csp")]
+                bypass_csp: false,
+                #[cfg(feature = "persistent-context-javascript-disabled")]
+                javascript_disabled: false,
+                video,
+            },
+        )
+    }
+}
+
+#[cfg(feature = "owned-launch")]
+#[napi]
+impl NativeEnvironment {
+    #[napi]
+    pub fn launch_persistent_chromium<'env>(
+        &self,
+        env: &'env Env,
+        executable_path: JsString<'env>,
+        user_data_dir: JsString<'env>,
+        timeout_ms: u32,
+        base_url: Option<JsString<'env>>,
+        policy_flags: u32,
+    ) -> napi::Result<PromiseRaw<'env, Unknown<'env>>> {
+        if policy_flags & !PERSISTENT_CONTEXT_KNOWN_POLICIES != 0 {
+            return Err(binding_error(HostError::InvalidArgument(
+                "persistent Context launch policy contains unknown bits".into(),
+            )));
+        }
+        let headless = policy_flags & PERSISTENT_CONTEXT_HEADLESS != 0;
+        let ignore_https_errors = policy_flags & PERSISTENT_CONTEXT_IGNORE_HTTPS_ERRORS != 0;
+        let user_data_dir = boundary::bounded_string(user_data_dir, 8192, "userDataDir")?;
+        let base_url = base_url
+            .map(|value| boundary::bounded_string(value, 16 * 1024, "baseURL"))
+            .transpose()?;
+        self.launch_chromium_impl(
+            env,
+            executable_path,
+            headless,
+            timeout_ms,
+            ChromiumLaunchKind::Persistent {
+                user_data_dir,
+                base_url,
+                ignore_https_errors,
+                #[cfg(feature = "persistent-context-locale")]
+                locale: None,
+                #[cfg(feature = "persistent-context-timezone")]
+                timezone_id: None,
+                #[cfg(feature = "persistent-context-geolocation")]
+                geolocation: None,
+                #[cfg(feature = "persistent-context-geolocation-permission")]
+                permissions: Vec::new(),
+                #[cfg(feature = "persistent-context-http-credentials")]
+                http_credentials: None,
+                #[cfg(feature = "persistent-context-offline")]
+                offline: false,
+                #[cfg(feature = "persistent-context-bypass-csp")]
+                bypass_csp: false,
+                #[cfg(feature = "persistent-context-javascript-disabled")]
+                javascript_disabled: false,
+            },
+        )
+    }
+}
+
+#[cfg(all(
+    feature = "owned-launch",
+    any(
+        feature = "persistent-context-locale",
+        feature = "persistent-context-timezone",
+        feature = "persistent-context-geolocation",
+        feature = "persistent-context-geolocation-permission",
+        feature = "persistent-context-http-credentials",
+        feature = "persistent-context-offline",
+        feature = "persistent-context-bypass-csp",
+        feature = "persistent-context-javascript-disabled"
+    )
+))]
+#[napi]
+impl NativeEnvironment {
+    #[allow(clippy::too_many_arguments)]
+    #[napi]
+    pub fn launch_persistent_chromium_with_context_defaults<'env>(
+        &self,
+        env: &'env Env,
+        executable_path: JsString<'env>,
+        user_data_dir: JsString<'env>,
+        timeout_ms: u32,
+        base_url: Option<JsString<'env>>,
+        policy_flags: u32,
+        defaults: NativePersistentContextDefaults,
+    ) -> napi::Result<PromiseRaw<'env, Unknown<'env>>> {
+        if policy_flags & !PERSISTENT_CONTEXT_KNOWN_POLICIES != 0 {
+            return Err(binding_error(HostError::InvalidArgument(
+                "persistent Context launch policy contains unknown bits".into(),
+            )));
+        }
+        let headless = policy_flags & PERSISTENT_CONTEXT_HEADLESS != 0;
+        let ignore_https_errors = policy_flags & PERSISTENT_CONTEXT_IGNORE_HTTPS_ERRORS != 0;
+        let user_data_dir = boundary::bounded_string(user_data_dir, 8192, "userDataDir")?;
+        let base_url = base_url
+            .map(|value| boundary::bounded_string(value, 16 * 1024, "baseURL"))
+            .transpose()?;
+        #[cfg(feature = "persistent-context-geolocation")]
+        let geolocation = defaults
+            .geolocation
+            .map(crate::NativeContextGeolocation::into_host)
+            .transpose()
+            .map_err(binding_error)?;
+        #[cfg(feature = "persistent-context-geolocation-permission")]
+        let permissions = defaults.permissions.unwrap_or_default();
+        #[cfg(feature = "persistent-context-http-credentials")]
+        let http_credentials = defaults
+            .http_credentials
+            .map(crate::NativeContextHttpCredentials::into_host)
+            .transpose()
+            .map_err(binding_error)?;
+        self.launch_chromium_impl(
+            env,
+            executable_path,
+            headless,
+            timeout_ms,
+            ChromiumLaunchKind::Persistent {
+                user_data_dir,
+                base_url,
+                ignore_https_errors,
+                #[cfg(feature = "persistent-context-locale")]
+                locale: defaults.locale,
+                #[cfg(feature = "persistent-context-timezone")]
+                timezone_id: defaults.timezone_id,
+                #[cfg(feature = "persistent-context-geolocation")]
+                geolocation,
+                #[cfg(feature = "persistent-context-geolocation-permission")]
+                permissions,
+                #[cfg(feature = "persistent-context-http-credentials")]
+                http_credentials,
+                #[cfg(feature = "persistent-context-offline")]
+                offline: defaults.offline.unwrap_or(false),
+                #[cfg(feature = "persistent-context-bypass-csp")]
+                bypass_csp: defaults.bypass_csp.unwrap_or(false),
+                #[cfg(feature = "persistent-context-javascript-disabled")]
+                javascript_disabled: defaults.java_script_enabled == Some(false),
+            },
+        )
+    }
+}
+
+#[cfg(all(
+    feature = "owned-launch",
+    feature = "video-recording",
+    any(
+        feature = "persistent-context-locale",
+        feature = "persistent-context-timezone",
+        feature = "persistent-context-geolocation",
+        feature = "persistent-context-geolocation-permission",
+        feature = "persistent-context-http-credentials",
+        feature = "persistent-context-offline",
+        feature = "persistent-context-bypass-csp",
+        feature = "persistent-context-javascript-disabled"
+    )
+))]
+#[napi]
+impl NativeEnvironment {
+    #[allow(clippy::too_many_arguments)]
+    #[napi]
+    pub fn launch_persistent_chromium_with_video_and_context_defaults<'env>(
+        &self,
+        env: &'env Env,
+        executable_path: JsString<'env>,
+        user_data_dir: JsString<'env>,
+        policy_flags: u32,
+        timeout_ms: u32,
+        base_url: Option<JsString<'env>>,
+        defaults: NativePersistentContextDefaults,
+        directory: JsString<'env>,
+        ffmpeg: JsString<'env>,
+        width: u32,
+        height: u32,
+    ) -> napi::Result<PromiseRaw<'env, Unknown<'env>>> {
+        if policy_flags & !PERSISTENT_CONTEXT_KNOWN_POLICIES != 0 {
+            return Err(binding_error(HostError::InvalidArgument(
+                "persistent Context launch policy contains unknown bits".into(),
+            )));
+        }
+        let headless = policy_flags & PERSISTENT_CONTEXT_HEADLESS != 0;
+        let ignore_https_errors = policy_flags & PERSISTENT_CONTEXT_IGNORE_HTTPS_ERRORS != 0;
+        let user_data_dir = boundary::bounded_string(user_data_dir, 8192, "userDataDir")?;
+        let base_url = base_url
+            .map(|value| boundary::bounded_string(value, 16 * 1024, "baseURL"))
+            .transpose()?;
+        let directory = boundary::bounded_string(directory, 8192, "recordVideo.dir")?;
+        let ffmpeg = boundary::bounded_string(ffmpeg, 8192, "FFmpeg executable")?;
+        let video = PersistentContextVideoOptions::new(
+            PathBuf::from(directory),
+            PathBuf::from(ffmpeg),
+            width,
+            height,
+        )
+        .map_err(binding_error)?;
+        #[cfg(feature = "persistent-context-geolocation")]
+        let geolocation = defaults
+            .geolocation
+            .map(crate::NativeContextGeolocation::into_host)
+            .transpose()
+            .map_err(binding_error)?;
+        #[cfg(feature = "persistent-context-geolocation-permission")]
+        let permissions = defaults.permissions.unwrap_or_default();
+        #[cfg(feature = "persistent-context-http-credentials")]
+        let http_credentials = defaults
+            .http_credentials
+            .map(crate::NativeContextHttpCredentials::into_host)
+            .transpose()
+            .map_err(binding_error)?;
+        self.launch_chromium_impl(
+            env,
+            executable_path,
+            headless,
+            timeout_ms,
+            ChromiumLaunchKind::PersistentVideo {
+                user_data_dir,
+                base_url,
+                ignore_https_errors,
+                #[cfg(feature = "persistent-context-locale")]
+                locale: defaults.locale,
+                #[cfg(feature = "persistent-context-timezone")]
+                timezone_id: defaults.timezone_id,
+                #[cfg(feature = "persistent-context-geolocation")]
+                geolocation,
+                #[cfg(feature = "persistent-context-geolocation-permission")]
+                permissions,
+                #[cfg(feature = "persistent-context-http-credentials")]
+                http_credentials,
+                #[cfg(feature = "persistent-context-offline")]
+                offline: defaults.offline.unwrap_or(false),
+                #[cfg(feature = "persistent-context-bypass-csp")]
+                bypass_csp: defaults.bypass_csp.unwrap_or(false),
+                #[cfg(feature = "persistent-context-javascript-disabled")]
+                javascript_disabled: defaults.java_script_enabled == Some(false),
+                video,
+            },
         )
     }
 }
@@ -1476,12 +1941,92 @@ impl NativeEnvironment {
         executable_path: JsString<'env>,
         headless: bool,
         timeout_ms: u32,
-        #[cfg(feature = "playwright-trace")] trace_directory: Option<(String, String)>,
+        launch_kind: ChromiumLaunchKind,
     ) -> napi::Result<PromiseRaw<'env, Unknown<'env>>> {
+        let allowance = match &launch_kind {
+            #[cfg(any(
+                feature = "persistent-context-locale",
+                feature = "persistent-context-timezone",
+                feature = "persistent-context-geolocation-permission",
+                feature = "persistent-context-http-credentials"
+            ))]
+            ChromiumLaunchKind::Persistent {
+                #[cfg(feature = "persistent-context-locale")]
+                locale,
+                #[cfg(feature = "persistent-context-timezone")]
+                timezone_id,
+                #[cfg(feature = "persistent-context-geolocation-permission")]
+                permissions,
+                #[cfg(feature = "persistent-context-http-credentials")]
+                http_credentials,
+                ..
+            } => {
+                let allowance = boundary::SMALL_ALLOWANCE;
+                #[cfg(feature = "persistent-context-locale")]
+                let allowance = persistent_string_allowance(
+                    allowance,
+                    locale.as_ref().map_or(0, String::len),
+                    "locale",
+                )?;
+                #[cfg(feature = "persistent-context-timezone")]
+                let allowance = persistent_string_allowance(
+                    allowance,
+                    timezone_id.as_ref().map_or(0, String::len),
+                    "timezoneId",
+                )?;
+                #[cfg(feature = "persistent-context-geolocation-permission")]
+                let allowance = persistent_permissions_allowance(allowance, permissions)?;
+                #[cfg(feature = "persistent-context-http-credentials")]
+                let allowance =
+                    persistent_credentials_allowance(allowance, http_credentials.as_ref())?;
+                allowance
+            }
+            #[cfg(all(
+                feature = "video-recording",
+                any(
+                    feature = "persistent-context-locale",
+                    feature = "persistent-context-timezone",
+                    feature = "persistent-context-geolocation-permission",
+                    feature = "persistent-context-http-credentials"
+                )
+            ))]
+            ChromiumLaunchKind::PersistentVideo {
+                #[cfg(feature = "persistent-context-locale")]
+                locale,
+                #[cfg(feature = "persistent-context-timezone")]
+                timezone_id,
+                #[cfg(feature = "persistent-context-geolocation-permission")]
+                permissions,
+                #[cfg(feature = "persistent-context-http-credentials")]
+                http_credentials,
+                ..
+            } => {
+                let allowance = boundary::SMALL_ALLOWANCE;
+                #[cfg(feature = "persistent-context-locale")]
+                let allowance = persistent_string_allowance(
+                    allowance,
+                    locale.as_ref().map_or(0, String::len),
+                    "locale",
+                )?;
+                #[cfg(feature = "persistent-context-timezone")]
+                let allowance = persistent_string_allowance(
+                    allowance,
+                    timezone_id.as_ref().map_or(0, String::len),
+                    "timezoneId",
+                )?;
+                #[cfg(feature = "persistent-context-geolocation-permission")]
+                let allowance = persistent_permissions_allowance(allowance, permissions)?;
+                #[cfg(feature = "persistent-context-http-credentials")]
+                let allowance =
+                    persistent_credentials_allowance(allowance, http_credentials.as_ref())?;
+                allowance
+            }
+            _ => boundary::SMALL_ALLOWANCE,
+        };
         let execution = self
             .owner
             .ffi
-            .admit(FfiLane::Connect, boundary::SMALL_ALLOWANCE)
+            .admit(FfiLane::Connect, allowance)
             .map_err(binding_error)?;
         let executable_path = boundary::bounded_string(executable_path, 8192, "executablePath")?;
         let admission = self.owner.admit().map_err(binding_error)?;
@@ -1503,58 +2048,257 @@ impl NativeEnvironment {
             env,
             execution,
             async move {
-                #[cfg(feature = "playwright-trace")]
-                let trace_directory = if let Some((base, requested)) = trace_directory
-                    && !requested.is_empty()
-                {
-                    Some(
-                        prepare_trace_directory(
-                            Path::new(&base),
-                            Path::new(&requested),
-                            TraceDirectoryLimits::new(4096, 256),
-                        )
-                        .map_err(|error| {
-                            HostError::InvalidArgument(format!("tracesDir: {error}"))
-                        })?,
-                    )
-                } else {
-                    None
-                };
                 let executable = ChromiumExecutable::from_path(
                     PathBuf::from(executable_path),
                     ChromiumChannel::Custom,
                 )
                 .map_err(|error| HostError::InvalidArgument(format!("executablePath: {error}")))?;
-                let directory = tempfile::Builder::new()
-                    .prefix("playwright-rust-node-")
-                    .tempdir()
-                    .map_err(|error| {
-                        HostError::Backend(format!("create Chromium profile: {error}"))
-                    })?;
-                let profile_path = std::fs::canonicalize(directory.path()).map_err(|error| {
-                    HostError::Backend(format!("resolve Chromium profile: {error}"))
-                })?;
-                let profile = Arc::new(Mutex::new(Some(directory)));
-                let host = tokio::select! {
-                    biased;
-                    () = owner.stopped.cancelled() => return Err(HostError::TargetClosed),
-                    result = async {
+                let (host, profile) = match launch_kind {
+                    ChromiumLaunchKind::Ephemeral {
                         #[cfg(feature = "playwright-trace")]
-                        if let Some(trace_directory) = trace_directory {
-                            return HostSession::launch_chromium_with_trace_directory(
-                                executable,
-                                profile_path,
-                                headless,
-                                timeout_ms,
-                                trace_directory,
-                            ).await;
+                        trace_directory,
+                    } => {
+                        #[cfg(feature = "playwright-trace")]
+                        let trace_directory = if let Some((base, requested)) = trace_directory
+                            && !requested.is_empty()
+                        {
+                            Some(
+                                prepare_trace_directory(
+                                    Path::new(&base),
+                                    Path::new(&requested),
+                                    TraceDirectoryLimits::new(4096, 256),
+                                )
+                                .map_err(|error| {
+                                    HostError::InvalidArgument(format!("tracesDir: {error}"))
+                                })?,
+                            )
+                        } else {
+                            None
+                        };
+                        let directory = tempfile::Builder::new()
+                            .prefix("playwright-rust-node-")
+                            .tempdir()
+                            .map_err(|error| {
+                                HostError::Backend(format!("create Chromium profile: {error}"))
+                            })?;
+                        let profile_path =
+                            std::fs::canonicalize(directory.path()).map_err(|error| {
+                                HostError::Backend(format!("resolve Chromium profile: {error}"))
+                            })?;
+                        let profile = Arc::new(Mutex::new(Some(directory)));
+                        let host = tokio::select! {
+                            biased;
+                            () = owner.stopped.cancelled() => return Err(HostError::TargetClosed),
+                            result = async {
+                                #[cfg(feature = "playwright-trace")]
+                                if let Some(trace_directory) = trace_directory {
+                                    return HostSession::launch_chromium_with_trace_directory(
+                                        executable,
+                                        profile_path,
+                                        headless,
+                                        timeout_ms,
+                                        trace_directory,
+                                    ).await;
+                                }
+                                HostSession::launch_chromium_with_lifecycle_events(
+                                    executable, profile_path, headless, timeout_ms,
+                                ).await
+                            } => Arc::new(result?),
+                        };
+                        (host, Some(profile))
+                    }
+                    ChromiumLaunchKind::Persistent {
+                        user_data_dir,
+                        base_url,
+                        ignore_https_errors,
+                        #[cfg(feature = "persistent-context-locale")]
+                        locale,
+                        #[cfg(feature = "persistent-context-timezone")]
+                        timezone_id,
+                        #[cfg(feature = "persistent-context-geolocation")]
+                        geolocation,
+                        #[cfg(feature = "persistent-context-geolocation-permission")]
+                        permissions,
+                        #[cfg(feature = "persistent-context-http-credentials")]
+                        http_credentials,
+                        #[cfg(feature = "persistent-context-offline")]
+                        offline,
+                        #[cfg(feature = "persistent-context-bypass-csp")]
+                        bypass_csp,
+                        #[cfg(feature = "persistent-context-javascript-disabled")]
+                        javascript_disabled,
+                    } => {
+                        let requested = PathBuf::from(user_data_dir);
+                        std::fs::create_dir_all(&requested).map_err(|error| {
+                            HostError::Backend(format!("create Chromium profile: {error}"))
+                        })?;
+                        let profile = ChromiumPersistentProfile::open_or_initialize(requested)
+                            .map_err(|error| {
+                                HostError::InvalidArgument(format!("userDataDir: {error}"))
+                            })?;
+                        let host = tokio::select! {
+                            biased;
+                            () = owner.stopped.cancelled() => return Err(HostError::TargetClosed),
+                            result = async {
+                                #[cfg(any(
+                                    feature = "persistent-context-ignore-https-errors",
+                                    feature = "persistent-context-locale",
+                                    feature = "persistent-context-timezone",
+                                    feature = "persistent-context-geolocation",
+                                    feature = "persistent-context-geolocation-permission",
+                                    feature = "persistent-context-http-credentials",
+                                    feature = "persistent-context-offline",
+                                    feature = "persistent-context-bypass-csp",
+                                    feature = "persistent-context-javascript-disabled"
+                                ))]
+                                {
+                                    #[cfg(not(feature = "persistent-context-ignore-https-errors"))]
+                                    if ignore_https_errors {
+                                        return Err(HostError::UnsupportedOperation(
+                                            "persistent Context ignoreHTTPSErrors is not selected"
+                                                .into(),
+                                        ));
+                                    }
+                                    let defaults = PersistentContextDefaults::default();
+                                    #[cfg(feature = "persistent-context-ignore-https-errors")]
+                                    let defaults = defaults
+                                        .with_ignore_https_errors(ignore_https_errors);
+                                    #[cfg(feature = "persistent-context-locale")]
+                                    let defaults = defaults.with_locale(
+                                        locale.map(ContextLocale::new).transpose()?,
+                                    );
+                                    #[cfg(feature = "persistent-context-timezone")]
+                                    let defaults = defaults.with_timezone(
+                                        timezone_id.map(ContextTimezone::new).transpose()?,
+                                    );
+                                    #[cfg(feature = "persistent-context-geolocation")]
+                                    let defaults = defaults.with_geolocation(geolocation);
+                                    #[cfg(feature = "persistent-context-geolocation-permission")]
+                                    let defaults = defaults.with_permissions(
+                                        ContextPermissions::new(permissions)?,
+                                    );
+                                    #[cfg(feature = "persistent-context-http-credentials")]
+                                    let defaults = defaults.with_http_credentials(http_credentials);
+                                    #[cfg(feature = "persistent-context-offline")]
+                                    let defaults = defaults.with_offline(offline);
+                                    #[cfg(feature = "persistent-context-bypass-csp")]
+                                    let defaults = defaults.with_bypass_csp(bypass_csp);
+                                    #[cfg(feature = "persistent-context-javascript-disabled")]
+                                    let defaults =
+                                        defaults.with_javascript_disabled(javascript_disabled);
+                                    return HostSession::launch_persistent_chromium_with_lifecycle_events_and_context_defaults(
+                                        executable,
+                                        profile,
+                                        headless,
+                                        base_url.as_deref(),
+                                        defaults,
+                                        timeout_ms,
+                                    ).await;
+                                }
+                                #[cfg(not(any(
+                                    feature = "persistent-context-ignore-https-errors",
+                                    feature = "persistent-context-locale",
+                                    feature = "persistent-context-timezone",
+                                    feature = "persistent-context-geolocation",
+                                    feature = "persistent-context-geolocation-permission",
+                                    feature = "persistent-context-http-credentials",
+                                    feature = "persistent-context-offline",
+                                    feature = "persistent-context-bypass-csp",
+                                    feature = "persistent-context-javascript-disabled"
+                                )))]
+                                {
+                                    if ignore_https_errors {
+                                        return Err(HostError::UnsupportedOperation(
+                                            "persistent Context ignoreHTTPSErrors is not selected".into(),
+                                        ));
+                                    }
+                                    HostSession::launch_persistent_chromium_with_lifecycle_events(
+                                        executable,
+                                        profile,
+                                        headless,
+                                        base_url.as_deref(),
+                                        timeout_ms,
+                                    ).await
+                                }
+                            } => Arc::new(result?),
+                        };
+                        (host, None)
+                    }
+                    #[cfg(feature = "video-recording")]
+                    ChromiumLaunchKind::PersistentVideo {
+                        user_data_dir,
+                        base_url,
+                        ignore_https_errors,
+                        #[cfg(feature = "persistent-context-locale")]
+                        locale,
+                        #[cfg(feature = "persistent-context-timezone")]
+                        timezone_id,
+                        #[cfg(feature = "persistent-context-geolocation")]
+                        geolocation,
+                        #[cfg(feature = "persistent-context-geolocation-permission")]
+                        permissions,
+                        #[cfg(feature = "persistent-context-http-credentials")]
+                        http_credentials,
+                        #[cfg(feature = "persistent-context-offline")]
+                        offline,
+                        #[cfg(feature = "persistent-context-bypass-csp")]
+                        bypass_csp,
+                        #[cfg(feature = "persistent-context-javascript-disabled")]
+                        javascript_disabled,
+                        video,
+                    } => {
+                        let requested = PathBuf::from(user_data_dir);
+                        std::fs::create_dir_all(&requested).map_err(|error| {
+                            HostError::Backend(format!("create Chromium profile: {error}"))
+                        })?;
+                        let profile = ChromiumPersistentProfile::open_or_initialize(requested)
+                            .map_err(|error| {
+                                HostError::InvalidArgument(format!("userDataDir: {error}"))
+                            })?;
+                        let defaults = PersistentContextDefaults::default().with_video(Some(video));
+                        #[cfg(feature = "persistent-context-ignore-https-errors")]
+                        let defaults = defaults.with_ignore_https_errors(ignore_https_errors);
+                        #[cfg(feature = "persistent-context-locale")]
+                        let defaults =
+                            defaults.with_locale(locale.map(ContextLocale::new).transpose()?);
+                        #[cfg(feature = "persistent-context-timezone")]
+                        let defaults = defaults
+                            .with_timezone(timezone_id.map(ContextTimezone::new).transpose()?);
+                        #[cfg(feature = "persistent-context-geolocation")]
+                        let defaults = defaults.with_geolocation(geolocation);
+                        #[cfg(feature = "persistent-context-geolocation-permission")]
+                        let defaults =
+                            defaults.with_permissions(ContextPermissions::new(permissions)?);
+                        #[cfg(feature = "persistent-context-http-credentials")]
+                        let defaults = defaults.with_http_credentials(http_credentials);
+                        #[cfg(feature = "persistent-context-offline")]
+                        let defaults = defaults.with_offline(offline);
+                        #[cfg(feature = "persistent-context-bypass-csp")]
+                        let defaults = defaults.with_bypass_csp(bypass_csp);
+                        #[cfg(feature = "persistent-context-javascript-disabled")]
+                        let defaults = defaults.with_javascript_disabled(javascript_disabled);
+                        #[cfg(not(feature = "persistent-context-ignore-https-errors"))]
+                        if ignore_https_errors {
+                            return Err(HostError::UnsupportedOperation(
+                                "persistent Context ignoreHTTPSErrors is not selected".into(),
+                            ));
                         }
-                        HostSession::launch_chromium_with_lifecycle_events(
-                            executable, profile_path, headless, timeout_ms,
-                        ).await
-                    } => Arc::new(result?),
+                        let host = tokio::select! {
+                            biased;
+                            () = owner.stopped.cancelled() => return Err(HostError::TargetClosed),
+                            result = HostSession::launch_persistent_chromium_with_lifecycle_events_and_context_defaults(
+                                executable,
+                                profile,
+                                headless,
+                                base_url.as_deref(),
+                                defaults,
+                                timeout_ms,
+                            ) => Arc::new(result?),
+                        };
+                        (host, None)
+                    }
                 };
-                admission.publish(&host, Some(Arc::clone(&profile)))?;
+                admission.publish(&host, profile.clone())?;
                 Ok((host, profile))
             },
             move |env, (host, profile)| {
@@ -1586,7 +2330,7 @@ impl NativeEnvironment {
                     }
                 };
                 Ok(NativeSession {
-                    launch_profile: Some(profile),
+                    launch_profile: profile,
                     #[cfg(feature = "retained-file-input")]
                     file_input_timeout_budget,
                     #[cfg(feature = "retained-file-input")]
@@ -1630,7 +2374,11 @@ impl NativeEnvironment {
             .admit(FfiLane::Connect, boundary::SMALL_ALLOWANCE)
             .map_err(binding_error)?;
         let engine = boundary::bounded_string(engine, 16, "engine")?;
-        let engine = StartupEngine::parse(&engine).map_err(binding_error)?;
+        if engine != "chromium" {
+            return Err(binding_error(HostError::InvalidArgument(
+                "engine must be chromium".into(),
+            )));
+        }
         let executable_path = boundary::bounded_string(executable_path, 8192, "executablePath")?;
         let traces_dir = boundary::bounded_string(traces_dir, 4096, "tracesDir")?;
         let base_directory =
@@ -1662,7 +2410,10 @@ impl NativeEnvironment {
                 let profile_path = std::fs::canonicalize(profile.path()).map_err(|error| {
                     HostError::Backend(format!("resolve browser profile: {error}"))
                 })?;
-                let arguments = engine.arguments(&profile_path)?;
+                let profile_path = profile_path.to_str().ok_or_else(|| {
+                    HostError::Backend("browser profile path is not valid UTF-8".into())
+                })?;
+                let arguments = vec![format!("--user-data-dir={profile_path}")];
                 let report = tokio::select! {
                     biased;
                     () = owner.stopped.cancelled() => return Err(HostError::TargetClosed),
@@ -1676,36 +2427,6 @@ impl NativeEnvironment {
             },
             |_, result| Ok(result),
         )
-    }
-}
-
-#[cfg(feature = "bidi-startup-failure")]
-#[derive(Clone, Copy)]
-enum StartupEngine {
-    Chromium,
-    Firefox,
-}
-
-#[cfg(feature = "bidi-startup-failure")]
-impl StartupEngine {
-    fn parse(value: &str) -> Result<Self, HostError> {
-        match value {
-            "chromium" => Ok(Self::Chromium),
-            "firefox" => Ok(Self::Firefox),
-            _ => Err(HostError::InvalidArgument(
-                "engine must be chromium or firefox".into(),
-            )),
-        }
-    }
-
-    fn arguments(self, profile_path: &Path) -> Result<Vec<String>, HostError> {
-        let profile_path = profile_path
-            .to_str()
-            .ok_or_else(|| HostError::Backend("browser profile path is not valid UTF-8".into()))?;
-        Ok(match self {
-            Self::Chromium => vec![format!("--user-data-dir={profile_path}")],
-            Self::Firefox => vec!["--profile".into(), profile_path.to_owned()],
-        })
     }
 }
 

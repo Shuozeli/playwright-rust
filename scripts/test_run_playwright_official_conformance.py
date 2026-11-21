@@ -636,6 +636,7 @@ assert.throws(() => fetch('http://127.0.0.1/'), /forbids fetch/);
                 grep=None,
                 workers=1,
                 headed=False,
+                channel="chromium",
                 endpoint="http://127.0.0.1:9222",
                 fixture_bind="100.64.0.1",
                 fixture_host="example-yuacx.example.ts.net",
@@ -650,6 +651,7 @@ assert.throws(() => fetch('http://127.0.0.1/'), /forbids fetch/);
 
             # Assert
             self.assertEqual(provenance["candidateProfile"], "official")
+            self.assertEqual(provenance["channel"], "chromium")
             self.assertEqual(provenance["schema"], 2)
             self.assertEqual(provenance["toolingSources"], tooling_source_records)
             self.assertEqual(provenance["adapter"], "candidate-adapter")
@@ -1118,6 +1120,133 @@ class PinnedFullFileTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(ValueError, "exact pinned page-history"):
             _cross_origin_forward_enabled(missing_flag)
+
+    def test_cross_origin_forward_accepts_exact_video_file_manifest(self) -> None:
+        # Arrange
+        root = Path(__file__).parents[1]
+        manifest = cast(
+            Manifest,
+            json.loads(
+                (
+                    root
+                    / "tests/official/playwright-core-video-chromium-v1-manifest.json"
+                ).read_text()
+            ),
+        )
+        suite = manifest["suites"][0]
+
+        # Act
+        enabled = _cross_origin_forward_enabled(suite)
+
+        # Assert
+        self.assertEqual(len(manifest["suites"]), 1)
+        self.assertEqual(suite["expectedTestsPerProject"], 29)
+        self.assertEqual(suite["project"], "chromium-library")
+        self.assertEqual(suite["channel"], "chromium")
+        self.assertTrue(enabled)
+
+    def test_cross_origin_forward_rejects_video_selection_drift(self) -> None:
+        # Arrange
+        root = Path(__file__).parents[1]
+        manifest = cast(
+            Manifest,
+            json.loads(
+                (
+                    root
+                    / "tests/official/playwright-core-video-chromium-v1-manifest.json"
+                ).read_text()
+            ),
+        )
+        suite = manifest["suites"][0]
+
+        # Act and Assert
+        for field, value in {
+            "args": ["tests/library/other.spec.ts"],
+            "project": "chromium-page",
+            "expectedTestsPerProject": 28,
+            "crossOriginForward": False,
+        }.items():
+            with self.subTest(field=field):
+                drifted = cast(Suite, {**suite, field: value})
+                with self.assertRaisesRegex(ValueError, "exact pinned video"):
+                    _cross_origin_forward_enabled(drifted)
+
+    def test_cross_origin_forward_accepts_exact_tracing_file_manifest(self) -> None:
+        # Arrange
+        root = Path(__file__).parents[1]
+        manifest = cast(
+            Manifest,
+            json.loads(
+                (
+                    root
+                    / "tests/official/playwright-core-tracing-chromium-v1-manifest.json"
+                ).read_text()
+            ),
+        )
+        suite = manifest["suites"][0]
+
+        # Act
+        enabled = _cross_origin_forward_enabled(suite)
+
+        # Assert
+        self.assertEqual(len(manifest["suites"]), 1)
+        self.assertEqual(suite["expectedTestsPerProject"], 35)
+        self.assertEqual(suite["project"], "chromium-library")
+        self.assertEqual(suite["channel"], "chromium")
+        self.assertTrue(enabled)
+
+    def test_cross_origin_forward_rejects_tracing_selection_drift(self) -> None:
+        # Arrange
+        root = Path(__file__).parents[1]
+        manifest = cast(
+            Manifest,
+            json.loads(
+                (
+                    root
+                    / "tests/official/playwright-core-tracing-chromium-v1-manifest.json"
+                ).read_text()
+            ),
+        )
+        suite = manifest["suites"][0]
+
+        # Act and Assert
+        for field, value in {
+            "args": ["tests/library/other.spec.ts"],
+            "project": "chromium-page",
+            "expectedTestsPerProject": 34,
+            "crossOriginForward": False,
+        }.items():
+            with self.subTest(field=field):
+                drifted = cast(Suite, {**suite, field: value})
+                with self.assertRaisesRegex(ValueError, "exact pinned tracing"):
+                    _cross_origin_forward_enabled(drifted)
+
+    def test_tracing_file_source_pin_matches_upstream(self) -> None:
+        # Arrange
+        root = Path(__file__).parents[1]
+        upstream = Path(
+            os.environ.get(
+                "PLAYWRIGHT_RUST_PLAYWRIGHT_CORE_UPSTREAM",
+                "/Users/cyuan/projects/thirdparty/playwright-v1.58.0",
+            )
+        )
+        if not (upstream / "tests/library/tracing.spec.ts").is_file():
+            self.skipTest("pinned upstream Playwright checkout is unavailable")
+        manifest = cast(
+            Manifest,
+            json.loads(
+                (
+                    root
+                    / "tests/official/playwright-core-tracing-chromium-v1-manifest.json"
+                ).read_text()
+            ),
+        )
+
+        # Act
+        source = _pinned_full_file_source(manifest["suites"][0], upstream)
+
+        # Assert
+        self.assertEqual(source[:3], ("library/tracing.spec.ts", 35, "chromium-library"))
 
     def test_history_file_source_pin_matches_upstream(self) -> None:
         # Arrange

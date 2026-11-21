@@ -267,3 +267,6 @@ pub use playwright_rust_transport as transport;
 
 #[cfg(feature = "transport-tokio")]
 pub use playwright_rust_transport_tokio as transport_tokio;
+
+#[cfg(feature = "remote-cdp")]
+pub use playwright_rust_remote_cdp as remote_cdp;

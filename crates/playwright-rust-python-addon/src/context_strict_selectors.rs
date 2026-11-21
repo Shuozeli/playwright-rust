@@ -1,4 +1,4 @@
-//! Bounded, Context-owned strict-selector defaults for the Python FFI.
+//! Context-owned strict-selector defaults for the Python FFI.
 //!
 //! An explicit selector-call option always wins. The stored default applies
 //! only when the call omits `strict`, matching Playwright's FrameSelectors.
@@ -7,8 +7,6 @@ use std::collections::BTreeSet;
 use std::sync::Mutex;
 
 use playwright_rust_node_host::HostError;
-
-const MAX_STRICT_CONTEXTS: usize = 64;
 
 #[derive(Default)]
 pub(crate) struct ContextStrictSelectors {
@@ -27,11 +25,6 @@ impl ContextStrictSelectors {
         let mut ids = self.strict_context_ids.lock().map_err(|_| {
             HostError::Backend("Context strict-selector policy lock poisoned".into())
         })?;
-        if !ids.contains(context_id) && ids.len() >= MAX_STRICT_CONTEXTS {
-            return Err(HostError::ResourceExhausted(
-                "Context strict-selector policy capacity exceeded".into(),
-            ));
-        }
         ids.insert(context_id.to_owned());
         Ok(())
     }
@@ -116,20 +109,20 @@ mod tests {
     }
 
     #[test]
-    fn policy_is_bounded_and_release_restores_capacity() {
+    fn policy_grows_past_the_legacy_capacity_and_retires() {
         // Arrange
         let policies = ContextStrictSelectors::default();
-        for index in 0..MAX_STRICT_CONTEXTS {
+        for index in 0..129 {
             policies.install(&index.to_string(), true).unwrap();
         }
 
         // Act
-        let full = policies.install("overflow", true);
-        policies.retire("0").unwrap();
         let admitted = policies.install("overflow", true);
+        policies.retire("0").unwrap();
 
         // Assert
-        assert!(matches!(full, Err(HostError::ResourceExhausted(_))));
         assert!(admitted.is_ok());
+        assert!(!policies.resolve("0", None).unwrap());
+        assert!(policies.resolve("overflow", None).unwrap());
     }
 }

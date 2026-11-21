@@ -790,7 +790,7 @@ mod tests {
         publish_ordered_scopes,
     };
     use crate::{
-        ChromiumNetworkEventDriver, ChromiumNetworkEventDriverShared,
+        ChromiumNetworkAdapterKind, ChromiumNetworkEventDriver, ChromiumNetworkEventDriverShared,
         ChromiumNetworkEventDriverState, ChromiumNetworkPageAdapter,
         ChromiumNetworkSubscriptionRegistry,
     };
@@ -827,6 +827,7 @@ mod tests {
             ObjectId::new(3),
             ChromiumNetworkPageAdapter {
                 browser_context_object_id: ObjectId::new(2),
+                kind: ChromiumNetworkAdapterKind::Page,
                 adapter: CdpNetworkEventAdapter::new(
                     ObjectId::new(3),
                     "session-1".to_owned(),
@@ -855,6 +856,7 @@ mod tests {
             subscriptions,
             object_ids,
             adapter_profile,
+            allocator_backed_adapters: false,
             resources,
             max_page_lanes: 1,
             max_related_sessions: 0,
@@ -1025,6 +1027,7 @@ mod tests {
             ObjectId::new(3),
             ChromiumNetworkPageAdapter {
                 browser_context_object_id: ObjectId::new(2),
+                kind: ChromiumNetworkAdapterKind::Page,
                 adapter: CdpNetworkEventAdapter::new(
                     ObjectId::new(3),
                     "session-1".to_owned(),
@@ -1053,6 +1056,7 @@ mod tests {
             subscriptions,
             object_ids,
             adapter_profile,
+            allocator_backed_adapters: false,
             resources,
             max_page_lanes: 1,
             max_related_sessions: 0,

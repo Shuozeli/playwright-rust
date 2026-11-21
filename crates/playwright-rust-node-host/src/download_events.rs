@@ -1,4 +1,4 @@
-//! Optional bounded Chromium download publication.
+//! Optional Chromium download publication with bounded unread notices.
 //!
 //! Download policy, browser-event correlation, completion state, temporary
 //! paths and queue ownership stay in Rust. Language bindings receive one
@@ -13,8 +13,8 @@ use std::sync::{Arc, Mutex, Weak};
 use playwright_rust_backend_cdp_topology::CdpTopology;
 use playwright_rust_cdp::{CdpEvent, CdpSession, generated::browser, generated::page};
 use playwright_rust_core::{
-    ObjectId, ProductionResourceLedger, ResourceClass, ResourceLease, ResourceRequest,
-    ResourceRequirements, ResourceScope,
+    ObjectId, ProductionResourceLedger, ResourceClass, ResourceLease, ResourceRequirements,
+    ResourceScope,
 };
 use playwright_rust_plugin_chromium_frame_observer::{
     ChromiumFrameEventObserver, FrameObservationResult,
@@ -23,44 +23,29 @@ use tokio::sync::Notify;
 
 use crate::{HostError, HostSession};
 
-pub const MAX_DOWNLOAD_CONTEXTS: usize = 16;
-pub const MAX_DOWNLOAD_OWNERS: usize = 64;
 pub const MAX_DOWNLOAD_NOTICES: usize = 64;
 pub const MAX_DOWNLOAD_PATH_BYTES: usize = 4096;
 const MAX_DOWNLOAD_GUID_BYTES: usize = 256;
 const MAX_DOWNLOAD_URL_BYTES: usize = 1024 * 1024;
 const MAX_DOWNLOAD_FILENAME_BYTES: usize = 4096;
-const CONTEXT_BYTES: u64 = 1024;
-const OWNER_BYTES: u64 = 4096;
 const INSTALLATION_BYTES: u64 = 4096;
 const INSTALLATION_SCOPE: ResourceScope = ResourceScope::extension(181, 1);
-const CONTEXT_SCOPE: ResourceScope = ResourceScope::extension(181, 2);
 
 static NEXT_INSTALLATION_ID: AtomicU64 = AtomicU64::new(1);
 
 pub(crate) const fn requirements() -> ResourceRequirements {
     ResourceRequirements::none()
         .with_class(
-            ResourceClass::LiveObject,
-            MAX_DOWNLOAD_OWNERS as u64,
-            MAX_DOWNLOAD_OWNERS as u64,
-        )
-        .with_class(
             ResourceClass::BackendStateBytes,
-            INSTALLATION_BYTES
-                + MAX_DOWNLOAD_CONTEXTS as u64 * CONTEXT_BYTES
-                + MAX_DOWNLOAD_OWNERS as u64 * OWNER_BYTES,
-            MAX_DOWNLOAD_OWNERS as u64 * OWNER_BYTES,
+            INSTALLATION_BYTES,
+            INSTALLATION_BYTES,
         )
         .with_class(
             ResourceClass::EventItem,
             MAX_DOWNLOAD_NOTICES as u64,
             MAX_DOWNLOAD_NOTICES as u64,
         )
-        .with_metadata(
-            MAX_DOWNLOAD_CONTEXTS + MAX_DOWNLOAD_OWNERS + 1,
-            MAX_DOWNLOAD_CONTEXTS + MAX_DOWNLOAD_NOTICES + MAX_DOWNLOAD_OWNERS,
-        )
+        .with_metadata(1, MAX_DOWNLOAD_NOTICES + 1)
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -79,7 +64,6 @@ pub struct DownloadOwner {
     expected_path: PathBuf,
     state: Mutex<DownloadState>,
     notify: Notify,
-    _owner: ResourceLease,
 }
 
 impl std::fmt::Debug for DownloadOwner {
@@ -136,15 +120,14 @@ impl DownloadOwner {
     }
 }
 
-#[derive(Clone)]
 pub struct DownloadNotice {
     pub page: ObjectId,
     pub owner: Arc<DownloadOwner>,
+    _notice: ResourceLease,
 }
 
 struct ContextEntry {
     path: PathBuf,
-    _storage: ResourceLease,
 }
 
 struct State {
@@ -210,20 +193,6 @@ impl Installation {
                 "download path exceeds {MAX_DOWNLOAD_PATH_BYTES} bytes"
             )));
         }
-        let storage = self
-            .resources
-            .claim(requirements())
-            .map_err(HostError::backend)?
-            .reserve(
-                CONTEXT_SCOPE,
-                ResourceClass::BackendStateBytes,
-                CONTEXT_BYTES,
-            )
-            .map_err(|error| {
-                HostError::ResourceExhausted(format!(
-                    "download Context capacity exceeded ({MAX_DOWNLOAD_CONTEXTS}): {error}"
-                ))
-            })?;
         {
             let state = self.state.lock().map_err(HostError::backend)?;
             if state.closed {
@@ -231,11 +200,6 @@ impl Installation {
             }
             if let Some(existing) = state.contexts.get(&context) {
                 return Ok(existing.path.clone());
-            }
-            if state.contexts.len() >= MAX_DOWNLOAD_CONTEXTS {
-                return Err(HostError::ResourceExhausted(format!(
-                    "download Context capacity exceeded ({MAX_DOWNLOAD_CONTEXTS})"
-                )));
             }
         }
         tokio::fs::create_dir_all(&path)
@@ -245,10 +209,10 @@ impl Installation {
         if state.closed {
             return Err(HostError::TargetClosed);
         }
-        state.contexts.entry(context).or_insert(ContextEntry {
-            path: path.clone(),
-            _storage: storage,
-        });
+        state
+            .contexts
+            .entry(context)
+            .or_insert(ContextEntry { path: path.clone() });
         Ok(path)
     }
 
@@ -292,11 +256,6 @@ impl Installation {
             )));
         }
         state.owners.retain(|_, owner| owner.strong_count() != 0);
-        if state.owners.len() >= MAX_DOWNLOAD_OWNERS {
-            return Err(HostError::ResourceExhausted(format!(
-                "download owner capacity exceeded ({MAX_DOWNLOAD_OWNERS})"
-            )));
-        }
         if state.owners.contains_key(params.guid.as_str()) {
             return Ok(());
         }
@@ -312,21 +271,14 @@ impl Installation {
                 "download result path exceeds {MAX_DOWNLOAD_PATH_BYTES} bytes"
             )));
         }
-        let owner_lease = self
+        let notice_lease = self
             .resources
             .claim(requirements())
             .map_err(HostError::backend)?
-            .reserve_many(
-                ResourceScope::Object(page),
-                &[
-                    ResourceRequest::new(ResourceClass::LiveObject, 1),
-                    ResourceRequest::new(ResourceClass::BackendStateBytes, OWNER_BYTES),
-                    ResourceRequest::new(ResourceClass::EventItem, 1),
-                ],
-            )
+            .reserve(INSTALLATION_SCOPE, ResourceClass::EventItem, 1)
             .map_err(|error| {
                 HostError::ResourceExhausted(format!(
-                    "download owner capacity exceeded ({MAX_DOWNLOAD_OWNERS}): {error}"
+                    "download notice capacity exceeded ({MAX_DOWNLOAD_NOTICES}): {error}"
                 ))
             })?;
         let guid: Box<str> = params.guid.into_boxed_str();
@@ -338,12 +290,12 @@ impl Installation {
             expected_path,
             state: Mutex::new(DownloadState::Pending),
             notify: Notify::new(),
-            _owner: owner_lease,
         });
         state.owners.insert(guid, Arc::downgrade(&owner));
         state.notices.push_back(DownloadNotice {
             page,
             owner: Arc::clone(&owner),
+            _notice: notice_lease,
         });
         drop(state);
         self.notify.notify_one();
@@ -716,8 +668,36 @@ mod tests {
         assert!(state.notices.is_empty());
     }
 
+    #[tokio::test]
+    async fn download_owner_registry_grows_past_the_legacy_count() {
+        // Arrange
+        let installation = Installation::new(&resources()).unwrap();
+        let context = ObjectId::new(3);
+        installation.prepare_context(context).await.unwrap();
+        let mut owners = Vec::new();
+
+        // Act
+        for value in 1..=65 {
+            installation
+                .begin(
+                    ObjectId::new(7),
+                    context,
+                    beginning(&format!("download-{value}")),
+                )
+                .expect("Download ownership should not have a fixed count limit");
+            let notice = installation.next_notice().await.unwrap();
+            owners.push(Arc::clone(&notice.owner));
+            drop(notice);
+        }
+
+        // Assert
+        assert_eq!(owners.len(), 65);
+        assert_eq!(installation.state.lock().unwrap().owners.len(), 65);
+        installation.disable_context(context).await.unwrap();
+    }
+
     #[test]
-    fn requirements_keep_download_notices_and_owners_finite() {
+    fn requirements_bound_notices_without_limiting_download_owners() {
         // Arrange
         let required = requirements();
 
@@ -727,7 +707,7 @@ mod tests {
 
         // Assert
         assert_eq!(items.global, MAX_DOWNLOAD_NOTICES as u64);
-        assert_eq!(owners.global, MAX_DOWNLOAD_OWNERS as u64);
+        assert_eq!(owners.global, 0);
         assert_ne!(ResourceScope::Object(ObjectId::new(7)), INSTALLATION_SCOPE);
     }
 }

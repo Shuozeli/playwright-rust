@@ -1,0 +1,27 @@
+{
+  "schema": 1,
+  "repository": "https://github.com/microsoft/playwright.git",
+  "tag": "v1.58.0",
+  "commit": "961381ec73a9fa2661d92504eab1a6bd6eaffc75",
+  "suites": [
+    {
+      "id": "library-tracing-chromium-v1",
+      "role": "browser-backed-official-file",
+      "runner": "packages/playwright/cli.js",
+      "config": "tests/library/playwright.config.ts",
+      "args": [
+        "tests/library/tracing.spec.ts"
+      ],
+      "candidateAdapter": "test-mode-playwright-core",
+      "oracleAdapter": "test-mode-playwright-core-cdp",
+      "project": "chromium-library",
+      "channel": "chromium",
+      "requiresBrowser": true,
+      "crossOriginForward": true,
+      "expectedTestsPerProject": 35,
+      "expectedFiles": 1,
+      "upstreamTestSourceSha256": "7757232728c1b62b43f4c5aed96a2d5ccb94adcc38b1692dc3f93e88a81ab7ba",
+      "expectedSpecIdsSha256": "ae6a094d9aaa58c7383b4a646586ba0d6143eec378776a1cdf0dba3e71057110"
+    }
+  ]
+}
