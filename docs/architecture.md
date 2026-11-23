@@ -1,4 +1,4 @@
-<!-- agent-updated: 2026-11-21T05:29:00Z -->
+<!-- agent-updated: 2026-11-21T21:02:00Z -->
 
 # Architecture
 
@@ -54,6 +54,18 @@ The Node and Python layers should translate public values and callbacks, while
 Rust owns browser state and core operation semantics. The current Node host is
 still a broad compatibility composition root; its footprint and feature edges
 need further audit.
+
+The attached browser's default Context is exposed as a borrowed
+`BrowserContext`. It may create session-owned Pages while retaining the
+profile's existing cookies and login state. `Browser::new_page()` has different
+semantics: it creates a new owned incognito Context. Topology enumeration does
+not confer ownership; pre-existing Contexts and Pages remain external.
+
+The current implementation has known gaps between the successful path and the
+target lifecycle. Popup/indirect targets lack lineage attribution, a late
+creation can cross the operation-drain deadline, close is not cancellation-safe
+from its first await, cleanup timeouts can multiply, and lease release lacks
+retry-stable shared state. These are ordered tasks, not hidden details.
 
 Node and Python environment wrappers share the host's `session_admission`
 primitive. It increments an allocator-backed pending-session counter with

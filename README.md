@@ -1,4 +1,4 @@
-<!-- agent-updated: 2026-11-21T05:29:00Z -->
+<!-- agent-updated: 2026-11-21T21:03:30Z -->
 
 # Playwright Rust
 
@@ -6,6 +6,11 @@ Playwright Rust is an experimental, composable browser-automation stack written
 in Rust, with Playwright-shaped Node.js and Python APIs. It is an independent
 Shuozeli project, not the official Microsoft Playwright implementation, and it
 does not yet claim full Playwright compatibility.
+
+Start with the [hosted documentation](https://playwright-rust-docs.yuanchenxi2025.chatgpt.site)
+(currently owner-private), the [user guide](docs/user-guide.md) for supported
+APIs and examples, or the [agent guide](docs/agent-guide.md) for architecture,
+invariants, and the test/review workflow.
 
 The design separates capability contracts, codecs, client/server adapters,
 browser backends, runtime integrations, and language bindings. Applications
@@ -24,13 +29,17 @@ the pinned protocol; they do not create public providers.
 The opt-in `playwright-rust-remote-cdp` crate is the high-level Rust entry
 point for externally owned Chromium instances. The umbrella selects it with
 `remote-cdp`; custom WebSocket upgrade headers additionally select
-`cdp-handshake-headers`. `connect_over_cdp()` exposes Context/Page creation,
-navigation, rendered HTML, final URL, evaluation, Locator operations,
+`cdp-handshake-headers`. `connect_over_cdp()` exposes attached Context and Page
+enumeration, borrowed-default-Context Page creation, owned Context/Page
+creation, navigation, rendered HTML, final URL, evaluation, Locator operations,
 screenshot, and bounded close without browser-process authority. Attachment
-shutdown closes only Contexts and Pages created by that session, disconnects
-the borrowed transport, and invokes an optional generic `RemoteLease` release
-hook exactly once. The crate contains no BCP protocol or dependency; a BCP
-adapter owns lease acquisition, renewal, fencing, and release.
+shutdown closes only explicitly tracked Contexts and Pages created by that
+session, disconnects the borrowed transport, and attempts an optional generic
+`RemoteLease` release hook at most once. Borrowed default Contexts cannot be
+explicitly closed. Popup lineage, close cancellation safety, a single global
+deadline, and retry-safe lease release remain tracked gaps. The
+crate contains no BCP protocol or dependency; a BCP adapter owns lease
+acquisition, renewal, fencing, and release.
 
 Node `BrowserContext.exposeBinding()` and `exposeFunction()` are available
 through the independently selectable `context-bindings` profile. The addon

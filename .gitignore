@@ -12,6 +12,7 @@ __pycache__/
 
 # Session state (created by playwright-rust CLI)
 .playwright-rust/
+.pwright/
 
 # IDE / editor
 .idea/

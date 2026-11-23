@@ -1,4 +1,4 @@
-<!-- agent-updated: 2026-11-21T05:29:00Z -->
+<!-- agent-updated: 2026-11-21T21:04:31Z -->
 
 # Codelab: inspect an opt-in dependency boundary
 
@@ -34,7 +34,7 @@ Select only the facade and custom-header capability:
 
 ```toml
 [dependencies]
-playwright-rust = { version = "0.1.0", default-features = false, features = [
+playwright-rust = { git = "https://github.com/Shuozeli/playwright-rust", rev = "<commit>", default-features = false, features = [
   "cdp-handshake-headers",
 ] }
 ```
@@ -56,19 +56,23 @@ let browser = connect_over_cdp(
     ws_url,
     RemoteCdpConnectOptions::default().with_headers(headers),
 ).await?;
-let page = browser.new_page().await?;
+let context = browser.contexts()?.into_iter()
+    .find(|context| !context.is_owned())
+    .ok_or_else(|| std::io::Error::other("no borrowed default Context"))?;
+let page = context.new_page().await?;
 page.goto("https://example.com", GotoOptions::default()).await?;
 let html = page.content().await?;
 assert!(html.contains("Example Domain"));
+page.close().await?;
 browser.close().await?;
 # Ok(())
 # }
 ```
 
 For an external lease, implement `RemoteLease::release()` and pass it with
-`with_remote_lease(Arc::new(...))`. The hook runs exactly once from
-`Browser::close`; the adapter remains responsible for lease renewal and for
-making release idempotent.
+`with_remote_lease(Arc::new(...))`. The current close path takes and attempts
+the hook at most once. The adapter remains responsible for renewal and must
+make release idempotent; cancellation/retry-stable release state is still open.
 
 Focused verification from the repository root:
 

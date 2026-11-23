@@ -1,4 +1,4 @@
-<!-- agent-updated: 2026-11-21T05:29:00Z -->
+<!-- agent-updated: 2026-11-21T21:02:00Z -->
 
 # Design decisions to settle
 
@@ -21,6 +21,13 @@ external `RemoteLease::release` hook at most once. Concurrent/repeated close is
 serialized and idempotent. A peer close immediately makes in-flight calls
 return a transport/disconnected error; it cannot wait for browser-side cleanup
 that the revoked socket can no longer perform.
+
+That paragraph is the target contract. The current implementation proves the
+explicit Context/Page happy path and a focused peer-revocation path, but it
+does not yet prove popup lineage, late-publication reconciliation,
+cancellation safety from the first await, one absolute deadline, or stable
+lease results after cancellation/error. The task ledger is the source of truth
+for those deltas; public claims must keep “current” and “target” distinct.
 
 The high-level facade is generic. `RemoteCdpConnectOptions` carries connection,
 command, operation, close, and lease-release timeouts plus optional handshake

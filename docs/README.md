@@ -1,7 +1,13 @@
-<!-- agent-updated: 2026-11-14T02:34:45Z -->
+<!-- agent-updated: 2026-11-21T21:03:30Z -->
 
 # Documentation
 
+- [Hosted documentation](https://playwright-rust-docs.yuanchenxi2025.chatgpt.site):
+  owner-private rendered site generated from these canonical Markdown files.
+- [User guide](user-guide.md): installation, remote-CDP workflow, ownership,
+  language examples, and the honest support matrix.
+- [Agent guide](agent-guide.md): invariants, repository map, lifecycle model,
+  test ladder, and maintainer checklist.
 - [Architecture](architecture.md): current repository and component boundaries.
 - [Design](design.md): decisions to settle before widening the API.
 - [Tasks](tasks.md): open migration and verification work.

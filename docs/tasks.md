@@ -1,4 +1,4 @@
-<!-- agent-updated: 2026-11-21T05:29:00Z -->
+<!-- agent-updated: 2026-11-21T19:21:55Z -->
 
 # Open tasks
 
@@ -1130,6 +1130,93 @@ count or result-size threshold that upstream does not have.
   live binding tests create a Page in the shared default Context and prove
   `browser.close()` retires only that Page while every pre-existing target and
   the dedicated Chrome process survive.
+
+### Remote-CDP shortcut audit (2026-11-21)
+
+The completed items above establish the current happy path; they do not close
+the following lifecycle and architecture gaps. Work through this list in order,
+and keep each fix behind a deterministic regression rather than weakening the
+attach-safe ownership boundary.
+
+- [x] **P0 — expose the attached browser's existing/default Context in the Rust
+  facade.** `Browser::new_page()` intentionally creates a new incognito Context;
+  previously the facade exposed neither `Browser::contexts()` nor an equivalent
+  borrowed default-Context entry point, so a BCP caller could not use the cookies
+  and login state of the leased persistent profile through the advertised
+  high-level Rust API. Implemented with `Browser::contexts()`,
+  `BrowserContext::pages()`, borrowed-Context Page creation, and a real-Chrome
+  two-attachment regression that shares cookie state, closes only the second
+  attachment's Page, and preserves the marker Page and Chrome process. A second
+  live regression proves explicit close of the borrowed default Context is
+  rejected without detaching its Page or Browser.
+- [ ] **P0 — attribute indirect targets to the creating session.** Session-owned
+  resources are recorded only by the explicit `new_context` and `new_page`
+  completion paths. A popup or another page-like target created by an owned
+  Page is present in topology but is not added to `SessionOwnedResources`. Track
+  opener/creation lineage and add a shared-default-Context regression where a
+  click or `window.open` creates a popup; session close must retire the popup
+  and its opener-created Page without touching pre-existing tabs.
+- [ ] **P0 — close the operation-drain timeout ownership race.** After
+  `operations.wait()` times out, `HostSession::close_with_timeouts` still takes
+  the owned-resource snapshot while an already-admitted creation may publish
+  later. Disconnect or fence the producer before snapshotting, or reconcile
+  late publications after the snapshot. Add a deterministic paused-creation
+  regression that crosses the drain deadline and proves zero surviving targets.
+- [ ] **P1 — make HostSession close cancellation-safe from its first await.** The
+  transport-disconnect `OnDrop` guard is currently installed only after the
+  operation drain and owned-resource cleanup. Cancellation during either earlier
+  phase leaves an admission-closed session with the socket still attached until
+  a later close or final owner drop. Install the guard before any cancellable
+  await and test cancellation separately in drain, resource cleanup, driver
+  join, and transport-I/O retirement.
+- [ ] **P1 — use one end-to-end close deadline.** The Rust facade first closes
+  every remembered Context with a fresh per-Context operation timeout and then
+  asks `HostSession` to clean the same ownership set again. `HostSession` also
+  reuses the full graceful duration for multiple phases. Replace these nested
+  windows with one absolute graceful deadline plus one forced-local deadline,
+  remove duplicate cleanup, and prove a large target set cannot multiply the
+  configured close bound.
+- [ ] **P1 — make external lease release cancellation- and retry-safe.** The
+  facade removes the hook from `LeaseSlot` before awaiting it, then marks the
+  Browser closed even if release fails, times out, or the close future is
+  cancelled. A second close consequently cannot retry or report the prior
+  result. Model release as an explicit shared state machine, invoke it exactly
+  once to completion, define stable repeated-close results, and test success,
+  error, timeout, and cancellation. Use the dedicated `RemoteCdpError::Lease`
+  variant or remove it instead of leaving it unreachable.
+- [ ] **P1 — define and verify Drop semantics.** Explicit `browser.close()` is
+  currently required to invoke the external lease hook. `HostSession::drop`
+  disconnects but performs no asynchronous owned-page cleanup; owned incognito
+  Contexts currently rely on Chromium's `disposeOnDetach`, while Pages created
+  in a borrowed default Context by the binding paths need an explicit retirement
+  policy. Either provide cancellation-safe background retirement or document a
+  strict explicit-close contract with a detectable leak/error path, then test
+  facade, Node, and Python early-return/drop cases.
+- [ ] **P1 — remove the Rust facade's dependency on the Node compatibility
+  host.** The high-level Rust crate imports evaluation, locator, screenshot, and
+  `HostSession` directly from `playwright-rust-node-host`; its selected normal
+  graph currently reaches 178 `playwright-rust-*` packages despite
+  `default = []`. Extract a minimal generic session/capability layer and make the
+  facade depend only on the CDP provider, browser-provider abstractions, and the
+  explicitly selected workflow capabilities. Preserve the Node host as a
+  consumer rather than the Rust facade's architectural root.
+- [ ] **P2 — distinguish transport disconnect from target closure.** The facade
+  maps every `HostError::TargetClosed` to `RemoteCdpError::Disconnected`, while
+  stream failures can still arrive as stringly `HostError::Backend`. Introduce
+  typed transport, browser, Context, Page, and Frame closure errors, and prove a
+  peer WebSocket revocation is reported differently from an ordinary Page close.
+- [ ] **P2 — state the high-level API's actual compatibility level.** `Page::url`
+  evaluates `location.href`, `goto` discards the navigation response,
+  `evaluate` has no argument/typed-return API, Context creation has no options,
+  and locators expose only a narrow selector/action subset. Keep this useful
+  scraper slice, but label it as such until behavior and signatures are compared
+  with the pinned official Playwright surface.
+- [ ] **P2 — expand the remote-CDP failure matrix.** Existing facade coverage is
+  primarily a happy-path scraper test and one revoked-socket test. Add
+  deterministic AAA coverage for borrowed logged-in Contexts, popups, operation
+  drain timeout, cancellation at every close phase, Drop, lease failure/timeout/
+  cancellation, many-target deadline enforcement, and transport-vs-target error
+  classification. Keep live Chrome tests as corroboration, not the only proof.
 
 - [x] Verify standalone locked release checks, the Rust workspace tests excluding
   Cargo's Python-addon test binary, Node build/tests, Python wheel/tests, and

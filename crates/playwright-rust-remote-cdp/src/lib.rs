@@ -24,7 +24,7 @@ use playwright_rust_node_host::locator_query::{QueryBudget, QueryLimits};
 pub use playwright_rust_node_host::screenshot::{
     ScreenshotFormat, ScreenshotOptions, ScreenshotOutput,
 };
-use playwright_rust_node_host::{HostError, HostSession, HostSessionCloseTimeouts};
+use playwright_rust_node_host::{HostError, HostSession, HostSessionCloseTimeouts, PageDescriptor};
 
 #[cfg(feature = "cdp-handshake-headers")]
 pub use playwright_rust_cdp::{CdpHandshakeHeaders, CdpHandshakeHeadersError};
@@ -219,6 +219,13 @@ impl BrowserInner {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .remove(context);
     }
+
+    fn owns_context(&self, context: &str) -> bool {
+        self.owned_contexts
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .contains(context)
+    }
 }
 
 #[derive(Clone)]
@@ -286,7 +293,32 @@ impl Browser {
         Ok(BrowserContext {
             browser: Arc::downgrade(&self.0),
             id: Arc::from(descriptor.id),
+            owned: true,
         })
+    }
+
+    /// Returns every Context currently visible through this CDP attachment.
+    ///
+    /// Contexts that existed before this client attached are borrowed. Pages
+    /// explicitly created through a borrowed Context are session-owned and are
+    /// retired by [`Browser::close`], but the Context and its pre-existing Pages
+    /// are never closed by that operation.
+    pub fn contexts(&self) -> Result<Vec<BrowserContext>, RemoteCdpError> {
+        self.0.ensure_open()?;
+        self.0
+            .host
+            .contexts()
+            .map_err(host_error)?
+            .into_iter()
+            .map(|descriptor| {
+                let owned = self.0.owns_context(&descriptor.id);
+                Ok(BrowserContext {
+                    browser: Arc::downgrade(&self.0),
+                    id: Arc::from(descriptor.id),
+                    owned,
+                })
+            })
+            .collect()
     }
 
     pub async fn new_page(&self) -> Result<Page, RemoteCdpError> {
@@ -350,11 +382,17 @@ impl Browser {
 pub struct BrowserContext {
     browser: Weak<BrowserInner>,
     id: Arc<str>,
+    owned: bool,
 }
 
 impl BrowserContext {
     pub fn id(&self) -> &str {
         &self.id
+    }
+
+    /// Whether this Context was created by this facade attachment.
+    pub const fn is_owned(&self) -> bool {
+        self.owned
     }
 
     fn browser(&self) -> Result<Arc<BrowserInner>, RemoteCdpError> {
@@ -373,17 +411,43 @@ impl BrowserContext {
     ) -> Result<Page, RemoteCdpError> {
         let browser = self.browser()?;
         let descriptor = browser.host.new_page(&self.id).await.map_err(host_error)?;
-        Ok(Page {
-            browser: Arc::downgrade(&browser),
+        Ok(self.page_from_descriptor(&browser, descriptor, close_context_on_page_close))
+    }
+
+    /// Returns the Pages currently visible in this Context.
+    pub fn pages(&self) -> Result<Vec<Page>, RemoteCdpError> {
+        let browser = self.browser()?;
+        Ok(browser
+            .host
+            .pages(&self.id)
+            .map_err(host_error)?
+            .into_iter()
+            .map(|descriptor| self.page_from_descriptor(&browser, descriptor, false))
+            .collect())
+    }
+
+    fn page_from_descriptor(
+        &self,
+        browser: &Arc<BrowserInner>,
+        descriptor: PageDescriptor,
+        close_context_on_page_close: bool,
+    ) -> Page {
+        Page {
+            browser: Arc::downgrade(browser),
             context: self.clone(),
             id: Arc::from(descriptor.id),
             main_frame_id: Arc::from(descriptor.main_frame_id),
             close_context_on_page_close,
-        })
+        }
     }
 
     pub async fn close(&self) -> Result<(), RemoteCdpError> {
         let browser = self.browser.upgrade().ok_or(RemoteCdpError::Disconnected)?;
+        if !self.owned {
+            return Err(RemoteCdpError::Operation(Arc::from(
+                "the attached browser's borrowed default Context cannot be closed",
+            )));
+        }
         match browser.host.close_context(&self.id).await {
             Ok(()) | Err(HostError::TargetClosed) => {
                 browser.forget_context(&self.id);
