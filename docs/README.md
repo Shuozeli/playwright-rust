@@ -1,20 +1,53 @@
-<!-- agent-updated: 2026-11-21T21:03:30Z -->
+<!-- agent-updated: 2026-11-24T19:10:05Z -->
 
-# Documentation
+# Playwright Rust documentation
 
-- [Hosted documentation](https://playwright-rust-docs.yuanchenxi2025.chatgpt.site):
-  owner-private rendered site generated from these canonical Markdown files.
-- [User guide](user-guide.md): installation, remote-CDP workflow, ownership,
-  language examples, and the honest support matrix.
-- [Agent guide](agent-guide.md): invariants, repository map, lifecycle model,
-  test ladder, and maintainer checklist.
-- [Architecture](architecture.md): current repository and component boundaries.
-- [Design](design.md): decisions to settle before widening the API.
-- [Tasks](tasks.md): open migration and verification work.
-- [Codelabs](codelabs.md): small, reproducible dependency checks.
-- [Detailed v2 design](architecture-v2.md) and [design task history](design-tasks-v2.md): source-era working notes.
-- [Node FFI](node-ffi-compatibility-design.md) and [Python FFI](python-ffi-compatibility-design.md): compatibility design notes.
-- [Core conformance](upstream-playwright-conformance.md) and [Python conformance](python-official-conformance.md): historical ledgers, not fresh proof in this checkout.
+Playwright Rust is a pre-release, Chromium-only automation stack. Start with
+the remote-CDP workflow, then use the reference and concept documents when you
+need exact behavior or implementation boundaries.
 
-Historical links to `.work/` receipts are intentionally unresolved here
-because local test outputs and generated artifacts were not migrated.
+## Start here
+
+- [Remote-CDP getting started](getting-started/remote-cdp.md)
+- [Rust API reference](reference/rust-api.md)
+- [Support matrix](reference/support-matrix.md)
+- [Known gaps](status/known-gaps.md)
+
+## Language guides
+
+- [Node.js](guides/node.md)
+- [Python](guides/python.md)
+
+## Concepts
+
+- [Architecture](concepts/architecture.md)
+- [Ownership and lifecycle](concepts/ownership-lifecycle.md)
+
+## Contributing
+
+- [Development](contributing/development.md)
+- [Testing](contributing/testing.md)
+- [Agent guide](contributing/agent-guide.md)
+
+## Decisions and status
+
+- [Architecture decision records](adr/README.md)
+- [Roadmap](status/roadmap.md)
+- [Active tasks](tasks.md)
+
+## Engineering evidence
+
+The [evidence index](evidence/README.md) contains source-pinned conformance and
+binding ledgers. These files record bounded experiments; they are not blanket
+compatibility claims.
+
+## Archive
+
+The [archive](archive/README.md) preserves superseded v2 design documents,
+working notes, and the previous task ledger. Archive files are historical and
+may contain stale links or results.
+
+## Browser previews
+
+The Markdown files in this repository are the source of truth. When a rendered
+preview is needed, serve it with `serve-lib` on Tailscale.

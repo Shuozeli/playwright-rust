@@ -1,4 +1,4 @@
-<!-- agent-updated: 2026-11-20T08:14:57Z -->
+<!-- agent-updated: 2026-11-24T19:10:05Z -->
 
 # shuozeli-playwright-rust
 
@@ -121,7 +121,7 @@ source-bound runs of the six Chromium `tests/sync/test_network.py` cases both
 remain 1/6; neither is promoted into the strict Python ledger. This interim
 join explicitly requires `request-history`, while the independent bounded
 navigation-owner design remains open. See the
-[Python conformance record](../../docs/python-official-conformance.md).
+[Python conformance record](../../docs/evidence/python-official-conformance.md).
 
 A second isolated release wheel now selects the independent default-off
 `response-security-details` leaf alongside the navigation join. Its rebuilt
@@ -130,7 +130,7 @@ SHA-256 is `0c09817458bc9329c3bbc7c00153c635ae913d3a58567746a2666ed24fa2d2cc`;
 feature matrix pass. The unchanged official
 sync/async security-detail cases have not yet run on this wheel because the
 dedicated Chrome CDP endpoint is unresponsive. The strict v10 outcome remains
-unchanged; see the [conformance record](../../docs/python-official-conformance.md).
+unchanged; see the [conformance record](../../docs/evidence/python-official-conformance.md).
 
 The previous frozen official Chromium checkpoint used an installed ABI131 wheel
 that adds
@@ -173,7 +173,7 @@ lanes under the Tailscale fixture. A later source-only facade fix makes
 Page navigation `Response.frame` available without `request-history`, with
 283/283 source-overlay contract tests; it is not in the frozen ABI130 wheel
 but is included in the installed ABI131 wheel.
-See the [Python conformance ledger](../../docs/python-official-conformance.md).
+See the [Python conformance ledger](../../docs/evidence/python-official-conformance.md).
 
 ABI127 adds a separately default-off
 `playwright-server-close-notices` profile for successful remote
@@ -192,7 +192,7 @@ passes 84 focused installed-wheel tests plus ten independent reruns of the
 Tailscale-bound synthetic WebSocket close test, including close-before-dispose
 inventory checks. No real Playwright Server or unchanged official
 successful-connect test is claimed; see the
-[conformance record](../../docs/upstream-playwright-conformance.md).
+[conformance record](../../docs/evidence/upstream-playwright-conformance.md).
 A separate close-notices-only ABI127 wheel (SHA-256
 `02a13c04b0b1b9bee4e9e5fa9f0dbdb3a98bda8a61f53c05198f5af11885e4a4`)
 passes 51 focused tests without selecting `frame-title` or exporting native
@@ -294,7 +294,7 @@ the invalid binary frame in the header case. An ABI121 source change earns
 formal conformance credit
 only after a fresh installed-wheel run of the unchanged official tests and
 paired evidence verification; see
-[the conformance record](../../docs/upstream-playwright-conformance.md) for
+[the conformance record](../../docs/evidence/upstream-playwright-conformance.md) for
 the latest outcome.
 Current source schedules awaitable CDP event handlers after delivery and
 reports asynchronous failures without replaying acknowledged events; focused
@@ -432,7 +432,7 @@ passes, six failures, 11 skips and 5,196 not run; the independent oracle has
 1,097 passes, five failures, 11 skips and 5,413 not run. These are not paired
 full-corpus results. A complete ABI108 click-file candidate diagnostic is
 53 passed / 14 failed / three report errors and is not promoted. See the
-[full Python checkpoint](../../docs/python-official-conformance.md).
+[full Python checkpoint](../../docs/evidence/python-official-conformance.md).
 
 The ABI106 notes below are historical checkpoints.
 
@@ -451,7 +451,7 @@ official 12-row metadata diagnostic, candidate and oracle agree on all three
 returned engine paths, but both fail the six unchanged executable-existence
 assertions because the matching browser binaries are not installed; those
 rows have not been promoted into the strict conformance ledger. See the
-[full Python checkpoint](../../docs/python-official-conformance.md#cross-engine-browsertype-metadata-checkpoint-2026-10-10).
+[full Python checkpoint](../../docs/evidence/python-official-conformance.md#cross-engine-browsertype-metadata-checkpoint-2026-10-10).
 
 `BrowserType.launch` is not installed. The opt-in Chromium
 `launch_persistent_context` requires an explicit caller-owned profile;
@@ -1296,9 +1296,9 @@ The currently implemented slice is intentionally small:
 - stable native exception codes and resource metrics.
 
 Everything outside that list is unsupported until its differential and cleanup
-gates pass. See [the Python FFI design](../../docs/python-ffi-compatibility-design.md).
+gates pass. See [the Python FFI design](../../docs/evidence/python-ffi-compatibility.md).
 The pinned official-source lane is documented in
-[Official Playwright Python conformance](../../docs/python-official-conformance.md).
+[Official Playwright Python conformance](../../docs/evidence/python-official-conformance.md).
 
 ## Local release wheel
 

@@ -1,4 +1,4 @@
-<!-- agent-updated: 2026-11-21T21:04:31Z -->
+<!-- agent-updated: 2026-11-23T03:34:47Z -->
 
 # playwright-rust-remote-cdp
 
@@ -40,5 +40,7 @@ creates an owned incognito Context. Explicit close is required; lease release
 should be idempotent. Popup lineage, cancellation safety, one global close
 deadline, retry-safe lease release, and Node-host decoupling remain open.
 
-See the [user guide](../../docs/user-guide.md), [agent
-guide](../../docs/agent-guide.md), and [tasks](../../docs/tasks.md).
+Continue with the [remote-CDP guide](../../docs/getting-started/remote-cdp.md),
+[Rust API reference](../../docs/reference/rust-api.md), and [ownership and
+lifecycle contract](../../docs/concepts/ownership-lifecycle.md). Maintainers
+should also read the [known gaps](../../docs/status/known-gaps.md).

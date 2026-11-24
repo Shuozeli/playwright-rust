@@ -1,25 +1,23 @@
-<!-- agent-updated: 2026-11-21T21:02:00Z -->
+<!-- agent-updated: 2026-11-23T03:34:47Z -->
 
 # Documentation manifest
 
-| Document | Update when |
+| Document group | Update when |
 | --- | --- |
-| `../README.md` | Project scope, setup, status, names, or release claims change |
-| `README.md` | Documentation entry points change |
-| `user-guide.md` | Public API, setup, ownership behavior, package status, or support claims change |
-| `agent-guide.md` | Repository map, invariants, lifecycle, test process, or maintainer priorities change |
-| `architecture.md` | Crate ownership, dependency direction, or runtime boundaries change |
-| `design.md` | Design decisions or invariants change |
-| `tasks.md` | Work is added, completed, or blocked |
-| `codelabs.md` | Reproducible commands or prerequisites change |
-| `architecture-v2.md`, `design-tasks-v2.md` | Detailed v2 architecture or design checkpoints change |
-| `node-ffi-compatibility-design.md`, `python-ffi-compatibility-design.md` | Binding contracts or verification change |
-| `upstream-playwright-conformance.md`, `python-official-conformance.md` | New source-bound official test evidence is independently verified |
-| `../crates/playwright-rust-har-recording/README.md` | HAR recording ownership, serialization policy, or license attribution changes |
-| `../crates/playwright-rust-ecmascript-regexp/README.md` | ECMAScript RegExp semantics, engine choice, or consumer boundaries change |
-| `../crates/playwright-rust-remote-cdp/README.md` | Remote-CDP API, features, ownership, or limitations change |
-| `../third_party/regress/PLAYWRIGHT_RUST_PROVENANCE.md` | Vendored engine commit, Unicode baseline, generation inputs, or license provenance changes |
-| `../scripts/generate_test262_regexp_corpus.mjs`, `../scripts/test262_regexp_oracle.mjs` | Test262 pin, isolation, probe selection, corpus schema, or Node baseline changes |
+| `../README.md` | Product scope, primary workflow, release state, or public entry points change |
+| `README.md` | Documentation structure or canonical destinations change |
+| `getting-started/` | Installation, prerequisites, or the first remote-CDP workflow changes |
+| `guides/` | Node or Python public entry points and package status change |
+| `reference/rust-api.md` | High-level Rust facade signatures or options change |
+| `reference/support-matrix.md` | Supported, incomplete, or intentionally excluded behavior changes |
+| `concepts/architecture.md` | Dependency direction, component ownership, or FFI boundaries change |
+| `concepts/ownership-lifecycle.md` | Attach ownership, close ordering, disconnect, lease, or Drop behavior changes |
+| `contributing/` | Development, testing, review, or agent workflow changes |
+| `adr/` | A durable design decision is accepted, superseded, or reversed |
+| `status/` and `tasks.md` | Priorities, milestones, or open work change |
+| `evidence/` | A source-bound conformance result is independently re-run and recorded |
+| `archive/` | Normally never; archived files preserve historical state |
+| `../crates/playwright-rust-remote-cdp/README.md` | Remote-CDP crate API, features, or limitations change |
 
-Historical copied documents may link to local `.work/` evidence that was not
-migrated. Do not mark an old result as freshly verified in this repository.
+Every new or updated Markdown document starts with an `agent-updated` timestamp.
+Do not turn evidence ledgers or task history into user-facing API contracts.

@@ -1,4 +1,4 @@
-<!-- agent-updated: 2026-11-21T03:41:33Z -->
+<!-- agent-updated: 2026-11-24T19:10:05Z -->
 
 This package targets Chromium over CDP only. Its CommonJS, ESM, and TypeScript
 surfaces export only `chromium`; there are no executable `firefox` or `webkit`
@@ -319,7 +319,7 @@ and Oracle ledger rows remain unchanged. Both lanes adapt launch to
 `connectOverCDP` on dedicated Chrome 155, so this is bounded browser execution,
 not unadapted or full Playwright public-API parity. The guard remains global;
 cross-Page Page-binding scoping still needs repair. See the
-[conformance record](../../docs/upstream-playwright-conformance.md).
+[conformance record](../../docs/evidence/upstream-playwright-conformance.md).
 
 The default-off `select-option-navigation-commit` feature is available alone
 or through `official-conformance-page-select-option-navigation-commit`, which
@@ -335,7 +335,7 @@ rewrite of that evidence. Both lanes adapt the launch fixture to
 `connectOverCDP`, so this proves a bounded browser-backed slice, not
 unadapted or complete Playwright public-API parity. The binding-source guard
 is global; a binding on another Page may still cause an unwanted evaluation
-on a navigating Page. See the [conformance record](../../docs/upstream-playwright-conformance.md).
+on a navigating Page. See the [conformance record](../../docs/evidence/upstream-playwright-conformance.md).
 
 The default-off `bidi-startup-failure` profile is a Chromium failure-only
 diagnostic for `BrowserType.launch()` with an explicitly supplied absolute
@@ -368,7 +368,7 @@ from `unexpected` to `expected`, while the other 48,471 raw rows per lane
 remain unchanged. The v10 receipt explicitly denies Browser, broad public-API,
 and BiDi-protocol parity. Its clean-CI tooling gate passes 35 pure tests
 locally, but cannot replay ignored evidence; remote CI has not run. See the
-[conformance ledger](../../docs/upstream-playwright-conformance.md).
+[conformance ledger](../../docs/evidence/upstream-playwright-conformance.md).
 
 The default-off `playwright-server-connect-session` profile now creates a
 supervised Playwright Server Browser in Rust and exposes a narrow Node
@@ -743,7 +743,7 @@ expect-title execution/tracing now pass their unchanged official rows. This is
 evidence for the pinned Chromium library file, not complete Playwright tracing
 or full-suite parity. Continuous screencast-frame rows remain upstream
 full-Chromium fixmes. Start and chunk titles are Rust-owned.
-See [the conformance record](../../docs/upstream-playwright-conformance.md).
+See [the conformance record](../../docs/evidence/upstream-playwright-conformance.md).
 
 The new opt-in `persistent-context-preflight` profile moves ordered
 certificate-shape and browser-argument decisions into the independent,
@@ -783,7 +783,7 @@ official core449 pass because that unchanged test touches upstream private
 state first.
 Registry paths do not prove an installed browser, and the Node addon retains
 its pre-existing host dependency tree. Full official conformance remains open;
-see [the conformance ledger](../../docs/upstream-playwright-conformance.md).
+see [the conformance ledger](../../docs/evidence/upstream-playwright-conformance.md).
 The separate `pnpm run test:persistent-context-preflight` suite covers boxed
 JavaScript strings, empty boxed certificate strings, Chromium argument
 ordering, and rejection of non-Chromium names at the native boundary.
@@ -2578,7 +2578,7 @@ queue and a 2 MiB image ceiling. Path, rendering-state options, combined fullPag
 clip and default font/caret fidelity remain incomplete. After the dedicated
 Chrome/Playwright Rust preflight and fixture setup, run `pnpm --dir packages/playwright-rust
 test:screenshot` with the same `PLAYWRIGHT_RUST_TEST_CDP` and `PLAYWRIGHT_RUST_TEST_BASE` variables
-as the other live lanes. [Screenshot evidence and limits](../../docs/node-ffi-compatibility-design.md#node-page-screenshot-binding-and-ownership-checkpoint-2026-09-07).
+as the other live lanes. [Screenshot evidence and limits](../../docs/evidence/node-ffi-compatibility.md#node-page-screenshot-binding-and-ownership-checkpoint-2026-09-07).
 
 Prior checkpoint: owned-session retirement is wired into host shutdown.
 The full 23-case Locator evaluation lane and native diagnostic supervisor pass,
@@ -2586,7 +2586,7 @@ including preservation of a borrowed Page and its running Promise when a Worker
 terminates (NODE-027). Compatibility is still incomplete: NODE-013 attach timing,
 NODE-014 window dimensions, NODE-022 keyboard behavior and unsupported APIs remain.
 The latest lifecycle attempt failed a window comparison and reached its unchanged
-total deadline. [Current evidence and resource contract](../../docs/node-ffi-compatibility-design.md#node-027-host-integration-and-worker-verification-2026-09-07).
+total deadline. [Current evidence and resource contract](../../docs/evidence/node-ffi-compatibility.md#node-027-host-integration-and-worker-verification-2026-09-07).
 
 ## Previous checkpoints (historical)
 
@@ -2605,14 +2605,14 @@ delayed source/getter conversion and binary staging. Its dedicated lane passes
 22 assertions but still fails the native diagnostic gate when terminating a
 Worker during a never-resolving browser evaluation (NODE-027). It is experimental,
 not a fully verified compatibility claim. No silent retry or Chrome restart was used.
-[Current FFI evidence](../../docs/node-ffi-compatibility-design.md#public-locatorevaluate-ffi-checkpoint-2026-09-07).
+[Current FFI evidence](../../docs/evidence/node-ffi-compatibility.md#public-locatorevaluate-ffi-checkpoint-2026-09-07).
 
 On this new addon, existing evaluation/Locator/lifecycle regressions pass
 38/38, 32/32 and 45/45. All 57 shared cases now finish with 43 matches /
 12 unsupported / 2 oracle errors; both label observations newly match. That
 shared run has no native cleanup failure, but it does not exercise or clear
 NODE-027. No complete-compatibility or memory-improvement claim is made.
-[Evidence and next gates](../../docs/node-ffi-compatibility-design.md#native-destruction-receipt-checkpoint-2026-09-07).
+[Evidence and next gates](../../docs/evidence/node-ffi-compatibility.md#native-destruction-receipt-checkpoint-2026-09-07).
 
 ## Build and test
 
@@ -2715,7 +2715,7 @@ stderr diagnostics and native panic/cleanup failures remain supervised.
 The unchanged interleaved-input addon now completes all **45/45 lifecycle cases
 in 192.715 seconds** with this policy; the prior traced 180-second run was killed
 after 44 passes. Earlier attachment/window failures remain open.
-[Evidence](../../docs/node-ffi-compatibility-design.md#node-013-lifecycle-supervision-evidence-2026-09-07).
+[Evidence](../../docs/evidence/node-ffi-compatibility.md#node-013-lifecycle-supervision-evidence-2026-09-07).
 Run all package lanes and the shared corpus serially against one CDP endpoint;
 separate working directories isolate Playwright Rust state, not browser-wide target
 discovery. Overlapping supervisors produced missing-session/timeout failures
@@ -2727,7 +2727,7 @@ ten-read close/fence overflow (NODE-023); the latter now has a scoped Rust fix
 and completed Locator 22/22, evaluation 38/38 and lifecycle 44/44 reruns on
 `e5076407...65d48`. Actions remain 22/24 with NODE-021/022. These are supported subsets, not full
 Playwright gates. Artifact-specific evidence and retained failures are in the
-[Node design record](../../docs/node-ffi-compatibility-design.md).
+[Node design record](../../docs/evidence/node-ffi-compatibility.md).
 No failures are skipped or silently retried.
 
 The preceding topology rebuild `72644cf9...b9ddcd` completes a serial run of Locator **32/32**,
@@ -2739,7 +2739,7 @@ An earlier overlapping package/shared run on this same binary failed with
 additional attachment errors: Locator 27/32, evaluation 34/38, lifecycle 43/45
 and shared 11 setup errors. Both runs are retained; a serial pass does not
 resolve concurrent attachment or the older navigation discrepancies.
-See the [preceding artifact evidence](../../docs/node-ffi-compatibility-design.md#production-paired-world-access-checkpoint-2026-09-07).
+See the [preceding artifact evidence](../../docs/evidence/node-ffi-compatibility.md#production-paired-world-access-checkpoint-2026-09-07).
 The independent Rust strict-wait and main-world adoption/evaluation leaves are
 now installed by the safe host, whose normal closure is 224 packages. Node
 `Locator.evaluate` was unavailable at that checkpoint; it is now exposed with
@@ -2750,7 +2750,7 @@ gates, including retained route ownership through cancelled native cleanup.
 It then remained outside this package's 221-package normal closure. That
 checkpoint did not rebuild the addon or rerun the five full browser lanes; it
 is historical evidence, not the current installation. See
-[the preparation record](../../docs/node-ffi-compatibility-design.md#paired-element-preparation-checkpoint-2026-09-07).
+[the preparation record](../../docs/evidence/node-ffi-compatibility.md#paired-element-preparation-checkpoint-2026-09-07).
 
 This explicitly authorized loopback CDP endpoint controls the dedicated Chrome
 automation profile, never a normal user profile. Tests do not close preexisting
@@ -2786,7 +2786,7 @@ the five-second connection timeout. A completion record proves that reload
 created a different main world. Context counts do not measure heap/RSS or prove
 init-script retention. The current result shows one reused Playwright Rust world and
 three added oracle worlds across three reconnects each, with no NODE-013 root
-cause claim. See [the evidence and limits](../../docs/node-ffi-compatibility-design.md#node-013-retained-world-diagnostic-2026-09-07).
+cause claim. See [the evidence and limits](../../docs/evidence/node-ffi-compatibility.md#node-013-retained-world-diagnostic-2026-09-07).
 
 The original attachment diagnostic compares Node main-thread, Worker and independent Rust
 host attachment while one pinned Playwright connection remains open. It does
@@ -2810,7 +2810,7 @@ repository root. It only enables session-local Page/Runtime domains and reads
 frame metadata on two to eight existing Pages; it detaches its own sessions and
 never creates worlds, navigates or closes Pages. It is not a full-host/Node
 benchmark. The first fixed experiment showed no improvement with one slow Page:
-serial 555–567 ms, paired 587–591 ms. [Evidence and limits](../../docs/node-ffi-compatibility-design.md#node-013-target-correlation-and-bounded-pair-experiment-2026-09-07).
+serial 555–567 ms, paired 587–591 ms. [Evidence and limits](../../docs/evidence/node-ffi-compatibility.md#node-013-target-correlation-and-bounded-pair-experiment-2026-09-07).
 
 NODE-013 reproduced outside Node-API too. The first standalone host probe took
 64 ms; with the oracle connected, both Node lanes and the independent Rust host
@@ -2820,7 +2820,7 @@ roughly 1.7–1.9-second overlapping attachments with three Pages. Command trace
 prove the two prerequisites overlap; changing live activity prevents a controlled
 performance attribution. The full regressions below were independently rerun;
 neither a passing probe nor those tests proves full compatibility or root cause.
-See the [diagnostic record](../../docs/node-ffi-compatibility-design.md#node-013-attachment-diagnostic-checkpoint-2026-09-06).
+See the [diagnostic record](../../docs/evidence/node-ffi-compatibility.md#node-013-attachment-diagnostic-checkpoint-2026-09-06).
 
 ### Compatibility checkpoint
 
@@ -2829,7 +2829,7 @@ including both Worker settlement/Buffer cases, and **45/45 lifecycle tests**.
 The full shared corpus completes with **45 match / 10 unsupported / 2 oracle-error**
 and no value/candidate/setup/cleanup errors; its supervisor remains non-passing.
 Earlier 3/12, 8/10 and 10/10 results belong to different artifacts and remain in
-the record. [Current verification](../../docs/node-ffi-compatibility-design.md#node-013-recursive-attachment-prerequisite-join-2026-09-07).
+the record. [Current verification](../../docs/evidence/node-ffi-compatibility.md#node-013-recursive-attachment-prerequisite-join-2026-09-07).
 
 This host now explicitly joins recursive auto-attach with Frame Tree, Runtime
 enable and empty utility-world registration. Context settings/Page enable remain
@@ -3085,7 +3085,7 @@ On the previous world-readiness addon `1c8ee9ea...d9df65`, Locator passes 22/22 
 Lifecycle completes **42/44**, retaining a native-window initialization
 discrepancy and a post-disconnect observer navigation interruption. Shared
 results are 36 matches / 19 unsupported / 2 oracle errors. The ordinary failing
-gates remain visible in the [artifact record](../../docs/node-ffi-compatibility-design.md#world-readiness-artifact-evidence-2026-09-07).
+gates remain visible in the [artifact record](../../docs/evidence/node-ffi-compatibility.md#world-readiness-artifact-evidence-2026-09-07).
 
 Context options beyond the implemented `Browser.newPage({ baseURL })` slice,
 `Page.isClosed()`, before-unload close, child frames, advanced screenshot options, browser launch,
@@ -3095,7 +3095,7 @@ yet. Declared unsupported async methods reject with
 options are rejected instead of ignored. This is not a complete replacement
 for Playwright or Playwright Test.
 
-See [the design and discrepancy register](../../docs/node-ffi-compatibility-design.md)
+See [the design and discrepancy register](../../docs/evidence/node-ffi-compatibility.md)
 for bounded-resource settings, verification scope, and pending gates. In
 particular, the initial host still uses an aggregate Rust composition; smaller
 feature-specific native packages and RSS comparison are future work.
